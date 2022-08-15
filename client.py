@@ -21,6 +21,7 @@ def game_to_api(path: str, site_root: str) -> None:
     with open(log_path, "r") as fh:
         log_data = json.load(fh)
     post_data["crucible_game_id"] = game_data["crucible_game_id"]
+    post_data["date"] = game_data["date"]
     post_data["winner"] = game_data["winner"]
     post_data["winner_deck_id"] = game_data["winner_deck_id"]
     post_data["winner_deck_name"] = game_data["winner_deck_name"]

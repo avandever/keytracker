@@ -4,6 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 import configparser
 from schema import db, Game, HouseTurnCounts, TurnState, Log
 from utils import config_to_uri
+from sqlalchemy.orm.exc import NoResultFound
 import datetime
 
 app = Flask(__name__)
@@ -15,11 +16,22 @@ db.init_app(app)
 db.create_all()
 
 
+class DuplicateGameError(Exception):
+    pass
+
+
 @app.route("/api/upload/v1", methods=["POST"])
 def upload_whole_game():
+    crucible_game_id = request.form["crucible_game_id"]
+    game_start = datetime.datetime.fromisoformat(request.form["date"].rstrip("Z"))
+    game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
+    if game is None:
+        app.logger.debug(f"Confirmed no existing record for {crucible_game_id}")
+    else:
+        raise DuplicateGameError(f"Found existing game for {crucible_game_id}")
     game = Game(
         crucible_game_id=request.form['crucible_game_id'],
-        date=None,
+        date=game_start,
         winner=request.form["winner"],
         winner_deck_id=request.form["winner_deck_id"],
         winner_deck_name=request.form["winner_deck_name"],
@@ -34,7 +46,12 @@ def upload_whole_game():
     log_text = request.form["log"]
     for (seq, log) in enumerate(log_text.split("\n")):
         #log_obj = Log(game=game, message=log, time=datetime.datetime.fromtimestamp(seq), winner_perspective=False)
-        log_obj = Log(game_id=game.id, message=log, winner_perspective=False)
+        log_obj = Log(
+            game_id=game.id,
+            message=log,
+            winner_perspective=False,
+            time=game_start + datetime.timedelta(seconds=seq),
+        )
         db.session.add(log_obj)
     db.session.commit()
     return make_response(jsonify(success=True), 201)
