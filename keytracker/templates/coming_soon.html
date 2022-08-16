@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+
+{% block css %}
+    <link href="{{ url_for("static", filename="css/style.css") }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+    <div class="coming_soon">
+        <h1>Coming Soon!</h1>
+        <p>This page isn't quite ready yet.</p>
+    </div>
+{% endblock %}
