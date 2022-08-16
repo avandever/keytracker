@@ -11,6 +11,6 @@ Installation instructions I used on Ubuntu on Windows
 6. cd keytracker-main
 7. Set up the virtual environment: python3 -m venv venv
 8. Activate the virtual environment: source venv/bin/activate
-9. Install flask and other modules: pip3 install -U requests mysqlclient Flask-SQLAlchemy
-10. Run the server: ./server.py
-11. Run the client: ./client.py
+9. Install modules: pip3 install .
+10. Run the server: keytracker/server.py
+11. Run the client: keytracker/client.py

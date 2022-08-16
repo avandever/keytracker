@@ -1,3 +1,7 @@
-venv/
+keytracker/venv/
+keytracker.egg-info/
+keytracker/__pycache__/
 __pycache__/
 config.ini
+build/
+venv/
