@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, render_template
 from flask_sqlalchemy import SQLAlchemy
 import configparser
 from schema import db, Game, HouseTurnCounts, TurnState, Log
 from utils import config_to_uri
 from sqlalchemy.orm.exc import NoResultFound
 import datetime
+from utils import render_log
 
 app = Flask(__name__)
 cparser = configparser.ConfigParser()
@@ -14,10 +15,61 @@ app.config["SQLALCHEMY_DATABASE_URI"] = config_to_uri(**cparser["db"])
 db.app = app
 db.init_app(app)
 db.create_all()
+app.jinja_env.globals.update(render_log=render_log)
 
 
 class DuplicateGameError(Exception):
     pass
+
+
+@app.route("/")
+def home():
+    """Landing page."""
+    last_five_games = Game.query.order_by(Game.date.desc()).limit(5).all()
+    return render_template(
+        "home.html",
+        title="Bear Tracks",
+        games=last_five_games,
+    )
+
+
+@app.route("/fame")
+def hall_of_fame():
+    """Hall of fame"""
+    return render_template(
+        "coming_soon.html",
+        title="Hall of Fame",
+        description="",
+    )
+
+
+@app.route("/leaderboard")
+def leaderboard():
+    """Leaderboard"""
+    return render_template(
+        "coming_soon.html",
+        title="Leaderboard",
+        description="",
+    )
+
+
+@app.route("/game/<crucible_game_id>", methods=["GET"])
+def game(crucible_game_id):
+    game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
+    return render_template(
+        "game.html",
+        title=f"{game.winner} vs {game.loser}",
+        game=game,
+    )
+
+
+@app.route("/user/<username>", methods=["GET"])
+def user(username):
+    """User Summary Page"""
+    return render_template(
+        "coming_soon.html",
+        title=username,
+    )
 
 
 @app.route("/api/upload/v1", methods=["POST"])

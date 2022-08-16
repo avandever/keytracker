@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+
+{% block css %}
+    <link href="{{ url_for("static", filename="css/style.css") }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+    <div class="game_header">
+        <h1>{{game.winner}} versus {{game.loser}}</h1>
+        <p>{{description}}</p>
+    </div>
+    <div class="game_player_summary">
+        <h2><a href="/player/{{game.winner}}">{{game.winner}}</a> using <a
+               href="/deck/{{game.winner_deck_id}}">{{game.winner_deck_name}}</a>  <a
+game.                          href="https://keyforgegame.com/deck-details/{{game.winner_deck_id}}">MV</a>
+           <a href="https://decksofkeyforge.com/decks/{{game.winner_deck_id}}">DOK</a>
+        </h2>
+        <h2><a href="/player/{{game.loser}}">{{game.loser}}</a> using <a
+               href="/deck/{{game.winner_deck_id}}">{{game.winner_deck_name}}</a>  <a
+game.                          href="https://keyforgegame.com/deck-details/{{game.winner_deck_id}}">MV</a>
+           <a href="https://decksofkeyforge.com/decks/{{game.winner_deck_id}}">DOK</a>
+        </h2>
+    </div>
+    <div class="logs">
+      {% for log in game.logs %}
+        <p>{{ render_log(log) }}</p>
+      {% endfor %}
+    </div>
+{% endblock %}

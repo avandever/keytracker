@@ -1,5 +1,3 @@
-
-
 class UnknownDBDriverException(Exception):
     pass
 
@@ -33,3 +31,7 @@ def config_to_uri(
     else:
         raise UnknownDBDriverException(f"Unrecognized DB Driver: {driver}")
     return "".join(uri_bits)
+
+
+def render_log(log: str) -> str:
+    return log.message
