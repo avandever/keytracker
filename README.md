@@ -12,5 +12,12 @@ Installation instructions I used on Ubuntu on Windows
 7. Set up the virtual environment: python3 -m venv venv
 8. Activate the virtual environment: source venv/bin/activate
 9. Install modules: pip3 install . gunicorn
-10. Run the server: gunicorn -w 4 "keytracker.server:app"
-11. Run the client: keytracker/client.py
+
+Run the server:
+1. Activate the virtual environment: source venv/bin/activate
+2. Start the server: gunicorn -w 4 "keytracker.server:app"
+3. Load in your browser (https://127.0.0.1:8000 by default)
+
+Run the client:
+1. Activate the virtual environment: source venv/bin/activate
+2. Run the client: keytracker/client.py
