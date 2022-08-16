@@ -2,11 +2,10 @@
 from flask import Flask, request, jsonify, make_response, render_template
 from flask_sqlalchemy import SQLAlchemy
 import configparser
-from schema import db, Game, HouseTurnCounts, TurnState, Log
-from utils import config_to_uri
+from keytracker.schema import db, Game, HouseTurnCounts, TurnState, Log
+from keytracker.utils import config_to_uri, render_log
 from sqlalchemy.orm.exc import NoResultFound
 import datetime
-from utils import render_log
 
 app = Flask(__name__)
 cparser = configparser.ConfigParser()
