@@ -1,6 +1,7 @@
 from collections import Counter, defaultdict
 from keytracker.schema import Game
 from typing import Dict
+import requests
 import re
 
 
@@ -11,12 +12,18 @@ HOUSE_CHOICE_MATCHER = re.compile(r"^(.*) chooses (.*) as their active house")
 FORGE_MATCHER = re.compile(r"^(.*) forges the (.*) key ?, paying [0-9]+ Æmber$")
 WIN_MATCHER = re.compile(r"^ ?(.*) has won the game$")
 
+MV_API_BASE = "http://www.keyforgegame.com/api/decks"
+
 
 class BadLog(Exception):
     pass
 
 
 class UnknownDBDriverException(Exception):
+    pass
+
+
+class DeckNotFoundError(Exception):
     pass
 
 
@@ -149,4 +156,9 @@ def log_to_game(log: str) -> Game:
 
 
 def deck_name_to_id(deck_name: str) -> str:
-    return "Not Implemented"
+    search_params = {"search": deck_name}
+    response = requests.get(MV_API_BASE, params=search_params)
+    data = response.json()
+    if not data["data"]:
+        raise DeckNotFoundError(f"Found no decks with name {deck_name}")
+    return data["data"][0]["id"]

@@ -128,8 +128,10 @@ def upload_log():
     log_text = request.form["log"]
     game = log_to_game(log_text)
     game.date = game_start
-    game.crucible_game_id = "UNKNOWN"
     db.session.add(game)
+    db.session.commit()
+    db.session.refresh(game)
+    game.crucible_game_id = f"UNKNOWN-{game.id}"
     db.session.commit()
     for (seq, log) in enumerate(log_text.split("\n")):
         log_obj = Log(
