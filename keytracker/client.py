@@ -48,5 +48,15 @@ def upload(game_path: str, host: str, port: int) -> None:
     game_to_api(game_path, site_root)
 
 
+@cli.command()
+@click.argument("log", type=click.File("r"))
+@click.option("--host", type=str, default="127.0.0.1")
+@click.option("--port", type=int, default=5000)
+def upload_log(log, host, port):
+    site_root = f"http://{host}:{port}"
+    uri = f"{site_root}/api/upload_log/v1"
+    requests.post(uri, {"log": log.read()})
+
+
 if __name__ == "__main__":
     cli()

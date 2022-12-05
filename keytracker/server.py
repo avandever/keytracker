@@ -2,8 +2,18 @@
 from flask import Flask, request, jsonify, make_response, render_template
 from flask_sqlalchemy import SQLAlchemy
 import configparser
-from keytracker.schema import db, Game, HouseTurnCounts, TurnState, Log
-from keytracker.utils import config_to_uri, render_log
+from keytracker.schema import (
+    db,
+    Game,
+    HouseTurnCounts,
+    TurnState,
+    Log,
+)
+from keytracker.utils import (
+    config_to_uri,
+    render_log,
+    log_to_game,
+)
 from sqlalchemy.orm.exc import NoResultFound
 import datetime
 
@@ -97,6 +107,31 @@ def upload_whole_game():
     log_text = request.form["log"]
     for (seq, log) in enumerate(log_text.split("\n")):
         #log_obj = Log(game=game, message=log, time=datetime.datetime.fromtimestamp(seq), winner_perspective=False)
+        log_obj = Log(
+            game_id=game.id,
+            message=log,
+            winner_perspective=False,
+            time=game_start + datetime.timedelta(seconds=seq),
+        )
+        db.session.add(log_obj)
+    db.session.commit()
+    return make_response(jsonify(success=True), 201)
+
+
+@app.route("/api/upload_log/v1", methods=["POST"])
+def upload_log():
+    date = request.form.get("date")
+    if date is None:
+        game_start = datetime.datetime.now()
+    else:
+        game_start = datetime.datetime.fromisoformat(date.rstrip("Z"))
+    log_text = request.form["log"]
+    game = log_to_game(log_text)
+    game.date = game_start
+    game.crucible_game_id = "UNKNOWN"
+    db.session.add(game)
+    db.session.commit()
+    for (seq, log) in enumerate(log_text.split("\n")):
         log_obj = Log(
             game_id=game.id,
             message=log,
