@@ -32,6 +32,7 @@ cparser = configparser.ConfigParser()
 cparser.read("config.ini")
 app.config["SQLALCHEMY_DATABASE_URI"] = config_to_uri(**cparser["db"])
 app.config["SECRET_KEY"] = cparser["app"]["secret_key"]
+assert app.config["SECRET_KEY"] != "placeholder"
 db.app = app
 db.init_app(app)
 db.create_all()
