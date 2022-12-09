@@ -1,21 +1,12 @@
 {% extends "layout.html" %}
-
 {% block content %}
-    {% if success %}
-        <div class="success">
-        Successfully uploaded {{success}}
-        </div>
-    {% endif %}
+    {% if success %}<div class="success">Successfully uploaded {{ success }}</div>{% endif %}
     <h1>Submit a game log</h1>
     <form method="post">
         <label for="log">Log Text</label>
-        <br>
-        <textarea type="text" name="log"
-               placeholder=""
-               rows="30"
-               cols="90"
-               value="{{request.form['title'] }}"></textarea>
-        <br>
+        <br />
+        <textarea type="text" name="log" placeholder="" rows="30" cols="90" value="{{request.form['title'] }}"></textarea>
+        <br />
         <button type="submit">Submit</button>
     </form>
 {% endblock %}

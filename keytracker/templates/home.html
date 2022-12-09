@@ -1,13 +1,14 @@
 {% extends "layout.html" %}
-
 {% block content %}
     <div class="introduction">
-        <h1>{{title}}</h1>
+        <h1>{{ title }}</h1>
         <p>KeyForge Game Records and Analysis</p>
     </div>
     <div class="games_list">
-      {% for game in games %}
-        <p><a href="/game/{{game.crucible_game_id}}">{{game.winner}} vs {{game.loser}}</a></p>
-      {% endfor %}
+        {% for game in games %}
+            <p>
+                <a href="/game/{{ game.crucible_game_id }}">{{ game.winner }} vs {{ game.loser }}</a>
+            </p>
+        {% endfor %}
     </div>
 {% endblock %}

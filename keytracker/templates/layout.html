@@ -1,16 +1,16 @@
 <!doctype html>
-<html>
-
+<html lang="en-US">
     <head>
-        <title>{% block title%}{{title}}{% endblock %}</title>
-        <meta charset="utf-8">
-        <meta name="description" content={{description}}>
-        <link rel="shortcut icon" href="/favicon.ico">
-        {% block css %}
-            <link href="{{ url_for("static", filename="css/style.css") }}" rel="stylesheet">
-        {% endblock %}
+        <title>
+            {% block title %}{{ title }}{% endblock %}
+        </title>
+        <meta charset="utf-8" />
+        <meta name="keywords" content="HTML, CSS, JavaScript" />
+        <meta name="description" content={{ description }} />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        {% block css %}<link href="{{ url_for("static", filename="css/style.css") }}"
+      rel="stylesheet"/>{% endblock %}
     </head>
-
     <body>
         {% include "navigation.html" %}
         <div class="content">
@@ -20,5 +20,4 @@
             {% block content %}{% endblock %}
         </div>
     </body>
-
 </html>
