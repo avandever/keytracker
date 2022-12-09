@@ -11,6 +11,7 @@ from keytracker.schema import (
     Log,
 )
 from keytracker.utils import (
+    basic_stats_to_game,
     DuplicateGameError,
     log_to_game,
 )
@@ -80,5 +81,18 @@ def upload_log():
             time=game_start + datetime.timedelta(seconds=seq),
         )
         db.session.add(log_obj)
+    db.session.commit()
+    return make_response(jsonify(success=True), 201)
+
+
+@blueprint.route("/api/simple_upload/v1", methods=["POST"])
+def simple_upload():
+    game = basic_stats_to_game(**request.form)
+    existing_game = Game.query.filter_by(crucible_game_id=game.crucible_game_id).first()
+    if existing_game is None:
+        current_app.logger.debug(f"Confirmed no existing record for {game.crucible_game_id}")
+    else:
+        raise DuplicateGameError(f"Found existing game for {game.crucible_game_id}")
+    db.session.add(game)
     db.session.commit()
     return make_response(jsonify(success=True), 201)

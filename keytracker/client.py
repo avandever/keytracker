@@ -58,5 +58,17 @@ def upload_log(log, host, port):
     requests.post(uri, {"log": log.read()})
 
 
+@cli.command()
+@click.argument("user_file", type=click.File("r"))
+@click.option("--host", type=str, default="127.0.0.1")
+@click.option("--port", type=int, default=5000)
+def simple_upload_user_games(user_file, host, port):
+    site_root = f"http://{host}:{port}"
+    uri = f"{site_root}/api/simple_upload/v1"
+    data = json.load(user_file)
+    for game in data:
+        requests.post(uri, game)
+
+
 if __name__ == "__main__":
     cli()
