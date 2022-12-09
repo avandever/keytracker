@@ -27,6 +27,10 @@ class DeckNotFoundError(Exception):
     pass
 
 
+class DuplicateGameError(Exception):
+    pass
+
+
 def config_to_uri(
     driver: str = "sqlite",
     path: str = "keyforge_cards.sqlite",
