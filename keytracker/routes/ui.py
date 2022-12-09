@@ -2,6 +2,7 @@ from flask import (
     Blueprint,
     flash,
     render_template,
+    redirect,
     request,
 )
 from keytracker.schema import (
@@ -51,6 +52,29 @@ def leaderboard():
     )
 
 
+@blueprint.route("/deck/<deck_id>", methods=["GET"])
+def deck(deck_id):
+    deck_games = (
+        Game.query
+            .filter(
+                (Game.winner_deck_id == deck_id) | (Game.loser_deck_id == deck_id)
+            ).order_by(Game.date.desc())
+            .all()
+    )
+    if len(deck_games) == 0:
+        flash(f"No games found for deck {deck_id}")
+        return redirect("/")
+    game = deck_games[0]
+    deck_name = game.winner_deck_name if game.winner_deck_id == deck_id else game.loser_deck_name
+    return render_template(
+        "deck.html",
+        title=f"{deck_name} Deck Summary",
+        games=deck_games,
+        deck_name=deck_name,
+        deck_id=deck_id,
+    )
+
+
 @blueprint.route("/game/<crucible_game_id>", methods=["GET"])
 def game(crucible_game_id):
     game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
@@ -61,12 +85,36 @@ def game(crucible_game_id):
     )
 
 
+@blueprint.route("/user", methods=["GET", "POST"])
+@blueprint.route("/user/", methods=["GET", "POST"])
+def user_search():
+    """User Search Page"""
+    if request.method == "POST":
+        return redirect(f"/user/{request.form['username']}")
+    return render_template(
+        "user_search.html",
+        title="User Search",
+    )
+
+
 @blueprint.route("/user/<username>", methods=["GET"])
 def user(username):
     """User Summary Page"""
+    user_games = (
+        Game.query
+            .filter(
+                (Game.winner == username) | (Game.loser == username)
+            ).order_by(Game.date.desc())
+            .all()
+    )
+    if len(user_games) == 0:
+        flash(f"No games found for user {username}")
+        return redirect("/user")
     return render_template(
-        "coming_soon.html",
-        title=username,
+        "user.html",
+        title=f"{username} games",
+        username=username,
+        games=user_games,
     )
 
 

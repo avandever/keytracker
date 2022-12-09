@@ -13,3 +13,15 @@ nav {
     color: #000000;
     background-color: #b0ffd0;
 }
+.game_players {
+    padding: 10px;
+    margin: 5px;
+    color: #000000;
+    background-color: #b0ffd0;
+}
+.game_decks {
+    padding: 10px;
+    margin: 5px;
+    color: #000000;
+    background-color: #fff9bf;
+}
