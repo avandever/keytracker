@@ -34,6 +34,7 @@ class Game(db.Model):
     This represents a game of KeyForge. It stores information about players and decks,
     along with some basic metadata.
     """
+
     __tablename__ = "tracker_game"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     crucible_game_id = db.Column(db.String(36))
@@ -90,9 +91,12 @@ class HouseTurnCounts(db.Model):
     on Game. In a pinch we should be able to use AS to generate per-house columns on
     query results, but I think that's a pretty weird situation.
     """
+
     __tablename__ = "tracker_house_turn_counts"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    game_id = db.Column(db.Integer, db.ForeignKey(Game.__table__.c.id), primary_key=True, index=True)
+    game_id = db.Column(
+        db.Integer, db.ForeignKey(Game.__table__.c.id), primary_key=True, index=True
+    )
     game = db.relationship("Game", back_populates="house_turn_counts")
     winner = db.Column(db.Boolean)
     house = db.Column(db.Enum(House))
@@ -106,9 +110,12 @@ class TurnState(db.Model):
     "activePlayer" because that makes no sense, and will count turn as an int - we
     should be able to order by id without problems.
     """
+
     __tablename__ = "tracker_turn_state"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    game_id = db.Column(db.Integer, db.ForeignKey(Game.__table__.c.id), primary_key=True, index=True)
+    game_id = db.Column(
+        db.Integer, db.ForeignKey(Game.__table__.c.id), primary_key=True, index=True
+    )
     game = db.relationship("Game", back_populates="turns")
     turn = db.Column(db.Integer)
     is_player_one = db.Column(db.Integer)
@@ -125,9 +132,12 @@ class Log(db.Model):
     be one record per event (log line), ordered by timestamps and deduplicated at
     display time if we have the same log from each player's perspective.
     """
+
     __tablename__ = "tracker_log"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    game_id = db.Column(db.Integer, db.ForeignKey(Game.__table__.c.id), primary_key=True, index=True)
+    game_id = db.Column(
+        db.Integer, db.ForeignKey(Game.__table__.c.id), primary_key=True, index=True
+    )
     game = db.relationship("Game", back_populates="logs")
     message = db.Column(db.String(1000))
     time = db.Column(db.DateTime)

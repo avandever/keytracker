@@ -55,17 +55,21 @@ def leaderboard():
 @blueprint.route("/deck/<deck_id>", methods=["GET"])
 def deck(deck_id):
     deck_games = (
-        Game.query
-            .filter(
-                (Game.winner_deck_id == deck_id) | (Game.loser_deck_id == deck_id)
-            ).order_by(Game.date.desc())
-            .all()
+        Game.query.filter(
+            (Game.winner_deck_id == deck_id) | (Game.loser_deck_id == deck_id)
+        )
+        .order_by(Game.date.desc())
+        .all()
     )
     if len(deck_games) == 0:
         flash(f"No games found for deck {deck_id}")
         return redirect("/")
     game = deck_games[0]
-    deck_name = game.winner_deck_name if game.winner_deck_id == deck_id else game.loser_deck_name
+    deck_name = (
+        game.winner_deck_name
+        if game.winner_deck_id == deck_id
+        else game.loser_deck_name
+    )
     return render_template(
         "deck.html",
         title=f"{deck_name} Deck Summary",
@@ -101,11 +105,9 @@ def user_search():
 def user(username):
     """User Summary Page"""
     user_games = (
-        Game.query
-            .filter(
-                (Game.winner == username) | (Game.loser == username)
-            ).order_by(Game.date.desc())
-            .all()
+        Game.query.filter((Game.winner == username) | (Game.loser == username))
+        .order_by(Game.date.desc())
+        .all()
     )
     if len(user_games) == 0:
         flash(f"No games found for user {username}")

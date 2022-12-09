@@ -30,7 +30,7 @@ def upload_whole_game():
     else:
         raise DuplicateGameError(f"Found existing game for {crucible_game_id}")
     game = Game(
-        crucible_game_id=request.form['crucible_game_id'],
+        crucible_game_id=request.form["crucible_game_id"],
         date=game_start,
         winner=request.form["winner"],
         winner_deck_id=request.form["winner_deck_id"],
@@ -45,7 +45,7 @@ def upload_whole_game():
     db.session.commit()
     log_text = request.form["log"]
     for (seq, log) in enumerate(log_text.split("\n")):
-        #log_obj = Log(game=game, message=log, time=datetime.datetime.fromtimestamp(seq), winner_perspective=False)
+        # log_obj = Log(game=game, message=log, time=datetime.datetime.fromtimestamp(seq), winner_perspective=False)
         log_obj = Log(
             game_id=game.id,
             message=log,
