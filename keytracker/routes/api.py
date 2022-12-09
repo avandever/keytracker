@@ -90,7 +90,9 @@ def simple_upload():
     game = basic_stats_to_game(**request.form)
     existing_game = Game.query.filter_by(crucible_game_id=game.crucible_game_id).first()
     if existing_game is None:
-        current_app.logger.debug(f"Confirmed no existing record for {game.crucible_game_id}")
+        current_app.logger.debug(
+            f"Confirmed no existing record for {game.crucible_game_id}"
+        )
     else:
         raise DuplicateGameError(f"Found existing game for {game.crucible_game_id}")
     db.session.add(game)
