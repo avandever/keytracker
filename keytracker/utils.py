@@ -5,12 +5,12 @@ import requests
 import re
 
 
-PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible$")
+PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
 FIRST_PLAYER_MATCHER = re.compile(r"^(.*) won the flip")
-SHUFFLE_MATCHER = re.compile(r"^(.*) is shuffling their deck$")
+SHUFFLE_MATCHER = re.compile(r"^(.*) is shuffling their deck")
 HOUSE_CHOICE_MATCHER = re.compile(r"^(.*) chooses (.*) as their active house")
-FORGE_MATCHER = re.compile(r"^(.*) forges the (.*) key ?, paying [0-9]+ Æmber$")
-WIN_MATCHER = re.compile(r"^ ?(.*) has won the game$")
+FORGE_MATCHER = re.compile(r"^(.*) forges the (.*) key ?, paying [0-9]+ Æmber")
+WIN_MATCHER = re.compile(r"^ ?(.*) has won the game")
 
 MV_API_BASE = "http://www.keyforgegame.com/api/decks"
 

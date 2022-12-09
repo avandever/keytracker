@@ -1,3 +1,15 @@
 nav {
     text-align: right;
 }
+.alert {
+    padding: 20px;
+    margin: 5px;
+    color: #970020;
+    background-color: #ffd5de;
+}
+.success {
+    padding: 20px;
+    margin: 5px;
+    color: #000000;
+    background-color: #b0ffd0;
+}

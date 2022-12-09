@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-from flask import Flask, request, jsonify, make_response, render_template
+from flask import (
+    flash,
+    Flask,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_sqlalchemy import SQLAlchemy
 import configparser
 from keytracker.schema import (
@@ -10,6 +19,7 @@ from keytracker.schema import (
     Log,
 )
 from keytracker.utils import (
+    BadLog,
     config_to_uri,
     render_log,
     log_to_game,
@@ -21,6 +31,7 @@ app = Flask(__name__)
 cparser = configparser.ConfigParser()
 cparser.read("config.ini")
 app.config["SQLALCHEMY_DATABASE_URI"] = config_to_uri(**cparser["db"])
+app.config["SECRET_KEY"] = cparser["app"]["secret_key"]
 db.app = app
 db.init_app(app)
 db.create_all()
@@ -78,6 +89,43 @@ def user(username):
     return render_template(
         "coming_soon.html",
         title=username,
+    )
+
+
+@app.route("/upload", methods=("GET", "POST"))
+def upload():
+    """Manual game upload page"""
+    if request.method == "POST":
+        game_start = datetime.datetime.now()
+        log_text = request.form["log"]
+        try:
+            game = log_to_game(log_text)
+        except BadLog as exc:
+            flash(str(exc))
+        else:
+            game.date = game_start
+            db.session.add(game)
+            db.session.commit()
+            db.session.refresh(game)
+            game.crucible_game_id = f"UNKNOWN-{game.id}"
+            db.session.commit()
+            for (seq, log) in enumerate(log_text.split("\n")):
+                log_obj = Log(
+                    game_id=game.id,
+                    message=log,
+                    winner_perspective=False,
+                    time=game_start + datetime.timedelta(seconds=seq),
+                )
+                db.session.add(log_obj)
+            db.session.commit()
+            return render_template(
+                "upload.html",
+                title="Upload a Game!",
+                success=f"{game.winner} vs. {game.loser}",
+            )
+    return render_template(
+        "upload.html",
+        title="Upload a Game!",
     )
 
 
