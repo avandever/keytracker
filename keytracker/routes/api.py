@@ -98,3 +98,12 @@ def simple_upload():
     db.session.add(game)
     db.session.commit()
     return make_response(jsonify(success=True), 201)
+
+
+@blueprint.route("/api/delete_game/v1/<game_id>", methods=["GET"])
+def delete_game(game_id):
+    game = Game.query.filter_by(crucible_game_id=game_id).one()
+    Log.query.filter_by(game_id=game.id).delete()
+    db.session.delete(game)
+    db.session.commit()
+    return make_response(jsonify(success=True), 201)

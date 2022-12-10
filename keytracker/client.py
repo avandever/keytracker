@@ -70,5 +70,15 @@ def simple_upload_user_games(user_file, host, port):
         requests.post(uri, game)
 
 
+@cli.command()
+@click.argument("game_id", type=str)
+@click.option("--host", type=str, default="127.0.0.1")
+@click.option("--port", type=int, default=5000)
+def delete_game(game_id, host, port):
+    site_root = f"http://{host}:{port}"
+    uri = f"{site_root}/api/delete_game/v1/{game_id}"
+    requests.get(uri)
+
+
 if __name__ == "__main__":
     cli()
