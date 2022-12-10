@@ -1,5 +1,6 @@
 from flask import (
     Blueprint,
+    current_app,
     flash,
     render_template,
     redirect,
@@ -12,6 +13,7 @@ from keytracker.schema import (
 )
 from keytracker.utils import (
     BadLog,
+    basic_stats_to_game,
     DeckNotFoundError,
     log_to_game,
 )
@@ -154,4 +156,24 @@ def upload():
     return render_template(
         "upload.html",
         title="Upload a Game!",
+    )
+
+
+@blueprint.route("/upload_simple", methods=("GET", "POST"))
+def upload_simple():
+    """Manual game upload page with just simple options"""
+    if request.method == "POST":
+        game = basic_stats_to_game(**request.form)
+        existing_game = Game.query.filter_by(crucible_game_id=game.crucible_game_id).first()
+        if existing_game is None:
+            current_app.logger.debug(
+                f"Confirmed no existing record for {game.crucible_game_id}")
+            db.session.add(game)
+            db.session.commit()
+            return redirect(f"/game/{game.crucible_game_id}")
+        else:
+            flash(f"A game with name '{game.crucible_game_id}' already exists")
+    return render_template(
+        "upload_simple.html",
+        title="Simple Game Upload",
     )

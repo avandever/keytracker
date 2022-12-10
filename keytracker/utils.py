@@ -206,6 +206,9 @@ def basic_stats_to_game(**kwargs) -> Game:
         if not loser_deck_name:
             raise MissingInput("Need name or id of losing deck")
         loser_deck_id = deck_name_to_id(loser_deck_name)
+    # If urls were passed in, fix that now
+    winner_deck_id = winner_deck_id.split("/")[-1]
+    loser_deck_id = loser_deck_id.split("/")[-1]
     if not loser_deck_name:
         loser_deck_name = deck_id_to_name(loser_deck_id)
     game = Game(

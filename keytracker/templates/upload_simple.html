@@ -1,0 +1,48 @@
+{% extends "layout.html" %}
+{% block content %}
+    {% if success %}<div class="success">Successfully uploaded {{ success }}</div>{% endif %}
+    <h1>Submit game data</h1>
+    <form method="post">
+        <label for="crucible_game_id">Crucible Game ID</label>
+        <br />
+        <input type="text" name="crucible_game_id" placeholder="ID from url OR something unique" />
+        <br />
+        <label for="date">Game Start Time</label>
+        <br />
+        <input type="datetime-local" name="date" placeholder="" />
+        <br />
+        <label for="winner">Winning Player Name</label>
+        <br />
+        <input type="text" name="winner" placeholder="Player Name" />
+        <br />
+        <label for="winner_deck_id">Winning Deck ID</label>
+        <br />
+        <input type="text" name="winner_deck_id" placeholder="deck_id or whole MV/DoK link" />
+        <br />
+        <label for="winner_deck_name">Name of Winning Deck</label>
+        <br />
+        <input type="text" name="winner_deck_name" placeholder="Please copy/paste or just leave blank" />
+        <br />
+        <label for="winner_keys">Keys Forged By Winning Player</label>
+        <br />
+        <input type="number" name="winner_keys" />
+        <br />
+        <label for="loser">Losing Player Name</label>
+        <br />
+        <input type="text" name="loser" placeholder="Player Name" />
+        <br />
+        <label for="loser_deck_id">Losing Deck ID</label>
+        <br />
+        <input type="text" name="loser_deck_id" placeholder="deck_id or whole MV/DoK link" />
+        <br />
+        <label for="loser_deck_name">Name of Losing Deck</label>
+        <br />
+        <input type="text" name="loser_deck_name" placeholder="Please copy/paste or just leave blank" />
+        <br />
+        <label for="loser_keys">Keys Forged By Losing Player</label>
+        <br />
+        <input type="number" name="loser_keys" />
+        <br />
+        <button type="submit">Submit</button>
+    </form>
+{% endblock %}
