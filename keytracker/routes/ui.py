@@ -109,6 +109,7 @@ def user(username):
     user_games = (
         Game.query.filter((Game.winner == username) | (Game.loser == username))
         .order_by(Game.date.desc())
+        .limit(10000)
         .all()
     )
     if len(user_games) == 0:
