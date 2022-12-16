@@ -177,10 +177,10 @@ def deck_name_to_id(deck_name: str) -> str:
 
 
 def deck_id_to_name(deck_id: str) -> str:
-    deck_url = os.path.join(MV_API_BASE, "decks", deck_id)
+    deck_url = os.path.join(MV_API_BASE, deck_id)
     response = requests.get(deck_url, params={"links": "cards, notes"})
     data = response.json()
-    return data["name"]
+    return data["data"]["name"]
 
 
 def basic_stats_to_game(**kwargs) -> Game:
@@ -201,8 +201,6 @@ def basic_stats_to_game(**kwargs) -> Game:
         if not winner_deck_name:
             raise MissingInput("Need name or id of winning deck")
         winner_deck_id = deck_name_to_id(winner_deck_name)
-    if not winner_deck_name:
-        winner_deck_name = deck_id_to_name(winner_deck_id)
     if not loser_deck_id:
         if not loser_deck_name:
             raise MissingInput("Need name or id of losing deck")
@@ -210,6 +208,8 @@ def basic_stats_to_game(**kwargs) -> Game:
     # If urls were passed in, fix that now
     winner_deck_id = winner_deck_id.split("/")[-1]
     loser_deck_id = loser_deck_id.split("/")[-1]
+    if not winner_deck_name:
+        winner_deck_name = deck_id_to_name(winner_deck_id)
     if not loser_deck_name:
         loser_deck_name = deck_id_to_name(loser_deck_id)
     game = Game(
