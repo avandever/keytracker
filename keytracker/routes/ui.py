@@ -1,6 +1,5 @@
 from flask import (
     Blueprint,
-    current_app,
     flash,
     render_template,
     redirect,
@@ -18,9 +17,11 @@ from keytracker.utils import (
     log_to_game,
 )
 import datetime
+import logging
 
 
 blueprint = Blueprint("ui", __name__, template_folder="templates")
+logger = logging.getLogger(__name__)
 
 
 @blueprint.route("/")
@@ -83,6 +84,7 @@ def deck(deck_id):
 
 @blueprint.route("/game/<crucible_game_id>", methods=["GET"])
 def game(crucible_game_id):
+    print(f"Looking up game by id {crucible_game_id}")
     game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
     return render_template(
         "game.html",
@@ -149,11 +151,7 @@ def upload():
                 )
                 db.session.add(log_obj)
             db.session.commit()
-            return render_template(
-                "upload.html",
-                title="Upload a Game!",
-                success=f"{game.winner} vs. {game.loser}",
-            )
+            return redirect(f"/game/{game.crucible_game_id}")
     return render_template(
         "upload.html",
         title="Upload a Game!",
@@ -169,9 +167,7 @@ def upload_simple():
             crucible_game_id=game.crucible_game_id
         ).first()
         if existing_game is None:
-            current_app.logger.debug(
-                f"Confirmed no existing record for {game.crucible_game_id}"
-            )
+            logger.debug(f"Confirmed no existing record for {game.crucible_game_id}")
             db.session.add(game)
             db.session.commit()
             return redirect(f"/game/{game.crucible_game_id}")
