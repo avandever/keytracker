@@ -5,8 +5,6 @@ keytracker/config.ini
 __pycache__/
 config.ini
 remote_config.ini
-Dockerfile
-.dockerignore
 .gcloudignore
 build/
 venv/
