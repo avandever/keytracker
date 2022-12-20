@@ -12,6 +12,13 @@
             Total games played: {{ games_won + games_lost }} | Games won: {{ games_won }}
             ( {{ '%0.2f' | format(games_won / ( games_won + games_lost ) * 100) }}% )
         </div>
+        <form method="get">
+            <label for="username">Limit to User: </label>
+            <input type="text"
+                   name="username"
+                   placeholder=""/>
+            <button type="submit">Filter</button>
+        </form>
     </div>
     <div class="games_list">
         {% for game in games %}

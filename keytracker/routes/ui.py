@@ -18,6 +18,7 @@ from keytracker.utils import (
 )
 import datetime
 import logging
+from sqlalchemy import and_, or_
 
 
 blueprint = Blueprint("ui", __name__, template_folder="templates")
@@ -57,15 +58,33 @@ def leaderboard():
 
 @blueprint.route("/deck/<deck_id>", methods=["GET"])
 def deck(deck_id):
-    games_won = Game.query.filter(Game.winner_deck_id == deck_id).count()
-    games_lost = Game.query.filter(Game.loser_deck_id == deck_id).count()
-    deck_games = (
-        Game.query.filter(
-            (Game.winner_deck_id == deck_id) | (Game.loser_deck_id == deck_id)
+    username = request.args.get("username")
+    if username is not None:
+        games_won = Game.query.filter_by(winner_deck_id=deck_id,winner=username).count()
+        games_lost = Game.query.filter_by(loser_deck_id=deck_id,loser=username).count()
+        deck_games = (
+            Game.query.filter(
+                or_(
+                    and_(Game.winner_deck_id == deck_id, Game.winner == username),
+                    and_(Game.loser_deck_id == deck_id, Game.loser == username)
+                )
+            )
+            .order_by(Game.date.desc())
+            .all()
         )
-        .order_by(Game.date.desc())
-        .all()
-    )
+    else:
+        games_won = Game.query.filter_by(winner_deck_id=deck_id).count()
+        games_lost = Game.query.filter_by(loser_deck_id=deck_id).count()
+        deck_games = (
+            Game.query.filter(
+                or_(
+                    (Game.winner_deck_id == deck_id),
+                    (Game.loser_deck_id == deck_id),
+                )
+            )
+            .order_by(Game.date.desc())
+            .all()
+        )
     if len(deck_games) == 0:
         flash(f"No games found for deck {deck_id}")
         return redirect("/")
