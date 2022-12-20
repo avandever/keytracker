@@ -57,6 +57,8 @@ def leaderboard():
 
 @blueprint.route("/deck/<deck_id>", methods=["GET"])
 def deck(deck_id):
+    games_won = Game.query.filter(Game.winner_deck_id == deck_id).count()
+    games_lost = Game.query.filter(Game.loser_deck_id == deck_id).count()
     deck_games = (
         Game.query.filter(
             (Game.winner_deck_id == deck_id) | (Game.loser_deck_id == deck_id)
@@ -79,6 +81,8 @@ def deck(deck_id):
         games=deck_games,
         deck_name=deck_name,
         deck_id=deck_id,
+        games_won=games_won,
+        games_lost=games_lost,
     )
 
 

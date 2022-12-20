@@ -8,6 +8,10 @@
         <div class="dok_link">
             <a href="https://decksofkeyforge.com/decks/{{ deck_id }}">Decks of KeyForge</a>
         </div>
+        <div class="games_summary">
+            Total games played: {{ games_won + games_lost }} | Games won: {{ games_won }}
+            ( {{ '%0.2f' | format(games_won / ( games_won + games_lost ) * 100) }}% )
+        </div>
     </div>
     <div class="games_list">
         {% for game in games %}
