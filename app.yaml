@@ -1,0 +1,9 @@
+service: tracker
+runtime: python310
+entrypoint: gunicorn -b :$PORT keytracker.server:app --log-level debug --log-file -
+handlers:
+- url: /static
+  static_dir: static
+
+- url: /.*
+  script: auto

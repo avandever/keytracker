@@ -1,7 +1,12 @@
 keytracker/venv/
 keytracker.egg-info/
 keytracker/__pycache__/
+keytracker/config.ini
 __pycache__/
 config.ini
+remote_config.ini
+Dockerfile
+.dockerignore
+.gcloudignore
 build/
 venv/

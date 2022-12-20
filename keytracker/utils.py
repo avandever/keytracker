@@ -5,6 +5,7 @@ import os
 from typing import Dict
 import requests
 import re
+import sqlalchemy
 
 
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
@@ -45,27 +46,19 @@ def config_to_uri(
     user: str = None,
     password: str = None,
     database: str = "keyforge_decks",
+    **connect_query,
 ) -> str:
-    uri_bits = [driver, "://"]
-    if driver == "sqlite":
-        uri_bits.append("/")
-        uri_bits.append(path)
-    elif driver in ["postgresql", "mysql"]:
-        if user is not None:
-            uri_bits.append(user)
-            if password is not None:
-                uri_bits.append(":")
-                uri_bits.append(password)
-        uri_bits.append("@")
-        uri_bits.append(host)
-        if port is not None:
-            uri_bits.append(":")
-            uri_bits.append(port)
-        uri_bits.append("/")
-        uri_bits.append(database)
-    else:
-        raise UnknownDBDriverException(f"Unrecognized DB Driver: {driver}")
-    return "".join(uri_bits)
+    return sqlalchemy.engine.url.URL.create(
+        drivername=driver,
+        username=user,
+        password=password,
+        database=database,
+        # If unix_socket is passed in, we us that in connect_query, and leave off
+        # host/port args
+        host=None if connect_query else host,
+        port=None if connect_query else port,
+        query=connect_query,
+    )
 
 
 def render_log(log: str) -> str:
