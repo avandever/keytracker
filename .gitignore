@@ -4,7 +4,7 @@ keytracker/__pycache__/
 keytracker/config.ini
 __pycache__/
 config.ini
-remote_config.ini
+config-local.ini
 .gcloudignore
 build/
 venv/

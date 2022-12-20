@@ -108,6 +108,8 @@ def user_search():
 @blueprint.route("/user/<username>", methods=["GET"])
 def user(username):
     """User Summary Page"""
+    games_won = Game.query.filter(Game.winner == username).count()
+    games_lost = Game.query.filter(Game.loser == username).count()
     user_games = (
         Game.query.filter((Game.winner == username) | (Game.loser == username))
         .order_by(Game.date.desc())
@@ -122,6 +124,8 @@ def user(username):
         title=f"{username} games",
         username=username,
         games=user_games,
+        games_won=games_won,
+        games_lost=games_lost,
     )
 
 
