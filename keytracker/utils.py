@@ -13,7 +13,7 @@ FIRST_PLAYER_MATCHER = re.compile(r"^(.*) (won the flip|chooses to go first)")
 SHUFFLE_MATCHER = re.compile(r"^(.*) is shuffling their deck")
 HOUSE_CHOICE_MATCHER = re.compile(r"^(.*) chooses (.*) as their active house")
 FORGE_MATCHER = re.compile(r"^(.*) forges the (.*) key *, paying ([0-9]+) Æmber")
-WIN_MATCHER = re.compile(r" *([^ ].*) has won the game")
+WIN_MATCHER = re.compile(r"\s*([^ ].*) has won the game")
 
 MV_API_BASE = "http://www.keyforgegame.com/api/decks"
 
