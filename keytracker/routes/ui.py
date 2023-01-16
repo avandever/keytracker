@@ -60,13 +60,15 @@ def leaderboard():
 def deck(deck_id):
     username = request.args.get("username")
     if username is not None:
-        games_won = Game.query.filter_by(winner_deck_id=deck_id,winner=username).count()
-        games_lost = Game.query.filter_by(loser_deck_id=deck_id,loser=username).count()
+        games_won = Game.query.filter_by(
+            winner_deck_id=deck_id, winner=username
+        ).count()
+        games_lost = Game.query.filter_by(loser_deck_id=deck_id, loser=username).count()
         deck_games = (
             Game.query.filter(
                 or_(
                     and_(Game.winner_deck_id == deck_id, Game.winner == username),
-                    and_(Game.loser_deck_id == deck_id, Game.loser == username)
+                    and_(Game.loser_deck_id == deck_id, Game.loser == username),
                 )
             )
             .order_by(Game.date.desc())
