@@ -1,4 +1,5 @@
 from collections import Counter, defaultdict
+import configparser
 import datetime
 from keytracker.schema import Game
 import os
@@ -36,6 +37,22 @@ class DuplicateGameError(Exception):
 
 class MissingInput(Exception):
     pass
+
+
+def load_config() -> Dict[str, str]:
+    config = {}
+    config_path = os.environ.get("TRACKER_CONFIG_PATH", "config.ini")
+    if config_path == "ENV":
+        config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("SQLALCHEMY_DATABASE_URI")
+        config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "placeholder")
+    else:
+        cparser = configparser.ConfigParser()
+        cparser.read(config_path)
+        config["SQLALCHEMY_DATABASE_URI"] = config_to_uri(**cparser["db"])
+        config["SECRET_KEY"] = cparser["app"]["secret_key"]
+    assert config["SQLALCHEMY_DATABASE_URI"] is not None
+    assert config["SECRET_KEY"] != "placeholder"
+    return config
 
 
 def config_to_uri(

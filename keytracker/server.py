@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 from flask import Flask
-import configparser
 from keytracker.schema import (
     db,
     Log,
 )
 from keytracker.utils import (
-    config_to_uri,
+    load_config,
     render_log,
 )
 from keytracker.routes import (
@@ -17,11 +16,7 @@ import os
 
 
 app = Flask(__name__)
-cparser = configparser.ConfigParser()
-cparser.read(os.environ.get("TRACKER_CONFIG_PATH", "config.ini"))
-app.config["SQLALCHEMY_DATABASE_URI"] = config_to_uri(**cparser["db"])
-app.config["SECRET_KEY"] = cparser["app"]["secret_key"]
-assert app.config["SECRET_KEY"] != "placeholder"
+app.config.update(load_config())
 app.app_context().push()
 db.app = app
 db.init_app(app)
