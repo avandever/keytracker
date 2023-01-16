@@ -43,7 +43,7 @@ def load_config() -> Dict[str, str]:
     config = {}
     config_path = os.environ.get("TRACKER_CONFIG_PATH", "config.ini")
     if config_path == "ENV":
-        config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("SQLALCHEMY_DATABASE_URI")
+        config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
         config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "placeholder")
     else:
         cparser = configparser.ConfigParser()
