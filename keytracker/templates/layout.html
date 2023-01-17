@@ -7,6 +7,11 @@
         <meta charset="utf-8" />
         <meta name="keywords" content="HTML, CSS, JavaScript" />
         <meta name="description" content={{ description }} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="{{ url_for('ui.home') }}" />
+        <meta property="og:title" content="{{ title }}" />
+        <meta property="og:description" content="{{ description }}" />
+        <meta property="og:image" content="https://ancientbearrepublic.com/abr.png" />
         {% block css %}<link href="{{ url_for("static", filename="css/style.css") }}"
       rel="stylesheet"/>{% endblock %}
     </head>
