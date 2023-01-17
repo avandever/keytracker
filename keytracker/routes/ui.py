@@ -4,6 +4,7 @@ from flask import (
     render_template,
     redirect,
     request,
+    url_for,
 )
 from keytracker.schema import (
     db,
@@ -89,7 +90,7 @@ def deck(deck_id):
         )
     if len(deck_games) == 0:
         flash(f"No games found for deck {deck_id}")
-        return redirect("/")
+        return redirect(url_for("ui.home"))
     game = deck_games[0]
     deck_name = (
         game.winner_deck_name
@@ -123,7 +124,7 @@ def game(crucible_game_id):
 def user_search():
     """User Search Page"""
     if request.method == "POST":
-        return redirect(f"/user/{request.form['username']}")
+        return redirect(url_for("ui.user", username=request.form["username"]))
     return render_template(
         "user_search.html",
         title="User Search",
@@ -143,7 +144,7 @@ def user(username):
     )
     if len(user_games) == 0:
         flash(f"No games found for user {username}")
-        return redirect("/user")
+        return redirect(url_for("ui.user_search"))
     return render_template(
         "user.html",
         title=f"{username} games",
@@ -180,7 +181,7 @@ def upload():
                 )
                 db.session.add(log_obj)
             db.session.commit()
-            return redirect(f"/game/{game.crucible_game_id}")
+            return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
     return render_template(
         "upload.html",
         title="Upload a Game!",
@@ -199,7 +200,7 @@ def upload_simple():
             logger.debug(f"Confirmed no existing record for {game.crucible_game_id}")
             db.session.add(game)
             db.session.commit()
-            return redirect(f"/game/{game.crucible_game_id}")
+            return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
         else:
             flash(f"A game with name '{game.crucible_game_id}' already exists")
     return render_template(
