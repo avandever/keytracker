@@ -33,6 +33,7 @@ def home():
     return render_template(
         "home.html",
         title="Bear Tracks",
+        description="KeyForge Game Records and Analysis",
         games=last_five_games,
     )
 
