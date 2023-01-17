@@ -13,22 +13,22 @@
                 {% if game.winner == username %}
                     {{ username }}
                 {% else %}
-                    <a href="/user/{{ game.winner }}">{{ game.winner }}</a>
+                    <a href="{{ url_for('ui.user', username=game.winner) }}">{{ game.winner }}</a>
                 {% endif %}
                 vs.
                 {% if game.loser == username %}
                     {{ username }}
                 {% else %}
-                    <a href="/user/{{ game.loser }}">{{ game.loser }}</a>
+                    <a href="{{ url_for('ui.user', username=game.loser) }}">{{ game.loser }}</a>
                 {% endif %}
-                (<a href="/game/{{ game.crucible_game_id }}">Details</a>)
+                (<a href="{{ url_for('ui.game', crucible_game_id=game.crucible_game_id) }}">Details</a>)
             </div>
             <div class="game_decks">
-                <a href="/deck/{{ game.winner_deck_id }}">{{ game.winner_deck_name }}</a>
+                <a href="{{ url_for('ui.deck', deck_id=game.winner_deck_id) }}">{{ game.winner_deck_name }}</a>
                 (<a href="https://www.keyforgegame.com/deck-details/{{ game.winner_deck_id }}">MV</a>)
                 (<a href="https://decksofkeyforge.com/decks/{{ game.winner_deck_id }}">DoK</a>)
                 vs.
-                <a href="/deck/{{ game.loser_deck_id }}">{{ game.loser_deck_name }}</a>
+                <a href="{{ url_for('ui.deck', deck_id=game.loser_deck_id) }}">{{ game.loser_deck_name }}</a>
                 (<a href="https://www.keyforgegame.com/deck-details/{{ game.loser_deck_id }}">MV</a>)
                 (<a href="https://decksofkeyforge.com/decks/{{ game.loser_deck_id }}">DoK</a>)
             </div>

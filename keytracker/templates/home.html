@@ -7,7 +7,7 @@
     <div class="games_list">
         {% for game in games %}
             <p>
-                <a href="/game/{{ game.crucible_game_id }}">{{ game.winner }} vs {{ game.loser }}</a>
+            <a href="{{ url_for('ui.game', crucible_game_id=game.crucible_game_id) }}">{{ game.winner }} vs {{ game.loser }}</a>
             </p>
         {% endfor %}
     </div>
