@@ -24,13 +24,13 @@
                 {% if game.winner == username %}
                     {{ username }}
                 {% else %}
-                <a href="{{ url_for('ui.user', username=game.winner) }}">{{ game.winner }}</a>
+                    <a href="{{ url_for('ui.user', username=game.winner) }}">{{ game.winner }}</a>
                 {% endif %}
                 vs.
                 {% if game.loser == username %}
                     {{ username }}
                 {% else %}
-                    <a href="{{ url_for('ui.user', username=game.loser) }}"{{ game.loser }}</a>
+                    <a href="{{ url_for('ui.user', username=game.loser) }}">{{ game.loser }}</a>
                 {% endif %}
                 (<a href="{{ url_for('ui.game', crucible_game_id=game.crucible_game_id) }}">Details</a>)
             </div>
