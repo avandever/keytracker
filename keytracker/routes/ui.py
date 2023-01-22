@@ -111,12 +111,79 @@ def deck(deck_id):
 
 @blueprint.route("/game/<crucible_game_id>", methods=["GET"])
 def game(crucible_game_id):
-    print(f"Looking up game by id {crucible_game_id}")
     game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
     return render_template(
         "game.html",
         title=f"{game.winner} vs {game.loser}",
         game=game,
+    )
+
+
+@blueprint.route("/games", methods=["GET"])
+def games():
+    if any(
+        (
+            request.args.get("user1"),
+            request.args.get("deck1"),
+        )
+    ):
+        query = Game.query
+        user1 = request.args.get("user1")
+        if user1:
+            if "|" in user1:
+                query = query.filter(
+                    or_(
+                        Game.winner.in_(user1.split("|")),
+                        Game.loser.in_(user1.split("|")),
+                    )
+                )
+            else:
+                query = query.filter(
+                    or_(
+                        Game.winner == user1,
+                        Game.loser == user1,
+                    )
+                )
+        user2 = request.args.get("user2")
+        if user2:
+            if "|" in user2:
+                query = query.filter(
+                    or_(
+                        Game.winner.in_(user2.split("|")),
+                        Game.loser.in_(user2.split("|")),
+                    )
+                )
+            else:
+                query = query.filter(
+                    or_(
+                        Game.winner == user2,
+                        Game.loser == user2,
+                    )
+                )
+        deck1 = request.args.get("deck1")
+        if deck1:
+            query = query.filter(
+                or_(
+                    Game.winner_deck_id == deck1,
+                    Game.loser_deck_id == deck1,
+                )
+            )
+        deck2 = request.args.get("deck2")
+        if deck2:
+            query = query.filter(
+                or_(
+                    Game.winner_deck_id == deck2,
+                    Game.loser_deck_id == deck2,
+                )
+            )
+        games = query.order_by(Game.date.desc()).all()
+    else:
+        games = None
+    return render_template(
+        "games.html",
+        title=f"Games Search",
+        args=request.args,
+        games=games,
     )
 
 

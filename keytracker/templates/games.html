@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class="games_header">
+        <h1>Record of games for {{ username }}</h1>
+        <div class="games_summary">Games Search</div>
+    </div>
+    <form id="cleanform" method="get">
+        <label for="user1">Player</label>
+        <br />
+        <input type="text"
+               name="user1"
+               {% if args["user1"] %} value="{{ args["user1"] }}"{% endif %}
+               placeholder="Username"/>
+        <br />
+        <label for="user2">Player</label>
+        <br />
+        <input type="text"
+               name="user2"
+               {% if args["user2"] %} value="{{ args["user2"] }}"{% endif %}
+               placeholder="Username"/>
+        <br />
+        <label for="deck1">Deck</label>
+        <br />
+        <input type="text"
+               name="deck1"
+               {% if args["deck1"] %} value="{{ args["deck1"] }}"{% endif %}
+               placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+        <br />
+        <label for="deck2">Deck</label>
+        <br />
+        <input type="text"
+               name="deck2"
+               {% if args["deck2"] %} value="{{ args["deck2"] }}"{% endif %}
+               placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+        <br />
+        <button type="submit">Submit</button>
+    </form>
+    <script type="text/javascript" src="{{ url_for("static", filename="cleanform.js") }}"></script>
+    {% if games %}
+        <div class="games_list">
+            {% for game in games %}
+                <div class="game_players">
+                    <a href="{{ url_for('ui.user', username=game.winner) }}">{{ game.winner }}</a>
+                    vs.
+                    <a href="{{ url_for('ui.user', username=game.loser) }}">{{ game.loser }}</a>
+                    (<a href="{{ url_for('ui.game', crucible_game_id=game.crucible_game_id) }}">Details</a>)
+                </div>
+                <div class="game_decks">
+                    <a href="{{ url_for('ui.deck', deck_id=game.winner_deck_id) }}">{{ game.winner_deck_name }}</a>
+                    (<a href="https://www.keyforgegame.com/deck-details/{{ game.winner_deck_id }}">MV</a>)
+                    (<a href="https://decksofkeyforge.com/decks/{{ game.winner_deck_id }}">DoK</a>)
+                    vs.
+                    <a href="{{ url_for('ui.deck', deck_id=game.loser_deck_id) }}">{{ game.loser_deck_name }}</a>
+                    (<a href="https://www.keyforgegame.com/deck-details/{{ game.loser_deck_id }}">MV</a>)
+                    (<a href="https://decksofkeyforge.com/decks/{{ game.loser_deck_id }}">DoK</a>)
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}
