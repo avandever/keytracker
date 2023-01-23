@@ -12,6 +12,9 @@ from keytracker.schema import (
     Log,
 )
 from keytracker.utils import (
+    add_deck_filters,
+    add_game_sort,
+    add_user_filters,
     BadLog,
     basic_stats_to_game,
     DeckNotFoundError,
@@ -128,55 +131,18 @@ def games():
         )
     ):
         query = Game.query
-        user1 = request.args.get("user1")
-        if user1:
-            if "|" in user1:
-                query = query.filter(
-                    or_(
-                        Game.winner.in_(user1.split("|")),
-                        Game.loser.in_(user1.split("|")),
-                    )
-                )
-            else:
-                query = query.filter(
-                    or_(
-                        Game.winner == user1,
-                        Game.loser == user1,
-                    )
-                )
-        user2 = request.args.get("user2")
-        if user2:
-            if "|" in user2:
-                query = query.filter(
-                    or_(
-                        Game.winner.in_(user2.split("|")),
-                        Game.loser.in_(user2.split("|")),
-                    )
-                )
-            else:
-                query = query.filter(
-                    or_(
-                        Game.winner == user2,
-                        Game.loser == user2,
-                    )
-                )
-        deck1 = request.args.get("deck1")
-        if deck1:
-            query = query.filter(
-                or_(
-                    Game.winner_deck_id == deck1,
-                    Game.loser_deck_id == deck1,
-                )
-            )
-        deck2 = request.args.get("deck2")
-        if deck2:
-            query = query.filter(
-                or_(
-                    Game.winner_deck_id == deck2,
-                    Game.loser_deck_id == deck2,
-                )
-            )
-        games = query.order_by(Game.date.desc()).all()
+        query = add_user_filters(
+            query,
+            filter(bool, map(request.args.get, ("user1", "user2"))),
+        )
+        query = add_deck_filters(
+            query,
+            deck_filters=filter(bool, map(request.args.get, ("deck1", "deck2"))),
+        )
+        query = add_game_sort(
+            query, [(request.args.get("sort1"), request.args.get("direction1"))]
+        )
+        games = query.all()
     else:
         games = None
     return render_template(

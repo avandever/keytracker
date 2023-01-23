@@ -3,10 +3,12 @@ import configparser
 import datetime
 from keytracker.schema import Game
 import os
-from typing import Dict
+from typing import Dict, Iterable, Tuple
 import requests
 import re
 import sqlalchemy
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import Query
 
 
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
@@ -235,3 +237,48 @@ def basic_stats_to_game(**kwargs) -> Game:
         loser_keys=kwargs.get("loser_keys"),
     )
     return game
+
+
+def add_user_filters(
+    query: Query,
+    user_filters: Iterable[str],
+) -> Query:
+    for user_string in user_filters:
+        if "|" in user_string:
+            query = query.filter(
+                or_(
+                    Game.winner.in_(user_string.split("|")),
+                    Game.loser.in_(user_string.split("|")),
+                )
+            )
+        else:
+            query = query.filter(
+                or_(
+                    Game.winner == user_string,
+                    Game.loser == user_string,
+                )
+            )
+    return query
+
+
+def add_deck_filters(
+    query: Query,
+    deck_filters: Iterable[str],
+) -> Query:
+    for deck in deck_filters:
+        query = query.filter(
+            or_(
+                Game.winner_deck_id == deck,
+                Game.loser_deck_id == deck,
+            )
+        )
+    return query
+
+
+def add_game_sort(
+    query: Query,
+    sort_specs: Iterable[Tuple[str, str]],
+) -> Query:
+    for (col, direction) in sort_specs:
+        query = query.order_by(getattr(getattr(Game, col), direction)())
+    return query

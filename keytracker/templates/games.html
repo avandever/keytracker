@@ -33,6 +33,29 @@
                {% if args["deck2"] %} value="{{ args["deck2"] }}"{% endif %}
                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
         <br />
+        <label for="sort1">Sort By</label>
+        <br />
+        <select id="sort1" name="sort1">
+            <option value="date"{% if args["sort1"] == "date" %} selected{% endif %}>
+                Date
+            </option>
+            <option value="loser_keys"
+                    {% if args["sort1"] == "loser_keys" %} selected{% endif %}>
+                Keys forged by loser
+            </option>
+        </select>
+        <br />
+        <label for="direction1">Order</label>
+        <br />
+        <select id="direction1" name="direction1">
+            <option value="asc"{% if args["direction1"] == "asc" %} selected{% endif %}>
+                Ascending
+            </option>
+            <option value="desc"{% if args["direction1"] == "desc" %} selected{% endif %}>
+                Descending
+            </option>
+        </select>
+        <br />
         <button type="submit">Submit</button>
     </form>
     <script type="text/javascript" src="{{ url_for("static", filename="cleanform.js") }}"></script>
