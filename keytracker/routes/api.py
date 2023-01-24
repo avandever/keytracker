@@ -14,6 +14,7 @@ from keytracker.utils import (
     add_decks_to_game,
     basic_stats_to_game,
     DuplicateGameError,
+    get_deck_by_id_with_zeal,
     log_to_game,
     get_deck_by_id_with_zeal,
 )
