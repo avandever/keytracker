@@ -349,3 +349,11 @@ def add_game_sort(
     for (col, direction) in sort_specs:
         query = query.order_by(getattr(getattr(Game, col), direction)())
     return query
+
+
+def add_decks_to_game(game: Game):
+    winner_deck = get_deck_by_id_with_zeal(game.winner_deck_id)
+    game.winner_deck_dbid = winner_deck.id
+    loser_deck = get_deck_by_id_with_zeal(game.loser_deck_id)
+    game.loser_deck_dbid = loser_deck.id
+    db.session.commit()

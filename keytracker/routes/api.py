@@ -11,6 +11,7 @@ from keytracker.schema import (
     Log,
 )
 from keytracker.utils import (
+    add_decks_to_game,
     basic_stats_to_game,
     DuplicateGameError,
     log_to_game,
@@ -106,4 +107,12 @@ def delete_game(game_id):
     Log.query.filter_by(game_id=game.id).delete()
     db.session.delete(game)
     db.session.commit()
+    return make_response(jsonify(success=True), 201)
+
+
+@blueprint.route("/api/load_missing_decks/v1/<int:count>", methods=["GET"])
+def load_missing_decks(count):
+    game = Game.query.filter_by(winner_deck_dbid=None).limit(count).all()
+    for game in game:
+        add_decks_to_game(game)
     return make_response(jsonify(success=True), 201)
