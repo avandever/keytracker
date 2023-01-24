@@ -18,6 +18,7 @@ import os
 
 app = Flask(__name__)
 app.config.update(load_config())
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_recycle": 3600}
 app.app_context().push()
 db.app = app
 db.init_app(app)
