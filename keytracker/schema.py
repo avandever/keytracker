@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+import sqlalchemy
 import datetime
 import enum
 
@@ -27,6 +28,65 @@ class Expansion(enum.Enum):
     MM = "Mass Mutation"
     DT = "Dark Tidings"
     WOE = "Winds of Exchange"
+
+
+class IdList(sqlalchemy.types.TypeDecorator):
+    impl = db.String(5 * 37)
+    cache_ok = True
+
+    def __init__(self, sep=","):
+        self.sep = sep
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            return self.sep.join(map(str, value))
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            if value == "":
+                return []
+            return list(map(int, value.split(self.sep)))
+
+
+class Card(db.Model):
+    __tablename__ = "tracker_card"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    kf_id = db.Column(db.String(36), primary_key=True)
+    card_title = db.Column(db.String(64))
+    house = db.Column(db.String(20))
+    card_type = db.Column(db.String(20))
+    front_image = db.Column(db.String(256))
+    card_text = db.Column(db.String(512))
+    traits = db.Column(db.String(64))
+    amber = db.Column(db.Integer)
+    power = db.Column(db.Integer)
+    armor = db.Column(db.Integer)
+    rarity = db.Column(db.String(10))
+    flavor_text = db.Column(db.String(512))
+    card_number = db.Column(db.Integer)
+    expansion = db.Column(db.Integer)
+    is_maverick = db.Column(db.Boolean)
+    is_anomaly = db.Column(db.Boolean)
+    is_enhanced = db.Column(db.Boolean)
+    is_non_deck = db.Column(db.Boolean, default=False, nullable=False)
+
+
+class Deck(db.Model):
+    """
+    This represents a deck, including various stats about it from the Master
+    Vault. This object does not inherently contain a list of cards, however, and instead
+    holds a list of ids that point to cards
+    """
+
+    __tablename__ = "tracker_deck"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    kf_id = db.Column(db.String(36), primary_key=True)
+    name = db.Column(db.String(256))
+    expansion = db.Column(db.Integer)
+    sas_rating = db.Column(db.Integer)
+    aerc_score = db.Column(db.Integer)
+    sas_version = db.Column(db.Integer)
+    card_id_list = db.Column(IdList(","))
 
 
 class Game(db.Model):

@@ -1,7 +1,7 @@
 from collections import Counter, defaultdict
 import configparser
 import datetime
-from keytracker.schema import Game
+from keytracker.schema import db, Card, Deck, Game
 import os
 from typing import Dict, Iterable, Tuple
 import requests
@@ -19,6 +19,11 @@ FORGE_MATCHER = re.compile(r"^(.*) forges the (.*) key *, paying ([0-9]+) Æmber
 WIN_MATCHER = re.compile(r"\s*([^ ].*) has won the game")
 
 MV_API_BASE = "http://www.keyforgegame.com/api/decks"
+
+
+DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
+DOK_DECK_BASE = "https://decksofkeyforge.com/public-api/v3/decks"
+LATEST_SAS_VERSION = 42
 
 
 class BadLog(Exception):
@@ -162,8 +167,10 @@ def log_to_game(log: str) -> Game:
             winner = player
         else:
             loser = player
-    print(f"Winning deck: {winner.deck_name}")
-    print(f"Losing deck: {loser.deck_name}")
+    winner_deck = get_deck_by_name_with_zeal(winner.deck_name)
+    loser_deck = get_deck_by_name_with_zeal(loser.deck_name)
+    print(f"Winning deck: {winner_deck.name}")
+    print(f"Losing deck: {loser_deck.name}")
     game = Game(
         winner=winner.player_name,
         winner_deck_id=deck_name_to_id(winner.deck_name),
@@ -175,6 +182,60 @@ def log_to_game(log: str) -> Game:
         loser_keys=loser.keys_forged,
     )
     return game
+
+
+def add_card_to_deck(card_dict: Dict, deck: Deck):
+    card_id = card_dict.pop("id")
+    card = Card.query.filter_by(kf_id=card_id).first()
+    if card is None:
+        card_dict["kf_id"] = card_id
+        card = Card(**card_dict)
+        db.session.add(card)
+        db.session.commit()
+        db.session.refresh(card)
+    deck.card_id_list.append(card.id)
+
+
+def get_deck_by_id_with_zeal(deck_id: str) -> Deck:
+    deck = Deck.query.filter_by(kf_id=deck_id).first()
+    if deck is None:
+        deck_url = os.path.join(MV_API_BASE, deck_id)
+        response = requests.get(deck_url, params={"links": "cards, notes"})
+        data = response.json()
+        deck = Deck(
+            kf_id=data["data"]["id"],
+            name=data["data"]["name"],
+            expansion=data["data"]["expansion"],
+        )
+        update_sas_scores(deck)
+        deck.card_id_list = []
+        for card in data["_linked"]["cards"]:
+            add_card_to_deck(card, deck)
+        db.session.add(deck)
+        db.session.commit()
+        return deck
+    return deck
+
+
+def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
+    deck = Deck.query.filter_by(name=deck_name).first()
+    if deck is None:
+        deck_id = deck_name_to_id(deck_name)
+        deck = get_deck_by_id_with_zeal(deck_id)
+    return deck
+
+
+def update_sas_scores(deck: Deck) -> bool:
+    """Returns True if update occurred."""
+    if (deck.sas_version or 0) >= LATEST_SAS_VERSION:
+        return False
+    url = os.path.join(DOK_DECK_BASE, deck.kf_id)
+    response = requests.get(url, headers=DOK_HEADERS)
+    data = response.json()
+    deck.sas_rating = data["deck"]["sasRating"]
+    deck.aerc_score = data["deck"]["aercScore"]
+    deck.sas_version = data["sasVersion"]
+    return True
 
 
 def deck_name_to_id(deck_name: str) -> str:
@@ -189,10 +250,8 @@ def deck_name_to_id(deck_name: str) -> str:
 
 
 def deck_id_to_name(deck_id: str) -> str:
-    deck_url = os.path.join(MV_API_BASE, deck_id)
-    response = requests.get(deck_url, params={"links": "cards, notes"})
-    data = response.json()
-    return data["data"]["name"]
+    deck = get_deck_by_id_with_zeal(deck_id)
+    return deck.name
 
 
 def basic_stats_to_game(**kwargs) -> Game:
