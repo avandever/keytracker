@@ -63,7 +63,7 @@ class Card(db.Model):
     armor = db.Column(db.Integer)
     rarity = db.Column(db.String(10))
     flavor_text = db.Column(db.String(512))
-    card_number = db.Column(db.Integer)
+    card_number = db.Column(db.String(10))
     expansion = db.Column(db.Integer)
     is_maverick = db.Column(db.Boolean)
     is_anomaly = db.Column(db.Boolean)
