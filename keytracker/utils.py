@@ -174,13 +174,13 @@ def log_to_game(log: str) -> Game:
     game = Game(
         winner=winner.player_name,
         winner_deck_dbid=winner_deck.id,
-        winner_deck_id=deck_name_to_id(winner.deck_name),
-        winner_deck_name=winner.deck_name,
+        winner_deck_id=winner_deck.kf_id,
+        winner_deck_name=winner_deck.name,
         winner_keys=winner.keys_forged,
         loser=loser.player_name,
         loser_deck_dbid=loser_deck.id,
-        loser_deck_id=deck_name_to_id(loser.deck_name),
-        loser_deck_name=loser.deck_name,
+        loser_deck_id=loser_deck.kf_id,
+        loser_deck_name=loser_deck.name,
         loser_keys=loser.keys_forged,
     )
     return game
@@ -271,31 +271,36 @@ def basic_stats_to_game(**kwargs) -> Game:
     loser = kwargs.get("loser")
     loser_deck_id = kwargs.get("loser_deck_id")
     loser_deck_name = kwargs.get("loser_deck_name")
-    if not winner_deck_id:
-        if not winner_deck_name:
+    if winner_deck_id:
+        # If urls were passed in, fix that now
+        winner_deck_id = winner_deck_id.split("/")[-1]
+        winner_deck = get_deck_by_id_with_zeal(winner_deck_id)
+    else:
+        if winner_deck_name:
+            winner_deck = get_deck_by_name_with_zeal(winner_deck_name)
+        else:
             raise MissingInput("Need name or id of winning deck")
-        winner_deck_id = deck_name_to_id(winner_deck_name)
-    if not loser_deck_id:
-        if not loser_deck_name:
+    if loser_deck_id:
+        # If urls were passed in, fix that now
+        loser_deck_id = loser_deck_id.split("/")[-1]
+        loser_deck = get_deck_by_id_with_zeal(loser_deck_id)
+    else:
+        if loser_deck_name:
+            loser_deck = get_deck_by_name_with_zeal(loser_deck_name)
+        else:
             raise MissingInput("Need name or id of losing deck")
-        loser_deck_id = deck_name_to_id(loser_deck_name)
-    # If urls were passed in, fix that now
-    winner_deck_id = winner_deck_id.split("/")[-1]
-    loser_deck_id = loser_deck_id.split("/")[-1]
-    if not winner_deck_name:
-        winner_deck_name = deck_id_to_name(winner_deck_id)
-    if not loser_deck_name:
-        loser_deck_name = deck_id_to_name(loser_deck_id)
     game = Game(
         crucible_game_id=crucible_game_id,
         date=date,
         winner=winner,
-        winner_deck_id=winner_deck_id,
-        winner_deck_name=winner_deck_name,
+        winner_deck_dbid=winner_deck.id,
+        winner_deck_id=winner_deck.kf_id,
+        winner_deck_name=winner_deck.name,
         winner_keys=kwargs.get("winner_keys", 3),
         loser=loser,
-        loser_deck_id=loser_deck_id,
-        loser_deck_name=loser_deck_name,
+        loser_deck_dbid=loser_deck.id,
+        loser_deck_id=loser_deck.kf_id,
+        loser_deck_name=loser_deck.name,
         loser_keys=kwargs.get("loser_keys"),
     )
     return game
