@@ -8,3 +8,7 @@ config-local.ini
 .gcloudignore
 build/
 venv/
+alembic.ini
+alembic/
+alembic_local/
+alembic_remote/
