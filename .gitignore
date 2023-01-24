@@ -9,6 +9,8 @@ config-local.ini
 build/
 venv/
 alembic.ini
+alembic-local.ini
+alembic-remote.ini
 alembic/
 alembic_local/
 alembic_remote/

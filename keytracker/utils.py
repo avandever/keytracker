@@ -173,10 +173,12 @@ def log_to_game(log: str) -> Game:
     print(f"Losing deck: {loser_deck.name}")
     game = Game(
         winner=winner.player_name,
+        winner_deck_dbid=winner_deck.id,
         winner_deck_id=deck_name_to_id(winner.deck_name),
         winner_deck_name=winner.deck_name,
         winner_keys=winner.keys_forged,
         loser=loser.player_name,
+        loser_deck_dbid=loser_deck.id,
         loser_deck_id=deck_name_to_id(loser.deck_name),
         loser_deck_name=loser.deck_name,
         loser_keys=loser.keys_forged,
@@ -213,6 +215,7 @@ def get_deck_by_id_with_zeal(deck_id: str) -> Deck:
             add_card_to_deck(card, deck)
         db.session.add(deck)
         db.session.commit()
+        db.session.refresh(deck)
         return deck
     return deck
 
