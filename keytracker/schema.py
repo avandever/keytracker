@@ -30,6 +30,20 @@ class Expansion(enum.Enum):
     WOE = "Winds of Exchange"
 
 
+ExpansionValues = namedtuple(
+    "ExpansionValues", ["name", "shortname", "dokname", "number"]
+)
+
+
+EXPANSION_VALUES = [
+    ExpansionValues("Call of the Archons", "CotA", "COTA", 341),
+    ExpansionValues("Age of Ascension", "AoA", "AOA", 435),
+    ExpansionValues("Worlds Collide", "WC", "WC", 452),
+    ExpansionValues("Mass Mutation", "MM", "MM", 479),
+    ExpansionValues("Dark Tidings", "DT", "DT", 496),
+]
+
+
 class IdList(sqlalchemy.types.TypeDecorator):
     impl = db.String(5 * 37)
     cache_ok = True
