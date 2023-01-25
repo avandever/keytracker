@@ -199,29 +199,40 @@ def add_card_to_deck(card_dict: Dict, deck: Deck):
     deck.card_id_list.append(card.id)
 
 
-def get_deck_by_id_with_zeal(deck_id: str) -> Deck:
+def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> Deck:
     deck = Deck.query.filter_by(kf_id=deck_id).first()
     if deck is None:
         deck_url = os.path.join(MV_API_BASE, deck_id)
+        print(f"Getting {deck_id} from MV")
         response = requests.get(
             deck_url,
             params={"links": "cards, notes"},
             headers={"X-Forwarded-For": randip()},
         )
+        print(response.text)
         data = response.json()
         deck = Deck(
             kf_id=data["data"]["id"],
             name=data["data"]["name"],
             expansion=data["data"]["expansion"],
         )
-        update_sas_scores(deck)
+        print("Setting dok data")
+        if sas_rating and aerc_score:
+            deck.sas_rating = sas_rating
+            deck.aerc_score = aerc_score
+            deck.sas_version = LATEST_SAS_VERSION
+        else:
+            update_sas_scores(deck)
         deck.card_id_list = []
         for card in data["_linked"]["cards"]:
             add_card_to_deck(card, deck)
+        print("Saving to db")
         db.session.add(deck)
         db.session.commit()
         db.session.refresh(deck)
         return deck
+    else:
+        print(f"Already knew about {deck_id} ({deck.name})")
     return deck
 
 

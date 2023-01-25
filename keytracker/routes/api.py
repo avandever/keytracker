@@ -15,6 +15,7 @@ from keytracker.utils import (
     basic_stats_to_game,
     DuplicateGameError,
     log_to_game,
+    get_deck_by_id_with_zeal,
 )
 import datetime
 
@@ -116,3 +117,9 @@ def load_missing_decks(count):
     for game in game:
         add_decks_to_game(game)
     return make_response(jsonify(success=True), 201)
+
+
+@blueprint.route("/api/load_deck_with_dok_data/v1/<deck_id>", methods=["POST"])
+def load_deck_with_dok_data(deck_id):
+    deck = get_deck_by_id_with_zeal(deck_id, sas_rating=request.form.get("sas_rating"), aerc_score=request.form.get("aerc_score"))
+    return make_response(jsonify(success=True, deck_name=deck.name), 201)
