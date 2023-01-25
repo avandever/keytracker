@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy
 import datetime
 import enum
+from collections import namedtuple
 
 
 db = SQLAlchemy()
