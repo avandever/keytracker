@@ -3,8 +3,10 @@
 import requests
 import json
 import click
+import csv
 import os
 from schema import db
+import time
 
 
 def game_to_api(path: str, site_root: str) -> None:
@@ -78,6 +80,32 @@ def delete_game(game_id, host, port):
     site_root = f"http://{host}:{port}"
     uri = f"{site_root}/api/delete_game/v1/{game_id}"
     requests.get(uri)
+
+
+@cli.command()
+@click.argument("dok_csv", type=click.File("r"))
+@click.option("--host", type=str, default="127.0.0.1")
+@click.option("--port", type=int, default=5000)
+@click.option("--sleep", type=float, default=0.0)
+def load_decks_from_dok_csv(dok_csv, host, port, sleep):
+    site_root = f"https://{host}:{port}"
+    base_uri = f"{site_root}/api/load_deck_with_dok_data/v1"
+    reader = csv.reader(dok_csv)
+    first_row = next(reader)
+    id_idx = first_row.index("keyforge_id")
+    sas_idx = first_row.index("sas_rating")
+    aerc_idx = first_row.index("aerc_score")
+    for row in reader:
+        keyforge_id = row[id_idx]
+        sas_rating = row[sas_idx]
+        aerc_score = row[aerc_idx]
+        print(f"Submitting {keyforge_id}")
+        response = requests.post(
+            f"{base_uri}/{keyforge_id}",
+            params={"sas_rating": sas_rating, "aerc_score": aerc_score},
+        )
+        print(response.text)
+        time.sleep(sleep)
 
 
 if __name__ == "__main__":
