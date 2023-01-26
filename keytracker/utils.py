@@ -209,7 +209,6 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
             params={"links": "cards, notes"},
             headers={"X-Forwarded-For": randip()},
         )
-        print(response.text)
         data = response.json()
         deck = Deck(
             kf_id=data["data"]["id"],
