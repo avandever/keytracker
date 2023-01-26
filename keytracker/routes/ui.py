@@ -215,6 +215,7 @@ def upload():
                 )
                 db.session.add(log_obj)
             db.session.commit()
+            db.session.refresh(game)
             return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
     return render_template(
         "upload.html",
