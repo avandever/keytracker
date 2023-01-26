@@ -5,7 +5,6 @@ import json
 import click
 import os
 from schema import db
-import time
 
 
 def game_to_api(path: str, site_root: str) -> None:
@@ -79,19 +78,6 @@ def delete_game(game_id, host, port):
     site_root = f"http://{host}:{port}"
     uri = f"{site_root}/api/delete_game/v1/{game_id}"
     requests.get(uri)
-
-
-@cli.command()
-@click.argument("json_file", type=click.File("r"))
-@click.option("--host", type=str, default="127.0.0.1")
-@click.option("--port", type=int, default=5000)
-def upload_card_data(json_file, host, port):
-    site_root = f"http://{host}:{port}"
-    uri = f"{site_root}/api/maybe_add_card/v1/"
-    card_data = json.load(json_file)
-    for card in card_data:
-        response = requests.post(uri, {"json_data": json.dumps(card)})
-        print(response.text)
 
 
 if __name__ == "__main__":
