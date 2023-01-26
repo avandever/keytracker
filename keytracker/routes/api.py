@@ -6,6 +6,7 @@ from flask import (
     request,
 )
 from keytracker.schema import (
+    Card,
     db,
     Game,
     Log,
@@ -17,6 +18,7 @@ from keytracker.utils import (
     log_to_game,
 )
 import datetime
+import json
 
 
 blueprint = Blueprint("api", __name__, template_folder="templates")
@@ -116,3 +118,15 @@ def load_missing_decks(count):
     for game in game:
         add_decks_to_game(game)
     return make_response(jsonify(success=True), 201)
+
+
+@blueprint.route("/api/maybe_add_card/v1/", methods=["POST"])
+def maybe_add_card():
+    card_data = json.loads(request.form["json_data"])
+    card = Card.query.filter_by(kf_id=card_data["kf_id"]).first()
+    if card is None:
+        card = Card(**card_data)
+        db.session.add(card)
+        db.session.commit()
+        db.session.refresh(card)
+    return make_response(jsonify(success=True, card_id=card.id), 201)
