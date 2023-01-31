@@ -176,9 +176,13 @@ class Game(db.Model):
         select(Deck.sas_rating)
         .where(Deck.id == winner_deck_dbid)
         .correlate_except(Deck)
+        .scalar_subquery()
     )
     loser_sas_rating = column_property(
-        select(Deck.sas_rating).where(Deck.id == loser_deck_dbid).correlate_except(Deck)
+        select(Deck.sas_rating)
+        .where(Deck.id == loser_deck_dbid)
+        .correlate_except(Deck)
+        .scalar_subquery()
     )
     combined_sas_rating = column_property(
         winner_sas_rating.expression + loser_sas_rating.expression
@@ -187,9 +191,13 @@ class Game(db.Model):
         select(Deck.aerc_score)
         .where(Deck.id == winner_deck_dbid)
         .correlate_except(Deck)
+        .scalar_subquery()
     )
     loser_aerc_score = column_property(
-        select(Deck.aerc_score).where(Deck.id == loser_deck_dbid).correlate_except(Deck)
+        select(Deck.aerc_score)
+        .where(Deck.id == loser_deck_dbid)
+        .correlate_except(Deck)
+        .scalar_subquery()
     )
     combined_aerc_score = column_property(
         winner_aerc_score.expression + loser_aerc_score.expression
