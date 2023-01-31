@@ -29,3 +29,21 @@ nav {
     color: #000000;
     background-color: #fff9bf;
 }
+
+.player_filter_inputs {
+    display: grid;
+    grid-template-columns: 150px 200px repeat(4, 60px);
+    grid-gap: 10px;
+}
+
+.form_element label {
+    display: block;
+}
+
+.form_element input {
+    display: block;
+}
+
+.form_element input[type="number"] {
+    width: 40px;
+}

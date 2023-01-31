@@ -134,6 +134,24 @@ def render_dropdown(name: str, options: Dict[str, str], selected: str = None) ->
     return output
 
 
+def render_input_number(name: str, label: str, lower: int, upper: int, current_value: int = None) -> str:
+    output = '<p class="form_element">'
+    output += f'<label for="{name}">{label}</label>'
+    bits = {
+        "type": "number",
+        "id": name,
+        "name": name,
+        "min": lower,
+        "max": upper,
+        "size": len(str(upper)),
+    }
+    if current_value is not None:
+        bits["value"] = current_value
+    bits_str = " ".join([f'{k}="{v}"' for k, v in bits.items()])
+    output += f'<input {bits_str}></p>'
+    return output
+
+
 class PlayerInfo:
     def __init__(self):
         self.player_name = "UNSET"
@@ -384,6 +402,47 @@ def add_user_filters(
                     Game.loser == user_string,
                 )
             )
+    return query
+
+
+def add_player_filters(
+    query: Query,
+    username: str = None,
+    deck_id: str = None,
+    sas_min: int = None,
+    sas_max: int = None,
+    aerc_min: int = None,
+    aerc_max: int = None,
+) -> Query:
+    if not any((username, deck_id, sas_min, sas_max, aerc_min, aerc_max)):
+        return query
+    winner_filters = []
+    loser_filters = []
+    if username is not None:
+        winner_filters.append(Game.winner == username)
+        loser_filters.append(Game.loser == username)
+    if deck_id is not None:
+        winner_filters.append(Game.winner_deck.has(Deck.kf_id == deck_id))
+        loser_filters.append(Game.loser_deck.has(Deck.kf_id == deck_id))
+    if sas_min is not None:
+        winner_filters.append(Game.winner_deck.has(Deck.sas_rating > sas_min))
+        loser_filters.append(Game.loser_deck.has(Deck.sas_rating > sas_min))
+    if sas_max is not None:
+        winner_filters.append(Game.winner_deck.has(Deck.sas_rating < sas_max))
+        loser_filters.append(Game.loser_deck.has(Deck.sas_rating < sas_max))
+    if aerc_min is not None:
+        winner_filters.append(Game.winner_deck.has(Deck.aerc_score > aerc_min))
+        loser_filters.append(Game.loser_deck.has(Deck.aerc_score > aerc_min))
+    if aerc_max is not None:
+        winner_filters.append(Game.winner_deck.has(Deck.aerc_score < aerc_max))
+        loser_filters.append(Game.loser_deck.has(Deck.aerc_score < aerc_max))
+    query = query.filter(
+        or_(
+            and_(*winner_filters),
+            and_(*loser_filters),
+        )
+    )
+    print(type(query))
     return query
 
 

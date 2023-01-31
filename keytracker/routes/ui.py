@@ -12,9 +12,8 @@ from keytracker.schema import (
     Log,
 )
 from keytracker.utils import (
-    add_deck_filters,
+    add_player_filters,
     add_game_sort,
-    add_user_filters,
     BadLog,
     basic_stats_to_game,
     DeckNotFoundError,
@@ -124,6 +123,7 @@ def game(crucible_game_id):
 
 @blueprint.route("/games", methods=["GET"])
 def games():
+    args_list = ["user", "deck", "sas_min", "sas_max", "aerc_min", "aerc_max"]
     if any(
         (
             request.args.get("user1"),
@@ -131,18 +131,12 @@ def games():
         )
     ):
         query = Game.query
-        query = add_user_filters(
-            query,
-            filter(bool, map(request.args.get, ("user1", "user2"))),
-        )
-        query = add_deck_filters(
-            query,
-            deck_filters=filter(bool, map(request.args.get, ("deck1", "deck2"))),
-        )
+        query = add_player_filters(query, *map(request.args.get, [f"{x}1" for x in args_list]))
+        query = add_player_filters(query, *map(request.args.get, [f"{x}2" for x in args_list]))
         query = add_game_sort(
             query, [(request.args.get("sort1"), request.args.get("direction1"))]
         )
-        games = query.all()
+        games = query.limit(10).all()
     else:
         games = None
     return render_template(

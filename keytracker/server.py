@@ -7,6 +7,7 @@ from keytracker.schema import (
 from keytracker.utils import (
     load_config,
     render_dropdown,
+    render_input_number,
     render_log,
     render_game_listing,
 )
@@ -28,6 +29,7 @@ db.create_all()
 app.jinja_env.globals.update(
     render_dropdown=render_dropdown,
     render_game_listing=render_game_listing,
+    render_input_number=render_input_number,
     render_log=render_log,
 )
 app.register_blueprint(ui.blueprint)
