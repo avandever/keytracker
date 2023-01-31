@@ -9,31 +9,7 @@
     </div>
     <div class="games_list">
         {% for game in games %}
-            <div class="game_players">
-                {% if game.winner == username %}
-                    {{ username }}
-                {% else %}
-                    <a href="{{ url_for('ui.user', username=game.winner) }}">{{ game.winner }}</a>
-                {% endif %}
-                vs.
-                {% if game.loser == username %}
-                    {{ username }}
-                {% else %}
-                    <a href="{{ url_for('ui.user', username=game.loser) }}">{{ game.loser }}</a>
-                {% endif %}
-                (<a href="{{ url_for('ui.game', crucible_game_id=game.crucible_game_id) }}">Details</a>)
-            </div>
-            <div class="game_decks">
-                <a href="{{ url_for('ui.deck', deck_id=game.winner_deck_id) }}">{{ game.winner_deck_name }}</a>
-                - {{ game.winner_deck.sas_rating }} SAS, {{ game.winner_deck.aerc_score }} AERC
-                (<a href="https://www.keyforgegame.com/deck-details/{{ game.winner_deck_id }}">MV</a>)
-                (<a href="https://decksofkeyforge.com/decks/{{ game.winner_deck_id }}">DoK</a>)
-                vs.
-                <a href="{{ url_for('ui.deck', deck_id=game.loser_deck_id) }}">{{ game.loser_deck_name }}</a>
-                - {{ game.loser_deck.sas_rating }} SAS, {{ game.loser_deck.aerc_score }} AERC
-                (<a href="https://www.keyforgegame.com/deck-details/{{ game.loser_deck_id }}">MV</a>)
-                (<a href="https://decksofkeyforge.com/decks/{{ game.loser_deck_id }}">DoK</a>)
-            </div>
+            {{ render_game_listing(game, username=username) | safe }}
         {% endfor %}
     </div>
 {% endblock %}

@@ -7,6 +7,7 @@ from keytracker.schema import (
 from keytracker.utils import (
     load_config,
     render_log,
+    render_game_listing,
 )
 from keytracker.routes import (
     ui,
@@ -23,7 +24,10 @@ app.app_context().push()
 db.app = app
 db.init_app(app)
 db.create_all()
-app.jinja_env.globals.update(render_log=render_log)
+app.jinja_env.globals.update(
+    render_game_listing=render_game_listing,
+    render_log=render_log,
+)
 app.register_blueprint(ui.blueprint)
 app.register_blueprint(api.blueprint)
 
