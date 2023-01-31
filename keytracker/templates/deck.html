@@ -36,17 +36,19 @@
             </div>
             <div class="game_decks">
                 {% if game.winner_deck_id == deck_id %}
-                    {{ deck_name }}
+                    {{ deck_name }} - {{ game.winner_deck.sas_rating }} SAS, {{ game.winner_deck.aerc_score }} AERC
                 {% else %}
                     <a href="{{ url_for('ui.deck', deck_id=game.winner_deck_id) }}">{{ game.winner_deck_name }}</a>
+                    - {{ game.winner_deck.sas_rating }} SAS, {{ game.winner_deck.aerc_score }} AERC
                     (<a href="https://www.keyforgegame.com/deck-details/{{ game.winner_deck_id }}">MV</a>)
                     (<a href="https://decksofkeyforge.com/decks/{{ game.winner_deck_id }}">DoK</a>)
                 {% endif %}
                 vs.
                 {% if game.loser_deck_id == deck_id %}
-                    {{ deck_name }}
+                    {{ deck_name }} - {{ game.loser_deck.sas_rating }} SAS, {{ game.loser_deck.aerc_score }} AERC
                 {% else %}
                     <a href="{{ url_for('ui.deck', deck_id=game.loser_deck_id) }}">{{ game.loser_deck_name }}</a>
+                    - {{ game.loser_deck.sas_rating }} SAS, {{ game.loser_deck.aerc_score }} AERC
                     (<a href="https://www.keyforgegame.com/deck-details/{{ game.loser_deck_id }}">MV</a>)
                     (<a href="https://decksofkeyforge.com/decks/{{ game.loser_deck_id }}">DoK</a>)
                 {% endif %}
