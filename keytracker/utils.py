@@ -121,6 +121,18 @@ def render_game_listing(game: Game, username: str = None, deck_id: str = None):
         f'<div class="game_decks">{" vs. ".join(decks)}</div>'
     )
 
+    
+def render_dropdown(name: str, options: Dict[str, str], selected: str = None) -> str:
+    output = f'<select id="{name}" name="{name}">\n'
+    for key, description in options.items():
+        option = f'<option value="{key}"'
+        if selected == key:
+            option += " selected" 
+        option += f'>{description}</option>\n'
+        output += option
+    output += "</select>"
+    return output
+
 
 class PlayerInfo:
     def __init__(self):

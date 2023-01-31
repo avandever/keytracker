@@ -150,6 +150,16 @@ def games():
         title=f"Games Search",
         args=request.args,
         games=games,
+        sort_options={
+            "date": "Date",
+            "loser_keys": "Keys forged by loser",
+            "combined_sas_rating": "Total SAS",
+            "winner_sas_rating": "Winner SAS",
+            "loser_sas_rating": "Loser SAS",
+            "combined_aerc_score": "Total AERC",
+            "winner_aerc_score": "Winner AERC",
+            "loser_aerc_score": "Loser AERC",
+        },
     )
 
 

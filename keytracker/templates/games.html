@@ -35,26 +35,11 @@
         <br />
         <label for="sort1">Sort By</label>
         <br />
-        <select id="sort1" name="sort1">
-            <option value="date"{% if args["sort1"] == "date" %} selected{% endif %}>
-                Date
-            </option>
-            <option value="loser_keys"
-                    {% if args["sort1"] == "loser_keys" %} selected{% endif %}>
-                Keys forged by loser
-            </option>
-        </select>
+        {{ render_dropdown('sort1', sort_options, args.get('sort1')) | safe }}
         <br />
         <label for="direction1">Order</label>
         <br />
-        <select id="direction1" name="direction1">
-            <option value="asc"{% if args["direction1"] == "asc" %} selected{% endif %}>
-                Ascending
-            </option>
-            <option value="desc"{% if args["direction1"] == "desc" %} selected{% endif %}>
-                Descending
-            </option>
-        </select>
+        {{ render_dropdown('direction1', {'desc': 'Descending', 'asc': 'Ascending'}, args.get('direction1')) | safe }}
         <br />
         <button type="submit">Submit</button>
     </form>
