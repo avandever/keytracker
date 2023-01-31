@@ -1,5 +1,11 @@
 from flask_sqlalchemy import SQLAlchemy
-import sqlalchemy
+from sqlalchemy import (
+    or_,
+    select,
+    types as sqlalchemy_types,
+)
+from sqlalchemy.orm import column_property
+from sqlalchemy.sql import func
 import datetime
 import enum
 from collections import namedtuple
@@ -45,7 +51,7 @@ EXPANSION_VALUES = [
 ]
 
 
-class IdList(sqlalchemy.types.TypeDecorator):
+class IdList(sqlalchemy_types.TypeDecorator):
     impl = db.String(5 * 37)
     cache_ok = True
 
@@ -116,7 +122,9 @@ class Game(db.Model):
     date = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     turns = db.Column(db.Integer)
     winner = db.Column(db.String(100), index=True)
-    winner_deck_dbid = db.Column(db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True)
+    winner_deck_dbid = db.Column(
+        db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
+    )
     winner_deck = db.relationship("Deck", foreign_keys=winner_deck_dbid)
     winner_deck_id = db.Column(db.String(100), index=True)
     winner_deck_name = db.Column(db.String(100))
@@ -138,7 +146,9 @@ class Game(db.Model):
     winner_cards_discarded = db.Column(db.Integer)
     winner_did_mulligan = db.Column(db.Boolean)
     loser = db.Column(db.String(100), index=True)
-    loser_deck_dbid = db.Column(db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True)
+    loser_deck_dbid = db.Column(
+        db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
+    )
     loser_deck = db.relationship("Deck", foreign_keys=[loser_deck_dbid])
     loser_deck_id = db.Column(db.String(100), index=True)
     loser_deck_name = db.Column(db.String(100))
@@ -162,6 +172,28 @@ class Game(db.Model):
     house_turn_counts = db.relationship("HouseTurnCounts", back_populates="game")
     turns = db.relationship("TurnState", back_populates="game")
     logs = db.relationship("Log", back_populates="game")
+    winner_sas_rating = column_property(
+        select(Deck.sas_rating)
+        .where(Deck.id == winner_deck_dbid)
+        .correlate_except(Deck)
+    )
+    loser_sas_rating = column_property(
+        select(Deck.sas_rating).where(Deck.id == loser_deck_dbid).correlate_except(Deck)
+    )
+    combined_sas_rating = column_property(
+        winner_sas_rating.expression + loser_sas_rating.expression
+    )
+    winner_aerc_score = column_property(
+        select(Deck.aerc_score)
+        .where(Deck.id == winner_deck_dbid)
+        .correlate_except(Deck)
+    )
+    loser_aerc_score = column_property(
+        select(Deck.aerc_score).where(Deck.id == loser_deck_dbid).correlate_except(Deck)
+    )
+    combined_aerc_score = column_property(
+        winner_aerc_score.expression + loser_aerc_score.expression
+    )
 
 
 class HouseTurnCounts(db.Model):
