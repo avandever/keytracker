@@ -5,6 +5,7 @@ from flask import (
     make_response,
     request,
 )
+from sqlalchemy import or_
 from keytracker.schema import (
     db,
     Game,
@@ -113,7 +114,16 @@ def delete_game(game_id):
 
 @blueprint.route("/api/load_missing_decks/v1/<int:count>", methods=["GET"])
 def load_missing_decks(count):
-    game = Game.query.filter_by(winner_deck_dbid=None).limit(count).all()
+    game = (
+        Game.query.filter(
+            or_(
+                Game.winner_deck_dbid == None,
+                Game.loser_deck_dbid == None,
+            )
+        )
+        .limit(count)
+        .all()
+    )
     for game in game:
         add_decks_to_game(game)
     return make_response(jsonify(success=True), 201)
@@ -121,5 +131,9 @@ def load_missing_decks(count):
 
 @blueprint.route("/api/load_deck_with_dok_data/v1/<deck_id>", methods=["POST"])
 def load_deck_with_dok_data(deck_id):
-    deck = get_deck_by_id_with_zeal(deck_id, sas_rating=request.form.get("sas_rating"), aerc_score=request.form.get("aerc_score"))
+    deck = get_deck_by_id_with_zeal(
+        deck_id,
+        sas_rating=request.form.get("sas_rating"),
+        aerc_score=request.form.get("aerc_score"),
+    )
     return make_response(jsonify(success=True, deck_name=deck.name), 201)
