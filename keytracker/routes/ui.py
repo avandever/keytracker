@@ -131,8 +131,12 @@ def games():
         )
     ):
         query = Game.query
-        query = add_player_filters(query, *map(request.args.get, [f"{x}1" for x in args_list]))
-        query = add_player_filters(query, *map(request.args.get, [f"{x}2" for x in args_list]))
+        query = add_player_filters(
+            query, *map(request.args.get, [f"{x}1" for x in args_list])
+        )
+        query = add_player_filters(
+            query, *map(request.args.get, [f"{x}2" for x in args_list])
+        )
         query = add_game_sort(
             query, [(request.args.get("sort1"), request.args.get("direction1"))]
         )

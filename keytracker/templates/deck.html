@@ -19,8 +19,6 @@
         </form>
     </div>
     <div class="games_list">
-        {% for game in games %}
-            {{ render_game_listing(game, username=username, deck_id=deck_id) | safe }}
-        {% endfor %}
+        {% for game in games %}{{ render_game_listing(game, username=username, deck_id=deck_id) | safe }}{% endfor %}
     </div>
 {% endblock %}

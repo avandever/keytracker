@@ -7,19 +7,19 @@
     <form id="cleanform" method="get">
         <div class="player_filter_inputs">
             <p class="form_element">
-            <label for="user1">Player</label>
-            <input type="text"
-                   name="user1"
-                   style="width: 140px;"
-                   {% if args["user1"] %} value="{{ args["user1"] }}"{% endif %}
-                   placeholder="Username"/>
+                <label for="user1">Player</label>
+                <input type="text"
+                       name="user1"
+                       style="width: 140px"
+                       {% if args["user1"] %} value="{{ args["user1"] }}"{% endif %}
+                       placeholder="Username"/>
             </p>
             <p class="form_element">
-            <label for="deck1">Deck</label>
-            <input type="text"
-                   name="deck1"
-                   {% if args["deck1"] %} value="{{ args["deck1"] }}"{% endif %}
-                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+                <label for="deck1">Deck</label>
+                <input type="text"
+                       name="deck1"
+                       {% if args["deck1"] %} value="{{ args["deck1"] }}"{% endif %}
+                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
             </p>
             {{ render_input_number("sas_min1", "SAS >", 33, 108, args.get("sas_min1")) | safe }}
             {{ render_input_number("sas_max1", "SAS <", 33, 108, args.get("sas_max1")) | safe }}
@@ -28,19 +28,19 @@
         </div>
         <div class="player_filter_inputs">
             <p class="form_element">
-            <label for="user2">Player</label>
-            <input type="text"
-                   name="user2"
-                   style="width: 140px;"
-                   {% if args["user2"] %} value="{{ args["user2"] }}"{% endif %}
-                   placeholder="Username"/>
+                <label for="user2">Player</label>
+                <input type="text"
+                       name="user2"
+                       style="width: 140px"
+                       {% if args["user2"] %} value="{{ args["user2"] }}"{% endif %}
+                       placeholder="Username"/>
             </p>
             <p class="form_element">
-            <label for="deck2">Deck</label>
-            <input type="text"
-                   name="deck2"
-                   {% if args["deck2"] %} value="{{ args["deck2"] }}"{% endif %}
-                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+                <label for="deck2">Deck</label>
+                <input type="text"
+                       name="deck2"
+                       {% if args["deck2"] %} value="{{ args["deck2"] }}"{% endif %}
+                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
             </p>
             {{ render_input_number("sas_min2", "SAS >", 33, 108, args.get("sas_min2")) | safe }}
             {{ render_input_number("sas_max2", "SAS <", 33, 108, args.get("sas_max2")) | safe }}
@@ -60,9 +60,7 @@
     <script type="text/javascript" src="{{ url_for("static", filename="cleanform.js") }}"></script>
     {% if games %}
         <div class="games_list">
-            {% for game in games %}
-                {{ render_game_listing(game) | safe }}
-            {% endfor %}
+            {% for game in games %}{{ render_game_listing(game) | safe }}{% endfor %}
         </div>
     {% endif %}
 {% endblock %}
