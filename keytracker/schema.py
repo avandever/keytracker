@@ -121,6 +121,7 @@ class Game(db.Model):
     crucible_game_id = db.Column(db.String(36))
     date = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     turns = db.Column(db.Integer)
+    first_player = db.Column(db.String(100))
     winner = db.Column(db.String(100), index=True)
     winner_deck_dbid = db.Column(
         db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
