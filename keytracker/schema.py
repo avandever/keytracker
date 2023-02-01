@@ -209,6 +209,20 @@ class Game(db.Model):
         return self.first_player or sorted([self.winner, self.loser])[0]
 
 
+class Player(db.Model):
+    """
+    Represents a player. Primarily, this should save us some trouble by being able to
+    use ids instead of strings in most tables.
+    The anonymous field will not be used for display. Rather, it will cause any
+    sightings of that username to be pointed at the "anonymous" player entry instead.
+    Ironically, the "anonymous" user will have a false in the anonymous column.
+    """
+    __tablename__ = "tracker_player"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    username = db.Column(db.String(100))
+    anonymous = db.Column(db.Boolean, default=False)
+
+
 class HouseTurnCounts(db.Model):
     """
     This is a breakout table to avoid having to have two columns x the number of houses
@@ -223,6 +237,9 @@ class HouseTurnCounts(db.Model):
     )
     game = db.relationship("Game", back_populates="house_turn_counts")
     winner = db.Column(db.Boolean)
+    player_id = db.Column(db.Integer, db.ForeignKey(Player.__table__.c.id),
+            primary_key=True, index=True)
+    player = db.relationship("Player")
     house = db.Column(db.Enum(House))
     turns = db.Column(db.Integer)
 
