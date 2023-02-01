@@ -204,6 +204,10 @@ class Game(db.Model):
         winner_aerc_score.expression + loser_aerc_score.expression
     )
 
+    @property
+    def insist_first_player(self) -> str:
+        return self.first_player or sorted([self.winner, self.loser])[0]
+
 
 class HouseTurnCounts(db.Model):
     """

@@ -16,14 +16,20 @@ def render_log(log: str) -> str:
 def render_game_listing(game: Game, username: str = None, deck_id: str = None):
     output = ""
     players = []
-    for player in [game.winner, game.loser]:
+    if game.winner == game.insist_first_player:
+        player_order = [game.winner, game.loser]
+        deck_order = [game.winner_deck, game.loser_deck]
+    else:
+        player_order = [game.loser, game.winner]
+        deck_order = [game.loser_deck, game.winner_deck]
+    for player in player_order:
         if player == username:
             players.append(player)
         else:
             url = url_for("ui.user", username=player)
             players.append(f'<a href="{url}">{player}</a>')
     decks = []
-    for deck in [game.winner_deck, game.loser_deck]:
+    for deck in deck_order:
         deck_summary = f"{deck.sas_rating} SAS, {deck.aerc_score} AERC"
         if deck.kf_id == deck_id:
             decks.append(f"{deck.name} - {deck_summary}")
