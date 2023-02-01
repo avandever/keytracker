@@ -35,14 +35,16 @@ def render_game_listing(game: Game, username: str = None, deck_id: str = None):
                 f'<a href="{deck_url}">{deck.name}</a> - {deck_summary} '
                 f"({mv_url}) ({dok_url})"
             )
+    game_url = url_for("ui.game", crucible_game_id=game.crucible_game_id)
+    game_link = f'<a href="{game_url}">Game Details</a>'
     compare_url = DOK_COMPARE_TEMPLATE.format(
         game.winner_deck.kf_id,
         game.loser_deck.kf_id,
     )
     compare_link = f'<a href="{compare_url}">DoK Compare</a>'
     return (
-        f'<div class="game_players">{" vs. ".join(players)}</div>'
-        f'<div class="game_decks">{" vs. ".join(decks)}  {compare_link}</div>'
+        f'<div class="game_players">{" vs. ".join(players)}&nbsp&nbsp&nbsp&nbsp{game_link}</div>'
+        f'<div class="game_decks">{" vs. ".join(decks)}&nbsp&nbsp&nbsp&nbsp{compare_link}</div>'
     )
 
 
