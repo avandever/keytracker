@@ -126,6 +126,7 @@ def log_to_game(log: str) -> Game:
             if m:
                 print(f"Found first player: {m.group(1)}")
                 player_infos[m.group(1)].first_player = True
+                first_player = m.group(1)
     except StopIteration:
         raise BadLog("Could not determine first player from log")
     try:
@@ -168,6 +169,7 @@ def log_to_game(log: str) -> Game:
     print(f"Winning deck: {winner_deck.name}")
     print(f"Losing deck: {loser_deck.name}")
     game = Game(
+        first_player=first_player,
         winner=winner.player_name,
         winner_deck=winner_deck,
         winner_deck_id=winner_deck.kf_id,
@@ -281,6 +283,7 @@ def basic_stats_to_game(**kwargs) -> Game:
     loser = kwargs.get("loser")
     loser_deck_id = kwargs.get("loser_deck_id")
     loser_deck_name = kwargs.get("loser_deck_name")
+    first_player = kwargs.get(kwargs.get("first_player"))
     if winner_deck_id:
         # If urls were passed in, fix that now
         winner_deck_id = winner_deck_id.split("/")[-1]
@@ -302,6 +305,7 @@ def basic_stats_to_game(**kwargs) -> Game:
     game = Game(
         crucible_game_id=crucible_game_id,
         date=date,
+        first_player=first_player,
         winner=winner,
         winner_deck=winner_deck,
         winner_deck_id=winner_deck.kf_id,

@@ -37,6 +37,7 @@ def upload_whole_game():
     game = Game(
         crucible_game_id=request.form["crucible_game_id"],
         date=game_start,
+        first_player=request.form["first_player"],
         winner=request.form["winner"],
         winner_deck_id=request.form["winner_deck_id"],
         winner_deck_name=request.form["winner_deck_name"],
