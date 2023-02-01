@@ -6,6 +6,7 @@ from typing import Dict
 MV_BROWSER_BASE = "https://www.keyforgegame.com/deck-details"
 
 DOK_BROWSER_BASE = "https://decksofkeyforge.com/decks"
+DOK_COMPARE_TEMPLATE = "https://decksofkeyforge.com/compare-decks?decks={}&decks={}"
 
 
 def render_log(log: str) -> str:
@@ -34,9 +35,14 @@ def render_game_listing(game: Game, username: str = None, deck_id: str = None):
                 f'<a href="{deck_url}">{deck.name}</a> - {deck_summary} '
                 f"({mv_url}) ({dok_url})"
             )
+    compare_url = DOK_COMPARE_TEMPLATE.format(
+        game.winner_deck.kf_id,
+        game.loser_deck.kf_id,
+    )
+    compare_link = f'<a href="{compare_url}">DoK Compare</a>'
     return (
         f'<div class="game_players">{" vs. ".join(players)}</div>'
-        f'<div class="game_decks">{" vs. ".join(decks)}</div>'
+        f'<div class="game_decks">{" vs. ".join(decks)}  {compare_link}</div>'
     )
 
 

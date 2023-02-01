@@ -4,6 +4,9 @@
         <h1>{{ game.winner }} versus {{ game.loser }}</h1>
         <p>{{ description }}</p>
         <p>Keys: {{ game.winner_keys }} - {{ game.loser_keys }}</p>
+        <p>
+            <a href="https://decksofkeyforge.com/compare-decks?decks={{ game.winner_deck.kf_id }}&decks={{ game.loser_deck.kf_id }}">Compare decks on DoK</a>
+        </p>
     </div>
     <div class="game_player_summary">
         <h2>
