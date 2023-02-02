@@ -8,6 +8,7 @@ from flask import (
 )
 from keytracker.schema import (
     db,
+    Deck,
     Game,
     Log,
 )
@@ -17,6 +18,7 @@ from keytracker.utils import (
     BadLog,
     basic_stats_to_game,
     DeckNotFoundError,
+    get_deck_by_id_with_zeal,
     log_to_game,
 )
 import datetime
@@ -63,31 +65,34 @@ def leaderboard():
 @blueprint.route("/deck/<deck_id>", methods=["GET"])
 def deck(deck_id):
     username = request.args.get("username")
+    deck = get_deck_by_id_with_zeal(deck_id)
     if username is not None:
-        games_won = Game.query.filter_by(
-            winner_deck_id=deck_id, winner=username
-        ).count()
-        games_lost = Game.query.filter_by(loser_deck_id=deck_id, loser=username).count()
-        deck_games = (
-            Game.query.filter(
-                or_(
-                    and_(Game.winner_deck_id == deck_id, Game.winner == username),
-                    and_(Game.loser_deck_id == deck_id, Game.loser == username),
-                )
+        games_won = Game.query.filter(
+            and_(
+                Game.winner_deck.has(kf_id == deck_id),
+                Game.winner == username,
             )
+        ).count()
+        games_lost = Game.query.filter_by(
+            and_(
+                Game.loser_deck.has(kf_id == deck_id),
+                Game.loser == username,
+            )
+        ).count()
+        deck_games = (
+            add_player_filters(Game.query, username, deck_id)
             .order_by(Game.date.desc())
             .all()
         )
     else:
-        games_won = Game.query.filter_by(winner_deck_id=deck_id).count()
-        games_lost = Game.query.filter_by(loser_deck_id=deck_id).count()
+        games_won = Game.query.filter(
+            Game.winner_deck.has(Deck.kf_id==deck_id)
+        ).count()
+        games_lost = Game.query.filter(
+            Game.loser_deck.has(Deck.kf_id==deck_id)
+        ).count()
         deck_games = (
-            Game.query.filter(
-                or_(
-                    (Game.winner_deck_id == deck_id),
-                    (Game.loser_deck_id == deck_id),
-                )
-            )
+            add_player_filters(Game.query, deck_id=deck_id)
             .order_by(Game.date.desc())
             .all()
         )
@@ -95,17 +100,12 @@ def deck(deck_id):
         flash(f"No games found for deck {deck_id}")
         return redirect(url_for("ui.home"))
     game = deck_games[0]
-    deck_name = (
-        game.winner_deck_name
-        if game.winner_deck_id == deck_id
-        else game.loser_deck_name
-    )
     return render_template(
         "deck.html",
-        title=f"{deck_name} Deck Summary",
+        title=f"{deck.name} Deck Summary",
         games=deck_games,
-        deck_name=deck_name,
-        deck_id=deck_id,
+        deck_name=deck.name,
+        deck_id=deck.kf_id,
         games_won=games_won,
         games_lost=games_lost,
     )

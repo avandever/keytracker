@@ -10,14 +10,14 @@
     </div>
     <div class="game_player_summary">
         <h2>
-            <a href="{{ url_for('ui.user', username=game.winner) }}">{{ game.winner }}</a> using <a href="{{ url_for('ui.deck', deck_id=game.winner_deck_id) }}">{{ game.winner_deck_name }}</a>  <a game.
-     href="https://keyforgegame.com/deck-details/{{ game.winner_deck_id }}">MV</a>
-            <a href="https://decksofkeyforge.com/decks/{{ game.winner_deck_id }}">DOK</a>
+            <a href="{{ url_for('ui.user', username=game.winner) }}">{{ game.winner }}</a> using <a href="{{ url_for('ui.deck', deck_id=game.winner_deck.kf_id) }}">{{ game.winner_deck.name }}</a>  <a game.
+     href="https://keyforgegame.com/deck-details/{{ game.winner_deck.kf_id }}">MV</a>
+            <a href="https://decksofkeyforge.com/decks/{{ game.winner_deck.kf_id }}">DOK</a>
         </h2>
         <h2>
-            <a href="{{ url_for('ui.user', username=game.loser) }}">{{ game.loser }}</a> using <a href="{{ url_for('ui.deck', deck_id=game.loser_deck_id) }}">{{ game.loser_deck_name }}</a>  <a game.
-     href="https://keyforgegame.com/deck-details/{{ game.loser_deck_id }}">MV</a>
-            <a href="https://decksofkeyforge.com/decks/{{ game.loser_deck_id }}">DOK</a>
+            <a href="{{ url_for('ui.user', username=game.loser) }}">{{ game.loser }}</a> using <a href="{{ url_for('ui.deck', deck_id=game.loser_deck.kf_id) }}">{{ game.loser_deck.name }}</a>  <a game.
+     href="https://keyforgegame.com/deck-details/{{ game.loser_deck.kf_id }}">MV</a>
+            <a href="https://decksofkeyforge.com/decks/{{ game.loser_deck.kf_id }}">DOK</a>
         </h2>
     </div>
     <div class="logs">

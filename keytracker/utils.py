@@ -240,8 +240,6 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
         db.session.commit()
         db.session.refresh(deck)
         return deck
-    else:
-        print(f"Already knew about {deck_id} ({deck.name})")
     return deck
 
 
@@ -333,28 +331,6 @@ def basic_stats_to_game(**kwargs) -> Game:
     return game
 
 
-def add_user_filters(
-    query: Query,
-    user_filters: Iterable[str],
-) -> Query:
-    for user_string in user_filters:
-        if "|" in user_string:
-            query = query.filter(
-                or_(
-                    Game.winner.in_(user_string.split("|")),
-                    Game.loser.in_(user_string.split("|")),
-                )
-            )
-        else:
-            query = query.filter(
-                or_(
-                    Game.winner == user_string,
-                    Game.loser == user_string,
-                )
-            )
-    return query
-
-
 def add_player_filters(
     query: Query,
     username: str = None,
@@ -401,20 +377,6 @@ def add_player_filters(
     return query
 
 
-def add_deck_filters(
-    query: Query,
-    deck_filters: Iterable[str],
-) -> Query:
-    for deck in deck_filters:
-        query = query.filter(
-            or_(
-                Game.winner_deck_id == deck,
-                Game.loser_deck_id == deck,
-            )
-        )
-    return query
-
-
 def add_game_sort(
     query: Query,
     sort_specs: Iterable[Tuple[str, str]],
@@ -422,14 +384,6 @@ def add_game_sort(
     for (col, direction) in sort_specs:
         query = query.order_by(getattr(getattr(Game, col), direction)())
     return query
-
-
-def add_decks_to_game(game: Game):
-    winner_deck = get_deck_by_id_with_zeal(game.winner_deck_id)
-    game.winner_deck_dbid = winner_deck.id
-    loser_deck = get_deck_by_id_with_zeal(game.loser_deck_id)
-    game.loser_deck_dbid = loser_deck.id
-    db.session.commit()
 
 
 def randip() -> str:
