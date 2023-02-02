@@ -376,8 +376,10 @@ def add_player_filters(
             winner_filters.append(Game.winner == username)
             loser_filters.append(Game.loser == username)
     if deck_id is not None:
-        winner_filters.append(Game.winner_deck.has(Deck.kf_id == deck_id))
-        loser_filters.append(Game.loser_deck.has(Deck.kf_id == deck_id))
+        # Avoid subqueries by resolving "quickly" here
+        deck = get_deck_by_id_with_zeal(deck_id)
+        winner_filters.append(Game.winner_deck_dbid == deck.id)
+        loser_filters.append(Game.loser_deck_dbid == deck.id)
     if sas_min is not None:
         winner_filters.append(Game.winner_deck.has(Deck.sas_rating > sas_min))
         loser_filters.append(Game.loser_deck.has(Deck.sas_rating > sas_min))
@@ -396,7 +398,6 @@ def add_player_filters(
             and_(*loser_filters),
         )
     )
-    print(type(query))
     return query
 
 
