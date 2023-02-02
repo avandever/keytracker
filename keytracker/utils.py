@@ -1,7 +1,15 @@
 from collections import Counter, defaultdict
 import configparser
 import datetime
-from keytracker.schema import db, Card, Deck, Game
+from keytracker.schema import (
+    db,
+    Card,
+    Deck,
+    Game,
+    House,
+    HouseTurnCounts,
+    Player,
+)
 import os
 from typing import Dict, Iterable, Tuple
 import random
@@ -15,7 +23,8 @@ from sqlalchemy.orm import Query
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
 FIRST_PLAYER_MATCHER = re.compile(r"^(.*) (won the flip|chooses to go first)")
 SHUFFLE_MATCHER = re.compile(r"^(.*) is shuffling their deck")
-HOUSE_CHOICE_MATCHER = re.compile(r"^(.*) chooses (.*) as their active house")
+HOUSE_CHOICE_MATCHER = re.compile(r"^([^ ]*) +chooses ([^ ]*) +as their active house this turn")
+HOUSE_MANUAL_MATCHER = re.compile(r"^([^ ]*) +manually changed their active house to ([^ ]*)")
 FORGE_MATCHER = re.compile(r"^(.*) forges the (.*) key *, paying ([0-9]+) Æmber")
 WIN_MATCHER = re.compile(r"\s*([^ ].*) has won the game")
 
@@ -422,3 +431,60 @@ def randip() -> str:
     third = random.randint(1, 253)
     fourth = random.randint(1, 253)
     return f"192.168.{third}.{fourth}"
+
+def turn_counts_from_logs(game: Game) -> None:
+    counts = defaultdict(dict)
+    players = {}
+    for (i, log) in enumerate(game.logs):
+        m = HOUSE_CHOICE_MATCHER.match(log.message)
+        if m:
+            username = m.group(1)
+            house = getattr(House, m.group(2).upper()).name
+            player = username_to_player(username)
+            count = counts[username].get(house)
+            if count is None:
+                count = HouseTurnCounts(
+                    game=game,
+                    player=player,
+                    house=house,
+                    turns=0,
+                    winner=player.username == game.winner,
+                )
+                counts[username][house] = count
+            count.turns += 1
+            continue
+        n = HOUSE_MANUAL_MATCHER.match(log.message)
+        if n:
+            # This should be set from last hit on HOUSE_CHOICE_MATCHER
+            count.turns -= 1
+            username = n.group(1)
+            house = getattr(House, n.group(2).upper()).name
+            player = username_to_player(username)
+            count = counts[username].get(house)
+            if count is None:
+                count = HouseTurnCounts(
+                    game=game,
+                    player=player,
+                    house=house,
+                    turns=0,
+                    winner=player.username == game.winner,
+                )
+                counts[username][house] = count
+            count.turns += 1
+    for subdict in counts.values():
+        for count in subdict.values():
+            if count.turns > 0:
+                db.session.add(count)
+    db.session.commit()
+
+
+def username_to_player(username: str) -> Player:
+    player = Player.query.filter_by(username=username).first()
+    if player is None:
+        player = Player(username=username)
+        db.session.add(player)
+        return player
+    if player.anonymous:
+        return Player.query.filter_by(username="anonymous").first()
+    else:
+        return player
