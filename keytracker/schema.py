@@ -217,6 +217,7 @@ class Player(db.Model):
     sightings of that username to be pointed at the "anonymous" player entry instead.
     Ironically, the "anonymous" user will have a false in the anonymous column.
     """
+
     __tablename__ = "tracker_player"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(100))
@@ -237,8 +238,9 @@ class HouseTurnCounts(db.Model):
     )
     game = db.relationship("Game", back_populates="house_turn_counts")
     winner = db.Column(db.Boolean)
-    player_id = db.Column(db.Integer, db.ForeignKey(Player.__table__.c.id),
-            primary_key=True, index=True)
+    player_id = db.Column(
+        db.Integer, db.ForeignKey(Player.__table__.c.id), primary_key=True, index=True
+    )
     player = db.relationship("Player")
     house = db.Column(db.Enum(House))
     turns = db.Column(db.Integer)

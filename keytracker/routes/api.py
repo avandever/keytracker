@@ -51,7 +51,6 @@ def upload_whole_game():
     db.session.commit()
     log_text = request.form["log"]
     for (seq, log) in enumerate(log_text.split("\n")):
-        # log_obj = Log(game=game, message=log, time=datetime.datetime.fromtimestamp(seq), winner_perspective=False)
         log_obj = Log(
             game_id=game.id,
             message=log,
@@ -60,6 +59,8 @@ def upload_whole_game():
         )
         db.session.add(log_obj)
     db.session.commit()
+    db.session.refresh(game)
+    turn_counts_from_logs(game)
     return make_response(jsonify(success=True), 201)
 
 
@@ -87,6 +88,8 @@ def upload_log():
         )
         db.session.add(log_obj)
     db.session.commit()
+    db.session.refresh(game)
+    turn_counts_from_logs(game)
     return make_response(jsonify(success=True), 201)
 
 
