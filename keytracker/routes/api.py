@@ -33,15 +33,24 @@ def upload_whole_game():
         current_app.logger.debug(f"Confirmed no existing record for {crucible_game_id}")
     else:
         raise DuplicateGameError(f"Found existing game for {crucible_game_id}")
+    first_player_name = request.form["first_player"]
+    winner_name = request.form["winner"]
+    loser_name = request.form["loser"]
+    first_player = username_to_player(first_player_name)
+    winner = username_to_player(winner_name)
+    loser = username_to_player(loser_name)
     game = Game(
         crucible_game_id=request.form["crucible_game_id"],
         date=game_start,
-        first_player=request.form["first_player"],
-        winner=request.form["winner"],
+        first_player=first_player_name,
+        first_player_id=first_player.id,
+        winner=winner_name,
+        winner_id=winner.id,
         winner_deck_id=request.form["winner_deck_id"],
         winner_deck_name=request.form["winner_deck_name"],
         winner_keys=request.form["winner_keys"],
-        loser=request.form["loser"],
+        loser=loser_name,
+        loser_id=loser.id,
         loser_deck_id=request.form["loser_deck_id"],
         loser_deck_name=request.form["loser_deck_name"],
         loser_keys=request.form["loser_keys"],

@@ -174,21 +174,27 @@ def log_to_game(log: str) -> Game:
         raise BadLog("Could not determine game winner from log")
     for player in player_infos.values():
         if player.winner:
-            winner = player
+            winner_name = player
         else:
-            loser = player
+            loser_name = player
+    winner = username_to_player(winner_name)
+    loser = username_to_player(loser_name)
+    first_player_obj = winner if first_playerr == winner_name else loser
     winner_deck = get_deck_by_name_with_zeal(winner.deck_name)
     loser_deck = get_deck_by_name_with_zeal(loser.deck_name)
     print(f"Winning deck: {winner_deck.name}")
     print(f"Losing deck: {loser_deck.name}")
     game = Game(
         first_player=first_player,
-        winner=winner.player_name,
+        first_player_id=first_player_obj.id,
+        winner=winner_name,
+        winner_id=winner.id,
         winner_deck=winner_deck,
         winner_deck_id=winner_deck.kf_id,
         winner_deck_name=winner_deck.name,
         winner_keys=winner.keys_forged,
-        loser=loser.player_name,
+        loser=loser_name,
+        loser_id=loser.id,
         loser_deck=loser_deck,
         loser_deck_id=loser_deck.kf_id,
         loser_deck_name=loser_deck.name,
@@ -288,13 +294,21 @@ def basic_stats_to_game(**kwargs) -> Game:
     else:
         date = datetime.datetime.fromisoformat(datestr.rstrip("Z"))
     turns = kwargs.get("turns")
-    winner = kwargs.get("winner")
+    winner_name = kwargs.get("winner")
     winner_deck_id = kwargs.get("winner_deck_id")
     winner_deck_name = kwargs.get("winner_deck_name")
-    loser = kwargs.get("loser")
+    winner = username_to_player(winner_name)
+    loser_name = kwargs.get("loser")
     loser_deck_id = kwargs.get("loser_deck_id")
     loser_deck_name = kwargs.get("loser_deck_name")
+    loser = username_to_player(loser_name)
     first_player = kwargs.get(kwargs.get("first_player"))
+    if first_player == "winner":
+        first_player_name = winner_name
+        first_player_obj = winner
+    else:
+        first_player_name = loser_name
+        first_player_obj = loser
     if winner_deck_id:
         # If urls were passed in, fix that now
         winner_deck_id = winner_deck_id.split("/")[-1]
@@ -316,13 +330,16 @@ def basic_stats_to_game(**kwargs) -> Game:
     game = Game(
         crucible_game_id=crucible_game_id,
         date=date,
-        first_player=first_player,
-        winner=winner,
+        first_player=first_player_name,
+        first_player_id=first_player.id,
+        winner=winner_name,
+        winner_id=winner.id,
         winner_deck=winner_deck,
         winner_deck_id=winner_deck.kf_id,
         winner_deck_name=winner_deck.name,
         winner_keys=kwargs.get("winner_keys", 3),
-        loser=loser,
+        loser=loser_name,
+        loser_id=loser.id,
         loser_deck=loser_deck,
         loser_deck_id=loser_deck.kf_id,
         loser_deck_name=loser_deck.name,

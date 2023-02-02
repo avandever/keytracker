@@ -86,10 +86,10 @@ def deck(deck_id):
         )
     else:
         games_won = Game.query.filter(
-            Game.winner_deck.has(Deck.kf_id==deck_id)
+            Game.winner_deck.has(Deck.kf_id == deck_id)
         ).count()
         games_lost = Game.query.filter(
-            Game.loser_deck.has(Deck.kf_id==deck_id)
+            Game.loser_deck.has(Deck.kf_id == deck_id)
         ).count()
         deck_games = (
             add_player_filters(Game.query, deck_id=deck_id)

@@ -122,7 +122,9 @@ class Game(db.Model):
     date = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     turns = db.Column(db.Integer)
     first_player = db.Column(db.String(100))
+    first_player_id = db.Column(db.Integer)
     winner = db.Column(db.String(100), index=True)
+    winner_id = db.Column(db.Integer)
     winner_deck_dbid = db.Column(
         db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
     )
@@ -147,6 +149,7 @@ class Game(db.Model):
     winner_cards_discarded = db.Column(db.Integer)
     winner_did_mulligan = db.Column(db.Boolean)
     loser = db.Column(db.String(100), index=True)
+    loser_id = db.Column(db.Integer)
     loser_deck_dbid = db.Column(
         db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
     )
