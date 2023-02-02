@@ -12,6 +12,7 @@ from keytracker.schema import (
     Log,
 )
 from keytracker.utils import (
+    anonymize_game_for_player,
     basic_stats_to_game,
     DuplicateGameError,
     get_deck_by_id_with_zeal,
@@ -69,6 +70,10 @@ def upload_whole_game():
     db.session.commit()
     db.session.refresh(game)
     turn_counts_from_logs(game)
+    if winner.anonymous:
+        anonymize_game_for_player(game, winner)
+    if loser.anonymous:
+        anonymize_game_for_player(game, loser)
     return make_response(jsonify(success=True), 201)
 
 
@@ -98,6 +103,12 @@ def upload_log():
     db.session.commit()
     db.session.refresh(game)
     turn_counts_from_logs(game)
+    winner = Player.query.filter_by(username=game.winner).first()
+    loser = Player.query.filter_by(username=game.loser).first()
+    if winner.anonymous:
+        anonymize_game_for_player(game, winner)
+    if loser.anonymous:
+        anonymize_game_for_player(game, loser)
     return make_response(jsonify(success=True), 201)
 
 

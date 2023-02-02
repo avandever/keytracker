@@ -39,6 +39,10 @@ DOK_DECK_BASE = "https://decksofkeyforge.com/public-api/v3/decks"
 LATEST_SAS_VERSION = 42
 
 
+class CantAnonymize(Exception):
+    pass
+
+
 class BadLog(Exception):
     pass
 
@@ -465,3 +469,33 @@ def username_to_player(username: str) -> Player:
         return Player.query.filter_by(username="anonymous").first()
     else:
         return player
+
+
+def anonymize_game_for_player(game: Game, player: Player) -> None:
+    if not player.anonymous:
+        raise CantAnonymize(f"{player.username} not anonymous")
+    anon_player = Player.query.filter_by(username="anonymous").first()
+    if game.winner == player.username or game.winner_id == player.id:
+        game.winner = anon_player.username
+        game.winner_id = anon_player.id
+    elif game.loser == player.username or game.loser_id == player.id:
+        game.loser = anon_player.username
+        game.loser_id = anon_player.id
+    else:
+        raise CantAnonymize(f"{player.username} not found on game {game.id}")
+    for count in game.house_turn_counts:
+        if count.player == player:
+            count.player = anon_player
+    for log in game.logs:
+        log.message = log.message.replace(player.username, anon_player.username)
+    db.session.commit()
+
+
+def anonymize_all_games_for_player(player: Player) -> None:
+    if not player.anonymous:
+        raise CantAnonymize(f"{player.username} not anonymous")
+    games = Game.query.filter_by(
+        or_(Game.winner == player.username, Game.loser == player.username)
+    ).all()
+    for game in games:
+        anonymize_game_for_player(game, player)

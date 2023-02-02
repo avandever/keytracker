@@ -15,6 +15,7 @@ from keytracker.schema import (
 from keytracker.utils import (
     add_player_filters,
     add_game_sort,
+    anonymize_game_for_player,
     BadLog,
     basic_stats_to_game,
     DeckNotFoundError,
@@ -229,6 +230,12 @@ def upload():
             db.session.commit()
             db.session.refresh(game)
             turn_counts_from_logs(game)
+            winner = Player.query.filter_by(username=game.winner).first()
+            loser = Player.query.filter_by(username=game.loser).first()
+            if winner.anonymous:
+                anonymize_game_for_player(game, winner)
+            if loser.anonymous:
+                anonymize_game_for_player(game, loser)
             return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
     return render_template(
         "upload.html",
