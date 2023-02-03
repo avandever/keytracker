@@ -11,6 +11,7 @@ from keytracker.schema import (
     Deck,
     Game,
     Log,
+    Player,
 )
 from keytracker.utils import (
     add_player_filters,
@@ -21,6 +22,7 @@ from keytracker.utils import (
     DeckNotFoundError,
     get_deck_by_id_with_zeal,
     log_to_game,
+    turn_counts_from_logs,
 )
 import datetime
 import logging

@@ -178,16 +178,18 @@ def log_to_game(log: str) -> Game:
         raise BadLog("Could not determine game winner from log")
     for player in player_infos.values():
         if player.winner:
-            winner_name = player
+            winner_info = player
         else:
-            loser_name = player
-    winner = username_to_player(winner_name)
-    loser = username_to_player(loser_name)
-    first_player_obj = winner if first_playerr == winner_name else loser
-    winner_deck = get_deck_by_name_with_zeal(winner.deck_name)
-    loser_deck = get_deck_by_name_with_zeal(loser.deck_name)
+            loser_info = player
+    winner_name = winner_info.player_name
+    loser_name = loser_info.player_name
+    winner_deck = get_deck_by_name_with_zeal(winner_info.deck_name)
+    loser_deck = get_deck_by_name_with_zeal(loser_info.deck_name)
     print(f"Winning deck: {winner_deck.name}")
     print(f"Losing deck: {loser_deck.name}")
+    winner = username_to_player(winner_name)
+    loser = username_to_player(loser_name)
+    first_player_obj = winner if first_player == winner_name else loser
     game = Game(
         first_player=first_player,
         first_player_id=first_player_obj.id,
@@ -196,13 +198,13 @@ def log_to_game(log: str) -> Game:
         winner_deck=winner_deck,
         winner_deck_id=winner_deck.kf_id,
         winner_deck_name=winner_deck.name,
-        winner_keys=winner.keys_forged,
+        winner_keys=winner_info.keys_forged,
         loser=loser_name,
         loser_id=loser.id,
         loser_deck=loser_deck,
         loser_deck_id=loser_deck.kf_id,
         loser_deck_name=loser_deck.name,
-        loser_keys=loser.keys_forged,
+        loser_keys=loser_info.keys_forged,
     )
     return game
 
