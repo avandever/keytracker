@@ -43,6 +43,16 @@ def home():
     )
 
 
+@blueprint.route("/privacy")
+def privacy():
+    """Privacy policy."""
+    return render_template(
+        "privacy.html",
+        title="Privacy Policy",
+        description="Bear Tracks Privacy Policy",
+    )
+
+
 @blueprint.route("/fame")
 def hall_of_fame():
     """Hall of fame"""
