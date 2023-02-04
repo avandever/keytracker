@@ -57,7 +57,7 @@
         <br />
         <button type="submit">Submit</button>
     </form>
-    <script type="text/javascript" src="{{ url_for("static", filename="cleanform.js") }}"></script>
+    <script type="text/javascript" src="{{ url_for("static", filename="js/cleanform.js") }}"></script>
     {% if games %}
         <div class="games_list">
             {% for game in games %}{{ render_game_listing(game) | safe }}{% endfor %}
