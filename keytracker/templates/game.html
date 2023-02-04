@@ -20,9 +20,18 @@
             <a href="https://decksofkeyforge.com/decks/{{ game.loser_deck.kf_id }}">DOK</a>
         </h2>
     </div>
+    <div class="visibility_checkbox">
+        Show system messages: <input type="checkbox" id="show_system_messages">
+    </div>
     <div class="logs">
         {% for log in game.logs %}
-            <p>{{ render_log(log) | safe }}</p>
+            {{ render_log(log) | safe }}
         {% endfor %}
     </div>
+    <script type="text/javascript">
+        $('.system_message').hide();
+        $('#show_system_messages').click(function() {
+            $('.system_message').toggle();
+        })
+    </script>
 {% endblock %}

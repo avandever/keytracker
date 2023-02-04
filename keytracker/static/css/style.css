@@ -70,3 +70,12 @@ nav {
 .hoverable_card:hover > img {
     display: block;
 }
+
+.system_message {
+    display: block;
+    background-color: pink;
+}
+
+.cardplay {
+    background-color: #b0ffd0;
+}

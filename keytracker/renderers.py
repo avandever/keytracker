@@ -16,26 +16,44 @@ DOK_COMPARE_TEMPLATE = "https://decksofkeyforge.com/compare-decks?decks={}&decks
 CARD_PLAY_BASIC = re.compile(r".* plays (.*)")
 CARD_PLAY_UPGRADE = re.compile(r".* plays (.*) attaching it to (.*)")
 
+SYSTEM_TEXT_MATCHERS = [
+    re.compile(r".* brings .* to The Crucible"),
+    re.compile(r"Compare Decks"),
+    re.compile(r".* has connected to the game server"),
+    re.compile(r"(\w+) phase - (\w+)"),
+]
+
 
 def render_log(log: str) -> str:
     message = log.message.strip('\r')
+    message = hide_system_messages(message)
     message = insert_card_images(message)
+    if "div" not in message:
+        return f'<div class="message-uncategorized">{message}</div>'
     return f"{message}"
 
 
+def hide_system_messages(message: str) -> str:
+    for matcher in SYSTEM_TEXT_MATCHERS:
+        if matcher.match(message):
+            return f'<div class="system_message">{message}</div>'
+    return message
+
+
 def insert_card_images(message: str) -> str:
+    any_match = False
     for matcher in [
         CARD_PLAY_UPGRADE,
         CARD_PLAY_BASIC,
     ]:
         m = matcher.match(message)
         if m:
-            print(f"Matches: {m.groups()}")
+            any_match = True
             for card_title in m.groups():
                 message = message.replace(card_title, dress_up_card(card_title))
             # Don't try remaining matchers
-            break
-    return f'<div class="cardplay">{message}</div>'
+            return f'<div class="cardplay">{message}</div>'
+    return message
 
 
 def dress_up_card(title: str) -> str:
