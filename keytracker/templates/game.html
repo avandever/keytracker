@@ -21,6 +21,8 @@
         </h2>
     </div>
     <div class="logs">
-        {% for log in game.logs %}<p>{{ render_log(log) }}</p>{% endfor %}
+        {% for log in game.logs %}
+            <p>{{ render_log(log) | safe }}</p>
+        {% endfor %}
     </div>
 {% endblock %}

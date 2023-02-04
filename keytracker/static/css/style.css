@@ -47,3 +47,15 @@ nav {
 .form_element input[type="number"] {
     width: 40px;
 }
+
+.hoverable_card {
+    color: blue;
+}
+
+.hoverable_card > img {
+    display: none;
+}
+
+.hoverable_card:hover > img {
+    display: block;
+}

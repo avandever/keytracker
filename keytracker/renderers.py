@@ -1,6 +1,11 @@
-from keytracker.schema import Game
+from keytracker.schema import Card, Game
 from flask import url_for
+import re
 from typing import Dict
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 MV_BROWSER_BASE = "https://www.keyforgegame.com/deck-details"
@@ -8,9 +13,27 @@ MV_BROWSER_BASE = "https://www.keyforgegame.com/deck-details"
 DOK_BROWSER_BASE = "https://decksofkeyforge.com/decks"
 DOK_COMPARE_TEMPLATE = "https://decksofkeyforge.com/compare-decks?decks={}&decks={}"
 
+CARD_PLAY_BASIC = re.compile(r".* plays (.*)")
+
 
 def render_log(log: str) -> str:
-    return log.message
+    message = log.message.strip('\r')
+    message = insert_card_images(message)
+    return f"{message}"
+
+
+def insert_card_images(message: str) -> str:
+    m = CARD_PLAY_BASIC.match(message)
+    if m:
+        card_title = m.group(1)
+        card = Card.query.filter_by(card_title=card_title).first()
+        if card is None:
+            logger.error(f"Could not find card in db: '{repr(card_title)}'")
+        else:
+            card_img = f'<img src="{card.front_image}"/>'
+            span = f'<span class="hoverable_card">{card_title}{card_img}</span>'
+            message = message.replace(card_title, span)
+    return message
 
 
 def render_game_listing(game: Game, username: str = None, deck_id: str = None):
