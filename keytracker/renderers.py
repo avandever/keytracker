@@ -14,6 +14,7 @@ DOK_BROWSER_BASE = "https://decksofkeyforge.com/decks"
 DOK_COMPARE_TEMPLATE = "https://decksofkeyforge.com/compare-decks?decks={}&decks={}"
 
 CARD_PLAY_BASIC = re.compile(r".* plays (.*)")
+CARD_PLAY_UPGRADE = re.compile(r".* plays (.*) attaching it to (.*)")
 
 
 def render_log(log: str) -> str:
@@ -23,17 +24,29 @@ def render_log(log: str) -> str:
 
 
 def insert_card_images(message: str) -> str:
-    m = CARD_PLAY_BASIC.match(message)
-    if m:
-        card_title = m.group(1)
-        card = Card.query.filter_by(card_title=card_title).first()
-        if card is None:
-            logger.error(f"Could not find card in db: '{repr(card_title)}'")
-        else:
-            card_img = f'<img src="{card.front_image}"/>'
-            span = f'<span class="hoverable_card">{card_title}{card_img}</span>'
-            message = message.replace(card_title, span)
-    return message
+    for matcher in [
+        CARD_PLAY_UPGRADE,
+        CARD_PLAY_BASIC,
+    ]:
+        m = matcher.match(message)
+        if m:
+            print(f"Matches: {m.groups()}")
+            for card_title in m.groups():
+                message = message.replace(card_title, dress_up_card(card_title))
+            # Don't try remaining matchers
+            break
+    return f'<div class="cardplay">{message}</div>'
+
+
+def dress_up_card(title: str) -> str:
+    card = Card.query.filter_by(card_title=title).first()
+    if card is None:
+        logger.error(f"Could not find card in db: '{repr(title)}'")
+        return title
+    else:
+        card_img = f'<img src="{card.front_image}"/>'
+        span = f'<span class="hoverable_card">{title}{card_img}</span>'
+        return span
 
 
 def render_game_listing(game: Game, username: str = None, deck_id: str = None):
