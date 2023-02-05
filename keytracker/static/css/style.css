@@ -58,7 +58,6 @@ nav {
 .hoverable_card > img {
     display: none;
     width: 250px;
-    background-color: black;
     color: #fff;
     text-align: center;
     padding: 5px 0;
