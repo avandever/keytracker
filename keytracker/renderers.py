@@ -13,8 +13,10 @@ MV_BROWSER_BASE = "https://www.keyforgegame.com/deck-details"
 DOK_BROWSER_BASE = "https://decksofkeyforge.com/decks"
 DOK_COMPARE_TEMPLATE = "https://decksofkeyforge.com/compare-decks?decks={}&decks={}"
 
-CARD_PLAY_BASIC = re.compile(r".* plays (.*)")
-CARD_PLAY_UPGRADE = re.compile(r".* plays (.*) attaching it to (.*)")
+CARD_PLAY_MATCHERS = [
+    re.compile(r".* plays (.*)"),
+    re.compile(r".* plays (.*) attaching it to (.*)"),
+]
 
 SYSTEM_TEXT_MATCHERS = [
     re.compile(r".* brings .* to The Crucible"),
@@ -23,17 +25,71 @@ SYSTEM_TEXT_MATCHERS = [
     re.compile(r"(\w+) phase - (\w+)"),
 ]
 
+UPKEEP_MATCHERS = [
+    re.compile(r".* chooses to randomize the first player"),
+    re.compile(r".* won the flip and is first player"),
+    re.compile(r".* draws [0-9]+ card ?s to their maximum of [0-9]+"),
+    re.compile(r".* is shuffling their deck"),
+    re.compile(r".* draws [0-9]+ cards?"),
+    re.compile(r".* does not forge a key.*"),
+    re.compile(r".* readies their cards"),
+    re.compile(r"End of turn [0-9]+"),
+    re.compile(r".* chooses (.*) as their active house this turn"),
+    re.compile(r"(\w+): [0-9]+ [aÆ]mber .*keys?.*(\w+): [0-9]+ [aÆ]mber.*keys?.*"),
+    re.compile(r".*in their archives to their hand.*"),
+    re.compile(r".* declares Check!"),
+]
+
+MANUAL_MODE_MATCHERS = [
+    re.compile(r".* is attempting to switch manual mode on"),
+    re.compile(r".* allows enabling manual mode"),
+    re.compile(r".* switches manual mode o(n|ff)"),
+    re.compile(r".* manually.*"),
+]
+
+TURN_START_MATCHERS = [
+    re.compile(r"TURN [0-9]+ - .*"),
+]
+
+FORGED_KEY_MATCHERS = [
+    re.compile(r".* forges the (.*) key.*"),
+]
+
 
 def render_log(log: str) -> str:
     message = log.message.strip('\r')
     for formatter in [
         hide_system_messages,
+        format_turn_start,
         format_card_plays,
+        format_game_upkeep,
+        format_key_forging,
         mark_uncategorized,
     ]:
         message = formatter(message)
         if "div" in message:
             return message
+
+
+def format_key_forging(message: str) -> str:
+    for matcher in FORGED_KEY_MATCHERS:
+        if matcher.match(message):
+            return f'<div class="forged_key_message">{message}</div>'
+    return message
+
+
+def format_turn_start(message: str) -> str:
+    for matcher in TURN_START_MATCHERS:
+        if matcher.match(message):
+            return f'<div class="turn_start_message">{message}</div>'
+    return message
+
+
+def format_game_upkeep(message: str) -> str:
+    for matcher in UPKEEP_MATCHERS:
+        if matcher.match(message):
+            return f'<div class="game_upkeep_message">{message}</div>'
+    return message
 
 
 def mark_uncategorized(message: str) -> str:
@@ -49,10 +105,7 @@ def hide_system_messages(message: str) -> str:
 
 def format_card_plays(message: str) -> str:
     any_match = False
-    for matcher in [
-        CARD_PLAY_UPGRADE,
-        CARD_PLAY_BASIC,
-    ]:
+    for matcher in CARD_PLAY_MATCHERS:
         m = matcher.match(message)
         if m:
             any_match = True

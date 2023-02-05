@@ -78,3 +78,15 @@ nav {
 .cardplay {
     background-color: #b0ffd0;
 }
+
+.game_upkeep_message {
+    background-color: yellow;
+}
+
+.turn_start_message {
+    background-color: cyan;
+}
+
+.forged_key_message {
+    background-color: gold;
+}
