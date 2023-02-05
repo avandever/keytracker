@@ -26,11 +26,18 @@ SYSTEM_TEXT_MATCHERS = [
 
 def render_log(log: str) -> str:
     message = log.message.strip('\r')
-    message = hide_system_messages(message)
-    message = insert_card_images(message)
-    if "div" not in message:
-        return f'<div class="message-uncategorized">{message}</div>'
-    return f"{message}"
+    for formatter in [
+        hide_system_messages,
+        format_card_plays,
+        mark_uncategorized,
+    ]:
+        message = formatter(message)
+        if "div" in message:
+            return message
+
+
+def mark_uncategorized(message: str) -> str:
+    return f'<div class="message-uncategorized">{message}</div>'
 
 
 def hide_system_messages(message: str) -> str:
@@ -40,7 +47,7 @@ def hide_system_messages(message: str) -> str:
     return message
 
 
-def insert_card_images(message: str) -> str:
+def format_card_plays(message: str) -> str:
     any_match = False
     for matcher in [
         CARD_PLAY_UPGRADE,
