@@ -7,6 +7,7 @@ from keytracker.schema import (
     Card,
     CardInDeck,
     Deck,
+    DokDeck,
     Enhancements,
     Game,
     House,
@@ -643,3 +644,37 @@ def retry_after_mysql_disconnect(func):
                 tries += 1
         return func(*args, **kwargs)
     return wrapper
+
+
+def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
+    print(data)
+    deck = get_deck_by_id_with_zeal(data["keyforge_id"])
+    print(f"Adding dok deck data for {deck.name}")
+    dok = DokDeck.query.filter_by(deck_id=deck.id).first()
+    if dok is not None:
+        print(f"Already have dok data for {deck.name}")
+        return
+    dok = DokDeck(
+        deck=deck,
+        sas_rating=data["sas_rating"],
+        synergy_rating=data["synergy_rating"],
+        antisynergy_rating=data["antisynergy_rating"],
+        aerc_score=data["aerc_score"],
+        amber_control=data["amber_control"],
+        expected_amber=data["expected_amber"],
+        artifact_control=data["artifact_control"],
+        creature_control=data["creature_control"],
+        efficiency=data["efficiency"],
+        recursion=data["recursion"],
+        disruption=data["disruption"],
+        creature_protection=data["creature_protection"],
+        other=data["other"],
+        effective_power=data["effective_power"],
+        raw_amber=data["raw_amber"],
+        action_count=data["action_count"],
+        upgrade_count=data["upgrade_count"],
+        creature_count=data["creature_count"],
+    )
+    db.session.add(dok)
+    if not skip_commit:
+        db.session.commit()

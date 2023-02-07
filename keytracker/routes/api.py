@@ -12,6 +12,7 @@ from keytracker.schema import (
     Log,
 )
 from keytracker.utils import (
+    add_dok_deck_from_dict,
     anonymize_game_for_player,
     basic_stats_to_game,
     DuplicateGameError,
@@ -146,3 +147,9 @@ def load_deck_with_dok_data(deck_id):
         aerc_score=request.form.get("aerc_score"),
     )
     return make_response(jsonify(success=True, deck_name=deck.name), 201)
+
+
+@blueprint.route("/api/add_dok_deck_from_dict/v1", methods=["POST"])
+def add_dok_deck_from_dict_api():
+    add_dok_deck_from_dict(**request.form)
+    return make_response(jsonify(success=True), 201)

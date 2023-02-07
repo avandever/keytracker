@@ -182,6 +182,7 @@ class Deck(db.Model):
     aerc_score = db.Column(db.Integer)
     sas_version = db.Column(db.Integer)
     card_id_list = db.Column(IdList(","))
+    dok = db.relationship("DokDeck", back_populates="deck")
     enhancements = db.relationship("Enhancements", back_populates="deck")
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
     pod_stats = db.relationship("PodStats", back_populates="deck")
@@ -350,6 +351,37 @@ class CardInDeck(db.Model):
     @hybrid_property
     def is_maverick(self):
         return self.house != self.natural_house
+
+
+class DokDeck(db.Model):
+    """
+    This represents DOK data about a deck.
+    """
+
+    __tablename__ = "tracker_dok_deck"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    deck_id = db.Column(
+        db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
+    )
+    deck = db.relationship("Deck", back_populates="dok")
+    sas_rating = db.Column(db.Float)
+    synergy_rating = db.Column(db.Float)
+    antisynergy_rating = db.Column(db.Float)
+    aerc_score = db.Column(db.Float)
+    amber_control = db.Column(db.Float)
+    expected_amber = db.Column(db.Float)
+    artifact_control = db.Column(db.Float)
+    creature_control = db.Column(db.Float)
+    efficiency = db.Column(db.Float)
+    recursion = db.Column(db.Float)
+    disruption = db.Column(db.Float)
+    creature_protection = db.Column(db.Float)
+    other = db.Column(db.Float)
+    effective_power = db.Column(db.Float)
+    raw_amber = db.Column(db.Integer)
+    action_count = db.Column(db.Integer)
+    upgrade_count = db.Column(db.Integer)
+    creature_count = db.Column(db.Integer)
 
 
 class Game(db.Model):

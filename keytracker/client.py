@@ -108,5 +108,26 @@ def load_decks_from_dok_csv(dok_csv, host, port, sleep):
         time.sleep(sleep)
 
 
+@cli.command()
+@click.argument("dok_csv", type=click.File("r"))
+@click.option("--host", type=str, default="127.0.0.1")
+@click.option("--port", type=int, default=5000)
+@click.option("--sleep", type=float, default=0.0)
+def add_dok_decks_as_dicts(dok_csv, host, port, sleep):
+    site_root = f"http://{host}:{port}"
+    base_uri = f"{site_root}/api/add_dok_deck_from_dict/v1"
+    reader = csv.reader(dok_csv)
+    headers = next(reader)
+    for row in reader:
+        data = {}
+        for i, label in enumerate(headers):
+            data[label] = row[i]
+        response = requests.post(
+            base_uri,
+            data,
+        )
+        time.sleep(sleep)
+
+
 if __name__ == "__main__":
     cli()
