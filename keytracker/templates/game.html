@@ -21,12 +21,11 @@
         </h2>
     </div>
     <div class="visibility_checkbox">
-        Show system messages: <input type="checkbox" id="show_system_messages">
+        Show system messages:
+        <input type="checkbox" id="show_system_messages">
     </div>
     <div class="logs">
-        {% for log in game.logs %}
-            {{ render_log(log) | safe }}
-        {% endfor %}
+        {% for log in game.logs %}{{ render_log(log) | safe }}{% endfor %}
     </div>
     <script type="text/javascript">
         $('.system_message').hide();

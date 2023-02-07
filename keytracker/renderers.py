@@ -57,7 +57,7 @@ FORGED_KEY_MATCHERS = [
 
 
 def render_log(log: str) -> str:
-    message = log.message.strip('\r')
+    message = log.message.strip("\r")
     for formatter in [
         hide_system_messages,
         format_turn_start,
