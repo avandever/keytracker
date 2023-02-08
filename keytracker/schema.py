@@ -9,6 +9,7 @@ from sqlalchemy.sql import func
 import datetime
 import enum
 from collections import namedtuple
+from typing import List
 
 
 db = SQLAlchemy()
@@ -92,19 +93,6 @@ class Card(db.Model):
     is_non_deck = db.Column(db.Boolean, default=False, nullable=False)
 
 
-class Enhancements(db.Model):
-    __tablename__ = "tracker_enhancements"
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    card_id = db.Column(db.Integer, db.ForeignKey(Card.__table__.c.id))
-    card = db.relationship("Card")
-    deck_id = db.Column(db.Integer, db.ForeignKey(Deck.__table__.c.id))
-    deck = db.relationship("Deck", back_populates="enhancements")
-    amber = db.Column(db.Integer, default=0)
-    capture = db.Column(db.Integer, default=0)
-    draw = db.Column(db.Integer, default=0)
-    damage = db.Column(db.Integer, default=0)
-
-
 class Deck(db.Model):
     """
     This represents a deck, including various stats about it from the Master
@@ -122,6 +110,23 @@ class Deck(db.Model):
     sas_version = db.Column(db.Integer)
     card_id_list = db.Column(IdList(","))
     enhancements = db.relationship("Enhancements", back_populates="deck")
+
+    @property
+    def cards(self) -> List[Card]:
+        return Card.query.filter(Card.id.in_(self.card_id_list)).all()
+
+
+class Enhancements(db.Model):
+    __tablename__ = "tracker_enhancements"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    card_id = db.Column(db.Integer, db.ForeignKey(Card.__table__.c.id))
+    card = db.relationship("Card")
+    deck_id = db.Column(db.Integer, db.ForeignKey(Deck.__table__.c.id))
+    deck = db.relationship("Deck", back_populates="enhancements")
+    amber = db.Column(db.Integer, default=0)
+    capture = db.Column(db.Integer, default=0)
+    draw = db.Column(db.Integer, default=0)
+    damage = db.Column(db.Integer, default=0)
 
 
 class Game(db.Model):

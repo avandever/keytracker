@@ -225,19 +225,8 @@ def add_card_to_deck(card_dict: Dict, deck: Deck):
 def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> Deck:
     deck = Deck.query.filter_by(kf_id=deck_id).first()
     if deck is None:
-        deck_url = os.path.join(MV_API_BASE, deck_id)
-        print(f"Getting {deck_id} from MV")
-        response = requests.get(
-            deck_url,
-            params={"links": "cards, notes"},
-            headers={"X-Forwarded-For": randip()},
-        )
-        data = response.json()
-        deck = Deck(
-            kf_id=data["data"]["id"],
-            name=data["data"]["name"],
-            expansion=data["data"]["expansion"],
-        )
+        deck = Deck(kf_id=deck_id)
+        refresh_deck_from_mv(deck)
         print("Setting dok data")
         if sas_rating and aerc_score:
             deck.sas_rating = sas_rating
@@ -245,16 +234,48 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
             deck.sas_version = LATEST_SAS_VERSION
         else:
             update_sas_scores(deck)
-        deck.card_id_list = []
-        for card in data["_linked"]["cards"]:
-            add_card_to_deck(card, deck)
-        enhancements = list(add_enhancements_on_deck(data, deck))
-        print("Saving to db")
-        db.session.add_all([deck] + enhancements)
-        db.session.commit()
         db.session.refresh(deck)
         return deck
     return deck
+
+
+def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
+    if card_cache is None:
+        card_cache = {}
+    deck_url = os.path.join(MV_API_BASE, deck.kf_id)
+    print(f"Getting {deck.kf_id} from MV")
+    response = requests.get(
+        deck_url,
+        params={"links": "cards, notes"},
+        headers={"-X-Forwarded-For": randip()},
+    )
+    all_data = response.json()
+    data = all_data["data"]
+    deck.name = data["name"]
+    deck.expansion = data["expansion"]
+    card_data_by_id = {c["id"]: c for c in all_data["_linked"]["cards"]}
+    cards = []
+    for card_id in data["_links"]["cards"]:
+        card = card_cache.get(card_id)
+        if card is None:
+            card = Card.query.filter_by(kf_id=card_id).first()
+            card_cache[card_id] = card
+        if card is None:
+            print(f"Adding card {card_dict['card_title']}")
+            card_dict = card_data_by_id[card_id].copy()
+            card_dict.pop("id")
+            carc_dict["kf_id"] = card_id
+            card = Card(**card_dict)
+            db.session.add(card)
+            db.session.commit()
+            db.session.refresh(card)
+            card_cache[card_id] = card
+        cards.append(card)
+    deck.card_id_list = [card.id for card in cards]
+    deck.enhancements.clear()
+    enhancements = list(add_enhancements_on_deck(all_data, deck))
+    db.session.add_all(enhancements)
+    db.session.commit()
 
 
 def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
