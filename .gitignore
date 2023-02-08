@@ -8,9 +8,13 @@ config-local.ini
 .gcloudignore
 build/
 venv/
+venv
 alembic.ini
 alembic-local.ini
 alembic-remote.ini
 alembic/
+alembic
 alembic_local/
+alembic_local
 alembic_remote/
+alembic_remote
