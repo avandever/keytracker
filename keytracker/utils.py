@@ -5,6 +5,7 @@ from keytracker.schema import (
     db,
     Card,
     Deck,
+    Enhancements,
     Game,
     House,
     HouseTurnCounts,
@@ -247,8 +248,9 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
         deck.card_id_list = []
         for card in data["_linked"]["cards"]:
             add_card_to_deck(card, deck)
+        enhancements = list(add_enhancements_on_deck(data, deck))
         print("Saving to db")
-        db.session.add(deck)
+        db.session.add_all([deck] + enhancements)
         db.session.commit()
         db.session.refresh(deck)
         return deck
@@ -501,3 +503,13 @@ def anonymize_all_games_for_player(player: Player) -> None:
     ).all()
     for game in games:
         anonymize_game_for_player(game, player)
+
+
+def add_enhancements_on_deck(data: Dict, deck: Deck) -> Iterable[Enhancements]:
+    bonus_icons = data["data"]["bonus_icons"]
+    kf_id_to_card = {card.kf_id: card for card in deck.cards}
+    for spec in bonus_icons:
+        card = kf_id_to_card[spec["card_id"]]
+        icons = Counter(spec["bonus_icons"])
+        enhancements = Enhancements(card=card, deck=deck, **icons)
+        yield enhancements
