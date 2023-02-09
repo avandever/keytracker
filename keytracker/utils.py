@@ -247,7 +247,7 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     response = requests.get(
         deck_url,
         params={"links": "cards, notes"},
-        headers={"-X-Forwarded-For": randip()},
+        headers={"X-Forwarded-For": randip()},
     )
     all_data = response.json()
     data = all_data["data"]
