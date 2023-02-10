@@ -4,6 +4,8 @@ from sqlalchemy import (
     select,
     types as sqlalchemy_types,
 )
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import column_property
 from sqlalchemy.sql import func
 import datetime
@@ -315,6 +317,21 @@ class CardInDeck(db.Model):
     enhanced_capture = db.Column(db.Integer, default=0)
     enhanced_draw = db.Column(db.Integer, default=0)
     enhanced_damage = db.Column(db.Integer, default=0)
+    card_title = association_proxy("platonic_card", "card_title")
+    card_type = association_proxy("platonic_card", "card_type")
+    front_image = association_proxy("platonic_card", "front_image")
+    card_text = association_proxy("platonic_card", "card_text")
+    traits = association_proxy("platonic_card", "traits")
+    amber = association_proxy("platonic_card", "amber")
+    power = association_proxy("platonic_card", "power")
+    armor = association_proxy("platonic_card", "armor")
+    flavor_text = association_proxy("platonic_card", "flavor_text")
+    is_non_deck = association_proxy("platonic_card", "is_non_deck")
+    natural_house = association_proxy("platonic_card", "house")
+
+    @hybrid_property
+    def is_maverick(self):
+        return self.house != self.natural_house
 
 
 class Game(db.Model):
