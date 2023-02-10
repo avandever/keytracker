@@ -1,15 +1,23 @@
 from collections import Counter, defaultdict
 import configparser
+import copy
 import datetime
 from keytracker.schema import (
     db,
     Card,
+    CardInDeck,
     Deck,
     Enhancements,
     Game,
     House,
     HouseTurnCounts,
+    PlatonicCard,
+    PlatonicCardInSet,
     Player,
+    Trait,
+    house_str_to_enum,
+    card_type_str_to_enum,
+    rarity_str_to_enum,
 )
 import os
 from typing import Dict, Iterable, Tuple
@@ -61,6 +69,10 @@ class DuplicateGameError(Exception):
 
 
 class MissingInput(Exception):
+    pass
+
+
+class MissingEnhancements(Exception):
     pass
 
 
@@ -243,7 +255,6 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
     deck_url = os.path.join(MV_API_BASE, deck.kf_id)
-    print(f"Getting {deck.kf_id} from MV")
     response = requests.get(
         deck_url,
         params={"links": "cards, notes"},
@@ -534,3 +545,66 @@ def add_enhancements_on_deck(data: Dict, deck: Deck) -> Iterable[Enhancements]:
         icons = Counter(spec["bonus_icons"])
         enhancements = Enhancements(card=card, deck=deck, **icons)
         yield enhancements
+
+
+def create_platonic_card(card: Card) -> PlatonicCard:
+    platonic_card = PlatonicCard(
+        card_title=card.card_title,
+        card_type=card_type_str_to_enum[card.card_type],
+        front_image=card.front_image,
+        card_text=card.card_text,
+        amber=card.amber,
+        power=card.power,
+        armor=card.armor,
+        flavor_text=card.flavor_text,
+        is_non_deck=card.is_non_deck,
+        house=house_str_to_enum[card.house],
+    )
+    db.session.add(platonic_card)
+    if card.traits:
+        trait_strs = card.traits.split(" • ")
+        for trait_str in trait_strs:
+            trait = Trait.query.filter_by(name=trait_str).first()
+            if trait is None:
+                trait = Trait(name=trait_str)
+                db.session.add(trait)
+            platonic_card.traits.append(trait)
+    if card.expansion not in {x.expansion for x in platonic_card.expansions}:
+        pc_in_set = PlatonicCardInSet(
+            card=platonic_card,
+            expansion=card.expansion,
+            rarity=rarity_str_to_enum[card.rarity],
+            card_number=card.card_number,
+            is_anomaly=card.is_anomaly,
+        )
+    db.session.add(pc_in_set)
+    return platonic_card
+
+
+def populate_enhanced_cards(deck: Deck) -> None:
+    enhancements = copy.deepcopy(deck.enhancements)
+    for card in deck.cards:
+        platonic_card = PlatonicCard.query.filter_by(card_title=card.card_title).first()
+        if platonic_card is None:
+            platonic_card = create_platonic_card(card)
+        card_in_deck = CardInDeck(
+            platonic_card=platonic_card,
+            deck=deck,
+            house=house_str_to_enum[card.house],
+            is_enhanced=card.is_enhanced,
+        )
+        db.session.add(card_in_deck)
+        if card_in_deck.is_enhanced:
+            for (idx, bling) in enumerate(enhancements):
+                if bling.card_id == card.id:
+                    card_in_deck.enhanced_amber = bling.amber
+                    card_in_deck.enhanced_capture = bling.capture
+                    card_in_deck.enhanced_draw = bling.draw
+                    card_in_deck.enhanced_damage = bling.damage
+                    enhancements.pop(idx)
+                    break
+            else:
+                raise MissingEnhancements(
+                    f"Could not successfully pair enhancements in {deck.id}"
+                )
+    db.session.commit()
