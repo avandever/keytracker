@@ -227,7 +227,9 @@ class Enhancements(db.Model):
 platonic_card_traits = db.Table(
     "tracker_platonic_card_traits",
     db.metadata,
-    db.Column("platonic_card_id", db.ForeignKey("tracker_platonic_card.id"), primary_key=True),
+    db.Column(
+        "platonic_card_id", db.ForeignKey("tracker_platonic_card.id"), primary_key=True
+    ),
     db.Column("trait_id", db.ForeignKey("tracker_traits.id"), primary_key=True),
 )
 
