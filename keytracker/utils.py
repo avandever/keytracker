@@ -393,6 +393,7 @@ def add_player_filters(
     query: Query,
     username: str = None,
     deck_id: str = None,
+    deck_dbid: int = None,
     sas_min: int = None,
     sas_max: int = None,
     aerc_min: int = None,
@@ -414,6 +415,9 @@ def add_player_filters(
         deck = get_deck_by_id_with_zeal(deck_id)
         winner_filters.append(Game.winner_deck_dbid == deck.id)
         loser_filters.append(Game.loser_deck_dbid == deck.id)
+    if deck_dbid is not None:
+        winner_filters.append(Game.winner_deck_dbid == deck_dbid)
+        loser_filters.append(Game.loser_deck_dbid == deck_dbid)
     if sas_min is not None:
         winner_filters.append(Game.winner_deck.has(Deck.sas_rating > sas_min))
         loser_filters.append(Game.loser_deck.has(Deck.sas_rating > sas_min))

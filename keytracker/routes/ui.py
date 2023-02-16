@@ -82,30 +82,26 @@ def deck(deck_id):
     if username is not None:
         games_won = Game.query.filter(
             and_(
-                Game.winner_deck.has(kf_id == deck_id),
+                Game.winner_deck_dbid == deck.id,
                 Game.winner == username,
             )
         ).count()
         games_lost = Game.query.filter_by(
             and_(
-                Game.loser_deck.has(kf_id == deck_id),
+                Game.loser_deck_dbid == deck.id,
                 Game.loser == username,
             )
         ).count()
         deck_games = (
-            add_player_filters(Game.query, username, deck_id)
+            add_player_filters(Game.query, username, deck_dbid=deck.id)
             .order_by(Game.date.desc())
             .all()
         )
     else:
-        games_won = Game.query.filter(
-            Game.winner_deck.has(Deck.kf_id == deck_id)
-        ).count()
-        games_lost = Game.query.filter(
-            Game.loser_deck.has(Deck.kf_id == deck_id)
-        ).count()
+        games_won = Game.query.filter_by(winner_deck_dbid=deck.id).count()
+        games_lost = Game.query.filter_by(loser_deck_dbid=deck.id).count()
         deck_games = (
-            add_player_filters(Game.query, deck_id=deck_id)
+            add_player_filters(Game.query, deck_dbid=deck.id)
             .order_by(Game.date.desc())
             .all()
         )
