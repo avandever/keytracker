@@ -248,6 +248,12 @@ def upload():
                 anonymize_game_for_player(game, winner)
             if loser.anonymous:
                 anonymize_game_for_player(game, loser)
+            game_reloaded = None
+            while game_reloaded is None:
+                time.sleep(0.5)
+                game_reloaded = Game.query.filter_by(
+                    crucible_game_id=game.crucible_game_id,
+                ).first()
             return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
     return render_template(
         "upload.html",
