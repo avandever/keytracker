@@ -131,6 +131,8 @@ def simple_upload():
 def delete_game(game_id):
     game = Game.query.filter_by(crucible_game_id=game_id).one()
     Log.query.filter_by(game_id=game.id).delete()
+    for htc in game.house_turn_counts:
+        db.session.delete(htc)
     db.session.delete(game)
     db.session.commit()
     return make_response(jsonify(success=True), 201)
