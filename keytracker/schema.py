@@ -102,7 +102,7 @@ class IdList(sqlalchemy_types.TypeDecorator):
 class Card(db.Model):
     __tablename__ = "tracker_card"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    kf_id = db.Column(db.String(36), primary_key=True)
+    kf_id = db.Column(db.String(36), index=True)
     card_title = db.Column(db.String(64))
     house = db.Column(db.String(20))
     card_type = db.Column(db.String(20))
@@ -171,7 +171,7 @@ class Deck(db.Model):
 
     __tablename__ = "tracker_deck"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    kf_id = db.Column(db.String(36), primary_key=True)
+    kf_id = db.Column(db.String(36), index=True, nullable=False)
     name = db.Column(db.String(256))
     expansion = db.Column(db.Integer)
     sas_rating = db.Column(db.Integer)
@@ -331,7 +331,7 @@ class Game(db.Model):
     winner = db.Column(db.String(100), index=True)
     winner_id = db.Column(db.Integer)
     winner_deck_dbid = db.Column(
-        db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
+        db.Integer, db.ForeignKey(Deck.__table__.c.id), index=True,
     )
     winner_deck = db.relationship("Deck", foreign_keys=winner_deck_dbid)
     winner_deck_id = db.Column(db.String(100), index=True)
@@ -356,7 +356,7 @@ class Game(db.Model):
     loser = db.Column(db.String(100), index=True)
     loser_id = db.Column(db.Integer)
     loser_deck_dbid = db.Column(
-        db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
+        db.Integer, db.ForeignKey(Deck.__table__.c.id), index=True
     )
     loser_deck = db.relationship("Deck", foreign_keys=[loser_deck_dbid])
     loser_deck_id = db.Column(db.String(100), index=True)
@@ -487,7 +487,7 @@ class Log(db.Model):
     __tablename__ = "tracker_log"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     game_id = db.Column(
-        db.Integer, db.ForeignKey(Game.__table__.c.id), primary_key=True, index=True
+        db.Integer, db.ForeignKey(Game.__table__.c.id), index=True
     )
     game = db.relationship("Game", back_populates="logs")
     message = db.Column(db.String(1000))
