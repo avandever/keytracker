@@ -24,7 +24,9 @@ import os
 app = Flask(__name__)
 app.config.update(load_config())
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_recycle": int(os.getenv("SQLALCHEMY_POOL_RECYCLE", 3600)),
+    "pool_size": 10,
+    "pool_recycle": int(os.getenv("SQLALCHEMY_POOL_RECYCLE", 300)),
+    "pool_pre_ping": True,
 }
 app.app_context().push()
 db.app = app
