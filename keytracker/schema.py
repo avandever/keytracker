@@ -334,7 +334,7 @@ class Game(db.Model):
         db.Integer, db.ForeignKey(Deck.__table__.c.id), index=True,
     )
     winner_deck = db.relationship("Deck", foreign_keys=winner_deck_dbid)
-    winner_deck_id = db.Column(db.String(100), index=True)
+    winner_deck_id = db.Column(db.String(100))
     winner_deck_name = db.Column(db.String(100))
     winner_keys = db.Column(db.Integer)
     winner_checks = db.Column(db.Integer)
@@ -359,7 +359,7 @@ class Game(db.Model):
         db.Integer, db.ForeignKey(Deck.__table__.c.id), index=True
     )
     loser_deck = db.relationship("Deck", foreign_keys=[loser_deck_dbid])
-    loser_deck_id = db.Column(db.String(100), index=True)
+    loser_deck_id = db.Column(db.String(100))
     loser_deck_name = db.Column(db.String(100))
     loser_keys = db.Column(db.Integer)
     loser_checks = db.Column(db.Integer)
