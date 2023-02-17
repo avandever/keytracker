@@ -399,7 +399,7 @@ def add_player_filters(
     aerc_min: int = None,
     aerc_max: int = None,
 ) -> Query:
-    if not any((username, deck_id, sas_min, sas_max, aerc_min, aerc_max)):
+    if not any((username, deck_id, deck_dbid, sas_min, sas_max, aerc_min, aerc_max)):
         return query
     winner_filters = []
     loser_filters = []

@@ -79,54 +79,33 @@ def leaderboard():
 @blueprint.route("/deck/<deck_id>", methods=["GET"])
 def deck(deck_id):
     username = request.args.get("username")
-    before = time.time()
     deck = get_deck_by_id_with_zeal(deck_id)
-    after = time.time()
-    print(f"Took {int(after - before)} s to get deck")
     if username is not None:
-        before = time.time()
         games_won = Game.query.filter(
             and_(
                 Game.winner_deck_dbid == deck.id,
                 Game.winner == username,
             )
         ).count()
-        after = time.time()
-        print(f"Took {int(after - before)} s to get win count")
-        before = time.time()
         games_lost = Game.query.filter_by(
             and_(
                 Game.loser_deck_dbid == deck.id,
                 Game.loser == username,
             )
         ).count()
-        after = time.time()
-        print(f"Took {int(after - before)} s to get loss count")
-        before = time.time()
         deck_games = (
             add_player_filters(Game.query, username, deck_dbid=deck.id)
             .order_by(Game.date.desc())
             .all()
         )
-        after = time.time()
-        print(f"Took {int(after - before)} s to get games")
     else:
-        before = time.time()
         games_won = Game.query.filter_by(winner_deck_dbid=deck.id).count()
-        after = time.time()
-        print(f"Took {int(after - before)} s to get win count")
-        before = time.time()
         games_lost = Game.query.filter_by(loser_deck_dbid=deck.id).count()
-        after = time.time()
-        print(f"Took {int(after - before)} s to get loss count")
-        before = time.time()
         deck_games = (
             add_player_filters(Game.query, deck_dbid=deck.id)
             .order_by(Game.date.desc())
             .all()
         )
-        after = time.time()
-        print(f"Took {int(after - before)} s to get games")
     if len(deck_games) == 0:
         flash(f"No games found for deck {deck_id}")
         return redirect(url_for("ui.home"))

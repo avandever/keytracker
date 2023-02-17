@@ -331,7 +331,9 @@ class Game(db.Model):
     winner = db.Column(db.String(100), index=True)
     winner_id = db.Column(db.Integer)
     winner_deck_dbid = db.Column(
-        db.Integer, db.ForeignKey(Deck.__table__.c.id), index=True,
+        db.Integer,
+        db.ForeignKey(Deck.__table__.c.id),
+        index=True,
     )
     winner_deck = db.relationship("Deck", foreign_keys=winner_deck_dbid)
     winner_deck_id = db.Column(db.String(100))
@@ -486,9 +488,7 @@ class Log(db.Model):
 
     __tablename__ = "tracker_log"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    game_id = db.Column(
-        db.Integer, db.ForeignKey(Game.__table__.c.id), index=True
-    )
+    game_id = db.Column(db.Integer, db.ForeignKey(Game.__table__.c.id), index=True)
     game = db.relationship("Game", back_populates="logs")
     message = db.Column(db.String(1000))
     time = db.Column(db.DateTime)
