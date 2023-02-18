@@ -246,7 +246,8 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
             deck.sas_version = LATEST_SAS_VERSION
         else:
             update_sas_scores(deck)
-        db.session.commit(deck)
+        db.session.add(deck)
+        db.session.commit()
         db.session.refresh(deck)
         return deck
     return deck
