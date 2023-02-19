@@ -46,6 +46,7 @@ app.register_blueprint(api.blueprint)
 
 
 @app.errorhandler(OperationalError)
+def handle_mysql_disconnect(error):
     db.session.rollback()
     return jsonify({"status_code": 500, "status": "Internal Server Error"})
 
