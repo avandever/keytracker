@@ -17,7 +17,10 @@ from keytracker.routes import (
     ui,
     api,
 )
-from sqlalchemy.exc import PendingRollbackError
+from sqlalchemy.exc import (
+    OperationalError,
+    PendingRollbackError,
+)
 import os
 
 
@@ -40,6 +43,11 @@ app.jinja_env.globals.update(
 )
 app.register_blueprint(ui.blueprint)
 app.register_blueprint(api.blueprint)
+
+
+@app.errorhandler(OperationalError)
+    db.session.rollback()
+    return jsonify({"status_code": 500, "status": "Internal Server Error"})
 
 
 @app.errorhandler(PendingRollbackError)
