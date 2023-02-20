@@ -39,6 +39,7 @@ class CardType(enum.Enum):
     CREATURE = "Creature"
     UPGRADE = "Upgrade"
     ARTIFACT = "Artifact"
+    CREATURE2 = "Creature2"
 
 
 card_type_str_to_enum = {ct.value: ct for ct in CardType.__members__.values()}

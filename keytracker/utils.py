@@ -554,9 +554,12 @@ def add_enhancements_on_deck(data: Dict, deck: Deck) -> Iterable[Enhancements]:
 
 
 def create_platonic_card(card: Card) -> PlatonicCard:
+    card_type = card.card_type
+    if card_type == "Creature1":
+        card_type = "Creature"
     platonic_card = PlatonicCard(
         card_title=card.card_title,
-        card_type=card_type_str_to_enum[card.card_type],
+        card_type=card_type_str_to_enum[card_type],
         front_image=card.front_image,
         card_text=card.card_text,
         amber=card.amber,
@@ -589,6 +592,7 @@ def create_platonic_card(card: Card) -> PlatonicCard:
 
 def populate_enhanced_cards(deck: Deck) -> None:
     enhancements = copy.deepcopy(deck.enhancements)
+    deck.cards_from_assoc.clear()
     for card in deck.cards:
         platonic_card = PlatonicCard.query.filter_by(card_title=card.card_title).first()
         if platonic_card is None:
