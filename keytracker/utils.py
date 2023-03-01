@@ -26,6 +26,10 @@ import requests
 import re
 import sqlalchemy
 from sqlalchemy import and_, or_
+from sqlalchemy.exc import (
+    OperationalError,
+    PendingRollbackError,
+)
 from sqlalchemy.orm import Query
 
 
@@ -625,3 +629,17 @@ def populate_enhanced_cards(deck: Deck, platonic_card_cache=None) -> None:
                     f"Could not successfully pair enhancements in {deck.id}"
                 )
     db.session.commit()
+
+
+def retry_after_mysql_disconnect(func):
+    def wrapper(*args, **kwargs):
+        tries = 0
+        while tries < 5:
+            try:
+                return func(*args, **kwargs)
+            except (OperationalError, PendingRollbackError) as exc:
+                print(exc)
+                db.session.rollback()
+                tries += 1
+        return func(*args, **kwargs)
+    return wrapper

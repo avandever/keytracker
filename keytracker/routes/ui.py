@@ -22,6 +22,7 @@ from keytracker.utils import (
     DeckNotFoundError,
     get_deck_by_id_with_zeal,
     log_to_game,
+    retry_after_mysql_disconnect,
     turn_counts_from_logs,
 )
 import datetime
@@ -34,6 +35,7 @@ blueprint = Blueprint("ui", __name__, template_folder="templates")
 logger = logging.getLogger(__name__)
 
 
+@retry_after_mysql_disconnect
 @blueprint.route("/")
 def home():
     """Landing page."""
@@ -76,6 +78,7 @@ def leaderboard():
     )
 
 
+@retry_after_mysql_disconnect
 @blueprint.route("/deck/<deck_id>", methods=["GET"])
 def deck(deck_id):
     username = request.args.get("username")
@@ -120,6 +123,7 @@ def deck(deck_id):
     )
 
 
+@retry_after_mysql_disconnect
 @blueprint.route("/game/<crucible_game_id>", methods=["GET"])
 def game(crucible_game_id):
     game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
@@ -134,6 +138,7 @@ def game(crucible_game_id):
     )
 
 
+@retry_after_mysql_disconnect
 @blueprint.route("/games", methods=["GET"])
 def games():
     args_list = ["user", "deck", "sas_min", "sas_max", "aerc_min", "aerc_max"]
@@ -174,6 +179,7 @@ def games():
     )
 
 
+@retry_after_mysql_disconnect
 @blueprint.route("/user", methods=["GET", "POST"])
 @blueprint.route("/user/", methods=["GET", "POST"])
 def user_search():
@@ -186,6 +192,7 @@ def user_search():
     )
 
 
+@retry_after_mysql_disconnect
 @blueprint.route("/user/<username>", methods=["GET"])
 def user(username):
     """User Summary Page"""
@@ -257,6 +264,7 @@ def upload():
     )
 
 
+@retry_after_mysql_disconnect
 @blueprint.route("/upload_simple", methods=("GET", "POST"))
 def upload_simple():
     """Manual game upload page with just simple options"""
