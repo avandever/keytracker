@@ -590,14 +590,16 @@ def create_platonic_card(card: Card) -> PlatonicCard:
     return platonic_card
 
 
-def populate_enhanced_cards(deck: Deck, platonic_card_cache = None) -> None:
+def populate_enhanced_cards(deck: Deck, platonic_card_cache=None) -> None:
     enhancements = copy.deepcopy(deck.enhancements)
     deck.cards_from_assoc.clear()
     platonic_card_cache = platonic_card_cache or {}
     for card in deck.cards:
         platonic_card = platonic_card_cache.get(card.card_title)
         if platonic_card is None:
-            platonic_card = PlatonicCard.query.filter_by(card_title=card.card_title).first()
+            platonic_card = PlatonicCard.query.filter_by(
+                card_title=card.card_title
+            ).first()
             platonic_card_cache[card.card_title] = platonic_card
         if platonic_card is None:
             platonic_card = create_platonic_card(card)

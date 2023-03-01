@@ -184,6 +184,7 @@ class Deck(db.Model):
     card_id_list = db.Column(IdList(","))
     enhancements = db.relationship("Enhancements", back_populates="deck")
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
+    pod_stats = db.relationship("PodStats", back_populates="deck")
 
     @property
     def cards(self) -> List[Card]:
@@ -213,6 +214,23 @@ class Deck(db.Model):
             else:
                 cards.append(EnhancedCard(card))
         return cards
+
+
+class PodStats(db.Model):
+    __tablename__ = "tracker_pod_stats"
+    deck_id = db.Column(
+        db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
+    )
+    house = db.Column(db.Enum(House), primary_key=True)
+    deck = db.relationship("Deck", back_populates="pod_stats")
+    enhanced_amber = db.Column(db.Integer, default=0)
+    enhanced_capture = db.Column(db.Integer, default=0)
+    enhanced_draw = db.Column(db.Integer, default=0)
+    enhanced_damage = db.Column(db.Integer, default=0)
+    # not derived because should be indexable
+    num_enhancements = db.Column(db.Integer, default=0, index=True)
+    aerc_score = db.Column(db.Integer, default=0, index=True)
+    sas_rating = db.Column(db.Integer, default=0, index=True)
 
 
 class Enhancements(db.Model):
