@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block content %}
+  <div class="decks_header">
+    <h1>Decks Advanced Search<h1>
+  </div>
+  <form id="cleanform" method="get">
+    {{ render_input_number("sas_min", "SAS Minimum", 33, 108, args.get("sas_min")) | safe }}
+    {{ render_input_number("sas_max", "SAS Maximum", 33, 108, args.get("sas_max")) | safe }}
+    {{ render_input_number("aerc_min", "AERC Minimum", 33, 108, args.get("aerc_min")) | safe }}
+    {{ render_input_number("aerc_max", "AERC Maximum", 33, 108, args.get("aerc_max")) | safe }}
+    <br />
+    <button type="submit">Submit</button>
+  </form>
+  <script type="text/javascript" src="{{ url_for("static", filename="js/cleanform.js") }}"></script>
+  {% if decks %}
+    <div class="decks_list">
+      {% for deck in decks %}
+        <div class="deck_listing">
+            <a href="{{ url_for("ui.deck", deck_id=deck.kf_id) }}">{{ deck.name }}</a>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endblock %}

@@ -180,6 +180,34 @@ def games():
 
 
 @retry_after_mysql_disconnect
+@blueprint.route("/decks", methods=["GET"])
+def decks():
+    if request.args:
+        query = Deck.query
+        sas_min = request.args.get("sas_min")
+        if sas_min:
+            query = query.filter(Deck.sas_rating >= sas_min)
+        sas_max = request.args.get("sas_max")
+        if sas_max:
+            query = query.filter(Deck.sas_rating <= sas_max)
+        aerc_min = request.args.get("aerc_min")
+        if aerc_min:
+            query = query.filter(Deck.aerc_score >= aerc_min)
+        aerc_max = request.args.get("aerc_max")
+        if aerc_max:
+            query = query.filter(Deck.aerc_score <= aerc_max)
+        decks = query.all()
+    else:
+        decks = None
+    return render_template(
+        "decks.html",
+        title=f"Decks Search",
+        args=request.args,
+        decks=decks,
+    )
+
+
+@retry_after_mysql_disconnect
 @blueprint.route("/user", methods=["GET", "POST"])
 @blueprint.route("/user/", methods=["GET", "POST"])
 def user_search():
