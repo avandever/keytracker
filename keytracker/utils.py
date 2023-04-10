@@ -15,6 +15,7 @@ from keytracker.schema import (
     PlatonicCard,
     PlatonicCardInSet,
     Player,
+    PodStats,
     Trait,
     house_str_to_enum,
     card_type_str_to_enum,
@@ -244,6 +245,7 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
     if deck is None:
         deck = Deck(kf_id=deck_id)
         refresh_deck_from_mv(deck)
+        calculate_pod_stats(deck)
         print("Setting dok data")
         if sas_rating and aerc_score:
             deck.sas_rating = sas_rating
@@ -678,3 +680,35 @@ def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
     db.session.add(dok)
     if not skip_commit:
         db.session.commit()
+
+def calculate_pod_stats(deck: Deck) -> None:
+    house_to_cards = defaultdict(list)
+    for card in deck.cards_from_assoc:
+        house_to_cards[card.house].append(card)
+    deck.pod_stats.clear()
+    for house, cards in house_to_cards.items():
+        enhancements, amber, capture, draw, damage = 0, 0, 0, 0, 0
+        mutants = 0
+        for card in cards:
+            if any(trait.name == "mutant" for trait in card.traits):
+                mutants += 1
+            amber += card.enhanced_amber
+            capture += card.enhanced_capture
+            draw += card.enhanced_draw
+            damage += card.enhanced_damage
+            enhancements += sum([
+                card.enhanced_amber,
+                card.enhanced_capture,
+                card.enhanced_draw,
+                card.enhanced_damage,
+            ])
+        pod = PodStats(
+            house=house,
+            deck=deck,
+            enhanced_amber=amber,
+            enhanced_capture=capture,
+            enhanced_draw=draw,
+            enhanced_damage=damage,
+            num_mutants=mutants,
+        )
+        db.session.add(pod)

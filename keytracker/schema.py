@@ -232,6 +232,7 @@ class PodStats(db.Model):
     num_enhancements = db.Column(db.Integer, default=0, index=True)
     aerc_score = db.Column(db.Integer, default=0, index=True)
     sas_rating = db.Column(db.Integer, default=0, index=True)
+    num_mutants = db.Column(db.Integer, default=0)
 
 
 class Enhancements(db.Model):
