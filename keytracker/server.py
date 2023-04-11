@@ -16,6 +16,7 @@ from keytracker.routes import (
     ui,
     api,
 )
+import sqlalchemy
 from sqlalchemy.exc import (
     OperationalError,
     PendingRollbackError,
@@ -59,6 +60,10 @@ def handle_pending_rollback(error):
 @app.shell_context_processor
 def shell_context():
     return {
+        "or_": sqlalchemy.or_,
+        "and_": sqlalchemy.and_,
+        "not_": sqlalchemy.not_,
+        "func": sqlalchemy.func,
         "db": schema.db,
         "utils": utils,
         "Card": schema.Card,
