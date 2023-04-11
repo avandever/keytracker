@@ -187,6 +187,9 @@ class Deck(db.Model):
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
     pod_stats = db.relationship("PodStats", back_populates="deck")
 
+    def __repr__(self) -> str:
+        return f"<Deck(\"{self.name}\", {self.expansion},  {self.id})>"
+
     @property
     def cards(self) -> List[Card]:
         card_objs = Card.query.filter(Card.id.in_(self.card_id_list)).all()
@@ -233,6 +236,15 @@ class PodStats(db.Model):
     aerc_score = db.Column(db.Integer, default=0, index=True)
     sas_rating = db.Column(db.Integer, default=0, index=True)
     num_mutants = db.Column(db.Integer, default=0)
+
+    def __repr__(self) -> str:
+        msg = f"<PodStats(D: {self.deck_id}, h: {self.house}, "
+        msg += f"e:{self.num_enhancements}"
+        msg += f" a:{self.enhanced_amber} c:{self.enhanced_capture}"
+        msg += f" f:{self.enhanced_draw} d:{self.enhanced_damage}"
+        msg += f" m:{self.num_mutants}"
+        msg += ")>"
+        return msg
 
 
 class Enhancements(db.Model):
