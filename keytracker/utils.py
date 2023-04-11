@@ -645,6 +645,7 @@ def retry_after_mysql_disconnect(func):
                 db.session.rollback()
                 tries += 1
         return func(*args, **kwargs)
+
     return wrapper
 
 
@@ -681,6 +682,7 @@ def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
     if not skip_commit:
         db.session.commit()
 
+
 def calculate_pod_stats(deck: Deck) -> None:
     house_to_cards = defaultdict(list)
     for card in deck.cards_from_assoc:
@@ -696,12 +698,14 @@ def calculate_pod_stats(deck: Deck) -> None:
             capture += card.enhanced_capture
             draw += card.enhanced_draw
             damage += card.enhanced_damage
-            enhancements += sum([
-                card.enhanced_amber,
-                card.enhanced_capture,
-                card.enhanced_draw,
-                card.enhanced_damage,
-            ])
+            enhancements += sum(
+                [
+                    card.enhanced_amber,
+                    card.enhanced_capture,
+                    card.enhanced_draw,
+                    card.enhanced_damage,
+                ]
+            )
         pod = PodStats(
             house=house,
             deck=deck,

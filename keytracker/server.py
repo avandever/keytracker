@@ -4,9 +4,8 @@ from keytracker.schema import (
     db,
     Log,
 )
-from keytracker.utils import (
-    load_config,
-)
+from keytracker import utils
+from keytracker import schema
 from keytracker.renderers import (
     render_dropdown,
     render_input_number,
@@ -25,7 +24,7 @@ import os
 
 
 app = Flask(__name__)
-app.config.update(load_config())
+app.config.update(utils.load_config())
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_size": 10,
     "pool_recycle": int(os.getenv("SQLALCHEMY_POOL_RECYCLE", 300)),
@@ -55,6 +54,33 @@ def handle_mysql_disconnect(error):
 def handle_pending_rollback(error):
     db.session.rollback()
     return jsonify({"status_code": 500, "status": "Internal Server Error"})
+
+
+@app.shell_context_processor
+def shell_context():
+    return {
+        "db": schema.db,
+        "utils": utils,
+        "Card": schema.Card,
+        "CardInDeck": schema.CardInDeck,
+        "CardType": schema.CardType,
+        "Deck": schema.Deck,
+        "DokDeck": schema.DokDeck,
+        "EnhancedCard": schema.EnhancedCard,
+        "Enhancements": schema.Enhancements,
+        "Expansion": schema.Expansion,
+        "Game": schema.Game,
+        "House": schema.House,
+        "HouseTurnCounts": schema.HouseTurnCounts,
+        "Log": schema.Log,
+        "PlatonicCard": schema.PlatonicCard,
+        "PlatonicCardInSet": schema.PlatonicCardInSet,
+        "Player": schema.Player,
+        "PodStats": schema.PodStats,
+        "Rarity": schema.Rarity,
+        "Trait": schema.Trait,
+        "TurnState": schema.TurnState,
+    }
 
 
 if __name__ == "__main__":
