@@ -687,8 +687,9 @@ def calculate_pod_stats(deck: Deck) -> None:
     house_to_cards = defaultdict(list)
     for card in deck.cards_from_assoc:
         house_to_cards[card.house].append(card)
-    deck.pod_stats.clear()
     for house, cards in house_to_cards.items():
+        if house == House.THETIDE:
+            continue
         enhancements, amber, capture, draw, damage = 0, 0, 0, 0, 0
         mutants = 0
         for card in cards:
@@ -706,13 +707,17 @@ def calculate_pod_stats(deck: Deck) -> None:
                     card.enhanced_damage,
                 ]
             )
-        pod = PodStats(
-            house=house,
-            deck=deck,
-            enhanced_amber=amber,
-            enhanced_capture=capture,
-            enhanced_draw=draw,
-            enhanced_damage=damage,
-            num_mutants=mutants,
-        )
+        for pod in deck.pod_stats:
+            if pod.house == house:
+                break
+        else:
+            pod = PodStats()
+        pod.house = house
+        pod.deck = deck
+        pod.enhanced_amber = amber
+        pod.enhanced_capture = capture
+        pod.enhanced_draw = draw
+        pod.enhanced_damage = damage
+        pod.num_enhancements = enhancements
+        pod.num_mutants = mutants
         db.session.add(pod)
