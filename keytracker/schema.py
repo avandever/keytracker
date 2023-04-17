@@ -187,8 +187,16 @@ class Deck(db.Model):
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
     pod_stats = db.relationship("PodStats", back_populates="deck")
 
+    @property
+    def mv_url(self) -> str:
+        return "https://www.keyforgegame.com/deck-details/" + self.kf_id
+
+    @property
+    def dok_url(self) -> str:
+        return "https://decksofkeyforge.com/decks/" + self.kf_id
+
     def __repr__(self) -> str:
-        return f"<Deck(\"{self.name}\", {self.expansion},  {self.id})>"
+        return f"<Deck(\"{self.name}\", {self.expansion},  {self.dok_url})>"
 
     @property
     def cards(self) -> List[Card]:
