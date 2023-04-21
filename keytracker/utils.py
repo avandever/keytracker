@@ -33,6 +33,7 @@ from sqlalchemy.exc import (
     PendingRollbackError,
 )
 from sqlalchemy.orm import Query
+from flask import current_app
 
 
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
@@ -83,7 +84,7 @@ class MissingEnhancements(Exception):
 
 
 def load_config() -> Dict[str, str]:
-    config = {}
+    config = {"DEBUG": True}
     config_path = os.environ.get("TRACKER_CONFIG_PATH", "config.ini")
     if config_path == "ENV":
         config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
@@ -138,18 +139,18 @@ class PlayerInfo:
 
 def log_to_game(log: str) -> Game:
     lines = log.split("\n")
-    print(f"Starting to parse log with {len(lines)} lines.")
+    current_app.logger.debug(f"Starting to parse log with {len(lines)} lines.")
     cursor = iter(lines)
     player_infos = {}
     try:
-        print("Looking for players!")
+        current_app.logger.debug("Looking for players!")
         count = 1
         while len(player_infos) < 2:
             line = next(cursor)
             count += 1
             m = PLAYER_DECK_MATCHER.match(line)
             if m:
-                print(f"Found player {m.group(1)} with deck {m.group(2)}")
+                current_app.logger.debug(f"Found player {m.group(1)} with deck {m.group(2)}")
                 player_infos[m.group(1)] = PlayerInfo()
                 player_infos[m.group(1)].deck_name = m.group(2)
                 player_infos[m.group(1)].player_name = m.group(1)
@@ -160,7 +161,7 @@ def log_to_game(log: str) -> Game:
             line = next(cursor)
             m = FIRST_PLAYER_MATCHER.match(line)
             if m:
-                print(f"Found first player: {m.group(1)}")
+                current_app.logger.debug(f"Found first player: {m.group(1)}")
                 player_infos[m.group(1)].first_player = True
                 first_player = m.group(1)
     except StopIteration:
@@ -170,7 +171,7 @@ def log_to_game(log: str) -> Game:
             line = next(cursor)
             m = SHUFFLE_MATCHER.match(line)
             if m:
-                print("Found first turn")
+                current_app.logger.debug("Found first turn")
                 player_infos[m.group(1)].shuffles += 1
     except StopIteration:
         raise BadLog("Could not find first turn start")
@@ -179,18 +180,18 @@ def log_to_game(log: str) -> Game:
             line = next(cursor)
             m = HOUSE_CHOICE_MATCHER.match(line)
             if m:
-                print(f"{m.group(1)} picked {m.group(2)}")
+                current_app.logger.debug(f"{m.group(1)} picked {m.group(2)}")
                 player_infos[m.group(1)].house_counts[m.group(2)] += 1
                 continue
             m = FORGE_MATCHER.match(line)
             if m:
-                print(f"{m.group(1)} forged for {m.group(3)}")
+                current_app.logger.debug(f"{m.group(1)} forged for {m.group(3)}")
                 player_infos[m.group(1)].keys_forged += 1
                 player_infos[m.group(1)].key_costs.append(int(m.group(3)))
                 continue
             m = WIN_MATCHER.match(line)
             if m:
-                print(f"{m.group(1)} won")
+                current_app.logger.debug(f"{m.group(1)} won")
                 player_infos[m.group(1)].winner = True
                 break
     except StopIteration:
@@ -204,8 +205,8 @@ def log_to_game(log: str) -> Game:
     loser_name = loser_info.player_name
     winner_deck = get_deck_by_name_with_zeal(winner_info.deck_name)
     loser_deck = get_deck_by_name_with_zeal(loser_info.deck_name)
-    print(f"Winning deck: {winner_deck.name}")
-    print(f"Losing deck: {loser_deck.name}")
+    current_app.logger.debug(f"Winning deck: {winner_deck.name}")
+    current_app.logger.debug(f"Losing deck: {loser_deck.name}")
     winner = username_to_player(winner_name)
     loser = username_to_player(loser_name)
     first_player_obj = winner if first_player == winner_name else loser
@@ -246,7 +247,7 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
         deck = Deck(kf_id=deck_id)
         refresh_deck_from_mv(deck)
         calculate_pod_stats(deck)
-        print("Setting dok data")
+        current_app.logger.debug("Setting dok data")
         if sas_rating and aerc_score:
             deck.sas_rating = sas_rating
             deck.aerc_score = aerc_score
@@ -281,7 +282,7 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
             card = Card.query.filter_by(kf_id=card_id).first()
             card_cache[card_id] = card
         if card is None:
-            print(f"Adding card {card_dict['card_title']}")
+            current_app.logger.debug(f"Adding card {card_dict['card_title']}")
             card_dict = card_data_by_id[card_id].copy()
             card_dict.pop("id")
             carc_dict["kf_id"] = card_id
@@ -638,8 +639,8 @@ def retry_anything_once(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as exc:
-            print(exc)
+        except Exception:
+            current_app.logger.exception("Caught excepting in retry_anything_once")
             db.session.rollback()
             return func(*args, **kwargs)
     return wrapper
@@ -651,8 +652,8 @@ def retry_after_mysql_disconnect(func):
         while tries < 5:
             try:
                 return func(*args, **kwargs)
-            except (OperationalError, PendingRollbackError) as exc:
-                print(exc)
+            except (OperationalError, PendingRollbackError):
+                current_app.logger.exception("Caught mysql error")
                 db.session.rollback()
                 tries += 1
         return func(*args, **kwargs)
@@ -661,12 +662,12 @@ def retry_after_mysql_disconnect(func):
 
 
 def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
-    print(data)
+    current_app.logger.debug(data)
     deck = get_deck_by_id_with_zeal(data["keyforge_id"])
-    print(f"Adding dok deck data for {deck.name}")
+    current_app.logger.debug(f"Adding dok deck data for {deck.name}")
     dok = DokDeck.query.filter_by(deck_id=deck.id).first()
     if dok is not None:
-        print(f"Already have dok data for {deck.name}")
+        current_app.logger.debug(f"Already have dok data for {deck.name}")
         return
     dok = DokDeck(
         deck=deck,
