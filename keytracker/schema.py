@@ -199,7 +199,7 @@ class Deck(db.Model):
         return "https://decksofkeyforge.com/decks/" + self.kf_id
 
     def __repr__(self) -> str:
-        return f"<Deck(\"{self.name}\", {self.expansion},  {self.dok_url})>"
+        return f'<Deck("{self.name}", {self.expansion},  {self.dok_url})>'
 
     @property
     def cards(self) -> List[Card]:

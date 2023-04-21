@@ -150,7 +150,9 @@ def log_to_game(log: str) -> Game:
             count += 1
             m = PLAYER_DECK_MATCHER.match(line)
             if m:
-                current_app.logger.debug(f"Found player {m.group(1)} with deck {m.group(2)}")
+                current_app.logger.debug(
+                    f"Found player {m.group(1)} with deck {m.group(2)}"
+                )
                 player_infos[m.group(1)] = PlayerInfo()
                 player_infos[m.group(1)].deck_name = m.group(2)
                 player_infos[m.group(1)].player_name = m.group(1)
@@ -643,6 +645,7 @@ def retry_anything_once(func):
             current_app.logger.exception("Caught excepting in retry_anything_once")
             db.session.rollback()
             return func(*args, **kwargs)
+
     return wrapper
 
 
