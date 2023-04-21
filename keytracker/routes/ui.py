@@ -93,7 +93,7 @@ def deck(deck_id):
                 Game.winner == username,
             )
         ).count()
-        games_lost = Game.query.filter_by(
+        games_lost = Game.query.filter(
             and_(
                 Game.loser_deck_dbid == deck.id,
                 Game.loser == username,
