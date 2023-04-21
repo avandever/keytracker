@@ -125,6 +125,9 @@ class Card(db.Model):
     is_enhanced = db.Column(db.Boolean)
     is_non_deck = db.Column(db.Boolean, default=False, nullable=False)
 
+    def __repr__(self) -> str:
+        return f"<Card({self.card_title}, {self.house})>"
+
 
 CARD_ATTRS = [
     "id",
@@ -283,6 +286,9 @@ class Trait(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(24))
 
+    def __repr__(self) -> str:
+        return f"<Trait({self.name})>"
+
 
 class PlatonicCard(db.Model):
     """
@@ -305,6 +311,9 @@ class PlatonicCard(db.Model):
     expansions = db.relationship("PlatonicCardInSet", back_populates="card")
     is_non_deck = db.Column(db.Boolean, default=False)
 
+    def __repr__(self) -> str:
+        return f"<PlatonicCard({self.card_title})>"
+
 
 class PlatonicCardInSet(db.Model):
     __tablename__ = "tracker_platonic_card_expansions"
@@ -316,6 +325,9 @@ class PlatonicCardInSet(db.Model):
     rarity = db.Column(db.Enum(Rarity))
     card_number = db.Column(db.String(10))
     is_anomaly = db.Column(db.Boolean, default=False)
+
+    def __repr__(self) -> str:
+        return f"<PlatonicCardInSet({self.card.card_title}, {self.expansion})>"
 
 
 class CardInDeck(db.Model):
@@ -372,6 +384,14 @@ class CardInDeck(db.Model):
     @hybrid_property
     def is_maverick(self):
         return self.house != self.natural_house
+
+    def __repr__(self) -> str:
+        return (
+            f"<CardInDeck({self.card_title}, {self.house},"
+            f"{self.enhanced_amber}a|{self.enhanced_capture}c|"
+            f"{self.enhanced_draw}f|{self.enhanced_damage}d,"
+            f"{self.deck.dok_url})>"
+        )
 
 
 class DokDeck(db.Model):
@@ -522,6 +542,9 @@ class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(100))
     anonymous = db.Column(db.Boolean, default=False)
+
+    def __repr__(self) -> str:
+        return f"<Player({self.username})>"
 
 
 class HouseTurnCounts(db.Model):
