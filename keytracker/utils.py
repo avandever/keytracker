@@ -634,6 +634,17 @@ def populate_enhanced_cards(deck: Deck, platonic_card_cache=None) -> None:
     db.session.commit()
 
 
+def retry_anything_once(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            print(exc)
+            db.session.rollback()
+            return func(*args, **kwargs)
+    return wrapper
+
+
 def retry_after_mysql_disconnect(func):
     def wrapper(*args, **kwargs):
         tries = 0

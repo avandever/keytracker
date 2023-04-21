@@ -23,6 +23,7 @@ from keytracker.utils import (
     get_deck_by_id_with_zeal,
     log_to_game,
     retry_after_mysql_disconnect,
+    retry_anything_once,
     turn_counts_from_logs,
 )
 import datetime
@@ -35,6 +36,7 @@ blueprint = Blueprint("ui", __name__, template_folder="templates")
 logger = logging.getLogger(__name__)
 
 
+@retry_anything_once
 @retry_after_mysql_disconnect
 @blueprint.route("/")
 def home():
@@ -78,6 +80,7 @@ def leaderboard():
     )
 
 
+@retry_anything_once
 @retry_after_mysql_disconnect
 @blueprint.route("/deck/<deck_id>", methods=["GET"])
 def deck(deck_id):
@@ -123,6 +126,7 @@ def deck(deck_id):
     )
 
 
+@retry_anything_once
 @retry_after_mysql_disconnect
 @blueprint.route("/game/<crucible_game_id>", methods=["GET"])
 def game(crucible_game_id):
@@ -138,6 +142,7 @@ def game(crucible_game_id):
     )
 
 
+@retry_anything_once
 @retry_after_mysql_disconnect
 @blueprint.route("/games", methods=["GET"])
 def games():
@@ -179,6 +184,7 @@ def games():
     )
 
 
+@retry_anything_once
 @retry_after_mysql_disconnect
 @blueprint.route("/decks", methods=["GET"])
 def decks():
@@ -207,6 +213,7 @@ def decks():
     )
 
 
+@retry_anything_once
 @retry_after_mysql_disconnect
 @blueprint.route("/user", methods=["GET", "POST"])
 @blueprint.route("/user/", methods=["GET", "POST"])
@@ -220,6 +227,7 @@ def user_search():
     )
 
 
+@retry_anything_once
 @retry_after_mysql_disconnect
 @blueprint.route("/user/<username>", methods=["GET"])
 def user(username):
