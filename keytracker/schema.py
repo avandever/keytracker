@@ -13,6 +13,7 @@ import enum
 from collections import namedtuple
 from typing import List
 import copy
+from xml.dom import minidom
 
 
 db = SQLAlchemy()
@@ -83,6 +84,8 @@ EXPANSION_VALUES = [
     ExpansionValues("Mass Mutation", "MM", "MM", 479),
     ExpansionValues("Dark Tidings", "DT", "DT", 496),
 ]
+
+EXPANSION_ID_TO_ABBR = {exp.number: exp.shortname for exp in EXPANSION_VALUES}
 
 
 class IdList(sqlalchemy_types.TypeDecorator):
@@ -189,6 +192,17 @@ class Deck(db.Model):
     enhancements = db.relationship("Enhancements", back_populates="deck")
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
     pod_stats = db.relationship("PodStats", back_populates="deck")
+
+    def as_xml(self) -> str:
+        doc = minidom.Document()
+        deck = doc.createElement("deck")
+        deck.setAttribute("id", self.kf_id)
+        deck.setAttribute("name", self.name)
+        deck.setAttribute("expansion", EXPANSION_ID_TO_ABBR[self.expansion])
+        deck.setAttribute("sas_rating", str(self.sas_rating))
+        deck.setAttribute("aerc_score", str(self.aerc_score))
+        doc.appendChild(deck)
+        return doc.toxml()
 
     @property
     def mv_url(self) -> str:

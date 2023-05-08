@@ -153,3 +153,13 @@ def load_deck_with_dok_data(deck_id):
 def add_dok_deck_from_dict_api():
     add_dok_deck_from_dict(**request.form)
     return make_response(jsonify(success=True), 201)
+
+
+@blueprint.route("/api/deck_xml/<deck_id>", methods=["GET"])
+def deck_xml(deck_id):
+    deck = get_deck_by_id_with_zeal(
+        deck_id,
+    )
+    resp = make_response(deck.as_xml())
+    resp.mimetype = "text/xml"
+    return resp
