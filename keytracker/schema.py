@@ -13,7 +13,7 @@ import enum
 from collections import namedtuple
 from typing import List
 import copy
-from xml.dom import minidom
+import xml.etree.ElementTree as ET
 
 
 db = SQLAlchemy()
@@ -194,15 +194,18 @@ class Deck(db.Model):
     pod_stats = db.relationship("PodStats", back_populates="deck")
 
     def as_xml(self) -> str:
-        doc = minidom.Document()
-        deck = doc.createElement("deck")
-        deck.setAttribute("id", self.kf_id)
-        deck.setAttribute("name", self.name)
-        deck.setAttribute("expansion", EXPANSION_ID_TO_ABBR[self.expansion])
-        deck.setAttribute("sas_rating", str(self.sas_rating))
-        deck.setAttribute("aerc_score", str(self.aerc_score))
-        doc.appendChild(deck)
-        return doc.toxml()
+        deck = ET.Element("deck")
+        kf_id = ET.SubElement(deck, "id")
+        kf_id.text = self.kf_id
+        name = ET.SubElement(deck, "name")
+        name.text = self.name
+        expansion = ET.SubElement(deck, "expansion")
+        expansion.text = EXPANSION_ID_TO_ABBR[self.expansion]
+        sas_rating = ET.SubElement(deck, "sas_rating")
+        sas_rating.text = str(self.sas_rating)
+        aerc_score = ET.SubElement(deck, "aerc_score")
+        aerc_score.text = str(self.aerc_score)
+        return ET.tostring(deck)
 
     @property
     def mv_url(self) -> str:
