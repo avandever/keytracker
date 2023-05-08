@@ -329,6 +329,9 @@ def deck_name_to_id(deck_name: str) -> str:
     if not data["data"]:
         raise DeckNotFoundError(f"Found no decks with name {deck_name}")
     if len(data["data"]) > 1:
+        for deck in data["data"]:
+            if deck["name"] == deck_name:
+                return deck["id"]
         raise DeckNotFoundError(f"Found multiple decks matching {deck_name}")
     return data["data"][0]["id"]
 
