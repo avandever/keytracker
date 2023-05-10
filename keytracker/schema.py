@@ -277,6 +277,9 @@ class PodStats(db.Model):
     aerc_score = db.Column(db.Integer, default=0, index=True)
     sas_rating = db.Column(db.Integer, default=0, index=True)
     num_mutants = db.Column(db.Integer, default=0)
+    creatures = db.Column(db.Integer, default=0)
+    raw_amber = db.Column(db.Integer, default=0)
+    total_amber = db.Column(db.Integer, default=0)
 
     def __repr__(self) -> str:
         msg = f"<PodStats(D: {self.deck_id}, h: {self.house}, "
