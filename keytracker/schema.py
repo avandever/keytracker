@@ -216,6 +216,7 @@ class Deck(db.Model):
                 "expansion": EXPANSION_ID_TO_ABBR[self.expansion],
                 "sas_rating": self.sas_rating,
                 "aerc_score": self.aerc_score,
+                "houses": sorted([ps.house.value for ps in self.pod_stats]),
             }
         )
 

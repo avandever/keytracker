@@ -248,7 +248,6 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
     if deck is None:
         deck = Deck(kf_id=deck_id)
         refresh_deck_from_mv(deck)
-        calculate_pod_stats(deck)
         current_app.logger.debug("Setting dok data")
         if sas_rating and aerc_score:
             deck.sas_rating = sas_rating
@@ -260,6 +259,13 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
         db.session.commit()
         db.session.refresh(deck)
         return deck
+    if len(deck.cards_from_assoc) == 0:
+        populate_enhanced_cards(deck)
+        db.session.refresh(deck)
+    if len(deck.pod_stats) == 0:
+        calculate_pod_stats(deck)
+        db.session.commit()
+        db.session.refresh(deck)
     return deck
 
 
