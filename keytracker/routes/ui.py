@@ -131,6 +131,9 @@ def deck(deck_id):
 @blueprint.route("/game/<crucible_game_id>", methods=["GET"])
 def game(crucible_game_id):
     game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
+    if game is None:
+        db.session.expire_all()
+        game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
     players = sorted(
         [game.winner, game.loser],
         key=lambda x: x != game.insist_first_player,
