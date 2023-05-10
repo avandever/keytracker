@@ -14,6 +14,7 @@ from collections import namedtuple
 from typing import List
 import copy
 import xml.etree.ElementTree as ET
+import json
 
 
 db = SQLAlchemy()
@@ -206,6 +207,17 @@ class Deck(db.Model):
         aerc_score = ET.SubElement(deck, "aerc_score")
         aerc_score.text = str(self.aerc_score)
         return ET.tostring(deck)
+
+    def as_json(self) -> str:
+        return json.dumps(
+            {
+                "id": self.kf_id,
+                "name": self.name,
+                "expansion": EXPANSION_ID_TO_ABBR[self.expansion],
+                "sas_rating": self.sas_rating,
+                "aerc_score": self.aerc_score,
+            }
+        )
 
     @property
     def mv_url(self) -> str:

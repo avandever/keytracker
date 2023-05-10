@@ -163,3 +163,13 @@ def deck_xml(deck_id):
     resp = make_response(deck.as_xml())
     resp.mimetype = "text/xml"
     return resp
+
+
+@blueprint.route("/api/deck_json/<deck_id>", methods=["GET"])
+def deck_json(deck_id):
+    deck = get_deck_by_id_with_zeal(
+        deck_id,
+    )
+    resp = make_response(deck.as_json())
+    resp.mimetype = "text/json"
+    return resp

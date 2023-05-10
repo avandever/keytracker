@@ -293,6 +293,7 @@ def upload():
                 game_reloaded = Game.query.filter_by(
                     crucible_game_id=game.crucible_game_id,
                 ).first()
+            time.sleep(5)
             return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
     return render_template(
         "upload.html",
