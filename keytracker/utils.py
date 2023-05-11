@@ -715,10 +715,13 @@ def calculate_pod_stats(deck: Deck) -> None:
         if house == House.THETIDE:
             continue
         enhancements, amber, capture, draw, damage = 0, 0, 0, 0, 0
-        mutants = 0
+        mutants, creatures, raw_amber = 0, 0, 0
         for card in cards:
             if any(trait.name == "mutant" for trait in card.traits):
                 mutants += 1
+            if card.card_type == CardType.CREATURE:
+                creatures += 1
+            raw_amber += card.amber
             amber += card.enhanced_amber
             capture += card.enhanced_capture
             draw += card.enhanced_draw
@@ -736,6 +739,7 @@ def calculate_pod_stats(deck: Deck) -> None:
                 break
         else:
             pod = PodStats()
+            db.session.add(pod)
         pod.house = house
         pod.deck = deck
         pod.enhanced_amber = amber
@@ -744,4 +748,6 @@ def calculate_pod_stats(deck: Deck) -> None:
         pod.enhanced_damage = damage
         pod.num_enhancements = enhancements
         pod.num_mutants = mutants
-        db.session.add(pod)
+        pod.creatures = creatures
+        pod.raw_amber = raw_amber
+        pod.total_amber = raw_amber + amber
