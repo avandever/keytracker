@@ -6,6 +6,7 @@ from keytracker.schema import (
     db,
     Card,
     CardInDeck,
+    CardType,
     Deck,
     DokDeck,
     Enhancements,
