@@ -69,6 +69,7 @@ class Rarity(enum.Enum):
     THETIDE = "The Tide"
     SPECIAL = "Special"
     EVILTWIN = "Evil Twin"
+    TOKEN = "Token"
 
 
 rarity_str_to_enum = {r.value: r for r in Rarity.__members__.values()}
