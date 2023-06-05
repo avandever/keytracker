@@ -291,10 +291,10 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
             card = Card.query.filter_by(kf_id=card_id).first()
             card_cache[card_id] = card
         if card is None:
-            current_app.logger.debug(f"Adding card {card_dict['card_title']}")
             card_dict = card_data_by_id[card_id].copy()
+            current_app.logger.debug(f"Adding card {card_dict['card_title']}")
             card_dict.pop("id")
-            carc_dict["kf_id"] = card_id
+            card_dict["kf_id"] = card_id
             card = Card(**card_dict)
             db.session.add(card)
             db.session.commit()
@@ -323,9 +323,12 @@ def update_sas_scores(deck: Deck) -> bool:
     url = os.path.join(DOK_DECK_BASE, deck.kf_id)
     response = requests.get(url, headers=DOK_HEADERS)
     data = response.json()
-    deck.sas_rating = data["deck"]["sasRating"]
-    deck.aerc_score = data["deck"]["aercScore"]
-    deck.sas_version = data["sasVersion"]
+    try:
+        deck.sas_rating = data["deck"]["sasRating"]
+        deck.aerc_score = data["deck"]["aercScore"]
+        deck.sas_version = data["sasVersion"]
+    except KeyError:
+        current_app.logger.exception(f"Failed getting dok data for {deck.kf_id}")
     return True
 
 
