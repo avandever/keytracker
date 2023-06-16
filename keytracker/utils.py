@@ -26,6 +26,7 @@ import os
 from typing import Dict, Iterable, Tuple
 import random
 import requests
+from aiohttp_requests import requests as arequests
 import re
 import sqlalchemy
 from sqlalchemy import and_, or_
@@ -35,6 +36,7 @@ from sqlalchemy.exc import (
 )
 from sqlalchemy.orm import Query
 from flask import current_app
+import logging
 
 
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
@@ -54,6 +56,13 @@ MV_API_BASE = "http://www.keyforgegame.com/api/decks"
 DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 DOK_DECK_BASE = "https://decksofkeyforge.com/public-api/v3/decks"
 LATEST_SAS_VERSION = 42
+SEARCH_PARAMS = {
+    "page_size": 10,
+    "search": "",
+    "power_level": "0,11",
+    "chains": "0,24",
+    "ordering": "-date",
+}
 
 
 class CantAnonymize(Exception):
@@ -81,6 +90,14 @@ class MissingInput(Exception):
 
 
 class MissingEnhancements(Exception):
+    pass
+
+
+class RequestThrottled(Exception):
+    pass
+
+
+class InternalServerError(Exception):
     pass
 
 
@@ -755,3 +772,24 @@ def calculate_pod_stats(deck: Deck) -> None:
         pod.creatures = creatures
         pod.raw_amber = raw_amber
         pod.total_amber = raw_amber + amber
+
+
+async def get_decks_from_page(page: int) -> Iterable[str]:
+    params = SEARCH_PARAMS.copy()
+    params["page"] = page
+    headers = {"X-Forwarded-For": randip()}
+    response = await arequests.get(MV_API_BASE, params=params, headers=headers)
+    try:
+        data = await response.json()
+    except json.decoder.JSONDecodeError:
+        current_app.logger.error(f"raw response: {response}")
+        raise
+    if "code" in data:
+        if data["code"] == 429:
+            raise RequestThrottled(data["message"] + data["detail"])
+        # "Internal Server Error" - means page does not exist
+        elif data["code"] == 0:
+            raise InternalServerError(data["message"] + data["detail"])
+        else:
+            logging.error(f"Unrecognized json response {data}")
+    return [deck["id"] for deck in data["data"]]
