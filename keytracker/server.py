@@ -16,6 +16,7 @@ from keytracker.routes import (
     ui,
     api,
 )
+from keytracker.scripts.collector import collector
 import sqlalchemy
 from sqlalchemy.exc import (
     OperationalError,
@@ -43,6 +44,8 @@ app.jinja_env.globals.update(
 )
 app.register_blueprint(ui.blueprint)
 app.register_blueprint(api.blueprint)
+
+app.cli.add_command(collector)
 
 
 @app.errorhandler(OperationalError)
