@@ -37,6 +37,7 @@ from sqlalchemy.exc import (
 from sqlalchemy.orm import Query
 from flask import current_app
 import logging
+import json
 
 
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")

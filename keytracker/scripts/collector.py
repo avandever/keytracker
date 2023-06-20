@@ -19,11 +19,13 @@ from keytracker.utils import (
 import time
 import os
 import json
+import logging
 
 
 collector = AppGroup("collector")
 page_one_stopper = "/tmp/stop_page_one_loop"
 click_log.basic_config()
+
 
 @collector.command("get")
 @click_log.simple_verbosity_option()
@@ -33,15 +35,35 @@ click_log.basic_config()
 @click.option("--deck-fetchers", default=1)
 @click.option("--reverse/--no-reverse", default=False)
 @click.option("-i", "--page-one-interval", type=int, default=0)
-def get(start_page: int, max_pages: int, page_workers: int, deck_fetchers: int, reverse: bool, page_one_interval: int):
+def get(
+    start_page: int,
+    max_pages: int,
+    page_workers: int,
+    deck_fetchers: int,
+    reverse: bool,
+    page_one_interval: int,
+):
+    logging.getLogger("aiohttp.client").setLevel(logging.INFO)
     asyncio.run(
         _get(
-            start_page, max_pages, page_workers, deck_fetchers, reverse,
+            start_page,
+            max_pages,
+            page_workers,
+            deck_fetchers,
+            reverse,
             page_one_interval,
         )
     )
 
-async def _get(start_page: int, max_pages: int, page_workers: int, deck_fetchers: int, reverse: bool, page_one_interval: int):
+
+async def _get(
+    start_page: int,
+    max_pages: int,
+    page_workers: int,
+    deck_fetchers: int,
+    reverse: bool,
+    page_one_interval: int,
+):
     with current_app.app_context():
         known_deck_ids = {x[0] for x in db.session.query(Deck.id).all()}
     current_app.logger.info(f"Starting with {len(known_deck_ids)} decks in db.")
@@ -49,16 +71,20 @@ async def _get(start_page: int, max_pages: int, page_workers: int, deck_fetchers
     deck_queue = Queue()
     tasks = []
     current_app.logger.debug("Going to start tasks")
-    tasks.extend(await start_page_fetchers(
-        page_workers,
-        page_queue,
-        deck_queue,
-        known_deck_ids,
-    ))
-    tasks.extend(await start_deck_fetchers(
-        deck_fetchers,
-        deck_queue,
-    ))
+    tasks.extend(
+        await start_page_fetchers(
+            page_workers,
+            page_queue,
+            deck_queue,
+            known_deck_ids,
+        )
+    )
+    tasks.extend(
+        await start_deck_fetchers(
+            deck_fetchers,
+            deck_queue,
+        )
+    )
     pages = range(start_page, max_pages + 1)
     if reverse:
         pages = reversed(pages)
@@ -80,6 +106,7 @@ async def _get(start_page: int, max_pages: int, page_workers: int, deck_fetchers
 @click_log.simple_verbosity_option()
 @click.option("-i", "--interval", type=int, default=300)
 def tail(interval: int):
+    logging.getLogger("aiohttp.client").setLevel(logging.INFO)
     asyncio.run(_tail(interval))
 
 
@@ -89,11 +116,13 @@ async def _tail(interval: int):
     current_app.logger.info(f"Starting tailer with {len(known_deck_ids)} decks in db.")
     deck_queue = Queue()
     tasks = []
-    tasks.extend(await start_deck_fetchers(
-        1,
-        deck_queue,
-        known_deck_ids,
-    ))
+    tasks.extend(
+        await start_deck_fetchers(
+            1,
+            deck_queue,
+            known_deck_ids,
+        )
+    )
     tailer = PageOneTailer(interval, deck_queue, known_deck_ids)
     tailer_task = create_task(tailer())
     await tailer_task
@@ -145,8 +174,7 @@ class PageProcessor:
                 decks = await get_decks_from_page(page)
                 if ise_in_a_row > 0:
                     current_app.logger.info(
-                        f"{iname}:Had {ise_in_a_row} InternalServerErrors. "
-                        "Clearing."
+                        f"{iname}:Had {ise_in_a_row} InternalServerErrors. " "Clearing."
                     )
                 ise_in_a_row = 0
             except InternalServerError:
@@ -184,7 +212,6 @@ class DeckFetcher:
         self.counter = 0
         self.counter_lock = Lock()
 
-
     async def __call__(self, iname: str) -> None:
         current_app.logger.debug(f"{iname}:Starting up")
         with current_app.app_context():
@@ -194,7 +221,9 @@ class DeckFetcher:
                 async with self.counter_lock:
                     self.counter += 1
                     if self.counter % 1 == 0:
-                        current_app.logger.debug(f"{iname}:{self.counter} decks processed")
+                        current_app.logger.debug(
+                            f"{iname}:{self.counter} decks processed"
+                        )
 
 
 class PageOneTailer:
@@ -229,11 +258,15 @@ class PageOneTailer:
                     self.known_deck_ids.add(deck_id)
                     decks_added += 1
                     current_app.logger.debug(f"{name}:found {decks_added} decks so far")
-            current_app.logger.debug(f"{name}:Page One Getter checked {page - 1} pages this iteration")
+            current_app.logger.debug(
+                f"{name}:Page One Getter checked {page - 1} pages this iteration"
+            )
             loop_end = time.time()
             to_sleep = loop_start + self.loop_interval - loop_end
             if to_sleep > 0:
-                current_app.logger.debug(f"{name}:Page One Getter sleeping for {to_sleep}")
+                current_app.logger.debug(
+                    f"{name}:Page One Getter sleeping for {to_sleep}"
+                )
                 await asyncio.sleep(to_sleep)
             else:
                 current_app.logger.debug(f"{name}:Page One Getter not sleeping")
