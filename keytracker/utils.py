@@ -59,7 +59,7 @@ DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 DOK_DECK_BASE = "https://decksofkeyforge.com/public-api/v3/decks"
 LATEST_SAS_VERSION = 42
 SEARCH_PARAMS = {
-    "page_size": 10,
+    "page_size": 25,
     "search": "",
     "power_level": "0,11",
     "chains": "0,24",
