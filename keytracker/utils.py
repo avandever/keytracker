@@ -27,6 +27,7 @@ from typing import Dict, Iterable, Tuple
 import random
 import requests
 from aiohttp_requests import requests as arequests
+import asyncio
 import re
 import sqlalchemy
 from sqlalchemy import and_, or_
@@ -64,6 +65,25 @@ SEARCH_PARAMS = {
     "chains": "0,24",
     "ordering": "-date",
 }
+
+
+class MVApi:
+    def __init__(self, seconds_per_call: float = 1.0):
+        self.lock = asyncio.Lock()
+        self.last_call_time
+
+    def callMVSync(*args, **kwargs):
+        return asyncio.run(self.callMV(*args, **kwargs))
+
+    async def callMV(*args, **kwargs):
+        with self.lock:
+            time_since_last_call = time.time() - self.last_call_time
+            asyncio.sleep(time_since_last_call)
+            self.last_call_time = time.time()
+            return await arequests.get(*args, **kwargs)
+
+
+mv_api = MVApi(1.0)
 
 
 class CantAnonymize(Exception):
@@ -292,7 +312,7 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
     deck_url = os.path.join(MV_API_BASE, deck.kf_id)
-    response = requests.get(
+    respone = mv_api.callMVSync(
         deck_url,
         params={"links": "cards, notes"},
         headers={"X-Forwarded-For": randip()},
@@ -352,7 +372,7 @@ def update_sas_scores(deck: Deck) -> bool:
 
 def deck_name_to_id(deck_name: str) -> str:
     search_params = {"search": deck_name}
-    response = requests.get(MV_API_BASE, params=search_params)
+    response = mv_api.callMVSync(MV_API_BASE, params=search_params)
     data = response.json()
     if not data["data"]:
         raise DeckNotFoundError(f"Found no decks with name {deck_name}")
@@ -779,7 +799,7 @@ async def get_decks_from_page(page: int) -> Iterable[str]:
     params = SEARCH_PARAMS.copy()
     params["page"] = page
     headers = {"X-Forwarded-For": randip()}
-    response = await arequests.get(MV_API_BASE, params=params, headers=headers)
+    response = await mv_api.callMV(MV_API_BASE, params=params, headers=headers)
     try:
         data = await response.json()
     except json.decoder.JSONDecodeError:
