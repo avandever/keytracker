@@ -4,4 +4,5 @@ PyMySQL==1.0.2
 mysql-connector-python==8.0.31
 mysqlclient==2.1.1
 click_log==0.4.0
+aiohttp_requests==0.1.3
 .
