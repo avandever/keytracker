@@ -44,6 +44,7 @@ def get(
     page_one_interval: int,
 ):
     logging.getLogger("aiohttp.client").setLevel(logging.INFO)
+    logging.debug("Starting collector")
     asyncio.run(
         _get(
             start_page,
@@ -65,8 +66,9 @@ async def _get(
     page_one_interval: int,
 ):
     with current_app.app_context():
-        known_deck_ids = {x[0] for x in db.session.query(Deck.id).all()}
+        known_deck_ids = {x[0] for x in db.session.query(Deck.kf_id).all()}
     current_app.logger.info(f"Starting with {len(known_deck_ids)} decks in db.")
+    current_app.logger.info(f"Example deck id: {list(known_deck_ids)[0]}")
     page_queue = Queue()
     deck_queue = Queue()
     tasks = []
@@ -150,7 +152,7 @@ async def start_deck_fetchers(
 ) -> Iterable[Task]:
     current_app.logger.debug("Starting deck fetchers")
     fetcher = DeckFetcher(in_q)
-    return [create_task(fetcher(f"fetchers-{x}")) for x in range(workers)]
+    return [create_task(fetcher(f"fetcher-{x}")) for x in range(workers)]
 
 
 class PageProcessor:
@@ -158,8 +160,7 @@ class PageProcessor:
         self.in_q = in_q
         self.out_q = out_q
         self.known_deck_ids = known_deck_ids
-        self.counter = 0
-        self.counter_lock = Lock()
+        self.decks_skipped = 0
 
     async def __call__(self, iname: str) -> None:
         skipped_decks = 0
@@ -167,9 +168,9 @@ class PageProcessor:
         current_app.logger.debug(f"{iname}:Starting up")
         while True:
             page = await self.in_q.get()
-            self.in_q.task_done()
             if page % 10 == 0:
                 current_app.logger.info(f"{iname}:Getting page {page}")
+            self.in_q.task_done()
             try:
                 decks = await get_decks_from_page(page)
                 if ise_in_a_row > 0:
@@ -201,6 +202,9 @@ class PageProcessor:
                 continue
             for deck_id in decks:
                 if deck_id in self.known_deck_ids:
+                    skipped_decks += 1
+                    if skipped_decks % 100 == 0:
+                        current_app.logger.debug(f"{iname}: Skipped {skipped_decks}")
                     continue
                 await self.out_q.put(deck_id)
                 self.known_deck_ids.add(deck_id)
@@ -210,20 +214,29 @@ class DeckFetcher:
     def __init__(self, q: Queue):
         self.q = q
         self.counter = 0
-        self.counter_lock = Lock()
+        self.skip_counter = 0
 
     async def __call__(self, iname: str) -> None:
         current_app.logger.debug(f"{iname}:Starting up")
         with current_app.app_context():
             while True:
                 deck_id = await self.q.get()
-                get_deck_by_id_with_zeal(deck_id)
-                async with self.counter_lock:
-                    self.counter += 1
-                    if self.counter % 1 == 0:
+                # This will happen again inside get_deck_by_id_with_zeal, but then we
+                # won't know whether the deck was already in db or freshly fetched
+                deck = Deck.query.filter_by(kf_id=deck_id).first()
+                if deck is not None:
+                    self.skip_counter += 1
+                    if self.skip_counter % 100 == 0:
                         current_app.logger.debug(
-                            f"{iname}:{self.counter} decks processed"
+                            f"{iname}:{self.skip_counter} decks skipped"
                         )
+                    continue
+                get_deck_by_id_with_zeal(deck_id)
+                self.counter += 1
+                if self.counter % 100 == 0:
+                    current_app.logger.debug(
+                        f"{iname}:{self.counter} decks fetched"
+                    )
 
 
 class PageOneTailer:
@@ -271,3 +284,7 @@ class PageOneTailer:
             else:
                 current_app.logger.debug(f"{name}:Page One Getter not sleeping")
         os.remove(self.stopper)
+
+
+if __name__ == "__main__":
+    collector()

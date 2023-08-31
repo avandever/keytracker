@@ -27,6 +27,7 @@ from typing import Dict, Iterable, Tuple
 import random
 import requests
 from aiohttp_requests import requests as arequests
+from aiohttp.client_exceptions import ContentTypeError
 import asyncio
 import re
 import sqlalchemy
@@ -39,6 +40,8 @@ from sqlalchemy.orm import Query
 from flask import current_app
 import logging
 import json
+import time
+import threading
 
 
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
@@ -68,19 +71,29 @@ SEARCH_PARAMS = {
 
 
 class MVApi:
-    def __init__(self, seconds_per_call: float = 1.0):
+    def __init__(self, seconds_per_call: float = 5.0):
         self.lock = asyncio.Lock()
-        self.last_call_time
+        self.lock_sync = threading.Lock()
+        self.last_call_time = 0.0
+        self.seconds_per_call = seconds_per_call
 
-    def callMVSync(*args, **kwargs):
-        return asyncio.run(self.callMV(*args, **kwargs))
-
-    async def callMV(*args, **kwargs):
-        with self.lock:
+    def callMVSync(self, *args, **kwargs):
+        with self.lock_sync:
             time_since_last_call = time.time() - self.last_call_time
-            asyncio.sleep(time_since_last_call)
+            time_to_sleep = max(0.0, self.seconds_per_call - time_since_last_call)
+            time.sleep(time_to_sleep)
             self.last_call_time = time.time()
-            return await arequests.get(*args, **kwargs)
+            response = requests.get(*args, **kwargs)
+            return response
+
+    async def callMV(self, *args, **kwargs):
+        async with self.lock:
+            time_since_last_call = time.time() - self.last_call_time
+            time_to_sleep = max(0.0, self.seconds_per_call - time_since_last_call)
+            await asyncio.sleep(time_to_sleep)
+            self.last_call_time = time.time()
+            response = await arequests.get(*args, **kwargs)
+            return response
 
 
 mv_api = MVApi(1.0)
@@ -283,11 +296,11 @@ def add_card_to_deck(card_dict: Dict, deck: Deck):
 
 
 def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> Deck:
+    current_app.logger.debug("Checking for deck in db")
     deck = Deck.query.filter_by(kf_id=deck_id).first()
     if deck is None:
         deck = Deck(kf_id=deck_id)
         refresh_deck_from_mv(deck)
-        current_app.logger.debug("Setting dok data")
         if sas_rating and aerc_score:
             deck.sas_rating = sas_rating
             deck.aerc_score = aerc_score
@@ -312,7 +325,7 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
     deck_url = os.path.join(MV_API_BASE, deck.kf_id)
-    respone = mv_api.callMVSync(
+    response = mv_api.callMVSync(
         deck_url,
         params={"links": "cards, notes"},
         headers={"X-Forwarded-For": randip()},
@@ -802,7 +815,7 @@ async def get_decks_from_page(page: int) -> Iterable[str]:
     response = await mv_api.callMV(MV_API_BASE, params=params, headers=headers)
     try:
         data = await response.json()
-    except json.decoder.JSONDecodeError:
+    except (json.decoder.JSONDecodeError, ContentTypeError):
         current_app.logger.error(f"raw response: {response}")
         raise
     if "code" in data:
