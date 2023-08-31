@@ -5,6 +5,4 @@ mysql-connector-python==8.0.31
 mysqlclient==2.1.1
 click_log==0.4.0
 cython==3.0.2
-faust-cchardet==2.1.19
-aiohttp-requests==0.1.3
 .
