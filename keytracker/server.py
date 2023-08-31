@@ -31,6 +31,8 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_size": 20,
     "pool_recycle": int(os.getenv("SQLALCHEMY_POOL_RECYCLE", 10)),
     "pool_pre_ping": True,
+    "pool_timeout": 5,
+    "pool_reset_on_return": 'commit',
 }
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.app_context().push()

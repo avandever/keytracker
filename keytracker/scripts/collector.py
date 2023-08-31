@@ -234,9 +234,7 @@ class DeckFetcher:
                 get_deck_by_id_with_zeal(deck_id)
                 self.counter += 1
                 if self.counter % 100 == 0:
-                    current_app.logger.debug(
-                        f"{iname}:{self.counter} decks fetched"
-                    )
+                    current_app.logger.debug(f"{iname}:{self.counter} decks fetched")
 
 
 class PageOneTailer:
