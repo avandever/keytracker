@@ -61,7 +61,9 @@ MV_API_BASE = "http://www.keyforgegame.com/api/decks"
 
 DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 DOK_DECK_BASE = "https://decksofkeyforge.com/public-api/v3/decks"
-LATEST_SAS_VERSION = 42
+LATEST_SAS_VERSION = 43
+SAS_MAX_AGE_DAYS = 90
+SAS_TD = datetime.timedelta(days=SAS_MAX_AGE_DAYS)
 SEARCH_PARAMS = {
     "page_size": 25,
     "search": "",
@@ -314,7 +316,8 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
         return deck
     if (
         not deck.dok
-        or datetime.datetime.utcnow() - deck.dok.last_refresh > datetime.timedelta(days=30)
+        or deck.dok.last_refresh is None
+        or datetime.datetime.utcnow() - deck.dok.last_refresh > SAS_TD
     ):
         update_sas_scores(deck)
     if len(deck.cards_from_assoc) == 0:
@@ -375,7 +378,12 @@ def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
 
 def update_sas_scores(deck: Deck) -> bool:
     """Returns True if update occurred."""
-    if (deck.sas_version or 0) >= LATEST_SAS_VERSION:
+    if (
+        (deck.sas_version or 0) >= LATEST_SAS_VERSION
+        and deck.dok
+        and deck.dok.last_refresh is not None
+        and datetime.datetime.utcnow() - deck.dok.last_refresh < SAS_TD
+    ):
         return False
     url = os.path.join(DOK_DECK_BASE, deck.kf_id)
     response = requests.get(url, headers=DOK_HEADERS)
