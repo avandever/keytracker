@@ -754,7 +754,10 @@ def get_snake_or_camel(obj: Dict[str, Any], key: str) -> Optional[str]:
 def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
     current_app.logger.debug(data)
     deck_id = get_snake_or_camel(data, "keyforge_id")
-    deck = get_deck_by_id_with_zeal(deck_id)
+    deck = Deck.query.filter_by(kf_id=deck_id).first()
+    if deck is None:
+        deck = Deck(kf_id=deck_id)
+        refresh_deck_from_mv(deck)
     current_app.logger.debug(f"Adding dok deck data for {deck.name}")
     dok = DokDeck.query.filter_by(deck_id=deck.id).first()
     if dok is None:
