@@ -26,8 +26,9 @@ import os
 from typing import Dict, Iterable, Tuple
 import random
 import requests
-#from aiohttp_requests import requests as arequests
-#from aiohttp.client_exceptions import ContentTypeError
+
+# from aiohttp_requests import requests as arequests
+# from aiohttp.client_exceptions import ContentTypeError
 import asyncio
 import re
 import sqlalchemy
@@ -311,6 +312,8 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
         db.session.commit()
         db.session.refresh(deck)
         return deck
+    if datetime.utcnow() - deck.dok.last_refresh > timedelta(days=30):
+        update_sas_scores(deck)
     if len(deck.cards_from_assoc) == 0:
         populate_enhanced_cards(deck)
         db.session.refresh(deck)
@@ -378,6 +381,7 @@ def update_sas_scores(deck: Deck) -> bool:
         deck.sas_rating = data["deck"]["sasRating"]
         deck.aerc_score = data["deck"]["aercScore"]
         deck.sas_version = data["sasVersion"]
+        add_dok_deck_from_dict(**data["deck"])
     except KeyError:
         current_app.logger.exception(f"Failed getting dok data for {deck.kf_id}")
     return True
@@ -728,36 +732,41 @@ def retry_after_mysql_disconnect(func):
     return wrapper
 
 
+def get_snake_or_camel(obj: Dict[str, Any], key: str) -> Optional[str]:
+    if key in obj:
+        return obj[key]
+    bits = key.split("_")
+    new_key = bits[0] + "".join(ele.title() for ele in bits[1:])
+    return obj.get(new_key)
+
+
 def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
     current_app.logger.debug(data)
-    deck = get_deck_by_id_with_zeal(data["keyforge_id"])
+    deck_id = get_snake_or_camel(data, "keyforge_id")
+    deck = get_deck_by_id_with_zeal(deck_id)
     current_app.logger.debug(f"Adding dok deck data for {deck.name}")
     dok = DokDeck.query.filter_by(deck_id=deck.id).first()
-    if dok is not None:
-        current_app.logger.debug(f"Already have dok data for {deck.name}")
-        return
-    dok = DokDeck(
-        deck=deck,
-        sas_rating=data["sas_rating"],
-        synergy_rating=data["synergy_rating"],
-        antisynergy_rating=data["antisynergy_rating"],
-        aerc_score=data["aerc_score"],
-        amber_control=data["amber_control"],
-        expected_amber=data["expected_amber"],
-        artifact_control=data["artifact_control"],
-        creature_control=data["creature_control"],
-        efficiency=data["efficiency"],
-        recursion=data["recursion"],
-        disruption=data["disruption"],
-        creature_protection=data["creature_protection"],
-        other=data["other"],
-        effective_power=data["effective_power"],
-        raw_amber=data["raw_amber"],
-        action_count=data["action_count"],
-        upgrade_count=data["upgrade_count"],
-        creature_count=data["creature_count"],
-    )
-    db.session.add(dok)
+    if dok is None:
+        dok = DokDeck(deck=deck)
+        db.session.add(dok)
+    dok.sas_rating = get_snake_or_camel(data, "sas_rating")
+    dok.synergy_rating = get_snake_or_camel(data, "synergy_rating")
+    dok.antisynergy_rating = get_snake_or_camel(data, "antisynergy_rating")
+    dok.aerc_score = get_snake_or_camel(data, "aerc_score")
+    dok.amber_control = get_snake_or_camel(data, "amber_control")
+    dok.expected_amber = get_snake_or_camel(data, "expected_amber")
+    dok.artifact_control = get_snake_or_camel(data, "artifact_control")
+    dok.creature_control = get_snake_or_camel(data, "creature_control")
+    dok.efficiency = get_snake_or_camel(data, "efficiency")
+    dok.recursion = get_snake_or_camel(data, "recursion")
+    dok.disruption = get_snake_or_camel(data, "disruption")
+    dok.creature_protection = get_snake_or_camel(data, "creature_protection")
+    dok.other = get_snake_or_camel(data, "other")
+    dok.effective_power = get_snake_or_camel(data, "effective_power")
+    dok.raw_amber = get_snake_or_camel(data, "raw_amber")
+    dok.action_count = get_snake_or_camel(data, "action_count")
+    dok.upgrade_count = get_snake_or_camel(data, "upgrade_count")
+    dok.creature_count = get_snake_or_camel(data, "creature_count")
     if not skip_commit:
         db.session.commit()
 
