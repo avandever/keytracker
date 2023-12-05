@@ -210,9 +210,9 @@ class Deck(db.Model):
         expansion = ET.SubElement(deck, "expansion")
         expansion.text = EXPANSION_ID_TO_ABBR[self.expansion]
         sas_rating = ET.SubElement(deck, "sas_rating")
-        sas_rating.text = str(self.sas_rating)
+        sas_rating.text = str(getattr(self.dok, "sas_rating", "UNKNOWN"))
         aerc_score = ET.SubElement(deck, "aerc_score")
-        aerc_score.text = str(self.aerc_score)
+        aerc_score.text = str(getattr(self.dok, "aerc_score", "UNKNOWN"))
         return ET.tostring(deck)
 
     def as_json(self) -> str:
@@ -221,8 +221,8 @@ class Deck(db.Model):
                 "id": self.kf_id,
                 "name": self.name,
                 "expansion": EXPANSION_ID_TO_ABBR[self.expansion],
-                "sas_rating": self.sas_rating,
-                "aerc_score": self.aerc_score,
+                "sas_rating": getattr(self.dok, "sas_rating", "UNKNOWN"),
+                "aerc_score": getattr(self.dok, "aerc_score", "UNKNOWN"),
                 "houses": sorted([ps.house.value for ps in self.pod_stats]),
             }
         )
@@ -463,6 +463,11 @@ class DokDeck(db.Model):
     action_count = db.Column(db.Integer)
     upgrade_count = db.Column(db.Integer)
     creature_count = db.Column(db.Integer)
+    last_refresh = db.Column(
+        db.DateTime,
+        default=func.now(),
+        onupdate=func.utc_timestamp(),
+    )
 
 
 class Game(db.Model):
