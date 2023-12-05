@@ -23,7 +23,7 @@ from keytracker.schema import (
     rarity_str_to_enum,
 )
 import os
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 import random
 import requests
 
