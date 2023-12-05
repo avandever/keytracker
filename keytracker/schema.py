@@ -6,7 +6,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import column_property
+from sqlalchemy.orm import column_property, mapped_column
 from sqlalchemy.sql import func
 import datetime
 import enum
@@ -196,7 +196,7 @@ class Deck(db.Model):
     aerc_score = db.Column(db.Integer)
     sas_version = db.Column(db.Integer)
     card_id_list = db.Column(IdList(","))
-    dok = db.relationship("DokDeck", back_populates="deck")
+    dok: db.Mapped["DokDeck"] = db.relationship("DokDeck", back_populates="deck")
     enhancements = db.relationship("Enhancements", back_populates="deck")
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
     pod_stats = db.relationship("PodStats", back_populates="deck")
@@ -441,10 +441,11 @@ class DokDeck(db.Model):
 
     __tablename__ = "tracker_dok_deck"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    deck_id = db.Column(
-        db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
+    deck_id: db.Mapped[int] = mapped_column(
+        db.ForeignKey(Deck.__table__.c.id),
+        primary_key=True,
     )
-    deck = db.relationship("Deck", back_populates="dok")
+    deck: db.Mapped["Deck"] = db.relationship("Deck", back_populates="dok")
     sas_rating = db.Column(db.Float)
     synergy_rating = db.Column(db.Float)
     antisynergy_rating = db.Column(db.Float)
@@ -468,6 +469,14 @@ class DokDeck(db.Model):
         default=func.now(),
         onupdate=func.utc_timestamp(),
     )
+
+    def __repr__(self) -> str:
+        return (
+            "<DokDeck("
+            f"id={self.id}, deck_id={self.deck.id}, "
+            f"sas_rating={self.sas_rating}, aerc_score={self.aerc_score}"
+            ")>"
+        )
 
 
 class Game(db.Model):
