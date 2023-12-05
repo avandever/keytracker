@@ -312,7 +312,7 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
         db.session.commit()
         db.session.refresh(deck)
         return deck
-    if datetime.utcnow() - deck.dok.last_refresh > timedelta(days=30):
+    if datetime.datetime.utcnow() - deck.dok.last_refresh > datetime.timedelta(days=30):
         update_sas_scores(deck)
     if len(deck.cards_from_assoc) == 0:
         populate_enhanced_cards(deck)
