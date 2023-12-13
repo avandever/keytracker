@@ -60,6 +60,7 @@ class Expansion(enum.Enum):
     WOE = "Winds of Exchange"
     VM23 = "Vault Masters 2023"
     UC22 = "Unchained 2022"
+    GR = "Grim Reminders"
 
 
 class Rarity(enum.Enum):
@@ -91,6 +92,7 @@ EXPANSION_VALUES = [
     ExpansionValues("Winds of Exchange", "WoE", "WoE", 600),
     ExpansionValues("Unchained 2022", "UC22", "UC22", 601),
     ExpansionValues("Vault Masters 2023", "VM23", "VM23", 609),
+    ExpansionValues("Grim Reminders", "GR", "GR", 700),
 ]
 
 EXPANSION_ID_TO_ABBR = {exp.number: exp.shortname for exp in EXPANSION_VALUES}
