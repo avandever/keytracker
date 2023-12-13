@@ -4,7 +4,7 @@
         <h1>Record of games for {{ username }}</h1>
         <div class="games_summary">
             Total games played: {{ games_won + games_lost }} | Games won: {{ games_won }}
-            ( {{ '%0.2f' | format(games_won / ( games_won + games_lost ) * 100) }}% )
+            ( {{ '%0.2f' | format(games_won / ( games_won + games_lost) * 100) }}% )
         </div>
     </div>
     <div class="games_list">

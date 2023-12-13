@@ -5,7 +5,12 @@
     <form method="post">
         <label for="log">Log Text</label>
         <br />
-        <textarea type="text" name="log" placeholder="" rows="30" cols="90" value="{{request.form['title'] }}"></textarea>
+        <textarea type="text"
+                  name="log"
+                  placeholder=""
+                  rows="30"
+                  cols="90"
+                  value="{{request.form['title'] }}"></textarea>
         <br />
         <button type="submit">Submit</button>
     </form>

@@ -11,20 +11,20 @@
                 <input type="text"
                        name="user1"
                        style="width: 140px"
-                       {% if args["user1"] %} value="{{ args["user1"] }}"{% endif %}
-                       placeholder="Username"/>
+                       {% if args["user1"] %}value="{{ args["user1"] }}"{% endif %}
+                       placeholder="Username" />
             </p>
             <p class="form_element">
                 <label for="deck1">Deck</label>
                 <input type="text"
                        name="deck1"
-                       {% if args["deck1"] %} value="{{ args["deck1"] }}"{% endif %}
-                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+                       {% if args["deck1"] %}value="{{ args["deck1"] }}"{% endif %}
+                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
             </p>
-            {{ render_input_number("sas_min1", "SAS >", 33, 108, args.get("sas_min1")) | safe }}
-            {{ render_input_number("sas_max1", "SAS <", 33, 108, args.get("sas_max1")) | safe }}
-            {{ render_input_number("aerc_min1", "AERC >", 33, 108, args.get("aerc_min1")) | safe }}
-            {{ render_input_number("aerc_max1", "AERC <", 33, 108, args.get("aerc_max1")) | safe }}
+            {{ render_input_number("sas_min1", "SAS >", 33, 108, args.get("sas_min1") ) | safe }}
+            {{ render_input_number("sas_max1", "SAS <", 33, 108, args.get("sas_max1") ) | safe }}
+            {{ render_input_number("aerc_min1", "AERC >", 33, 108, args.get("aerc_min1") ) | safe }}
+            {{ render_input_number("aerc_max1", "AERC <", 33, 108, args.get("aerc_max1") ) | safe }}
         </div>
         <div class="player_filter_inputs">
             <p class="form_element">
@@ -32,28 +32,28 @@
                 <input type="text"
                        name="user2"
                        style="width: 140px"
-                       {% if args["user2"] %} value="{{ args["user2"] }}"{% endif %}
-                       placeholder="Username"/>
+                       {% if args["user2"] %}value="{{ args["user2"] }}"{% endif %}
+                       placeholder="Username" />
             </p>
             <p class="form_element">
                 <label for="deck2">Deck</label>
                 <input type="text"
                        name="deck2"
-                       {% if args["deck2"] %} value="{{ args["deck2"] }}"{% endif %}
-                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
+                       {% if args["deck2"] %}value="{{ args["deck2"] }}"{% endif %}
+                       placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
             </p>
-            {{ render_input_number("sas_min2", "SAS >", 33, 108, args.get("sas_min2")) | safe }}
-            {{ render_input_number("sas_max2", "SAS <", 33, 108, args.get("sas_max2")) | safe }}
-            {{ render_input_number("aerc_min2", "AERC >", 33, 108, args.get("aerc_min2")) | safe }}
-            {{ render_input_number("aerc_max2", "AERC <", 33, 108, args.get("aerc_max2")) | safe }}
+            {{ render_input_number("sas_min2", "SAS >", 33, 108, args.get("sas_min2") ) | safe }}
+            {{ render_input_number("sas_max2", "SAS <", 33, 108, args.get("sas_max2") ) | safe }}
+            {{ render_input_number("aerc_min2", "AERC >", 33, 108, args.get("aerc_min2") ) | safe }}
+            {{ render_input_number("aerc_max2", "AERC <", 33, 108, args.get("aerc_max2") ) | safe }}
         </div>
         <label for="sort1">Sort By</label>
         <br />
-        {{ render_dropdown('sort1', sort_options, args.get('sort1')) | safe }}
+        {{ render_dropdown('sort1', sort_options, args.get('sort1') ) | safe }}
         <br />
         <label for="direction1">Order</label>
         <br />
-        {{ render_dropdown('direction1', {'desc': 'Descending', 'asc': 'Ascending'}, args.get('direction1')) | safe }}
+        {{ render_dropdown('direction1', {'desc': 'Descending', 'asc': 'Ascending'}, args.get('direction1') ) | safe }}
         <br />
         <button type="submit">Submit</button>
     </form>

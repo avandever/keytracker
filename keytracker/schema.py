@@ -171,6 +171,7 @@ class EnhancedCard:
         capture: int = 0,
         draw: int = 0,
         damage: int = 0,
+        discard: int = 0,
     ):
         for attr in CARD_ATTRS:
             setattr(self, attr, getattr(card, attr))
@@ -178,6 +179,7 @@ class EnhancedCard:
         self.enhanced_capture = capture
         self.enhanced_draw = draw
         self.enhanced_damage = damage
+        self.enhanced_discard = discard
 
 
 class Deck(db.Model):
@@ -259,6 +261,7 @@ class Deck(db.Model):
                                 capture=bling.capture,
                                 draw=bling.draw,
                                 damage=bling.damage,
+                                discard=bling.discard,
                             )
                         )
                         enhancements.pop(idx)
@@ -279,6 +282,7 @@ class PodStats(db.Model):
     enhanced_capture = db.Column(db.Integer, default=0)
     enhanced_draw = db.Column(db.Integer, default=0)
     enhanced_damage = db.Column(db.Integer, default=0)
+    enhanced_discard = db.Column(db.Integer, default=0)
     # not derived because should be indexable
     num_enhancements = db.Column(db.Integer, default=0, index=True)
     aerc_score = db.Column(db.Integer, default=0, index=True)
@@ -309,6 +313,7 @@ class Enhancements(db.Model):
     capture = db.Column(db.Integer, default=0)
     draw = db.Column(db.Integer, default=0)
     damage = db.Column(db.Integer, default=0)
+    discard = db.Column(db.Integer, default=0)
 
 
 platonic_card_traits = db.Table(
@@ -409,6 +414,7 @@ class CardInDeck(db.Model):
     enhanced_capture = db.Column(db.Integer, default=0)
     enhanced_draw = db.Column(db.Integer, default=0)
     enhanced_damage = db.Column(db.Integer, default=0)
+    enhanced_discard = db.Column(db.Integer, default=0)
     card_title = association_proxy("platonic_card", "card_title")
     card_type = association_proxy("platonic_card", "card_type")
     front_image = association_proxy("platonic_card", "front_image")
@@ -429,8 +435,8 @@ class CardInDeck(db.Model):
         return (
             f"<CardInDeck({self.card_title}, {self.house},"
             f"{self.enhanced_amber}a|{self.enhanced_capture}c|"
-            f"{self.enhanced_draw}f|{self.enhanced_damage}d,"
-            f"{self.deck.dok_url})>"
+            f"{self.enhanced_draw}f|{self.enhanced_damage}d|"
+            f"{self.enhanced_discard}D,{self.deck.dok_url})>"
         )
 
 
