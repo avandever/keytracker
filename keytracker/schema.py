@@ -33,6 +33,7 @@ class House(enum.Enum):
     UNFATHOMABLE = "Unfathomable"
     UNTAMED = "Untamed"
     THETIDE = "The Tide"
+    GEISTOID = "Geistoid"
 
 
 house_str_to_enum = {h.value: h for h in House.__members__.values()}
