@@ -273,30 +273,6 @@ class Deck(db.Model):
         id_to_card = {card.id: card for card in card_objs}
         return [id_to_card[cid] for cid in self.card_id_list]
 
-    @property
-    def enhanced_cards(self) -> List[EnhancedCard]:
-        enhancements = copy.deepcopy(self.enhancements)
-        cards = []
-        for card in self.cards:
-            if card.is_enhanced:
-                for (idx, bling) in enumerate(enhancements):
-                    if bling.card_id == card.id:
-                        cards.append(
-                            EnhancedCard(
-                                card=card,
-                                amber=bling.amber,
-                                capture=bling.capture,
-                                draw=bling.draw,
-                                damage=bling.damage,
-                                discard=bling.discard,
-                            )
-                        )
-                        enhancements.pop(idx)
-                        break
-            else:
-                cards.append(EnhancedCard(card))
-        return cards
-
 
 class PodStats(db.Model):
     __tablename__ = "tracker_pod_stats"
