@@ -17,6 +17,7 @@ from keytracker.schema import (
     PlatonicCardInSet,
     Player,
     PodStats,
+    POSSIBLE_LANGUAGES,
     Trait,
     house_str_to_enum,
     card_type_str_to_enum,
@@ -43,6 +44,7 @@ import logging
 import json
 import time
 import threading
+from lingua import LanguageDetectorBuilder
 
 
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
@@ -71,6 +73,8 @@ SEARCH_PARAMS = {
     "chains": "0,24",
     "ordering": "-date",
 }
+
+language_detector = LanguageDetectorBuilder.from_languages(*POSSIBLE_LANGUAGES).build()
 
 
 class MVApi:
@@ -831,6 +835,14 @@ def calculate_pod_stats(deck: Deck) -> None:
         pod.creatures = creatures
         pod.raw_amber = raw_amber
         pod.total_amber = raw_amber + amber
+
+
+def guess_deck_language(deck: Deck) -> None:
+    guess = language_detector.detect_language_of(deck.name)
+    if guess is None:
+        deck.language = None
+    else:
+        deck.language = guess.name
 
 
 async def get_decks_from_page(page: int) -> Iterable[str]:

@@ -15,9 +15,30 @@ from typing import List
 import copy
 import xml.etree.ElementTree as ET
 import json
+from lingua import Language
 
 
 db = SQLAlchemy()
+
+
+# Changing order will break enum in db. Can add to end, but don't subtract or move
+POSSIBLE_LANGUAGES = [
+    Language.CHINESE,
+    Language.ENGLISH,
+    Language.FRENCH,
+    Language.GERMAN,
+    Language.ITALIAN,
+    Language.KOREAN,
+    Language.POLISH,
+    Language.PORTUGUESE,
+    Language.RUSSIAN,
+    Language.SPANISH,
+    Language.THAI,
+    Language.VIETNAMESE,
+]
+
+
+Language = enum.Enum("Language", [l.name for l in POSSIBLE_LANGUAGES])
 
 
 class House(enum.Enum):
@@ -207,6 +228,7 @@ class Deck(db.Model):
     enhancements = db.relationship("Enhancements", back_populates="deck")
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
     pod_stats = db.relationship("PodStats", back_populates="deck")
+    language = db.Enum(Language)
 
     def as_xml(self) -> str:
         deck = ET.Element("deck")
