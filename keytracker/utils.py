@@ -24,7 +24,7 @@ from keytracker.schema import (
     rarity_str_to_enum,
 )
 import os
-from typing import Any, Dict, Iterable, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 import random
 import requests
 
@@ -325,7 +325,7 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
     ):
         update_sas_scores(deck)
     if len(deck.cards_from_assoc) == 0:
-        populate_enhanced_cards(deck)
+        refresh_deck_from_mv(deck)
         db.session.refresh(deck)
     if len(deck.pod_stats) == 0:
         calculate_pod_stats(deck)
@@ -365,10 +365,15 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
             db.session.refresh(card)
             card_cache[card_id] = card
         cards.append(card)
-    deck.card_id_list = [card.id for card in cards]
-    deck.enhancements.clear()
-    enhancements = list(add_enhancements_on_deck(all_data, deck))
-    db.session.add_all(enhancements)
+    bonus_icons = all_data["data"]["bonus_icons"]
+    kf_id_to_card = {card.kf_id: card for card in cards}
+    enhancements_list = []
+    for spec in bonus_icons:
+        card = kf_id_to_card[spec["card_id"]]
+        icons = Counter(spec["bonus_icons"])
+        enhancements = Enhancements(card=card, deck=deck, **icons)
+        enhancements_list.append(enhancements)
+    populate_enhanced_cards(deck, cards, enhancements_list)
     db.session.commit()
 
 
@@ -636,16 +641,6 @@ def anonymize_all_games_for_player(player: Player) -> None:
         anonymize_game_for_player(game, player)
 
 
-def add_enhancements_on_deck(data: Dict, deck: Deck) -> Iterable[Enhancements]:
-    bonus_icons = data["data"]["bonus_icons"]
-    kf_id_to_card = {card.kf_id: card for card in deck.cards}
-    for spec in bonus_icons:
-        card = kf_id_to_card[spec["card_id"]]
-        icons = Counter(spec["bonus_icons"])
-        enhancements = Enhancements(card=card, deck=deck, **icons)
-        yield enhancements
-
-
 def create_platonic_card(card: Card) -> PlatonicCard:
     card_type = card.card_type
     if card_type == "Creature1":
@@ -683,11 +678,15 @@ def create_platonic_card(card: Card) -> PlatonicCard:
     return platonic_card
 
 
-def populate_enhanced_cards(deck: Deck, platonic_card_cache=None) -> None:
-    enhancements = copy.deepcopy(deck.enhancements)
+def populate_enhanced_cards(
+    deck: Deck,
+    cards: List[Card],
+    enhancements: List[Enhancements],
+    platonic_card_cache=None,
+) -> None:
     deck.cards_from_assoc.clear()
     platonic_card_cache = platonic_card_cache or {}
-    for card in deck.cards:
+    for card in cards:
         platonic_card = platonic_card_cache.get(card.card_title)
         if platonic_card is None:
             platonic_card = PlatonicCard.query.filter_by(

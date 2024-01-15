@@ -122,24 +122,6 @@ EXPANSION_VALUES = [
 EXPANSION_ID_TO_ABBR = {exp.number: exp.shortname for exp in EXPANSION_VALUES}
 
 
-class IdList(sqlalchemy_types.TypeDecorator):
-    impl = db.String(5 * 37)
-    cache_ok = True
-
-    def __init__(self, sep=","):
-        self.sep = sep
-
-    def process_bind_param(self, value, dialect):
-        if value is not None:
-            return self.sep.join(map(str, value))
-
-    def process_result_value(self, value, dialect):
-        if value is not None:
-            if value == "":
-                return []
-            return list(map(int, value.split(self.sep)))
-
-
 class Card(db.Model):
     __tablename__ = "tracker_card"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -223,12 +205,12 @@ class Deck(db.Model):
     sas_rating = db.Column(db.Integer)
     aerc_score = db.Column(db.Integer)
     sas_version = db.Column(db.Integer)
-    card_id_list = db.Column(IdList(","))
+    card_id_list = db.Column(db.String(259))
     dok: db.Mapped["DokDeck"] = db.relationship("DokDeck", back_populates="deck")
     enhancements = db.relationship("Enhancements", back_populates="deck")
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
     pod_stats = db.relationship("PodStats", back_populates="deck")
-    language = db.Enum(Language)
+    language = db.Column(db.Enum(Language))
 
     def as_xml(self) -> str:
         deck = ET.Element("deck")
@@ -266,12 +248,6 @@ class Deck(db.Model):
 
     def __repr__(self) -> str:
         return f'<Deck("{self.name}", {self.expansion},  {self.dok_url})>'
-
-    @property
-    def cards(self) -> List[Card]:
-        card_objs = Card.query.filter(Card.id.in_(self.card_id_list)).all()
-        id_to_card = {card.id: card for card in card_objs}
-        return [id_to_card[cid] for cid in self.card_id_list]
 
 
 class PodStats(db.Model):
