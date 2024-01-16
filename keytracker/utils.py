@@ -704,8 +704,10 @@ def populate_enhanced_cards(
         )
         db.session.add(card_in_deck)
         if card_in_deck.is_enhanced:
+            current_app.logger.debug(f"Trying to enhance {card_in_deck}, {card.id}")
             for (idx, bling) in enumerate(enhancements):
-                if bling.card_id == card.id:
+                current_app.logger.debug(f"Checking enhancement {bling.card_id}")
+                if bling.card.id == card.id:
                     card_in_deck.enhanced_amber = bling.amber
                     card_in_deck.enhanced_capture = bling.capture
                     card_in_deck.enhanced_draw = bling.draw
