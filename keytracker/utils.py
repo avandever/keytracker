@@ -404,6 +404,7 @@ def update_sas_scores(deck: Deck) -> bool:
         add_dok_deck_from_dict(**data["deck"])
     except KeyError:
         current_app.logger.exception(f"Failed getting dok data for {deck.kf_id}")
+        current_app.logger.debug(f"Received text:\n{response.text}")
     return True
 
 
@@ -757,7 +758,6 @@ def get_snake_or_camel(obj: Dict[str, Any], key: str) -> Optional[str]:
 
 
 def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
-    current_app.logger.debug(data)
     deck_id = get_snake_or_camel(data, "keyforge_id")
     deck = Deck.query.filter_by(kf_id=deck_id).first()
     # This is a bit redundant to get_deck_by_id_with_zeal, but necessary to avoid an
