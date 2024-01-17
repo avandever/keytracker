@@ -132,9 +132,10 @@ def deck(deck_id):
 def game(crucible_game_id):
     game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
     if game is None:
-        db.session.expire_all()
-        time.sleep(5)
-        game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
+        return render_template(
+            "game_missing.html",
+            crucible_game_id=crucible_game_id,
+        )
     players = sorted(
         [game.winner, game.loser],
         key=lambda x: x != game.insist_first_player,

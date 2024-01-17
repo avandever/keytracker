@@ -1,0 +1,6 @@
+{% extends "layout.html" %}
+{% block content %}
+<p>Oops! I can't find that game.</p>
+<p>If you just uploaded, please wait a bit, then retry.</p>
+<p><a href="{{ url_for(request.endpoint, **request.view_args) }}">Retry</a></p>
+{% endblock %}
