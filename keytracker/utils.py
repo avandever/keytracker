@@ -334,6 +334,28 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
     return deck
 
 
+def loop_loading_missed_sas(batch_size: int, max_set_id: int = 700) -> None:
+    q = Deck.query.filter(and_(Deck.expansion<max_set_id, Deck.dok==None))
+    query_times = []
+    while q.count() > 0:
+        current_app.logger.info(f"{q.count()} decks left. Fetching {batch_size} to process.")
+        decks = q.limit(batch_size).all()
+        while decks:
+            deck = decks.pop()
+            query_times = [qt for qt in query_times if time.time() - qt < 60]
+            if len(query_times) > 45:
+                oldest = min(query_times)
+                to_sleep = 1 + time.time() - oldest
+                current_app.logger.debug(f"Sleeping {to_sleep}")
+                time.sleep(to_sleep)
+            update_sas_scores(deck)
+            query_times.append(time.time())
+            db.session.commit()
+            count = len(decks)
+            if count % 25 == 0:
+                current_app.logger.info(f"{count} left in this batch")
+
+
 def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
