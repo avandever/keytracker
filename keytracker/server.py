@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import Flask, jsonify
+from flask import current_app, Flask, jsonify
 from keytracker.schema import (
     db,
     Log,
@@ -23,6 +23,8 @@ from sqlalchemy.exc import (
     PendingRollbackError,
 )
 import os
+import logging
+import time
 
 
 app = Flask(__name__)
@@ -70,6 +72,7 @@ def shell_context():
         "and_": sqlalchemy.and_,
         "not_": sqlalchemy.not_,
         "func": sqlalchemy.func,
+        "current_app": current_app,
         "db": schema.db,
         "utils": utils,
         "Card": schema.Card,
@@ -83,12 +86,14 @@ def shell_context():
         "Game": schema.Game,
         "House": schema.House,
         "HouseTurnCounts": schema.HouseTurnCounts,
+        "logging": logging,
         "Log": schema.Log,
         "PlatonicCard": schema.PlatonicCard,
         "PlatonicCardInSet": schema.PlatonicCardInSet,
         "Player": schema.Player,
         "PodStats": schema.PodStats,
         "Rarity": schema.Rarity,
+        "time": time,
         "Trait": schema.Trait,
         "TurnState": schema.TurnState,
     }
