@@ -349,6 +349,17 @@ class PlatonicCardInSet(db.Model):
     rarity = db.Column(db.Enum(Rarity))
     card_number = db.Column(db.String(10))
     is_anomaly = db.Column(db.Boolean, default=False)
+    card_title = association_proxy("card", "card_title")
+    card_type = association_proxy("card", "card_type")
+    front_image = association_proxy("card", "front_image")
+    card_text = association_proxy("card", "card_text")
+    traits = association_proxy("card", "traits")
+    amber = association_proxy("card", "amber")
+    power = association_proxy("card", "power")
+    armor = association_proxy("card", "armor")
+    flavor_text = association_proxy("card", "flavor_text")
+    house = association_proxy("card", "house")
+    is_non_deck = association_proxy("card", "is_non_deck")
 
     def __repr__(self) -> str:
         return f"<PlatonicCardInSet({self.card.card_title}, {self.expansion})>"
