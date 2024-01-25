@@ -5,8 +5,10 @@ from flask.cli import AppGroup
 import asyncio
 from keytracker.schema import (
     db,
+    PlatonicCard,
     Deck,
 )
+from aiohttp_requests import requests as arequests
 import click_log
 from asyncio import create_task, Lock, Queue, Task
 from typing import Iterable, List, Set
@@ -20,11 +22,86 @@ import time
 import os
 import json
 import logging
+import shutil
 
 
 collector = AppGroup("collector")
 page_one_stopper = "/tmp/stop_page_one_loop"
 click_log.basic_config()
+
+
+@collector.command("get_images")
+@click_log.simple_verbosity_option()
+@click.option("--image-dir", default="keyforge-images")
+@click.option("--group-by", default="expansion,house,rarity,card_type")
+def get_images(image_dir: str, group_by: str) -> None:
+    asyncio.run(_get_images(
+        image_dir,
+        group_by=group_by.split(",")
+    ))
+
+
+async def _get_images(image_dir: str, group_by: List[str] = None) -> None:
+    with current_app.app_context():
+        all_cards = PlatonicCard.query.all()
+        for card in all_cards:
+            await get_card_image(
+                card,
+                image_dir,
+                group_by,
+            )
+
+
+def build_image_dirs(
+    base_dir: str,
+    card: PlatonicCard,
+    group_by: List[str] = None,
+) -> List[str]:
+    if group_by is None:
+        return base_dir
+    if "expansion" in group_by:
+        expansions = card.expansions
+    else:
+        expansions = [""]
+    paths = []
+    for expansion in expansions:
+        path_bits = [base_dir]
+        path_bits.append("-".join(group_by))
+        for attr in group_by:
+            if attr == "expansion":
+                path_bits.append(str(expansion.expansion))
+            else:
+                try:
+                    bit = getattr(card, attr)
+                except AttributeError:
+                    bit = getattr(expansion, attr)
+                path_bits.append(str(bit))
+        paths.append(os.path.join(*path_bits))
+    return paths
+
+
+async def get_card_image(
+    card: PlatonicCard,
+    image_dir: str,
+    group_by: List[str] = None,
+) -> None:
+    group_by_paths = build_image_dirs(image_dir, card, group_by)
+    output_file = os.path.join(image_dir, os.path.basename(card.front_image))
+    group_by_links = [
+        os.path.join(
+            group_by_path,
+            os.path.basename(card.front_image),
+        )
+        for group_by_path in group_by_paths
+    ]
+    if not os.path.exists(output_file):
+        img = await arequests.get(card.front_image)
+        with open(output_file, "wb") as fh:
+            fh.write(await img.content.read())
+    for group_by_link in group_by_links:
+        if not os.path.exists(group_by_link):
+            os.makedirs(os.path.dirname(group_by_link), exist_ok=True)
+            shutil.copy(output_file, group_by_link)
 
 
 @collector.command("get")

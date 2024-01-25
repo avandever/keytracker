@@ -28,8 +28,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import random
 import requests
 
-# from aiohttp_requests import requests as arequests
-# from aiohttp.client_exceptions import ContentTypeError
+from aiohttp_requests import requests as arequests
+from aiohttp.client_exceptions import ContentTypeError
 import asyncio
 import re
 import sqlalchemy
