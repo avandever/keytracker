@@ -59,7 +59,7 @@ HOUSE_MANUAL_MATCHER = re.compile(
 FORGE_MATCHER = re.compile(r"^(.*) forges the (.*) key *, paying ([0-9]+) Æmber")
 WIN_MATCHER = re.compile(r"\s*([^ ].*) has won the game")
 
-MV_API_BASE = "http://www.keyforgegame.com/api/decks"
+MV_API_BASE = "https://www.keyforgegame.com/api/decks"
 
 DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 DOK_DECK_BASE = "https://decksofkeyforge.com/public-api/v3/decks"
@@ -68,9 +68,6 @@ SAS_MAX_AGE_DAYS = 90
 SAS_TD = datetime.timedelta(days=SAS_MAX_AGE_DAYS)
 SEARCH_PARAMS = {
     "page_size": 25,
-    "search": "",
-    "power_level": "0,11",
-    "chains": "0,24",
     "ordering": "-date",
 }
 
@@ -887,3 +884,239 @@ async def get_decks_from_page(page: int) -> Iterable[str]:
         else:
             logging.error(f"Unrecognized json response {data}")
     return [deck["id"] for deck in data["data"]]
+
+
+def get_decks_from_page_v2(page: int, reverse: bool) -> None:
+    params = SEARCH_PARAMS.copy()
+    params["page"] = page
+    params["links"] = "cards"
+    if reverse:
+        params["ordering"] = "date"
+    else:
+        params["ordering"] = "-date"
+    api_base = os.path.join(MV_API_BASE, "v2/")
+    response = mv_api.callMVSync(api_base, params=params)
+    try:
+        data = response.json()
+    except (json.decoder.JSONDecodeError, ContentTypeError):
+        current_app.logger.error(f"raw response: {response}")
+        raise
+    if "code" in data:
+        if data["code"] == 429:
+            raise RequestThrottled(data["message"] + data["detail"])
+        # "Internal Server Error" - means page does not exist
+        elif data["code"] == 0:
+            raise InternalServerError(data["message"] + data["detail"])
+        else:
+            current_app.logger.error(f"Unrecognized json response {data}")
+            raise Exception()
+    decks = data["data"]
+    cards = data["_linked"]["cards"]
+    card_details = {c["id"]: c for c in cards}
+    for deck_json in decks:
+        add_one_deck_v2(deck_json, card_details)
+
+
+def add_one_deck_v2(deck_json, card_details) -> None:
+    deck = Deck.query.filter_by(kf_id=deck_json["id"]).first()
+    new_deck = False
+    if deck is None:
+        deck = Deck(kf_id=deck_json["id"])
+        db.session.add(deck)
+        new_deck = True
+    deck.name = deck_json["name"]
+    deck.expansion = deck_json["expansion"]
+    bonus_icons = deck_json["bonus_icons"]
+    houses = deck_json["_links"]["houses"]
+    deck_card_ids = deck_json["_links"]["cards"]
+    deck_str = f"{deck.name} - https://keyforgegame.com/deck-details/{deck.kf_id}"
+    if new_deck:
+        current_app.logger.debug(f"Adding cards to {deck_str}")
+        add_cards_v2_new(deck, deck_card_ids, card_details, bonus_icons)
+    else:
+        res = are_cards_okay(deck, deck_card_ids, card_details, bonus_icons)
+        if res:
+            current_app.logger.debug(f"Existing deck is ok: {deck_str}")
+        else:
+            current_app.logger.debug(f"Clearing and re-adding cards for {deck_str}")
+            deck.cards_from_assoc.clear()
+            add_cards_v2_new(deck, deck_card_ids, card_details, bonus_icons)
+    db.session.commit()
+
+
+def are_cards_okay(
+    deck: Deck,
+    deck_card_ids: List[str],
+    card_details,
+    bonus_icons,
+) -> bool:
+    cards = [c for c in deck.cards_from_assoc]
+    for card_id in deck_card_ids:
+        for card in cards:
+            if card_id == card.card_kf_id:
+                break
+        else:
+            return False
+        cards.remove(card)
+        card_json = card_details[card_id]
+        # Check straight strings
+        if (
+            card.card_title != card_json["card_title"]
+            or card.front_image != card_json["front_image"]
+            or card.card_text != card_json["card_text"]
+            or card.amber != int(card_json["amber"])
+            or card.power != int(0 if card_json["power"] == "X" else card_json["power"])
+            or card.armor != int(0 if card_json["armor"] == "X" else card_json["armor"])
+            or card.flavor_text != card_json["flavor_text"]
+            or card.card_number != card_json["card_number"]
+            or card.expansion != card_json["expansion"]
+            or card.is_maverick != card_json["is_maverick"]
+            or card.is_anomaly != card_json["is_anomaly"]
+            or card.is_enhanced != card_json["is_enhanced"]
+            or card.is_non_deck != card_json["is_non_deck"]
+        ):
+            current_app.logger.debug("Found mismatch in simple strings")
+            if card.card_title != card_json["card_title"]:
+                current_app.logger.debug(f"card_title: {card.card_title} vs {card_json['card_title']}")
+            if card.front_image != card_json["front_image"]:
+                current_app.logger.debug(f"front_image: {card.front_image} vs {card_json['front_image']}")
+            if card.card_text != card_json["card_text"]:
+                current_app.logger.debug(f"card_text: {card.card_text} vs {card_json['card_text']}")
+            if card.amber != card_json["amber"]:
+                current_app.logger.debug(f"amber: {card.amber} vs {card_json['amber']}")
+            if card.power != card_json["power"]:
+                current_app.logger.debug(f"power: {card.power} vs {card_json['power']}")
+            if card.armor != card_json["armor"]:
+                current_app.logger.debug(f"armor: {card.armor} vs {card_json['armor']}")
+            if card.flavor_text != card_json["flavor_text"]:
+                current_app.logger.debug(f"flavor_text: {card.flavor_text} vs {card_json['flavor_text']}")
+            if card.card_number != card_json["card_number"]:
+                current_app.logger.debug(f"card_number: {card.card_number} vs {card_json['card_number']}")
+            if card.expansion != card_json["expansion"]:
+                current_app.logger.debug(f"expansion: {card.expansion} vs {card_json['expansion']}")
+            if card.is_maverick != card_json["is_maverick"]:
+                current_app.logger.debug(f"is_maverick: {card.is_maverick} vs {card_json['is_maverick']}")
+            if card.is_anomaly != card_json["is_anomaly"]:
+                current_app.logger.debug(f"is_anomaly: {card.is_anomaly} vs {card_json['is_anomaly']}")
+            if card.is_enhanced != card_json["is_enhanced"]:
+                current_app.logger.debug(f"is_enhanced: {card.is_enhanced} vs {card_json['is_enhanced']}")
+            if card.is_non_deck != card_json["is_non_deck"]:
+                current_app.logger.debug(f"is_non_deck: {card.is_non_deck} vs {card_json['is_non_deck']}")
+            return False
+        # Check enums
+        if (
+            card.card_type != card_type_str_to_enum[card_json["card_type"]]
+            or card.house != house_str_to_enum[card_json["house"]]
+            or card.rarity != rarity_str_to_enum[card_json["rarity"]]
+        ):
+            current_app.logger.debug("Found mismatch in enums")
+            return False
+        # Check traits
+        if card_json["traits"] and {t.name for t in card.traits} != set(card_json["traits"].split(" • ")):
+            current_app.logger.debug("Found mismatch in traits")
+            return False
+        return True
+
+
+def add_cards_v2_new(
+    deck: Deck,
+    deck_card_ids: List[str],
+    card_details,
+    bonus_icons,
+) -> None:
+    for card_id in deck_card_ids:
+        card_json = card_details[card_id]
+        pcis = PlatonicCardInSet.query.filter_by(card_kf_id=card_id).first()
+        if pcis is None:
+            current_app.logger.info(
+                f"Creating new card in set: {card_json['expansion']}:{card_json['card_title']}"
+                f":{card_json['house']}:{card_json['id']}"
+            )
+            pc = PlatonicCard.query.filter_by(card_title=card_json["card_title"]).first()
+            if pc is None:
+                current_app.logger.info(
+                    f"Creating new platonic card: {card_json['card_title']}"
+                )
+                pc = PlatonicCard(
+                    card_title=card_json["card_title"],
+                )
+                db.session.add(pc)
+            pcis = PlatonicCardInSet(
+                card=pc,
+                card_kf_id=card_json["id"],
+                expansion=card_json["expansion"],
+            )
+            db.session.add(pcis)
+        else:
+            pc = pcis.card
+        update_platonic_info(pc, pcis, card_json)
+        card = CardInDeck(
+            platonic_card=pc,
+            card_in_set=pcis,
+            deck=deck,
+            house=house_str_to_enum[card_json["house"]],
+            is_enhanced=card_json["is_enhanced"],
+            enhanced_amber=0,
+            enhanced_capture=0,
+            enhanced_draw=0,
+            enhanced_damage=0,
+            enhanced_discard=0,
+        )
+        db.session.add(card)
+        if card.is_enhanced:
+            bling = copy.deepcopy(bonus_icons)
+            for (idx, enh) in enumerate(bling):
+                if enh["card_id"] == pcis.card_kf_id:
+                    for icon in enh["bonus_icons"]:
+                        if icon == "damage":
+                            card.enhanced_damage += 1
+                        elif icon == "amber":
+                            card.enhanced_amber += 1
+                        elif icon == "draw":
+                            card.enhanced_draw += 1
+                        elif icon == "capture":
+                            card.enhanced_capture += 1
+                        elif icon == "discard":
+                            card.enhanced_discard += 1
+                        else:
+                            raise MissingEnhancements(f"Could not pair enhancements in {deck.kf_id}")
+                    break
+            else:
+                raise MissingEnhancements(f"Could not pair enhancements in {deck.kf_id}")
+        db.session.commit()
+            
+
+def update_platonic_info(
+    platonic_card: PlatonicCard,
+    card_in_set: PlatonicCardInSet,
+    card_json,
+) -> None:
+    # Double-check that platonic card info is right
+    if card_json["traits"]:
+        trait_strs = card_json["traits"].split(" • ")
+        if {t.name for t in platonic_card.traits} != set(trait_strs):
+            platonic_card.traits.clear()
+            for trait_str in trait_strs:
+                trait = Trait.query.filter_by(name=trait_str).first()
+                if trait is None:
+                    current_app.logger.info(f"Adding new trait: {trait_str}")
+                    trait = Trait(name=trait_str)
+                    db.session.add(trait)
+                platonic_card.traits.append(trait)
+    else:
+        platonic_card.traits.clear()
+    platonic_card.card_type = card_type_str_to_enum[card_json["card_type"]]
+    platonic_card.front_image = card_json["front_image"]
+    platonic_card.card_text = card_json["card_text"]
+    platonic_card.amber = int(card_json["amber"])
+    platonic_card.power = int(0 if card_json["power"] == "X" else card_json["power"])
+    platonic_card.armor = int(0 if card_json["armor"] == "X" else card_json["armor"])
+    platonic_card.flavor_text = card_json["flavor_text"]
+    platonic_card.house = house_str_to_enum[card_json["house"]]
+    platonic_card.is_non_deck = card_json["is_non_deck"]
+    # Double-check that card in set info is right
+    card_in_set.expansion = card_json["expansion"]
+    card_in_set.rarity = rarity_str_to_enum[card_json["rarity"]]
+    card_in_set.card_number = card_json["card_number"]
+    card_in_set.is_anomaly = card_json["is_anomaly"]
+    card_in_set.front_image = card_json["front_image"]

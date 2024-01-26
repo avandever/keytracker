@@ -14,6 +14,7 @@ from asyncio import create_task, Lock, Queue, Task
 from typing import Iterable, List, Set
 from keytracker.utils import (
     get_decks_from_page,
+    get_decks_from_page_v2,
     get_deck_by_id_with_zeal,
     InternalServerError,
     RequestThrottled,
@@ -102,6 +103,41 @@ async def get_card_image(
         if not os.path.exists(group_by_link):
             os.makedirs(os.path.dirname(group_by_link), exist_ok=True)
             shutil.copy(output_file, group_by_link)
+
+
+@collector.command("get_v2")
+@click_log.simple_verbosity_option()
+@click.option("--start-page", type=int, default=1)
+@click.option("--max-pages", type=int, default=1)
+@click.option("--reverse/--no-reverse", default=False)
+@click.option("--interval", type=int, default=10)
+def get_v2(
+    start_page: int,
+    max_pages: int,
+    reverse: bool,
+    interval: int,
+) -> None:
+    logging.debug("Starting collector")
+    end_page = start_page + max_pages
+    start_time = time.time()
+    pages_done = 0
+    last_run = 0
+    for page in range(start_page, end_page):
+        now = time.time()
+        delta = now - last_run
+        if delta < interval:
+            to_sleep = interval - delta
+            logging.debug(f"Sleeping {to_sleep}")
+            time.sleep(to_sleep)
+        last_run = time.time()
+        logging.debug(
+            f"Getting page {page} (stopping at {end_page}), reverse={reverse}. "
+            f"{pages_done} pages done in {last_run - start_time} seconds. "
+            f"1 page per {(last_run - start_time) / (pages_done or 1)} seconds."
+        )
+        with current_app.app_context():
+            get_decks_from_page_v2(page, reverse=reverse)
+        pages_done += 1
 
 
 @collector.command("get")
