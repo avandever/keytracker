@@ -341,17 +341,19 @@ class PlatonicCard(db.Model):
 
 class PlatonicCardInSet(db.Model):
     __tablename__ = "tracker_platonic_card_expansions"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     card_id = db.Column(
-        db.Integer, db.ForeignKey(PlatonicCard.__table__.c.id), primary_key=True
+        db.Integer, db.ForeignKey(PlatonicCard.__table__.c.id), index=True
     )
     card = db.relationship("PlatonicCard", back_populates="expansions")
+    card_kf_id = db.Column(db.String(36))
     expansion = db.Column(db.Integer, primary_key=True)
     rarity = db.Column(db.Enum(Rarity))
     card_number = db.Column(db.String(10))
     is_anomaly = db.Column(db.Boolean, default=False)
+    front_image = db.Column(db.String(100))
     card_title = association_proxy("card", "card_title")
     card_type = association_proxy("card", "card_type")
-    front_image = association_proxy("card", "front_image")
     card_text = association_proxy("card", "card_text")
     traits = association_proxy("card", "traits")
     amber = association_proxy("card", "amber")
@@ -392,6 +394,11 @@ class CardInDeck(db.Model):
         index=True,
     )
     platonic_card = db.relationship("PlatonicCard")
+    card_in_set_id = db.Column(
+        db.Integer,
+        db.ForeignKey(PlatonicCardInSet.__table__.c.id),
+    )
+    card_in_set = db.relationship("PlatonicCardInSet")
     deck_id = db.Column(
         db.Integer,
         db.ForeignKey(Deck.__table__.c.id),
@@ -407,7 +414,6 @@ class CardInDeck(db.Model):
     enhanced_discard = db.Column(db.Integer, default=0)
     card_title = association_proxy("platonic_card", "card_title")
     card_type = association_proxy("platonic_card", "card_type")
-    front_image = association_proxy("platonic_card", "front_image")
     card_text = association_proxy("platonic_card", "card_text")
     traits = association_proxy("platonic_card", "traits")
     amber = association_proxy("platonic_card", "amber")
@@ -416,10 +422,19 @@ class CardInDeck(db.Model):
     flavor_text = association_proxy("platonic_card", "flavor_text")
     is_non_deck = association_proxy("platonic_card", "is_non_deck")
     natural_house = association_proxy("platonic_card", "house")
+    card_kf_id = association_proxy("card_in_set", "card_kf_id")
+    front_image = association_proxy("card_in_set", "front_image")
+    expansion = association_proxy("card_in_set", "expansion")
+    rarity = association_proxy("card_in_set", "rarity")
+    card_number = association_proxy("card_in_set", "card_number")
+    is_anomaly = association_proxy("card_in_set", "is_anomaly")
 
     @hybrid_property
     def is_maverick(self):
-        return self.house != self.natural_house
+        return (
+            self.house != self.natural_house
+            and not self.is_anomaly
+        )
 
     def __repr__(self) -> str:
         return (
