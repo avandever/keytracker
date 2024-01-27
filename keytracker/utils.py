@@ -702,20 +702,20 @@ def populate_enhanced_cards(
     deck: Deck,
     cards: List[Card],
     enhancements: List[Enhancements],
-    platonic_card_cache=None,
+    add_decks_cache=None,
 ) -> None:
     deck.cards_from_assoc.clear()
-    platonic_card_cache = platonic_card_cache or {}
+    add_decks_cache = platonic_card_cache or {}
     for card in cards:
-        platonic_card = platonic_card_cache.get(card.card_title)
+        platonic_card = add_decks_cache.get(card.card_title)
         if platonic_card is None:
             platonic_card = PlatonicCard.query.filter_by(
                 card_title=card.card_title
             ).first()
-            platonic_card_cache[card.card_title] = platonic_card
+            add_decks_cache[card.card_title] = platonic_card
         if platonic_card is None:
             platonic_card = create_platonic_card(card)
-            platonic_card_cache[card.card_title] = platonic_card
+            add_decks_cache[card.card_title] = platonic_card
         card_in_deck = CardInDeck(
             platonic_card=platonic_card,
             deck=deck,
@@ -886,7 +886,7 @@ async def get_decks_from_page(page: int) -> Iterable[str]:
     return [deck["id"] for deck in data["data"]]
 
 
-def get_decks_from_page_v2(page: int, reverse: bool) -> int:
+def get_decks_from_page_v2(page: int, reverse: bool, add_decks_cache=None) -> int:
     params = SEARCH_PARAMS.copy()
     params["page"] = page
     params["links"] = "cards"
@@ -915,11 +915,13 @@ def get_decks_from_page_v2(page: int, reverse: bool) -> int:
     card_details = {c["id"]: c for c in cards}
     new_decks = 0
     for deck_json in decks:
-        new_decks += add_one_deck_v2(deck_json, card_details)
+        if deck_json["id"] not in add_decks_cache["seen_deck_ids"]:
+            new_decks += add_one_deck_v2(deck_json, card_details, add_decks_cache)
+            add_decks_cache["seen_deck_ids"].add(deck_json["id"])
     return new_decks
 
 
-def add_one_deck_v2(deck_json, card_details) -> int:
+def add_one_deck_v2(deck_json, card_details, add_decks_cache=None) -> int:
     deck = Deck.query.filter_by(kf_id=deck_json["id"]).first()
     new_deck = False
     if deck is None:
@@ -942,7 +944,7 @@ def add_one_deck_v2(deck_json, card_details) -> int:
         else:
             current_app.logger.debug(f"Clearing and re-adding cards for {deck_str}")
             deck.cards_from_assoc.clear()
-            add_cards_v2_new(deck, deck_card_ids, card_details, bonus_icons)
+            add_cards_v2_new(deck, deck_card_ids, card_details, bonus_icons, add_decks_cache)
     db.session.commit()
     return 1 if new_deck else 0
 
@@ -959,6 +961,7 @@ def are_cards_okay(
             if card_id == card.card_kf_id:
                 break
         else:
+            current_app.logger.debug(f"Did not find card {card_id} in db deck")
             return False
         cards.remove(card)
         card_json = card_details[card_id]
@@ -1026,16 +1029,23 @@ def add_cards_v2_new(
     deck_card_ids: List[str],
     card_details,
     bonus_icons,
+    add_decks_cache=None,
 ) -> None:
+    if add_decks_cache is None:
+        add_decks_cache = defaultdict(dict)
     for card_id in deck_card_ids:
         card_json = card_details[card_id]
-        pcis = PlatonicCardInSet.query.filter_by(card_kf_id=card_id).first()
+        pcis = add_decks_cache["card_in_set"].get(card_id)
+        if pcis is None:
+            pcis = PlatonicCardInSet.query.filter_by(card_kf_id=card_id).first()
         if pcis is None:
             current_app.logger.info(
                 f"Creating new card in set: {card_json['expansion']}:{card_json['card_title']}"
                 f":{card_json['house']}:{card_json['id']}"
             )
-            pc = PlatonicCard.query.filter_by(card_title=card_json["card_title"]).first()
+            pc = add_decks_cache["platonic_card"].get(card_json["card_title"])
+            if pc is None:
+                pc = PlatonicCard.query.filter_by(card_title=card_json["card_title"]).first()
             if pc is None:
                 current_app.logger.info(
                     f"Creating new platonic card: {card_json['card_title']}"
@@ -1052,6 +1062,8 @@ def add_cards_v2_new(
             db.session.add(pcis)
         else:
             pc = pcis.card
+        add_decks_cache["card_in_set"]["card_id"] = pcis
+        add_decks_cache["platonic_card"][card_json["card_title"]] = pc
         update_platonic_info(pc, pcis, card_json)
         card = CardInDeck(
             platonic_card=pc,

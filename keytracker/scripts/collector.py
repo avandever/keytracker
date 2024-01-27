@@ -120,6 +120,11 @@ def get_v2(
     page_one_interval: int,
 ) -> None:
     logging.debug("Starting collector")
+    add_decks_cache = {
+        "seen_deck_ids": set(),
+        "card_in_set": {},
+        "platonic_card": {},
+    }
     end_page = start_page + max_pages
     start_time = time.time()
     last_page_one_run = 0
@@ -128,7 +133,7 @@ def get_v2(
     for page in range(start_page, end_page):
         now = time.time()
         if page_one_interval and now - last_page_one_run > page_one_interval:
-            pages_done += get_page_one_v2(seconds_per_request)
+            pages_done += get_page_one_v2(seconds_per_request, add_decks_cache)
             now = time.time()
         delta = now - last_run
         if delta < seconds_per_request:
@@ -142,11 +147,15 @@ def get_v2(
             f"1 page per {(last_run - start_time) / (pages_done or 1)} seconds."
         )
         with current_app.app_context():
-            get_decks_from_page_v2(page, reverse=reverse)
+            get_decks_from_page_v2(
+                page,
+                reverse=reverse,
+                add_decks_cache=add_decks_cache,
+            )
         pages_done += 1
 
 
-def get_page_one_v2(seconds_per_request: int) -> int:
+def get_page_one_v2(seconds_per_request: int, add_decks_cache=None) -> int:
     last_run = 0
     run_count = 0
     new_deck_count = -1
@@ -161,7 +170,11 @@ def get_page_one_v2(seconds_per_request: int) -> int:
             time.sleep(to_sleep)
         last_run = time.time()
         with current_app.app_context():
-            new_deck_count = get_decks_from_page_v2(1, reverse=False)
+            new_deck_count = get_decks_from_page_v2(
+                1,
+                reverse=False,
+                add_decks_cache=add_decks_cache,
+            )
         logging.debug(f"Found {new_deck_count} new decks on page {page}")
         run_count += 1
     return run_count
