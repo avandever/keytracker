@@ -110,23 +110,29 @@ async def get_card_image(
 @click.option("--start-page", type=int, default=1)
 @click.option("--max-pages", type=int, default=1)
 @click.option("--reverse/--no-reverse", default=False)
-@click.option("--interval", type=int, default=10)
+@click.option("--seconds-per-request", type=int, default=10)
+@click.option("-i", "--page-one-interval", type=int, default=0)
 def get_v2(
     start_page: int,
     max_pages: int,
     reverse: bool,
-    interval: int,
+    seconds_per_request: int,
+    page_one_interval: int,
 ) -> None:
     logging.debug("Starting collector")
     end_page = start_page + max_pages
     start_time = time.time()
+    last_page_one_run = 0
     pages_done = 0
     last_run = 0
     for page in range(start_page, end_page):
         now = time.time()
+        if page_one_interval and now - last_page_one_run > page_one_interval:
+            pages_done += get_page_one_v2(seconds_per_request)
+            now = time.time()
         delta = now - last_run
-        if delta < interval:
-            to_sleep = interval - delta
+        if delta < seconds_per_request:
+            to_sleep = seconds_per_request - delta
             logging.debug(f"Sleeping {to_sleep}")
             time.sleep(to_sleep)
         last_run = time.time()
@@ -138,6 +144,27 @@ def get_v2(
         with current_app.app_context():
             get_decks_from_page_v2(page, reverse=reverse)
         pages_done += 1
+
+
+def get_page_one_v2(seconds_per_request: int) -> int:
+    last_run = 0
+    run_count = 0
+    new_deck_count = -1
+    page = 0
+    while new_deck_count == -1 or new_deck_count > 20:
+        page += 1
+        now = time.time()
+        delta = now - last_run
+        if delta < seconds_per_request:
+            to_sleep = seconds_per_request - delta
+            logging.debug(f"Sleeping {to_sleep}")
+            time.sleep(to_sleep)
+        last_run = time.time()
+        with current_app.app_context():
+            new_deck_count = get_decks_from_page_v2(1, reverse=False)
+        logging.debug(f"Found {new_deck_count} new decks on page {page}")
+        run_count += 1
+    return run_count
 
 
 @collector.command("get")

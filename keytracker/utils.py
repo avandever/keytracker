@@ -886,7 +886,7 @@ async def get_decks_from_page(page: int) -> Iterable[str]:
     return [deck["id"] for deck in data["data"]]
 
 
-def get_decks_from_page_v2(page: int, reverse: bool) -> None:
+def get_decks_from_page_v2(page: int, reverse: bool) -> int:
     params = SEARCH_PARAMS.copy()
     params["page"] = page
     params["links"] = "cards"
@@ -913,11 +913,13 @@ def get_decks_from_page_v2(page: int, reverse: bool) -> None:
     decks = data["data"]
     cards = data["_linked"]["cards"]
     card_details = {c["id"]: c for c in cards}
+    new_decks = 0
     for deck_json in decks:
-        add_one_deck_v2(deck_json, card_details)
+        new_decks += add_one_deck_v2(deck_json, card_details)
+    return new_decks
 
 
-def add_one_deck_v2(deck_json, card_details) -> None:
+def add_one_deck_v2(deck_json, card_details) -> int:
     deck = Deck.query.filter_by(kf_id=deck_json["id"]).first()
     new_deck = False
     if deck is None:
@@ -942,6 +944,7 @@ def add_one_deck_v2(deck_json, card_details) -> None:
             deck.cards_from_assoc.clear()
             add_cards_v2_new(deck, deck_card_ids, card_details, bonus_icons)
     db.session.commit()
+    return 1 if new_deck else 0
 
 
 def are_cards_okay(
@@ -965,8 +968,8 @@ def are_cards_okay(
             or card.front_image != card_json["front_image"]
             or card.card_text != card_json["card_text"]
             or card.amber != int(card_json["amber"])
-            or card.power != int(0 if card_json["power"] == "X" else card_json["power"])
-            or card.armor != int(0 if card_json["armor"] == "X" else card_json["armor"])
+            or card.power != int(0 if card_json["power"] in ("X", None) else card_json["power"])
+            or card.armor != int(0 if card_json["armor"] in ("X", None) else card_json["armor"])
             or card.flavor_text != card_json["flavor_text"]
             or card.card_number != card_json["card_number"]
             or card.expansion != card_json["expansion"]
@@ -1109,8 +1112,8 @@ def update_platonic_info(
     platonic_card.front_image = card_json["front_image"]
     platonic_card.card_text = card_json["card_text"]
     platonic_card.amber = int(card_json["amber"])
-    platonic_card.power = int(0 if card_json["power"] == "X" else card_json["power"])
-    platonic_card.armor = int(0 if card_json["armor"] == "X" else card_json["armor"])
+    platonic_card.power = int(0 if card_json["power"] in ("X", None) else card_json["power"])
+    platonic_card.armor = int(0 if card_json["armor"] in ("X", None) else card_json["armor"])
     platonic_card.flavor_text = card_json["flavor_text"]
     platonic_card.house = house_str_to_enum[card_json["house"]]
     platonic_card.is_non_deck = card_json["is_non_deck"]
