@@ -965,6 +965,8 @@ def are_cards_okay(
             return False
         cards.remove(card)
         card_json = card_details[card_id]
+        if card_json["card_type"] == "Creature1":
+            card_json["card_type"] == "Creature"
         # Check straight strings
         if (
             card.card_title != card_json["card_title"]
@@ -1035,6 +1037,8 @@ def add_cards_v2_new(
         add_decks_cache = defaultdict(dict)
     for card_id in deck_card_ids:
         card_json = card_details[card_id]
+        if card_json["card_type"] == "Creature1":
+            card_json["card_type"] == "Creature"
         pcis = add_decks_cache["card_in_set"].get(card_id)
         if pcis is None:
             pcis = PlatonicCardInSet.query.filter_by(card_kf_id=card_id).first()
