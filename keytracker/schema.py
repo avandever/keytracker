@@ -55,6 +55,7 @@ class House(enum.Enum):
     UNTAMED = "Untamed"
     THETIDE = "The Tide"
     GEISTOID = "Geistoid"
+    KEYRAKEN = "Keyraken"
 
 
 house_str_to_enum = {h.value: h for h in House.__members__.values()}
