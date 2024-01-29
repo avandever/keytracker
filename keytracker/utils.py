@@ -1131,7 +1131,14 @@ def update_platonic_info(
     platonic_card.power = int(0 if card_json["power"] in ("X", None) else card_json["power"])
     platonic_card.armor = int(0 if card_json["armor"] in ("X", None) else card_json["armor"])
     platonic_card.flavor_text = card_json["flavor_text"]
-    platonic_card.house = house_str_to_enum[card_json["house"]]
+    # Don't set platonic card house for mavericks, anomalies, or revenants
+    if not any([
+        card_json["is_maverick"],
+        card_json["is_anomaly"],
+        card_json["card_number"].startswith("R"),
+        card_json["card_title"] in ("It's Coming...", "Dark Æmber Vault"),
+    ]):
+        platonic_card.house = house_str_to_enum[card_json["house"]]
     platonic_card.is_non_deck = card_json["is_non_deck"]
     # Double-check that card in set info is right
     card_in_set.expansion = card_json["expansion"]
