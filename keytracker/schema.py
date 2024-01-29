@@ -56,6 +56,9 @@ class House(enum.Enum):
     THETIDE = "The Tide"
     GEISTOID = "Geistoid"
     KEYRAKEN = "Keyraken"
+    # Special marker for platonic cards that don't have a house to call home, e.g.
+    # anomalies, revenants, DAV, and It's Coming
+    NONE = "No House"
 
 
 house_str_to_enum = {h.value: h for h in House.__members__.values()}
