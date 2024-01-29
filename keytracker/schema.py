@@ -356,6 +356,12 @@ class PlatonicCardInSet(db.Model):
     card_number = db.Column(db.String(10))
     is_anomaly = db.Column(db.Boolean, default=False)
     front_image = db.Column(db.String(100))
+    # Every PlatonicCardInSet is either maverick or not, so actually it makes sense to
+    # record house here. It can eventually be dropped from CardInDeck.
+    house = db.Column(db.Enum(House))
+    is_maverick = db.Column(db.Boolean, default=False)
+    # And enhanced vs. non-enhanced are also different ids
+    is_enhanced = db.Column(db.Boolean, default=False)
     card_title = association_proxy("card", "card_title")
     card_type = association_proxy("card", "card_type")
     card_text = association_proxy("card", "card_text")
@@ -364,7 +370,6 @@ class PlatonicCardInSet(db.Model):
     power = association_proxy("card", "power")
     armor = association_proxy("card", "armor")
     flavor_text = association_proxy("card", "flavor_text")
-    house = association_proxy("card", "house")
     is_non_deck = association_proxy("card", "is_non_deck")
 
     def __repr__(self) -> str:
@@ -409,7 +414,9 @@ class CardInDeck(db.Model):
         index=True,
     )
     deck = db.relationship("Deck", back_populates="cards_from_assoc")
+    # TODO: replace with association proxy to card_in_set
     house = db.Column(db.Enum(House))
+    # TODO: replace with association proxy to card_in_set
     is_enhanced = db.Column(db.Boolean, default=False)
     enhanced_amber = db.Column(db.Integer, default=0)
     enhanced_capture = db.Column(db.Integer, default=0)
@@ -433,6 +440,7 @@ class CardInDeck(db.Model):
     card_number = association_proxy("card_in_set", "card_number")
     is_anomaly = association_proxy("card_in_set", "is_anomaly")
 
+    # TODO: replace with association proxy to card_in_set
     @hybrid_property
     def is_maverick(self):
         return (
