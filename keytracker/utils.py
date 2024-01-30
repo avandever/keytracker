@@ -913,16 +913,18 @@ def get_decks_from_page_v2(page: int, reverse: bool, add_decks_cache=None) -> in
     decks = data["data"]
     cards = data["_linked"]["cards"]
     card_details = {c["id"]: c for c in cards}
-    new_decks = 0
+    existing_decks = Deck.query.filter(Deck.kf_id.in_([d["id"] for d in decks])).all()
+    id_to_existing_deck = {deck.kf_id: deck for deck in existing_decks}
+    new_decks = len(decks) - len(existing_decks)
     for deck_json in decks:
         if deck_json["id"] not in add_decks_cache["seen_deck_ids"]:
-            new_decks += add_one_deck_v2(deck_json, card_details, add_decks_cache)
+            existing_deck = id_to_existing_deck.get(deck_json["id"])
+            add_one_deck_v2(deck_json, card_details, add_decks_cache, existing_deck)
             add_decks_cache["seen_deck_ids"].add(deck_json["id"])
     return new_decks
 
 
-def add_one_deck_v2(deck_json, card_details, add_decks_cache=None) -> int:
-    deck = Deck.query.filter_by(kf_id=deck_json["id"]).first()
+def add_one_deck_v2(deck_json, card_details, add_decks_cache=None, deck: Deck = None) -> int:
     new_deck = False
     if deck is None:
         deck = Deck(kf_id=deck_json["id"])

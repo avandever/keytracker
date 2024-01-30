@@ -5,8 +5,9 @@ from flask.cli import AppGroup
 import asyncio
 from keytracker.schema import (
     db,
-    PlatonicCard,
     Deck,
+    house_str_to_enum,
+    PlatonicCard,
 )
 from aiohttp_requests import requests as arequests
 import click_log
@@ -35,16 +36,21 @@ click_log.basic_config()
 @click_log.simple_verbosity_option()
 @click.option("--image-dir", default="keyforge-images")
 @click.option("--group-by", default="expansion,house,rarity,card_type")
-def get_images(image_dir: str, group_by: str) -> None:
+@click.option("--only-house", default=None, type=click.Choice(house_str_to_enum.keys()))
+def get_images(image_dir: str, group_by: str, only_house: str = None) -> None:
     asyncio.run(_get_images(
         image_dir,
-        group_by=group_by.split(",")
+        group_by=None if group_by == "" else group_by.split(","),
+        only_house=only_house,
     ))
 
 
-async def _get_images(image_dir: str, group_by: List[str] = None) -> None:
+async def _get_images(image_dir: str, group_by: List[str] = None, only_house: str = None) -> None:
     with current_app.app_context():
-        all_cards = PlatonicCard.query.all()
+        pcq = PlatonicCard.query
+        if only_house:
+            pcq = pcq.filter_by(house=house_str_to_enum[only_house])
+        all_cards = pcq.all()
         for card in all_cards:
             await get_card_image(
                 card,
@@ -59,7 +65,7 @@ def build_image_dirs(
     group_by: List[str] = None,
 ) -> List[str]:
     if group_by is None:
-        return base_dir
+        return [base_dir]
     if "expansion" in group_by:
         expansions = card.expansions
     else:
@@ -171,7 +177,7 @@ def get_page_one_v2(seconds_per_request: int, add_decks_cache=None) -> int:
         last_run = time.time()
         with current_app.app_context():
             new_deck_count = get_decks_from_page_v2(
-                1,
+                page,
                 reverse=False,
                 add_decks_cache=add_decks_cache,
             )
