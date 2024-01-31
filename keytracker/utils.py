@@ -1039,6 +1039,8 @@ def add_cards_v2_new(
         add_decks_cache = defaultdict(dict)
     for card_id in deck_card_ids:
         card_json = card_details[card_id]
+        if card_json["card_title"] == "Archon's Callback":
+            card_json["card_title"] = "Archon’s Callback"
         if card_json["card_type"] == "Creature1":
             card_json["card_type"] = "Creature"
         pcis = add_decks_cache["card_in_set"].get(card_id)
@@ -1137,8 +1139,25 @@ def update_platonic_info(
     if not any([
         card_json["is_maverick"],
         card_json["is_anomaly"],
+        # This actuall should cover all revenants
         card_json["card_number"].startswith("R"),
-        card_json["card_title"] in ("It's Coming...", "Dark Æmber Vault"),
+        card_json["card_title"] in (
+            # Special cards from MM
+            "It’s Coming...",
+            "Dark Æmber Vault",
+            # Revenants
+            "Ghostly Dr. Verokter",
+            "Portalmonster",
+            "Revived Ză-Orhă",
+            "Xenos Darkshadow",
+            "Immortal Greking",
+            "Duma the Returned",
+            "Spectral Ruth",
+            "Qyxxlyxx Grave Master",
+            "Cincinnatus Resurrexit",
+            "Phantom Drummernaut",
+            "Encounter Golem",
+        ),
     ]):
         platonic_card.house = house_str_to_enum[card_json["house"]]
     platonic_card.is_non_deck = card_json["is_non_deck"]
