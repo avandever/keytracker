@@ -1043,6 +1043,9 @@ def add_cards_v2_new(
             card_json["card_title"] = "Archon’s Callback"
         if card_json["card_type"] == "Creature1":
             card_json["card_type"] = "Creature"
+        # Tack "Evil" onto the beginning of the card title for evil twin cards
+        if card_json["rarity"] == "Evil Twin":
+            card_json["card_title"] = "Evil " + card_json["card_title"]
         pcis = add_decks_cache["card_in_set"].get(card_id)
         if pcis is None:
             pcis = PlatonicCardInSet.query.filter_by(card_kf_id=card_id).first()
