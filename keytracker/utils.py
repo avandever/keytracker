@@ -357,6 +357,7 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
     deck_url = os.path.join(MV_API_BASE, "v2", deck.kf_id)
+    current_app.logger.debug(f"mv url: {deck_url}")
     response = mv_api.callMVSync(
         deck_url,
         params={"links": "cards,notes"},
