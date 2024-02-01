@@ -359,9 +359,11 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     deck_url = os.path.join(MV_API_BASE, "v2", deck.kf_id)
     response = mv_api.callMVSync(
         deck_url,
-        params={"links": "cards, notes"},
+        params={"links": "cards,notes"},
     )
     all_data = response.json()
+    if "data" not in all_data:
+        current_app.logger.debug(f"all_data: {all_data}")
     data = all_data["data"]
     card_json = all_data["_linked"]["cards"]
     card_details = {c["id"]: c for c in card_json}
