@@ -364,7 +364,8 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     all_data = response.json()
     data = all_data["data"]
     card_json = all_data["_linked"]["cards"]
-    add_one_deck_v2(data, card_json, deck=deck)
+    card_details = {c["id"]: c for c in card_json}
+    add_one_deck_v2(data, card_details, deck=deck)
 
 
 def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
