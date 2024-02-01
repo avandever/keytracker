@@ -356,44 +356,15 @@ def loop_loading_missed_sas(batch_size: int, max_set_id: int = 700) -> None:
 def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
-    deck_url = os.path.join(MV_API_BASE, deck.kf_id)
+    deck_url = os.path.join(MV_API_BASE, "v2", deck.kf_id)
     response = mv_api.callMVSync(
         deck_url,
         params={"links": "cards, notes"},
-        headers={"X-Forwarded-For": randip()},
     )
     all_data = response.json()
     data = all_data["data"]
-    deck.name = data["name"]
-    deck.expansion = data["expansion"]
-    card_data_by_id = {c["id"]: c for c in all_data["_linked"]["cards"]}
-    cards = []
-    for card_id in data["_links"]["cards"]:
-        card = card_cache.get(card_id)
-        if card is None:
-            card = Card.query.filter_by(kf_id=card_id).first()
-            card_cache[card_id] = card
-        if card is None:
-            card_dict = card_data_by_id[card_id].copy()
-            current_app.logger.debug(f"Adding card {card_dict['card_title']}")
-            card_dict.pop("id")
-            card_dict["kf_id"] = card_id
-            card = Card(**card_dict)
-            db.session.add(card)
-            db.session.commit()
-            db.session.refresh(card)
-            card_cache[card_id] = card
-        cards.append(card)
-    bonus_icons = all_data["data"]["bonus_icons"]
-    kf_id_to_card = {card.kf_id: card for card in cards}
-    enhancements_list = []
-    for spec in bonus_icons:
-        card = kf_id_to_card[spec["card_id"]]
-        icons = Counter(spec["bonus_icons"])
-        enhancements = Enhancements(card=card, deck=deck, **icons)
-        enhancements_list.append(enhancements)
-    populate_enhanced_cards(deck, cards, enhancements_list)
-    db.session.commit()
+    card_json = all_data["_linked"]["cards"]
+    add_one_deck_v2(data, card_json, deck=deck)
 
 
 def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
@@ -696,49 +667,6 @@ def create_platonic_card(card: Card) -> PlatonicCard:
         )
     db.session.add(pc_in_set)
     return platonic_card
-
-
-def populate_enhanced_cards(
-    deck: Deck,
-    cards: List[Card],
-    enhancements: List[Enhancements],
-    add_decks_cache=None,
-) -> None:
-    deck.cards_from_assoc.clear()
-    add_decks_cache = platonic_card_cache or {}
-    for card in cards:
-        platonic_card = add_decks_cache.get(card.card_title)
-        if platonic_card is None:
-            platonic_card = PlatonicCard.query.filter_by(
-                card_title=card.card_title
-            ).first()
-            add_decks_cache[card.card_title] = platonic_card
-        if platonic_card is None:
-            platonic_card = create_platonic_card(card)
-            add_decks_cache[card.card_title] = platonic_card
-        card_in_deck = CardInDeck(
-            platonic_card=platonic_card,
-            deck=deck,
-            house=house_str_to_enum[card.house],
-            is_enhanced=card.is_enhanced,
-        )
-        db.session.add(card_in_deck)
-        if card_in_deck.is_enhanced:
-            current_app.logger.debug(f"Trying to enhance {card_in_deck}, {card.id}")
-            for (idx, bling) in enumerate(enhancements):
-                current_app.logger.debug(f"Checking enhancement {bling.card_id}")
-                if bling.card.id == card.id:
-                    card_in_deck.enhanced_amber = bling.amber
-                    card_in_deck.enhanced_capture = bling.capture
-                    card_in_deck.enhanced_draw = bling.draw
-                    card_in_deck.enhanced_damage = bling.damage
-                    enhancements.pop(idx)
-                    break
-            else:
-                raise MissingEnhancements(
-                    f"Could not successfully pair enhancements in {deck.id}"
-                )
-    db.session.commit()
 
 
 def retry_anything_once(func):
