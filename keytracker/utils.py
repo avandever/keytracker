@@ -815,7 +815,12 @@ async def get_decks_from_page(page: int) -> Iterable[str]:
     return [deck["id"] for deck in data["data"]]
 
 
-def get_decks_from_page_v2(page: int, reverse: bool, add_decks_cache=None) -> int:
+def dump_page_json_to_file(
+    page: int,
+    reverse: bool,
+    dest: str,
+    tries: int = 5,
+) -> None:
     params = SEARCH_PARAMS.copy()
     params["page"] = page
     params["links"] = "cards"
@@ -824,21 +829,89 @@ def get_decks_from_page_v2(page: int, reverse: bool, add_decks_cache=None) -> in
     else:
         params["ordering"] = "-date"
     api_base = os.path.join(MV_API_BASE, "v2/")
-    response = mv_api.callMVSync(api_base, params=params)
-    try:
-        data = response.json()
-    except (json.decoder.JSONDecodeError, ContentTypeError):
-        current_app.logger.error(f"raw response: {response}")
-        raise
-    if "code" in data:
-        if data["code"] == 429:
-            raise RequestThrottled(data["message"] + data["detail"])
-        # "Internal Server Error" - means page does not exist
-        elif data["code"] == 0:
-            raise InternalServerError(data["message"] + data["detail"])
+    response = mv_api.callMVSync(
+        api_base,
+        params=params,
+        headers={"X-Forwarded-For": randip()},
+    )
+    finished = False
+    while tries and not finished:
+        tries -= 1
+        try:
+            data = response.json()
+        except (json.decoder.JSONDecodeError, ContentTypeError):
+            current_app.logger.error(f"raw response: {response}")
+            if tries:
+                time.sleep(random.choice(range(20, 40)))
+                continue
+            else:
+                raise
+        if "code" in data:
+            if tries:
+                current_app.logger.error(f"Got error, retrying: {data['message'] + data['detail']}")
+                time.sleep(random.choice(range(20, 40)))
+                continue
+            if data["code"] == 429:
+                raise RequestThrottled(data["message"] + data["detail"])
+            # "Internal Server Error" - means page does not exist
+            elif data["code"] == 0:
+                raise InternalServerError(data["message"] + data["detail"])
+            else:
+                current_app.logger.error(f"Unrecognized json response {data}")
+                raise Exception()
         else:
-            current_app.logger.error(f"Unrecognized json response {data}")
-            raise Exception()
+            finished = True
+    with open(os.path.join(dest, f"{page}.json"), "w") as fh:
+        json.dump(data, fh)
+
+
+
+def get_decks_from_page_v2(
+    page: int,
+    reverse: bool,
+    add_decks_cache=None,
+    tries: int = 5,
+) -> int:
+    params = SEARCH_PARAMS.copy()
+    params["page"] = page
+    params["links"] = "cards"
+    if reverse:
+        params["ordering"] = "date"
+    else:
+        params["ordering"] = "-date"
+    api_base = os.path.join(MV_API_BASE, "v2/")
+    response = mv_api.callMVSync(
+        api_base,
+        params=params,
+        headers={"X-Forwarded-For": randip()},
+    )
+    finished = False
+    while tries and not finished:
+        tries -= 1
+        try:
+            data = response.json()
+        except (json.decoder.JSONDecodeError, ContentTypeError):
+            current_app.logger.error(f"raw response: {response}")
+            if tries:
+                time.sleep(random.choice(range(20, 40)))
+                continue
+            else:
+                raise
+        if "code" in data:
+            if tries:
+                current_app.logger.error(f"Got error, retrying: {data['message'] + data['detail']}")
+                time.sleep(random.choice(range(20, 40)))
+                continue
+            if data["code"] == 429:
+                raise RequestThrottled(data["message"] + data["detail"])
+            # "Internal Server Error" - means page does not exist
+            elif data["code"] == 0:
+                raise InternalServerError(data["message"] + data["detail"])
+            else:
+                current_app.logger.error(f"Unrecognized json response {data}")
+                raise Exception()
+        else:
+            finished = True
     decks = data["data"]
     cards = data["_linked"]["cards"]
     card_details = {c["id"]: c for c in cards}

@@ -5,6 +5,7 @@ from flask.cli import AppGroup
 import asyncio
 from keytracker.schema import (
     db,
+    CardInDeck,
     Deck,
     house_str_to_enum,
     PlatonicCard,
@@ -14,9 +15,11 @@ import click_log
 from asyncio import create_task, Lock, Queue, Task
 from typing import Iterable, List, Set
 from keytracker.utils import (
+    add_one_deck_v2,
     get_decks_from_page,
     get_decks_from_page_v2,
     get_deck_by_id_with_zeal,
+    dump_page_json_to_file,
     InternalServerError,
     RequestThrottled,
 )
@@ -25,6 +28,7 @@ import os
 import json
 import logging
 import shutil
+from sqlalchemy.orm import joinedload
 
 
 collector = AppGroup("collector")
@@ -109,6 +113,91 @@ async def get_card_image(
         if not os.path.exists(group_by_link):
             os.makedirs(os.path.dirname(group_by_link), exist_ok=True)
             shutil.copy(output_file, group_by_link)
+
+
+@collector.command("get_to_file")
+@click_log.simple_verbosity_option()
+@click.argument("dest", type=str)
+@click.option("--range", "ranges", type=str, multiple=True)
+@click.option("--reverse/--no-reverse", default=False)
+@click.option("--seconds-per-request", type=int, default=10)
+def get_to_file(
+    dest: str,
+    ranges: List[str],
+    reverse: bool,
+    seconds_per_request: int,
+) -> None:
+    logging.debug(f"Starting scraper, dumping to files in {dest}")
+    last_run = 0
+    pages_done = 0
+    start_time = time.time()
+    for page_range in ranges:
+        start, end = page_range.split(",")
+        for page in range(int(start), int(end)):
+            now = time.time()
+            delta = now - last_run
+            if delta < seconds_per_request:
+                to_sleep = seconds_per_request - delta
+                logging.debug(f"Sleeping {to_sleep}")
+                time.sleep(to_sleep)
+            last_run = time.time()
+            logging.debug(
+                f"Getting page {page}. Current range ends at {end}, reverse={reverse}. "
+                f"{pages_done} pages done in {last_run - start_time} seconds. "
+                f"1 page per {(last_run - start_time) / (pages_done or 1)} seconds."
+            )
+            with current_app.app_context():
+                dump_page_json_to_file(
+                    page,
+                    reverse,
+                    dest,
+                )
+                pages_done += 1
+
+
+@collector.command("load-decks-from-dir")
+@click_log.simple_verbosity_option()
+@click.argument("source", type=str)
+@click.option("-m", "--max-files", type=int, default=0)
+def load_decks_from_dir(source: str, max_files: int = 0) -> None:
+    done_count = 0
+    with current_app.app_context():
+        add_decks_cache = {
+            "seen_deck_ids": set(),
+            "card_in_set": {},
+            "platonic_card": {},
+        }
+        while max_files == 0 or done_count < max_files:
+            filenames = sorted(os.listdir(source), key=lambda x: int(x.split(".")[0]))
+            if not filenames:
+                logging.debug(f"No files found in {source}. Sleep and try again.")
+                time.sleep(20)
+                continue
+            path = os.path.join(source, filenames[0])
+            logging.info(f"Loading {path}")
+            with open(os.path.join(source, path), "r") as fh:
+                data = json.load(fh)
+            decks = data["data"]
+            cards = data["_linked"]["cards"]
+            card_details = {c["id"]: c for c in cards}
+            existing_decks_query = (
+                Deck.query
+                .options(
+                    joinedload(Deck.cards_from_assoc)
+                    .subqueryload(CardInDeck.card_in_set),
+                    joinedload(Deck.cards_from_assoc)
+                    .subqueryload(CardInDeck.platonic_card),
+                )
+                .filter(Deck.kf_id.in_([d["id"] for d in decks]))
+            )
+            existing_decks = existing_decks_query.all()
+            id_to_existing_deck = {deck.kf_id: deck for deck in existing_decks}
+            # new_decks = len(decks) - len(existing_decks)
+            for deck_json in decks:
+                existing_deck = id_to_existing_deck.get(deck_json["id"])
+                add_one_deck_v2(deck_json, card_details, add_decks_cache, deck=existing_deck)
+        os.remove(path)
+        done_count += 1
 
 
 @collector.command("get_v2")
