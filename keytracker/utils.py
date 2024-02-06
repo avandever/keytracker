@@ -2,6 +2,7 @@ from collections import Counter, defaultdict
 import configparser
 import copy
 import datetime
+import difflib
 from keytracker.schema import (
     db,
     Card,
@@ -989,16 +990,16 @@ def are_cards_okay(
         ):
             current_app.logger.debug("Found mismatch in simple strings")
             if card.card_title != card_json["card_title"]:
-                current_app.logger.debug(f"card_title: {card.card_title} vs {card_json['card_title']}")
+                current_app.logger.debug(f"card_title: {diff_strings(card.card_title, card_json['card_title'])}")
             if card.front_image != card_json["front_image"]:
-                current_app.logger.debug(f"front_image: {card.front_image} vs {card_json['front_image']}")
+                current_app.logger.debug(f"front_image: {diff_strings(card.front_image, card_json['front_image'])}")
             if card.card_text != card_json["card_text"]:
-                current_app.logger.debug(f"card_text: {card.card_text} vs {card_json['card_text']}")
+                current_app.logger.debug(f"card_text: {diff_strings(card.card_text, card_json['card_text'])}")
             if card.amber != card_json["amber"]:
                 current_app.logger.debug(f"amber: {card.amber} vs {card_json['amber']}")
-            if card.power != card_json["power"]:
+            if card.power != normalize_stat(card_json["power"]):
                 current_app.logger.debug(f"power: {card.power} vs {card_json['power']}")
-            if card.armor != card_json["armor"]:
+            if card.armor != normalize_stat(card_json["armor"]):
                 current_app.logger.debug(f"armor: {card.armor} vs {card_json['armor']}")
             if card.flavor_text != card_json["flavor_text"]:
                 current_app.logger.debug(f"flavor_text: {card.flavor_text} vs {card_json['flavor_text']}")
@@ -1028,6 +1029,18 @@ def are_cards_okay(
             current_app.logger.debug("Found mismatch in traits")
             return False
         return True
+
+
+def diff_strings(a: str, b: str) -> str:
+    msg =[f"{a} => {b}"]
+    for i, s in enumerate(difflib.ndiff(a, b)):
+        if s[0] == " ":
+            continue
+        elif s[0] == "0":
+            msg.append(f"Delete \"{s[-1]}\" from position {i}")
+        elif s[0] == "+":
+            msg.append(f"Add \"{s[-1]}\" to position {i}")
+    return "\n".join(msg)
 
 
 def add_cards_v2_new(
@@ -1112,6 +1125,13 @@ def add_cards_v2_new(
             else:
                 raise MissingEnhancements(f"Could not pair enhancements in {deck.kf_id}")
         db.session.commit()
+
+
+def normalize_stat(stat: Optional[str]) -> int:
+    if stat in ("X", None):
+        return 0
+    else:
+        return int(stat)
             
 
 def update_platonic_info(
@@ -1137,8 +1157,8 @@ def update_platonic_info(
     platonic_card.front_image = card_json["front_image"]
     platonic_card.card_text = card_json["card_text"]
     platonic_card.amber = int(card_json["amber"])
-    platonic_card.power = int(0 if card_json["power"] in ("X", None) else card_json["power"])
-    platonic_card.armor = int(0 if card_json["armor"] in ("X", None) else card_json["armor"])
+    platonic_card.power = normalize_stat(card_json["power"])
+    platonic_card.armor = normalize_stat(card_json["armor"])
     platonic_card.flavor_text = card_json["flavor_text"]
     # Don't set platonic card house for mavericks, anomalies, or revenants
     if not any([

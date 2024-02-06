@@ -196,8 +196,8 @@ def load_decks_from_dir(source: str, max_files: int = 0) -> None:
             for deck_json in decks:
                 existing_deck = id_to_existing_deck.get(deck_json["id"])
                 add_one_deck_v2(deck_json, card_details, add_decks_cache, deck=existing_deck)
-        os.remove(path)
-        done_count += 1
+            os.remove(path)
+            done_count += 1
 
 
 @collector.command("get_v2")
