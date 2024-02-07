@@ -126,6 +126,13 @@ EXPANSION_VALUES = [
 EXPANSION_ID_TO_ABBR = {exp.number: exp.shortname for exp in EXPANSION_VALUES}
 
 
+class GlobalVariable(db.Model):
+    __tablename__ = "tracker_global_variable"
+    name = db.Column(db.String(100), primary_key=True)
+    value_str = db.Column(db.String(255), nullable=True)
+    value_int = db.Column(db.Integer, nullable=True)
+
+
 class Card(db.Model):
     __tablename__ = "tracker_card"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
