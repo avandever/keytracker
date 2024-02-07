@@ -875,9 +875,14 @@ def get_decks_from_page_v2(
     tries: int = 5,
     update_highest_page: bool = False,
 ) -> int:
+    # MV api will not return more than 25, so don't try
+    page_size = 25
     params = SEARCH_PARAMS.copy()
-    params["page"] = page
-    params["links"] = "cards"
+    params = {
+        "page": page,
+        "links": "cards",
+        "page_size": page_size,
+    }
     if reverse:
         params["ordering"] = "date"
     else:
@@ -926,7 +931,7 @@ def get_decks_from_page_v2(
             existing_deck = id_to_existing_deck.get(deck_json["id"])
             add_one_deck_v2(deck_json, card_details, add_decks_cache, existing_deck)
             add_decks_cache["seen_deck_ids"].add(deck_json["id"])
-    if update_highest_page and reverse:
+    if update_highest_page and reverse and len(decks) == page_size:
         highest_page = GlobalVariable.query.filter_by(name="highest_mv_page_scraped").first()
         if page > highest_page.value_int:
             highest_page.value_int = page

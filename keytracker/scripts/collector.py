@@ -7,6 +7,7 @@ from keytracker.schema import (
     db,
     CardInDeck,
     Deck,
+    GlobalVariable,
     house_str_to_enum,
     PlatonicCard,
 )
@@ -198,6 +199,43 @@ def load_decks_from_dir(source: str, max_files: int = 0) -> None:
                 add_one_deck_v2(deck_json, card_details, add_decks_cache, deck=existing_deck)
             os.remove(path)
             done_count += 1
+
+
+@collector.command("tail_v2")
+@click_log.simple_verbosity_option()
+@click.option("-i", "--interval", type=int, default=20)
+def tail_v2(interval: int = 20) -> None:
+    logging.debug("Starting page one tailer")
+    pages_done = 0
+    add_decks_cache = {
+        "seen_deck_ids": set(),
+        "card_in_set": {},
+        "platonic_card": {},
+    }
+    start_time = time.time()
+    last_run = start_time - interval
+    while True:
+        highest_page = GlobalVariable.query.filter_by(name="highest_mv_page_scraped").first().value_int
+        now = time.time()
+        delta = now - last_run
+        if delta < interval:
+            to_sleep = interval - delta
+            logging.debug(f"Sleeping {to_sleep}")
+            time.sleep(to_sleep)
+        last_run = time.time()
+        logging.debug(
+            f"Tailing page one. "
+            f"{pages_done} runs in {last_run - start_time} seconds. "
+            f"1 page per {(last_run - start_time) / (pages_done or 1)} seconds."
+        )
+        with current_app.app_context():
+            get_decks_from_page_v2(
+                highest_page + 1,
+                reverse=True,
+                add_decks_cache=add_decks_cache,
+                update_highest_page=True,
+            )
+        pages_done += 1
 
 
 @collector.command("get_v2")
