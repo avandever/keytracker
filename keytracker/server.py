@@ -30,7 +30,7 @@ import time
 app = Flask(__name__)
 app.config.update(utils.load_config())
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "isolation_level": "READ UNCOMMITTED",
+    "isolation_level": "READ COMMITTED",
     "pool_size": 20,
     "pool_recycle": int(os.getenv("SQLALCHEMY_POOL_RECYCLE", 10)),
     "pool_pre_ping": True,
