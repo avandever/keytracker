@@ -226,9 +226,10 @@ def decks():
 def csv_to_pods():
     """CSV to Pod Stats Page"""
     if request.method == "POST":
+        max_decks = 10
         decks_csv = request.files["decks_csv"]
         result_type = request.form["result_type"]
-        house_stats = parse_house_stats(decks_csv)
+        house_stats = parse_house_stats(decks_csv, max_decks=max_decks)
         if result_type == "csv":
             output_csv = house_stats_to_csv(house_stats)
             output_filename = decks_csv.filename.replace(".csv", "_pod_stats.csv")
@@ -244,6 +245,7 @@ def csv_to_pods():
             return render_template(
                 "csv_to_pods.html",
                 house_stats=house_stats,
+                max_decks=max_decks,
             )
     else:
         return render_template(
