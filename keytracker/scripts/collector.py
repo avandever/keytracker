@@ -22,6 +22,7 @@ from keytracker.utils import (
     get_deck_by_id_with_zeal,
     dump_page_json_to_file,
     InternalServerError,
+    loop_loading_missed_sas,
     RequestThrottled,
 )
 import time
@@ -154,6 +155,14 @@ def get_to_file(
                     dest,
                 )
                 pages_done += 1
+
+
+@collector.command("load-missing-sas")
+@click_log.simple_verbosity_option()
+@click.option("-n", "--batch-size", type=int, default=500)
+@click.option("-m", "--max-set-id", type=int, default=700)
+def load_missing_sas(batch_size: int, max_set_id: int) -> None:
+    loop_loading_missed_sas(batch_size, max_set_id)
 
 
 @collector.command("load-decks-from-dir")
