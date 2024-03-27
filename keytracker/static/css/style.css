@@ -90,3 +90,9 @@ nav {
 .forged_key_message {
     background-color: gold;
 }
+
+table, th, td {
+    border: 1px solid black;
+    border-collapse: collapse;
+    border-style: dotted;
+}

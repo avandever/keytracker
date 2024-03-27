@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block content %}
+    <div class="pod_stats_header">
+        <h1>My Pod Stats</h1>
+        <p>Deck data loaded from the csv you passed in</p>
+    </div>
+    <div class="house_stats">
+        <table>
+            <tr>
+                <th>Sas</th>
+                <th>Expansion</th>
+                <th>House</th>
+                <th>Deck</th>
+                <th>Cards</th>
+            </tr>
+            {% for pod in house_stats %}
+            <tr>
+                <td>{{ pod.sas|round(1) }}</td>
+                <td>{{ pod.expansion }}</td>
+                <td>{{ pod.house }}</td>
+                <td><a href={{ pod.link }}>{{ pod.name }}</a></td>
+                <td>{{ pod.cards }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+{% endblock %}

@@ -1,8 +1,10 @@
+import csv
 from collections import Counter, defaultdict
 import configparser
 import copy
 import datetime
 import difflib
+import io
 from keytracker.schema import (
     db,
     Card,
@@ -25,8 +27,9 @@ from keytracker.schema import (
     card_type_str_to_enum,
     rarity_str_to_enum,
 )
+import operator
 import os
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, IO, Iterable, List, Optional, Tuple
 import random
 import requests
 
@@ -74,6 +77,125 @@ SEARCH_PARAMS = {
 }
 
 language_detector = LanguageDetectorBuilder.from_languages(*POSSIBLE_LANGUAGES).build()
+
+MM_UNHOUSED_CARDS = [
+    "It’s Coming...",
+    "Dark Æmber Vault",
+]
+REVENANTS = [
+    "Ghostly Dr. Verokter",
+    "Portalmonster",
+    "Revived Ză-Orhă",
+    "Xenos Darkshadow",
+    "Immortal Greking",
+    "Duma the Returned",
+    "Spectral Ruth",
+    "Qyxxlyxx Grave Master",
+    "Cincinnatus Resurrexit",
+    "Phantom Drummernaut",
+    "Encounter Golem",
+]
+
+
+class CsvPod:
+    __slots__ = ("name", "expansion", "house", "link", "sas", "cards")
+    __slots__ = ("name", "sas", "expansion", "house", "cards", "link")
+
+    def __init__(self, name, expansion, link, house, sas, cards) -> None:
+        self.name = name
+        self.expansion = expansion
+        self.house = house
+        self.link = link
+        self.sas = float(sas)
+        self.cards = cards
+
+    def headers(self) -> List[str]:
+        return list(self.__slots__)
+
+    def as_row(self) -> List:
+        return [getattr(self, attr) for attr in self.__slots__]
+
+
+class DeckFromCsv:
+    __slots__ = ("name", "house1", "house2", "house3", "set_string", "house1_sas",
+                 "house2_sas", "house3_sas", "house1_cards", "house2_cards",
+                 "house3_cards", "link")
+    ROWS_TO_READ = ('\ufeff"Name"', "Houses", "Expansion", "House 1 SAS", "House 2 SAS",
+                    "House 3 SAS", "House 1 Cards", "House 2 Cards", "House 3 Cards",
+                    "DoK Link")
+
+    def __init__(
+        self,
+        name,
+        house_string,
+        set_string,
+        house1_sas,
+        house2_sas,
+        house3_sas,
+        house1_cards,
+        house2_cards,
+        house3_cards,
+        link,
+    ):
+        self.name = name
+        houses = house_string.split(" | ")
+        self.house1, self.house2, self.house3 = houses
+        self.set_string = set_string
+        self.house1_sas = house1_sas
+        self.house2_sas = house2_sas
+        self.house3_sas = house3_sas
+        self.house1_cards = house1_cards
+        self.house2_cards = house2_cards
+        self.house3_cards = house3_cards
+        self.link = link
+
+    def __repr__(self) -> str:
+        return (f"{self.name} - {self.house1}: {self.house1_sas}, "
+                f"{self.house2}: {self.house2_sas}, {self.house3}: {self.house3_sas}")
+
+    def as_rows(self) -> List[List]:
+        return [
+            [self.name, self.set_string, self.link, self.house1, self.house1_sas,
+             self.house1_cards],
+            [self.name, self.set_string, self.link, self.house2, self.house2_sas,
+             self.house2_cards],
+            [self.name, self.set_string, self.link, self.house3, self.house3_sas,
+             self.house3_cards],
+        ]
+
+    def as_pods(self) -> List[CsvPod]:
+        return [
+            CsvPod(self.name, self.set_string, self.link, self.house1, self.house1_sas, self.house1_cards),
+            CsvPod(self.name, self.set_string, self.link, self.house2, self.house2_sas, self.house2_cards),
+            CsvPod(self.name, self.set_string, self.link, self.house3, self.house3_sas, self.house3_cards),
+        ]
+
+
+def parse_house_stats(decks_csv: IO, max_decks: int = 10) -> List[CsvPod]:
+    csv_str = decks_csv.read().decode()
+    decks_csv = io.StringIO(csv_str)
+    reader = csv.reader(decks_csv, skipinitialspace=True)
+    header = next(reader)
+    rows_to_read = [header.index(title) for title in DeckFromCsv.ROWS_TO_READ]
+    decks_done = 0
+    pods = []
+    for row in reader:
+        deck = DeckFromCsv(*[row[x] for x in rows_to_read])
+        pods.extend(deck.as_pods())
+        decks_done += 1
+        if decks_done >= max_decks:
+            break
+    sorted_pods = sorted(pods, key=operator.attrgetter("sas"), reverse=True)
+    return sorted_pods
+
+
+def house_stats_to_csv(pods: List[CsvPod]) -> IO:
+    f = io.StringIO()
+    writer = csv.writer(f)
+    writer.writerow(pods[0].headers())
+    for pod in pods:
+        writer.writerow(pod.as_row())
+    return io.BytesIO(f.getvalue().encode())
 
 
 class MVApi:
@@ -1178,23 +1300,7 @@ def update_platonic_info(
         card_json["is_anomaly"],
         # This actuall should cover all revenants
         card_json["card_number"].startswith("R"),
-        card_json["card_title"] in (
-            # Special cards from MM
-            "It’s Coming...",
-            "Dark Æmber Vault",
-            # Revenants
-            "Ghostly Dr. Verokter",
-            "Portalmonster",
-            "Revived Ză-Orhă",
-            "Xenos Darkshadow",
-            "Immortal Greking",
-            "Duma the Returned",
-            "Spectral Ruth",
-            "Qyxxlyxx Grave Master",
-            "Cincinnatus Resurrexit",
-            "Phantom Drummernaut",
-            "Encounter Golem",
-        ),
+        card_json["card_title"] in MM_UNHOUSED_CARDS + REVENANTS,
     ]):
         platonic_card.house = house_str_to_enum[card_json["house"]]
     platonic_card.is_non_deck = card_json["is_non_deck"]

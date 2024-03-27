@@ -4,6 +4,7 @@ from flask import (
     render_template,
     redirect,
     request,
+    send_file,
     url_for,
 )
 from keytracker.schema import (
@@ -21,7 +22,9 @@ from keytracker.utils import (
     basic_stats_to_game,
     DeckNotFoundError,
     get_deck_by_id_with_zeal,
+    house_stats_to_csv,
     log_to_game,
+    parse_house_stats,
     retry_after_mysql_disconnect,
     retry_anything_once,
     turn_counts_from_logs,
@@ -216,6 +219,38 @@ def decks():
         args=request.args,
         decks=decks,
     )
+
+
+@blueprint.route("/csv_to_pods", methods=["GET"])
+@blueprint.route("/csv_to_pods/", methods=["GET", "POST"])
+def csv_to_pods():
+    """CSV to Pod Stats Page"""
+    if request.method == "POST":
+        decks_csv = request.files["decks_csv"]
+        result_type = request.form["result_type"]
+        house_stats = parse_house_stats(decks_csv)
+        if result_type == "csv":
+            output_csv = house_stats_to_csv(house_stats)
+            output_filename = decks_csv.filename.replace(".csv", "_pod_stats.csv")
+            return send_file(
+                output_csv,
+                download_name=output_filename,
+                as_attachment=True,
+            )
+            response = make_response(output_csv)
+            response.headers["Content-Disposition"] = "attachment; filename=pod_stats.csv"
+            return response
+        else:
+            return render_template(
+                "csv_to_pods.html",
+                house_stats=house_stats,
+            )
+    else:
+        return render_template(
+            "csv_to_pods_landing.html",
+            title="Pod Stats From CSV",
+        )
+        # {% for pod in house_stats %}{{ render_csv_pod(pod) | safe }}{% endfor %}
 
 
 @retry_anything_once
