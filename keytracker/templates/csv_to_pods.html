@@ -12,6 +12,8 @@
                 <th>House</th>
                 <th>Deck</th>
                 <th>Cards</th>
+                <th>On Market</th>
+                <th>Price</th>
             </tr>
             {% for pod in house_stats %}
             <tr>
@@ -20,6 +22,8 @@
                 <td>{{ pod.house }}</td>
                 <td><a href={{ pod.link }}>{{ pod.name }}</a></td>
                 <td>{{ pod.cards }}</td>
+                <td>{{ pod.on_market }}</td>
+                <td>{{ pod.price }}</td>
             </tr>
             {% endfor %}
         </table>

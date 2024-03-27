@@ -98,16 +98,17 @@ REVENANTS = [
 
 
 class CsvPod:
-    __slots__ = ("name", "expansion", "house", "link", "sas", "cards")
-    __slots__ = ("name", "sas", "expansion", "house", "cards", "link")
+    __slots__ = ("name", "sas", "expansion", "house", "cards", "link", "on_market", "price")
 
-    def __init__(self, name, expansion, link, house, sas, cards) -> None:
+    def __init__(self, name, expansion, link, house, sas, cards, for_sale, for_auction, for_trade, price) -> None:
         self.name = name
         self.expansion = expansion
         self.house = house
         self.link = link
         self.sas = float(sas)
         self.cards = cards
+        self.on_market = "true" in (for_sale, for_trade, for_auction)
+        self.price = price
 
     def headers(self) -> List[str]:
         return list(self.__slots__)
@@ -119,10 +120,11 @@ class CsvPod:
 class DeckFromCsv:
     __slots__ = ("name", "house1", "house2", "house3", "set_string", "house1_sas",
                  "house2_sas", "house3_sas", "house1_cards", "house2_cards",
-                 "house3_cards", "link")
+                 "house3_cards", "link", "for_sale", "for_auction", "for_trade",
+                 "price")
     ROWS_TO_READ = ('\ufeff"Name"', "Houses", "Expansion", "House 1 SAS", "House 2 SAS",
                     "House 3 SAS", "House 1 Cards", "House 2 Cards", "House 3 Cards",
-                    "DoK Link")
+                    "DoK Link", "For Sale", "For Auction", "For Trade", "Price")
 
     def __init__(
         self,
@@ -136,6 +138,10 @@ class DeckFromCsv:
         house2_cards,
         house3_cards,
         link,
+        for_sale,
+        for_auction,
+        for_trade,
+        price
     ):
         self.name = name
         houses = house_string.split(" | ")
@@ -148,26 +154,26 @@ class DeckFromCsv:
         self.house2_cards = house2_cards
         self.house3_cards = house3_cards
         self.link = link
+        self.for_sale = for_sale
+        self.for_auction = for_auction
+        self.for_trade = for_trade
+        self.price = price
 
     def __repr__(self) -> str:
         return (f"{self.name} - {self.house1}: {self.house1_sas}, "
                 f"{self.house2}: {self.house2_sas}, {self.house3}: {self.house3_sas}")
 
-    def as_rows(self) -> List[List]:
-        return [
-            [self.name, self.set_string, self.link, self.house1, self.house1_sas,
-             self.house1_cards],
-            [self.name, self.set_string, self.link, self.house2, self.house2_sas,
-             self.house2_cards],
-            [self.name, self.set_string, self.link, self.house3, self.house3_sas,
-             self.house3_cards],
-        ]
-
     def as_pods(self) -> List[CsvPod]:
         return [
-            CsvPod(self.name, self.set_string, self.link, self.house1, self.house1_sas, self.house1_cards),
-            CsvPod(self.name, self.set_string, self.link, self.house2, self.house2_sas, self.house2_cards),
-            CsvPod(self.name, self.set_string, self.link, self.house3, self.house3_sas, self.house3_cards),
+            CsvPod(self.name, self.set_string, self.link, self.house1, self.house1_sas,
+                self.house1_cards, self.for_sale, self.for_auction, self.for_trade,
+                self.price),
+            CsvPod(self.name, self.set_string, self.link, self.house2, self.house2_sas,
+                self.house2_cards, self.for_sale, self.for_auction, self.for_trade,
+                self.price),
+            CsvPod(self.name, self.set_string, self.link, self.house3, self.house3_sas,
+                self.house3_cards, self.for_sale, self.for_auction, self.for_trade,
+                self.price),
         ]
 
 
