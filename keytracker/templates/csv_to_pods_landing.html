@@ -2,15 +2,18 @@
 {% block content %}
     <h1>Get your Pod stats</h1>
     <form method="post" enctype="multipart/form-data">
-        <label for="result_type">How to get results</label><br>
+        <label for="result_type">How to get results</label>
+        <br>
         <input type="radio" id="csv" name="result_type" value="csv">
-        <label for="csv">CSV</label><br>
+        <label for="csv">CSV</label>
+        <br>
         <input type="radio" id="browser" name="result_type" value="browser">
-        <label for="browser">In Browser</label><br>
+        <label for="browser">In Browser</label>
+        <br>
         <label for="decks_csv">Upload your CSV file from DoK. Max file size is 16 MB.</label>
         <br />
         <input type="file" name="decks_csv" accept=".csv" />
         <br />
         <button type="submit">Submit</button>
     </form>
-{% endblock  %}
+{% endblock %}
