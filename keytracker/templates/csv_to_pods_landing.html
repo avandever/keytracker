@@ -10,10 +10,16 @@
         <input type="radio" id="browser" name="result_type" value="browser">
         <label for="browser">In Browser</label>
         <br>
+        <input type="checkbox"
+               id="show_card_images"
+               name="show_card_images"
+               value="True">
+        <label for="show_card_images">Show cards as images (only for In Browser mode)</label>
+        <br>
         <label for="decks_csv">Upload your CSV file from DoK. Max file size is 16 MB.</label>
-        <br />
+        <br>
         <input type="file" name="decks_csv" accept=".csv" />
-        <br />
+        <br>
         <button type="submit">Submit</button>
     </form>
 {% endblock %}

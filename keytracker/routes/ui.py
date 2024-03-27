@@ -8,6 +8,7 @@ from flask import (
     url_for,
 )
 from keytracker.schema import (
+    CardInDeck,
     db,
     Deck,
     Game,
@@ -29,10 +30,11 @@ from keytracker.utils import (
     retry_anything_once,
     turn_counts_from_logs,
 )
+from sqlalchemy import and_, or_
+from sqlalchemy.orm import joinedload
 import datetime
 import time
 import logging
-from sqlalchemy import and_, or_
 
 
 blueprint = Blueprint("ui", __name__, template_folder="templates")
@@ -226,9 +228,10 @@ def decks():
 def csv_to_pods():
     """CSV to Pod Stats Page"""
     if request.method == "POST":
-        max_decks = 10000
+        max_decks = 1000
         decks_csv = request.files["decks_csv"]
         result_type = request.form["result_type"]
+        show_card_image = request.form.get("show_card_images")
         house_stats = parse_house_stats(decks_csv, max_decks=max_decks)
         if result_type == "csv":
             output_csv = house_stats_to_csv(house_stats)
@@ -242,10 +245,16 @@ def csv_to_pods():
             response.headers["Content-Disposition"] = "attachment; filename=pod_stats.csv"
             return response
         else:
+            kf_ids = {pod.link.split("/")[-1] for pod in house_stats}
+            decks = Deck.query.options(
+                joinedload(Deck.cards_from_assoc).joinedload(CardInDeck.card_in_set)
+            ).filter(Deck.kf_id.in_(kf_ids))
+            name_to_deck = {deck.name: deck for deck in decks}
             return render_template(
                 "csv_to_pods.html",
                 house_stats=house_stats,
                 max_decks=max_decks,
+                name_to_deck=name_to_deck,
             )
     else:
         return render_template(

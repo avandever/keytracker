@@ -7,6 +7,7 @@ from keytracker.schema import (
 from keytracker import utils
 from keytracker import schema
 from keytracker.renderers import (
+    render_card_images,
     render_dropdown,
     render_input_number,
     render_log,
@@ -44,6 +45,7 @@ db.app = app
 db.init_app(app)
 db.create_all()
 app.jinja_env.globals.update(
+    render_card_images=render_card_images,
     render_dropdown=render_dropdown,
     render_game_listing=render_game_listing,
     render_input_number=render_input_number,

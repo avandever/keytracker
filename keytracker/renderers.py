@@ -1,4 +1,4 @@
-from keytracker.schema import Card, Game
+from keytracker.schema import Card, Game, Deck
 from flask import url_for
 import re
 from typing import Dict
@@ -198,4 +198,15 @@ def render_input_number(
         bits["value"] = current_value
     bits_str = " ".join([f'{k}="{v}"' for k, v in bits.items()])
     output += f"<input {bits_str}></p>"
+    return output
+
+
+def render_card_images(deck: Deck, house: str = None) -> str:
+    output = ""
+    if house:
+        cards = [c for c in deck.cards_from_assoc if c.house.value == house]
+    else:
+        cards = deck.cards_from_assoc
+    for card in cards:
+        output += f'<img src="{card.front_image}" width="100" height="140">'
     return output
