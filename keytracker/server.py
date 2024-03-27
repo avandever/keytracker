@@ -38,6 +38,7 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_reset_on_return": "commit",
 }
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000  # 16 MB
 app.app_context().push()
 db.app = app
 db.init_app(app)
