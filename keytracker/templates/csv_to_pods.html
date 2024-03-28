@@ -23,7 +23,11 @@
                     <td>
                         <a href={{ pod.link }}>{{ pod.name }}</a>
                     </td>
-                    <td>{{ render_card_images(name_to_deck[pod.name], pod.house) | safe }}</td>
+                    {% if show_card_images %}
+                        <td>{{ render_card_images(name_to_deck[pod.name], pod.house) | safe }}</td>
+                    {% else %}
+                        <td>{{ render_card_list(name_to_deck[pod.name], pod.house) | safe }}</td>
+                    {% endif %}
                     <td>{{ pod.on_market }}</td>
                     <td>{{ pod.price }}</td>
                 </tr>

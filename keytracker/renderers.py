@@ -56,6 +56,12 @@ FORGED_KEY_MATCHERS = [
     re.compile(r".* forges the (.*) key.*"),
 ]
 
+amber_pip = '<img src="https://www.keyforgegame.com/images/66f2f00f12feac4368785f6543cfd0b9.png" width=15 height=15>'
+draw_pip = '<img src="https://www.keyforgegame.com/images/2ccf3cd9faf3a670c1c19cb67b44fde2.png" width=15 height=15>'
+capture_pip = '<img src="https://www.keyforgegame.com/images/18062375103883be1757f1ec09e56c36.png" width=15 height=15>'
+damage_pip = '<img src="https://www.keyforgegame.com/images/4ef12ff91e76087f3e207fbb0698bb63.png" width=15 height=15>'
+discard_pip = '<img src="https://www.keyforgegame.com/images/833fdc87b48b2102c8dc43a93fd13347.png" width=15 height=15>'
+
 
 def render_log(log: str) -> str:
     message = log.message.strip("\r")
@@ -210,3 +216,29 @@ def render_card_images(deck: Deck, house: str = None) -> str:
     for card in cards:
         output += f'<img src="{card.front_image}" width="100" height="140">'
     return output
+
+
+def get_pip_imgs(card: Card) -> str:
+    pips = (
+        amber_pip * card.enhanced_amber +
+        draw_pip * card.enhanced_draw +
+        capture_pip * card.enhanced_capture +
+        damage_pip * card.enhanced_damage +
+        discard_pip * card.enhanced_discard
+    )
+    return pips
+
+
+def render_card_list(deck: Deck, house: str = None) -> str:
+    output = []
+    if house:
+        cards = [c for c in deck.cards_from_assoc if c.house.value == house]
+    else:
+        cards = deck.cards_from_assoc
+    for card in cards:
+        pips = get_pip_imgs(card)
+        card_img = f'<img src="{card.front_image}"/>'
+        span = f'<span class="hoverable_card">{card.card_title}{card_img}</span>'
+        span += pips
+        output.append(span)
+    return " | ".join(output)

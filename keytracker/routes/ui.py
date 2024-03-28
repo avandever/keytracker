@@ -231,7 +231,7 @@ def csv_to_pods():
         max_decks = 1000
         decks_csv = request.files["decks_csv"]
         result_type = request.form["result_type"]
-        show_card_image = request.form.get("show_card_images")
+        show_card_images = bool(request.form.get("show_card_images"))
         house_stats = parse_house_stats(decks_csv, max_decks=max_decks)
         if result_type == "csv":
             output_csv = house_stats_to_csv(house_stats)
@@ -255,6 +255,7 @@ def csv_to_pods():
                 house_stats=house_stats,
                 max_decks=max_decks,
                 name_to_deck=name_to_deck,
+                show_card_images=show_card_images,
             )
     else:
         return render_template(
