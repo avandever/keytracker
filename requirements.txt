@@ -77,3 +77,4 @@ wcwidth==0.2.12
 Werkzeug==3.0.1
 yarl==1.9.3
 zipp==3.17.0
+patreon

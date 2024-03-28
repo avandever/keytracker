@@ -2,6 +2,7 @@ from werkzeug.security import (
     generate_password_hash,
     check_password_hash,
 )
+import patreon
 from flask_login import (
     login_required,
     login_user,
@@ -44,10 +45,15 @@ from sqlalchemy.orm import joinedload
 import datetime
 import time
 import logging
+import os
 
 
 blueprint = Blueprint("ui", __name__, template_folder="templates")
 logger = logging.getLogger(__name__)
+
+
+patreon_client_id = os.getenv("PATREON_CLIENT_ID")
+patreon_client_secret = os.getenv("PATREON_CLIENT_SECRET")
 
 
 @blueprint.route("/")
@@ -449,3 +455,18 @@ def logout():
 @login_required
 def profile():
     return render_template("profile.html", user=current_user)
+
+
+@blueprint.route("/oauth/redirect")
+def oauth_redirect():
+    oauth_client = patreon.OAuth(patreon_client_id, patreon_client_secret)
+    tokens = oauth_client.get_tokens(request.args.get("code"), "/oauth/redirect")
+    access_token = tokens["access_token"]
+
+    api_client = patreon.API(access_token)
+    user_response = api_client.get_identity()
+    user = user_response.data()
+    memberships = user.relationship("memberships")
+    membership = memberships[0] if memberships and len(memberships) > 0 else None
+    print(memberships)
+    return str(memberships)
