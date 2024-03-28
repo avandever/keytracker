@@ -266,16 +266,19 @@ def csv_to_pods_post():
         )
 
 
-@blueprint.route("/user", methods=["GET", "POST"])
-@blueprint.route("/user/", methods=["GET", "POST"])
+@blueprint.route("/user", methods=["GET"])
 def user_search():
     """User Search Page"""
-    if request.method == "POST":
-        return redirect(url_for("ui.user", username=request.form["username"]))
     return render_template(
         "user_search.html",
         title="User Search",
     )
+
+
+@blueprint.route("/user", methods=["POST"])
+def user_search_post():
+    """User Search Page"""
+    return redirect(url_for("ui.user", username=request.form["username"]))
 
 
 @blueprint.route("/user/<username>", methods=["GET"])
@@ -302,74 +305,88 @@ def user(username):
     )
 
 
-@blueprint.route("/upload", methods=("GET", "POST"))
+@blueprint.route("/upload", methods=["GET"])
 def upload():
-    """Manual game upload page"""
-    if request.method == "POST":
-        game_start = datetime.datetime.now()
-        log_text = request.form["log"]
-        try:
-            game = log_to_game(log_text)
-        except (BadLog, DeckNotFoundError) as exc:
-            flash(str(exc))
-        else:
-            game.date = game_start
-            db.session.add(game)
-            db.session.commit()
-            db.session.refresh(game)
-            game.crucible_game_id = f"UNKNOWN-{game.id}"
-            db.session.commit()
-            for (seq, log) in enumerate(log_text.split("\n")):
-                log_obj = Log(
-                    game_id=game.id,
-                    message=log,
-                    winner_perspective=False,
-                    time=game_start + datetime.timedelta(seconds=seq),
-                )
-                db.session.add(log_obj)
-            db.session.commit()
-            db.session.refresh(game)
-            turn_counts_from_logs(game)
-            winner = Player.query.filter_by(username=game.winner).first()
-            loser = Player.query.filter_by(username=game.loser).first()
-            if winner.anonymous:
-                anonymize_game_for_player(game, winner)
-            if loser.anonymous:
-                anonymize_game_for_player(game, loser)
-            game_reloaded = None
-            while game_reloaded is None:
-                time.sleep(0.5)
-                game_reloaded = Game.query.filter_by(
-                    crucible_game_id=game.crucible_game_id,
-                ).first()
-            time.sleep(20)
-            return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
     return render_template(
         "upload.html",
         title="Upload a Game!",
     )
 
 
-@retry_after_mysql_disconnect
-@blueprint.route("/upload_simple", methods=("GET", "POST"))
+@blueprint.route("/upload", methods=["POST"])
+def upload_post():
+    """Manual game upload page"""
+    game_start = datetime.datetime.now()
+    log_text = request.form["log"]
+    try:
+        game = log_to_game(log_text)
+    except (BadLog, DeckNotFoundError) as exc:
+        flash(str(exc))
+    else:
+        game.date = game_start
+        db.session.add(game)
+        db.session.commit()
+        db.session.refresh(game)
+        game.crucible_game_id = f"UNKNOWN-{game.id}"
+        db.session.commit()
+        for (seq, log) in enumerate(log_text.split("\n")):
+            log_obj = Log(
+                game_id=game.id,
+                message=log,
+                winner_perspective=False,
+                time=game_start + datetime.timedelta(seconds=seq),
+            )
+            db.session.add(log_obj)
+        db.session.commit()
+        db.session.refresh(game)
+        turn_counts_from_logs(game)
+        winner = Player.query.filter_by(username=game.winner).first()
+        loser = Player.query.filter_by(username=game.loser).first()
+        if winner.anonymous:
+            anonymize_game_for_player(game, winner)
+        if loser.anonymous:
+            anonymize_game_for_player(game, loser)
+        game_reloaded = None
+        while game_reloaded is None:
+            time.sleep(0.5)
+            game_reloaded = Game.query.filter_by(
+                crucible_game_id=game.crucible_game_id,
+            ).first()
+        time.sleep(20)
+        return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
+    return render_template(
+        "upload.html",
+        title="Upload a Game!",
+    )
+
+
+@blueprint.route("/upload_simple", methods=["GET"])
 def upload_simple():
     """Manual game upload page with just simple options"""
-    if request.method == "POST":
-        game = basic_stats_to_game(**request.form)
-        existing_game = Game.query.filter_by(
-            crucible_game_id=game.crucible_game_id
-        ).first()
-        if existing_game is None:
-            logger.debug(f"Confirmed no existing record for {game.crucible_game_id}")
-            db.session.add(game)
-            db.session.commit()
-            return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
-        else:
-            flash(f"A game with name '{game.crucible_game_id}' already exists")
     return render_template(
         "upload_simple.html",
         title="Simple Game Upload",
     )
+
+
+@blueprint.route("/upload_simple", methods=["POST"])
+def upload_simple_post():
+    """Manual game upload page with just simple options"""
+    game = basic_stats_to_game(**request.form)
+    existing_game = Game.query.filter_by(
+        crucible_game_id=game.crucible_game_id
+    ).first()
+    if existing_game is None:
+        logger.debug(f"Confirmed no existing record for {game.crucible_game_id}")
+        db.session.add(game)
+        db.session.commit()
+        return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
+    else:
+        flash(f"A game with name '{game.crucible_game_id}' already exists")
+        return render_template(
+            "upload_simple.html",
+            title="Simple Game Upload",
+        )
 
 
 @blueprint.route("/login")
