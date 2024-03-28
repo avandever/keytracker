@@ -37,8 +37,6 @@ from keytracker.utils import (
     house_stats_to_csv,
     log_to_game,
     parse_house_stats,
-    retry_after_mysql_disconnect,
-    retry_anything_once,
     turn_counts_from_logs,
 )
 from sqlalchemy import and_, or_
@@ -52,8 +50,6 @@ blueprint = Blueprint("ui", __name__, template_folder="templates")
 logger = logging.getLogger(__name__)
 
 
-@retry_anything_once
-@retry_after_mysql_disconnect
 @blueprint.route("/")
 def home():
     """Landing page."""
@@ -96,8 +92,6 @@ def leaderboard():
     )
 
 
-@retry_anything_once
-@retry_after_mysql_disconnect
 @blueprint.route("/deck/<deck_id>", methods=["GET"])
 def deck(deck_id):
     username = request.args.get("username")
@@ -142,8 +136,6 @@ def deck(deck_id):
     )
 
 
-@retry_anything_once
-@retry_after_mysql_disconnect
 @blueprint.route("/game/<crucible_game_id>", methods=["GET"])
 def game(crucible_game_id):
     game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
@@ -163,8 +155,6 @@ def game(crucible_game_id):
     )
 
 
-@retry_anything_once
-@retry_after_mysql_disconnect
 @blueprint.route("/games", methods=["GET"])
 def games():
     args_list = ["user", "deck", "sas_min", "sas_max", "aerc_min", "aerc_max"]
@@ -205,8 +195,6 @@ def games():
     )
 
 
-@retry_anything_once
-@retry_after_mysql_disconnect
 @blueprint.route("/decks", methods=["GET"])
 def decks():
     if request.args:
@@ -275,11 +263,8 @@ def csv_to_pods():
             "csv_to_pods_landing.html",
             title="Pod Stats From CSV",
         )
-        # {% for pod in house_stats %}{{ render_csv_pod(pod) | safe }}{% endfor %}
 
 
-@retry_anything_once
-@retry_after_mysql_disconnect
 @blueprint.route("/user", methods=["GET", "POST"])
 @blueprint.route("/user/", methods=["GET", "POST"])
 def user_search():
@@ -292,8 +277,6 @@ def user_search():
     )
 
 
-@retry_anything_once
-@retry_after_mysql_disconnect
 @blueprint.route("/user/<username>", methods=["GET"])
 def user(username):
     """User Summary Page"""
