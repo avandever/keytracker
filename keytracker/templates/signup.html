@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% block content %}
+    <form method="POST" action="/signup">
+        <input class="input"
+               type="email"
+               name="email"
+               placeholder="Your Email"
+               autofocus="">
+        <input class="input" type="text" name="name" placeholder="Name" autofocus="">
+        <input class="input"
+               type="password"
+               name="password"
+               placeholder="Your Password">
+        <button class="button">Sign Up</button>
+    </form>
+{% endblock %}
