@@ -210,7 +210,7 @@ def render_input_number(
 def render_card_images(deck: Deck, house: str = None) -> str:
     output = ""
     if house:
-        cards = [c for c in deck.cards_from_assoc if c.house.value == house]
+        cards = [c for c in deck.cards_from_assoc if c.house.value.replace(" ", "") == house]
     else:
         cards = deck.cards_from_assoc
     for card in cards:
@@ -234,7 +234,7 @@ def get_pip_imgs(card: Card) -> str:
 def render_card_list(deck: Deck, house: str = None) -> str:
     output = []
     if house:
-        cards = [c for c in deck.cards_from_assoc if c.house.value == house]
+        cards = [c for c in deck.cards_from_assoc if c.house.value.replace(" ", "") == house]
     else:
         cards = deck.cards_from_assoc
     for card in cards:
