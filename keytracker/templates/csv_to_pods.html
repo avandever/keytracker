@@ -8,7 +8,7 @@
         <table>
             <tr>
                 <th>Sas</th>
-                <th>Expansion</th>
+                {% if not hide_set %}<th>Expansion</th>{% endif %}
                 <th>House</th>
                 <th>Deck</th>
                 <th>Cards</th>
@@ -18,7 +18,7 @@
             {% for pod in house_stats %}
                 <tr>
                     <td>{{ pod.sas|round(1) }}</td>
-                    <td>{{ pod.expansion }}</td>
+                    {% if not hide_set %}<td>{{ pod.expansion }}</td>{% endif %}
                     <td>{{ pod.house }}</td>
                     <td>
                         <a href={{ pod.link }}>{{ pod.name }}</a>

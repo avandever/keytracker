@@ -2,6 +2,10 @@
 {% block content %}
     <h1>Get your Pod stats</h1>
     <form method="post" enctype="multipart/form-data">
+        <label for="decks_csv">Upload your CSV file from DoK. Max file size is 16 MB.</label>
+        <br>
+        <input type="file" name="decks_csv" accept=".csv" />
+        <br>
         <label for="result_type">How to get results</label>
         <br>
         <input type="radio" id="csv" name="result_type" value="csv">
@@ -10,16 +14,20 @@
         <input type="radio" id="browser" name="result_type" value="browser">
         <label for="browser">In Browser</label>
         <br>
+        <p>Browser Mode Options</p>
         <input type="checkbox"
                id="show_card_images"
                name="show_card_images"
                value="True">
-        <label for="show_card_images">Show cards as images (only for In Browser mode)</label>
+        <label for="show_card_images">Show cards as images</label>
         <br>
-        <label for="decks_csv">Upload your CSV file from DoK. Max file size is 16 MB.</label>
-        <br>
-        <input type="file" name="decks_csv" accept=".csv" />
-        <br>
-        <button type="submit">Submit</button>
-    </form>
-{% endblock %}
+        <input type="checkbox"
+            id="hide_set"
+            name="hide_set"
+            value=True">
+            <label for="hide_set">Hide Expansion</label>
+            <br>
+            <br>
+            <button type="submit">Submit</button>
+        </form>
+    {% endblock %}
