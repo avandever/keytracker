@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
 from sqlalchemy import (
     or_,
     select,
@@ -697,3 +698,11 @@ class Log(db.Model):
         else:
             msg = self.message
         return f"<Log(game_id={self.game_id}, message='{msg}', time={self.time}, winner_perspective={self.winner_perspective})>"
+
+
+class User(UserMixin, db.Model):
+    __tablename__ = "tracker_user"
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(100), unique=True)
+    password = db.Column(db.String(200))
+    name = db.Column(db.String(100))

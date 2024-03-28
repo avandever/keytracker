@@ -24,6 +24,7 @@ EditorConfig==0.12.3
 exceptiongroup==1.2.0
 executing==2.0.1
 Flask==3.0.0
+flask-login==0.6.3
 flask-shell-ipython==0.5.1
 Flask-SQLAlchemy==3.1.1
 frozenlist==1.4.0

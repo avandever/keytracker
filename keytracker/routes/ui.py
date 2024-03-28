@@ -1,3 +1,13 @@
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash,
+)
+from flask_login import (
+    login_required,
+    login_user,
+    logout_user,
+    current_user,
+)
 from flask import (
     Blueprint,
     flash,
@@ -14,6 +24,7 @@ from keytracker.schema import (
     Game,
     Log,
     Player,
+    User,
 )
 from keytracker.utils import (
     add_player_filters,
@@ -375,3 +386,65 @@ def upload_simple():
         "upload_simple.html",
         title="Simple Game Upload",
     )
+
+
+@blueprint.route("/login")
+def login():
+    return render_template("login.html")
+
+
+@blueprint.route("/login", methods=["POST"])
+def login_post():
+    # login code here
+    email = request.form.get("email")
+    password = request.form.get("password")
+    remember = bool(request.form.get("remember"))
+    
+    user = User.query.filter_by(email=email).first()
+    
+    if user and check_password_hash(user.password, password):
+        login_user(user, remember=remember)
+        return redirect(url_for("ui.profile"))
+    else:
+        flash("Please check your login details and try again.")
+        return redirect(url_for("ui.login"))
+
+
+
+@blueprint.route("/signup")
+def signup():
+    return render_template("signup.html" )
+
+
+@blueprint.route("/signup", methods=["POST"])
+def signup_post():
+    # Add user
+    email = request.form.get("email")
+    name = request.form.get("name")
+    password = request.form.get("password")
+    user = User.query.filter_by(email=email).first()
+    if user:
+        flash("Email address already exists")
+        return redirect(url_for("ui.signup"))
+    new_user = User(
+        email=email,
+        name=name,
+        password=generate_password_hash(password),
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    return redirect(url_for("ui.login"))
+
+
+@blueprint.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    flash("Successfully logged out.")
+    return redirect(url_for("ui.home"))
+
+
+@blueprint.route("/profile")
+@login_required
+def profile():
+    return render_template("profile.html", user=current_user)

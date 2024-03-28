@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from flask import current_app, Flask, jsonify
+from flask_login import LoginManager
 from keytracker.schema import (
     db,
     Log,
@@ -44,6 +45,18 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1000 * 1000  # 16 MB
 app.app_context().push()
 db.app = app
 db.init_app(app)
+
+login_manager = LoginManager()
+login_manager.login_view = "ui.login"
+login_manager.init_app(app)
+
+from keytracker.schema import User
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
 db.create_all()
 app.jinja_env.globals.update(
     render_card_images=render_card_images,
