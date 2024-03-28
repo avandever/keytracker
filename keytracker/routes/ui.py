@@ -461,8 +461,8 @@ def profile():
 def oauth_redirect():
     oauth_client = patreon.OAuth(patreon_client_id, patreon_client_secret)
     tokens = oauth_client.get_tokens(request.args.get("code"), "/oauth/redirect")
+    print(f"tokens: {tokens}")
     access_token = tokens["access_token"]
-
     api_client = patreon.API(access_token)
     user_response = api_client.get_identity()
     user = user_response.data()
