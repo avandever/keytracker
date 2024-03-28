@@ -223,45 +223,46 @@ def decks():
 
 
 @blueprint.route("/csv_to_pods", methods=["GET"])
-@blueprint.route("/csv_to_pods/", methods=["GET", "POST"])
 def csv_to_pods():
     """CSV to Pod Stats Page"""
-    if request.method == "POST":
-        max_decks = 1000
-        decks_csv = request.files["decks_csv"]
-        result_type = request.form["result_type"]
-        show_card_images = bool(request.form.get("show_card_images"))
-        hide_set = bool(request.form.get("hide_set"))
-        house_stats = parse_house_stats(decks_csv, max_decks=max_decks)
-        if result_type == "csv":
-            output_csv = house_stats_to_csv(house_stats)
-            output_filename = decks_csv.filename.replace(".csv", "_pod_stats.csv")
-            return send_file(
-                output_csv,
-                download_name=output_filename,
-                as_attachment=True,
-            )
-            response = make_response(output_csv)
-            response.headers["Content-Disposition"] = "attachment; filename=pod_stats.csv"
-            return response
-        else:
-            kf_ids = {pod.link.split("/")[-1] for pod in house_stats}
-            decks = Deck.query.options(
-                joinedload(Deck.cards_from_assoc).joinedload(CardInDeck.card_in_set)
-            ).filter(Deck.kf_id.in_(kf_ids))
-            name_to_deck = {deck.name: deck for deck in decks}
-            return render_template(
-                "csv_to_pods.html",
-                house_stats=house_stats,
-                max_decks=max_decks,
-                name_to_deck=name_to_deck,
-                show_card_images=show_card_images,
-                hide_set=hide_set,
-            )
+    return render_template(
+        "csv_to_pods_landing.html",
+        title="Pod Stats From CSV",
+    )
+
+
+@blueprint.route("/csv_to_pods", methods=["POST"])
+def csv_to_pods_post():
+    max_decks = 1000
+    decks_csv = request.files["decks_csv"]
+    result_type = request.form["result_type"]
+    show_card_images = bool(request.form.get("show_card_images"))
+    hide_set = bool(request.form.get("hide_set"))
+    house_stats = parse_house_stats(decks_csv, max_decks=max_decks)
+    if result_type == "csv":
+        output_csv = house_stats_to_csv(house_stats)
+        output_filename = decks_csv.filename.replace(".csv", "_pod_stats.csv")
+        return send_file(
+            output_csv,
+            download_name=output_filename,
+            as_attachment=True,
+        )
+        response = make_response(output_csv)
+        response.headers["Content-Disposition"] = "attachment; filename=pod_stats.csv"
+        return response
     else:
+        kf_ids = {pod.link.split("/")[-1] for pod in house_stats}
+        decks = Deck.query.options(
+            joinedload(Deck.cards_from_assoc).joinedload(CardInDeck.card_in_set)
+        ).filter(Deck.kf_id.in_(kf_ids))
+        name_to_deck = {deck.name: deck for deck in decks}
         return render_template(
-            "csv_to_pods_landing.html",
-            title="Pod Stats From CSV",
+            "csv_to_pods.html",
+            house_stats=house_stats,
+            max_decks=max_decks,
+            name_to_deck=name_to_deck,
+            show_card_images=show_card_images,
+            hide_set=hide_set,
         )
 
 
