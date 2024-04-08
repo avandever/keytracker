@@ -240,6 +240,7 @@ def csv_to_pods():
 @blueprint.route("/csv_to_pods", methods=["POST"])
 def csv_to_pods_post():
     max_decks = 1000
+    max_to_fetch = 2
     decks_csv = request.files["decks_csv"]
     result_type = request.form["result_type"]
     show_card_images = bool(request.form.get("show_card_images"))
@@ -261,7 +262,19 @@ def csv_to_pods_post():
         decks = Deck.query.options(
             joinedload(Deck.cards_from_assoc).joinedload(CardInDeck.card_in_set)
         ).filter(Deck.kf_id.in_(kf_ids))
+        missing_deck_count = len(kf_ids) - decks.count()
         name_to_deck = {deck.name: deck for deck in decks}
+        if missing_deck_count > 0:
+            missing_kf_ids = kf_ids - {d.kf_id for d in decks}
+            if missing_deck_count <= max_to_fetch:
+                logger.debug("Missing one or two decks, attempting to fetch.")
+                for kf_id in missing_kf_ids:
+                    deck = get_deck_by_id_with_zeal(kf_id)
+                    name_to_deck[deck.name] = deck
+            else:
+                logger.debug("Missing too many decks from db, skipping some.")
+                flash(f"Warning: {missing_deck_count} unrecognized decks in csv. Skipping them for now, but if you try again later they may be available.")
+                house_stats = [p for p in house_stats if p.name in name_to_deck.keys()]
         return render_template(
             "csv_to_pods.html",
             house_stats=house_stats,
