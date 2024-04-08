@@ -99,7 +99,11 @@ async def get_card_image(
     group_by: List[str] = None,
 ) -> None:
     group_by_paths = build_image_dirs(image_dir, card, group_by)
-    output_file = os.path.join(image_dir, os.path.basename(card.front_image))
+    try:
+        output_file = os.path.join(image_dir, os.path.basename(card.front_image))
+    except TypeError:
+        print(f"{type(card)}:{card.card_title}:{card.id}:{card.front_image}")
+        raise
     group_by_links = [
         os.path.join(
             group_by_path,
