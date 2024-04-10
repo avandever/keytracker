@@ -483,3 +483,8 @@ def oauth_redirect():
     membership = memberships[0] if memberships and len(memberships) > 0 else None
     print(memberships)
     return str(memberships)
+
+
+@blueprint.route("/patreon")
+def patreon():
+    return render_template("patreon.html")
