@@ -61,6 +61,7 @@ class House(enum.Enum):
     # anomalies, revenants, DAV, and It's Coming
     NONE = "No House"
     ELDERS = "Elders"
+    IRONYXREBELS = "Ironyx Rebels"
 
 
 house_str_to_enum = {h.value: h for h in House.__members__.values()}
