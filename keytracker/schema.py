@@ -91,6 +91,7 @@ class Expansion(enum.Enum):
     GR = "Grim Reminders"
     M24 = "Menagerie 2024"
     VM24 = "Vault Masters 2024"
+    MCW = "Martian Civil War"
 
 
 class Rarity(enum.Enum):
@@ -125,6 +126,7 @@ EXPANSION_VALUES = [
     ExpansionValues("Grim Reminders", "GR", "GR", 700),
     ExpansionValues("Menagerie 2024", "M24", "M24", 722),
     ExpansionValues("Vault Masters 2024", "VM24", "VM24", 737),
+    ExpansionValues("Martian Civil War", "MCW", "MCW", 892),
 ]
 
 EXPANSION_ID_TO_ABBR = {exp.number: exp.shortname for exp in EXPANSION_VALUES}
