@@ -132,6 +132,38 @@ EXPANSION_VALUES = [
 EXPANSION_ID_TO_ABBR = {exp.number: exp.shortname for exp in EXPANSION_VALUES}
 
 
+class KeyforgeSet(db.Model):
+    __tablename__ = "tracker_set"
+    number = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    shortname = db.Column(db.String(10), nullable=False)
+    dokname = db.Column(db.String(10), nullable=False)
+
+
+class KeyforgeRarity(db.Model):
+    __tablename__ = "tracker_rarity"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(20), nullable=False, index=True)
+
+
+class KeyforgeCardType(db.Model):
+    __tablename__ = "tracker_card_type"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(20), nullable=False, index=True)
+
+
+class KeyforgeHouse(db.Model):
+    __tablename__ = "tracker_house"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(30), nullable=False, index=True)
+
+
+class DeckLanguage(db.Model):
+    __tablename__ = "tracker_deck_language"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(50), nullable=False, index=True)
+
+
 class GlobalVariable(db.Model):
     __tablename__ = "tracker_global_variable"
     name = db.Column(db.String(100), primary_key=True)
