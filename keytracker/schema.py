@@ -306,6 +306,11 @@ class PodStats(db.Model):
         db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
     )
     house = db.Column(db.Enum(House), primary_key=True)
+    kf_house_id = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeHouse.__table__.c.id),
+    )
+    kf_house = db.relationship("KeyforgeHouse")
     deck = db.relationship("Deck", back_populates="pod_stats")
     enhanced_amber = db.Column(db.Integer, default=0)
     enhanced_capture = db.Column(db.Integer, default=0)
@@ -382,6 +387,11 @@ class PlatonicCard(db.Model):
     armor = db.Column(db.Integer)
     flavor_text = db.Column(db.String(512))
     house = db.Column(db.Enum(House))
+    kf_house_id = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeHouse.__table__.c.id),
+    )
+    kf_house = db.relationship("KeyforgeHouse")
     expansions = db.relationship("PlatonicCardInSet", back_populates="card")
     is_non_deck = db.Column(db.Boolean, default=False)
 
@@ -405,6 +415,11 @@ class PlatonicCardInSet(db.Model):
     # Every PlatonicCardInSet is either maverick or not, so actually it makes sense to
     # record house here. It can eventually be dropped from CardInDeck.
     house = db.Column(db.Enum(House))
+    kf_house_id = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeHouse.__table__.c.id),
+    )
+    kf_house = db.relationship("KeyforgeHouse")
     is_maverick = db.Column(db.Boolean, default=False)
     # And enhanced vs. non-enhanced are also different ids
     is_enhanced = db.Column(db.Boolean, default=False)
@@ -690,6 +705,11 @@ class HouseTurnCounts(db.Model):
     player = db.relationship("Player")
     house = db.Column(db.Enum(House))
     turns = db.Column(db.Integer)
+    kf_house_id = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeHouse.__table__.c.id),
+    )
+    kf_house = db.relationship("KeyforgeHouse")
 
 
 class TurnState(db.Model):

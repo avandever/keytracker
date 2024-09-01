@@ -17,6 +17,7 @@ from keytracker.schema import (
     GlobalVariable,
     House,
     HouseTurnCounts,
+    KeyforgeHouse,
     PlatonicCard,
     PlatonicCardInSet,
     Player,
@@ -675,6 +676,15 @@ def randip() -> str:
     return f"192.168.{third}.{fourth}"
 
 
+def get_or_create_house(name: str) -> KeyforgeHouse:
+    house = KeyforgeHouse.filter_by(name=name).first()
+    if house is None:
+        house = KeyforgeHouse(name=name)
+        db.session.add(house)
+        db.session.commit()
+    return house
+
+
 def turn_counts_from_logs(game: Game) -> None:
     counts = defaultdict(dict)
     players = {}
@@ -690,6 +700,7 @@ def turn_counts_from_logs(game: Game) -> None:
                     game=game,
                     player=player,
                     house=house,
+                    kf_house=get_or_create_house(house),
                     turns=0,
                     winner=player.username == game.winner,
                 )
@@ -709,6 +720,7 @@ def turn_counts_from_logs(game: Game) -> None:
                     game=game,
                     player=player,
                     house=house,
+                    kf_house=get_or_create_house(house),
                     turns=0,
                     winner=player.username == game.winner,
                 )
@@ -778,6 +790,7 @@ def create_platonic_card(card: Card) -> PlatonicCard:
         flavor_text=card.flavor_text,
         is_non_deck=card.is_non_deck,
         house=house_str_to_enum[card.house],
+        kf_house=get_or_create_house(card.house),
     )
     db.session.add(platonic_card)
     if card.traits:
@@ -904,6 +917,7 @@ def calculate_pod_stats(deck: Deck) -> None:
             pod = PodStats()
             db.session.add(pod)
         pod.house = house
+        pod.kf_house = get_or_create_house(house.value)
         pod.deck = deck
         pod.enhanced_amber = amber
         pod.enhanced_capture = capture
