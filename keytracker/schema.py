@@ -251,7 +251,11 @@ class Deck(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     kf_id = db.Column(db.String(36), index=True, nullable=False)
     name = db.Column(db.String(256))
-    expansion = db.Column(db.Integer)
+    expansion = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeSet.__table__.c.number),
+    )
+    kf_set = db.relationship("KeyforgeSet")
     sas_rating = db.Column(db.Integer)
     aerc_score = db.Column(db.Integer)
     sas_version = db.Column(db.Integer)
@@ -589,6 +593,14 @@ class Game(db.Model):
     winner_keys = db.Column(db.Integer)
     winner_checks = db.Column(db.Integer)
     winner_deck_expansion = db.Column(db.Enum(Expansion))
+    winner_deck_kf_set_id = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeSet.__table__.c.number),
+    )
+    winner_deck_kf_set = db.relationship(
+        "KeyforgeSet",
+        foreign_keys=winner_deck_kf_set_id,
+    )
     winner_upgrades_played = db.Column(db.Integer)
     winner_actions_played = db.Column(db.Integer)
     winner_creatures_played = db.Column(db.Integer)
@@ -614,6 +626,14 @@ class Game(db.Model):
     loser_keys = db.Column(db.Integer)
     loser_checks = db.Column(db.Integer)
     loser_deck_expansion = db.Column(db.Enum(Expansion))
+    loser_deck_kf_set_id = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeSet.__table__.c.number),
+    )
+    loser_deck_kf_set = db.relationship(
+        "KeyforgeSet",
+        foreign_keys=loser_deck_kf_set_id,
+    )
     loser_upgrades_played = db.Column(db.Integer)
     loser_actions_played = db.Column(db.Integer)
     loser_creatures_played = db.Column(db.Integer)
