@@ -11,6 +11,7 @@ from keytracker.schema import (
     CardInDeck,
     CardType,
     Deck,
+    DeckLanguage,
     DokDeck,
     Enhancements,
     Game,
@@ -947,6 +948,11 @@ def guess_deck_language(deck: Deck) -> None:
         deck.language = None
     else:
         deck.language = guess.name
+        language = DeckLanguage.query.filter_by(name=guess.name).first()
+        if language is None:
+            language = DeckLanguage(name=guess.name)
+            db.session.add(language)
+        deck.deck_language = language
 
 
 async def get_decks_from_page(page: int) -> Iterable[str]:

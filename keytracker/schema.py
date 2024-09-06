@@ -265,6 +265,11 @@ class Deck(db.Model):
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
     pod_stats = db.relationship("PodStats", back_populates="deck")
     language = db.Column(db.Enum(Language))
+    deck_language_id = db.Column(
+        db.Integer,
+        db.ForeignKey(DeckLanguage.__table__.c.id),
+    )
+    deck_language = db.relationship("DeckLanguage")
 
     def as_xml(self) -> str:
         deck = ET.Element("deck")
