@@ -18,6 +18,8 @@ from keytracker.schema import (
     House,
     HouseTurnCounts,
     KeyforgeHouse,
+    KeyforgeSet,
+    KeyforgeRarity,
     PlatonicCard,
     PlatonicCardInSet,
     Player,
@@ -802,10 +804,13 @@ def create_platonic_card(card: Card) -> PlatonicCard:
                 db.session.add(trait)
             platonic_card.traits.append(trait)
     if card.expansion not in {x.expansion for x in platonic_card.expansions}:
+        rarity = KeyforgeRarity.query.filter_by(name=card.rarity).one()
+        assert rarity is not None, f"Unrecognized rarity {card.rarity}"
         pc_in_set = PlatonicCardInSet(
             card=platonic_card,
             expansion=card.expansion,
             rarity=rarity_str_to_enum[card.rarity],
+            kf_rarity = rarity,
             card_number=card.card_number,
             is_anomaly=card.is_anomaly,
         )
@@ -1330,3 +1335,9 @@ def update_platonic_info(
     card_in_set.card_number = card_json["card_number"]
     card_in_set.is_anomaly = card_json["is_anomaly"]
     card_in_set.front_image = card_json["front_image"]
+    if card_in_set.kf_rarity is None or card_in_set.kf_rarity.name != card_json["rarity"]:
+        rarity = KeyforgeRarity.query.filter_by(name=card_json["rarity"]).first()
+        if rarity is None:
+            rarity = KeyforgeRarity(name=card_json["rarity"])
+            db.session.add(rarity)
+        card_in_set.kf_rarity = rarity

@@ -413,6 +413,12 @@ class PlatonicCardInSet(db.Model):
     card_kf_id = db.Column(db.String(36))
     expansion = db.Column(db.Integer, primary_key=True)
     rarity = db.Column(db.Enum(Rarity))
+    kf_rarity_id = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeRarity.__table__.c.id),
+        index=True,
+    )
+    kf_rarity = db.relationship("KeyforgeRarity")
     card_number = db.Column(db.String(10))
     is_anomaly = db.Column(db.Boolean, default=False)
     front_image = db.Column(db.String(100))
