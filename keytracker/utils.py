@@ -17,6 +17,7 @@ from keytracker.schema import (
     GlobalVariable,
     House,
     HouseTurnCounts,
+    KeyforgeCardType,
     KeyforgeHouse,
     KeyforgeSet,
     KeyforgeRarity,
@@ -781,9 +782,14 @@ def create_platonic_card(card: Card) -> PlatonicCard:
     card_type = card.card_type
     if card_type == "Creature1":
         card_type = "Creature"
+    card_type_obj = KeyforgeCardType.query.filter_by(name=card.card_type).first()
+    if card_type_obj is None:
+        card_type_obj = KeyforgeCardType(name=card.card_type)
+        db.session.add(card_type_obj)
     platonic_card = PlatonicCard(
         card_title=card.card_title,
         card_type=card_type_str_to_enum[card_type],
+        kf_card_type=card_type_obj,
         front_image=card.front_image,
         card_text=card.card_text,
         amber=card.amber,
@@ -1313,6 +1319,12 @@ def update_platonic_info(
     else:
         platonic_card.traits.clear()
     platonic_card.card_type = card_type_str_to_enum[card_json["card_type"]]
+    if platonic_card.kf_card_type is None or platonic_card.kf_card_type != card_json["card_type"]:
+        card_type = KeyforgeCardType.query.filter_by(name=card_json["card_type"]).first()
+        if card_type is None:
+            card_type = KeyforgeCardType(name=card_json["card_type"])
+            db.session.add(card_type)
+        platonic_card.kf_card_type = card_type
     platonic_card.front_image = card_json["front_image"]
     platonic_card.card_text = card_json["card_text"]
     platonic_card.amber = int(card_json["amber"])

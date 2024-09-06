@@ -383,6 +383,11 @@ class PlatonicCard(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     card_title = db.Column(db.String(64))
     card_type = db.Column(db.Enum(CardType))
+    kf_card_type_id = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeCardType.__table__.c.id),
+    )
+    kf_card_type = db.relationship("KeyforgeCardType")
     front_image = db.Column(db.String(100))
     card_text = db.Column(db.String(512))
     traits = db.relationship("Trait", secondary=platonic_card_traits)
