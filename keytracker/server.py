@@ -112,7 +112,6 @@ def shell_context():
         "PlatonicCardInSet": schema.PlatonicCardInSet,
         "Player": schema.Player,
         "PodStats": schema.PodStats,
-        "Rarity": schema.Rarity,
         "time": time,
         "Trait": schema.Trait,
         "TurnState": schema.TurnState,

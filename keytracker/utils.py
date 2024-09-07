@@ -30,7 +30,6 @@ from keytracker.schema import (
     Trait,
     house_str_to_enum,
     card_type_str_to_enum,
-    rarity_str_to_enum,
 )
 import operator
 import os
@@ -816,7 +815,6 @@ def create_platonic_card(card: Card) -> PlatonicCard:
         pc_in_set = PlatonicCardInSet(
             card=platonic_card,
             expansion=card.expansion,
-            rarity=rarity_str_to_enum[card.rarity],
             kf_rarity = rarity,
             card_number=card.card_number,
             is_anomaly=card.is_anomaly,
@@ -1158,6 +1156,7 @@ def are_cards_okay(
             or card.is_anomaly != card_json["is_anomaly"]
             or card.is_enhanced != card_json["is_enhanced"]
             or card.is_non_deck != card_json["is_non_deck"]
+            or card.rarity != card_json["rarity"]
         ):
             current_app.logger.debug("Found mismatch in simple strings")
             if card.card_title != card_json["card_title"]:
@@ -1186,12 +1185,13 @@ def are_cards_okay(
                 current_app.logger.debug(f"is_enhanced: {card.is_enhanced} vs {card_json['is_enhanced']}")
             if card.is_non_deck != card_json["is_non_deck"]:
                 current_app.logger.debug(f"is_non_deck: {card.is_non_deck} vs {card_json['is_non_deck']}")
+            if card.rarity != card_json["rarity"]:
+                current_app.logger.debug(f"rarity: {card.rarity} vs {card_json['rarity']}")
             return False
         # Check enums
         if (
             card.card_type != card_type_str_to_enum[card_json["card_type"]]
             or card.house != house_str_to_enum[card_json["house"]]
-            or card.rarity != rarity_str_to_enum[card_json["rarity"]]
         ):
             current_app.logger.debug("Found mismatch in enums")
             return False
@@ -1349,7 +1349,6 @@ def update_platonic_info(
     platonic_card.is_non_deck = card_json["is_non_deck"]
     # Double-check that card in set info is right
     card_in_set.expansion = card_json["expansion"]
-    card_in_set.rarity = rarity_str_to_enum[card_json["rarity"]]
     card_in_set.card_number = card_json["card_number"]
     card_in_set.is_anomaly = card_json["is_anomaly"]
     card_in_set.front_image = card_json["front_image"]

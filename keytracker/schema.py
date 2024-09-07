@@ -80,21 +80,6 @@ class CardType(enum.Enum):
 card_type_str_to_enum = {ct.value: ct for ct in CardType.__members__.values()}
 
 
-class Rarity(enum.Enum):
-    COMMON = "Common"
-    UNCOMMON = "Uncommon"
-    RARE = "Rare"
-    FIXED = "FIXED"
-    VARIANT = "Variant"
-    THETIDE = "The Tide"
-    SPECIAL = "Special"
-    EVILTWIN = "Evil Twin"
-    TOKEN = "Token"
-
-
-rarity_str_to_enum = {r.value: r for r in Rarity.__members__.values()}
-
-
 ExpansionValues = namedtuple(
     "ExpansionValues", ["name", "shortname", "dokname", "number"]
 )
@@ -407,13 +392,13 @@ class PlatonicCardInSet(db.Model):
     card = db.relationship("PlatonicCard", back_populates="expansions")
     card_kf_id = db.Column(db.String(36))
     expansion = db.Column(db.Integer, primary_key=True)
-    rarity = db.Column(db.Enum(Rarity))
     kf_rarity_id = db.Column(
         db.Integer,
         db.ForeignKey(KeyforgeRarity.__table__.c.id),
         index=True,
     )
     kf_rarity = db.relationship("KeyforgeRarity")
+    rarity = association_proxy("kf_rarity", "name")
     card_number = db.Column(db.String(10))
     is_anomaly = db.Column(db.Boolean, default=False)
     front_image = db.Column(db.String(100))
