@@ -39,9 +39,6 @@ POSSIBLE_LANGUAGES = [
 ]
 
 
-Language = enum.Enum("Language", [l.name for l in POSSIBLE_LANGUAGES])
-
-
 class House(enum.Enum):
     BROBNAR = "Brobnar"
     DIS = "Dis"
@@ -234,12 +231,12 @@ class Deck(db.Model):
     enhancements = db.relationship("Enhancements", back_populates="deck")
     cards_from_assoc = db.relationship("CardInDeck", back_populates="deck")
     pod_stats = db.relationship("PodStats", back_populates="deck")
-    language = db.Column(db.Enum(Language))
     deck_language_id = db.Column(
         db.Integer,
         db.ForeignKey(DeckLanguage.__table__.c.id),
     )
     deck_language = db.relationship("DeckLanguage")
+    language = association_proxy("language", "name")
 
     def as_xml(self) -> str:
         deck = ET.Element("deck")
