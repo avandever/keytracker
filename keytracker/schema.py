@@ -39,31 +39,6 @@ POSSIBLE_LANGUAGES = [
 ]
 
 
-class House(enum.Enum):
-    BROBNAR = "Brobnar"
-    DIS = "Dis"
-    EKWIDON = "Ekwidon"
-    LOGOS = "Logos"
-    MARS = "Mars"
-    SANCTUM = "Sanctum"
-    SAURIAN = "Saurian"
-    SHADOWS = "Shadows"
-    STARALLIANCE = "Star Alliance"
-    UNFATHOMABLE = "Unfathomable"
-    UNTAMED = "Untamed"
-    THETIDE = "The Tide"
-    GEISTOID = "Geistoid"
-    KEYRAKEN = "Keyraken"
-    # Special marker for platonic cards that don't have a house to call home, e.g.
-    # anomalies, revenants, DAV, and It's Coming
-    NONE = "No House"
-    ELDERS = "Elders"
-    IRONYXREBELS = "Ironyx Rebels"
-
-
-house_str_to_enum = {h.value: h for h in House.__members__.values()}
-
-
 ExpansionValues = namedtuple(
     "ExpansionValues", ["name", "shortname", "dokname", "number"]
 )
@@ -268,12 +243,13 @@ class PodStats(db.Model):
     deck_id = db.Column(
         db.Integer, db.ForeignKey(Deck.__table__.c.id), primary_key=True
     )
-    house = db.Column(db.Enum(House), primary_key=True)
     kf_house_id = db.Column(
         db.Integer,
         db.ForeignKey(KeyforgeHouse.__table__.c.id),
+        primary_key=True,
     )
     kf_house = db.relationship("KeyforgeHouse")
+    house = association_proxy("kf_house", "name")
     deck = db.relationship("Deck", back_populates="pod_stats")
     enhanced_amber = db.Column(db.Integer, default=0)
     enhanced_capture = db.Column(db.Integer, default=0)
@@ -354,12 +330,12 @@ class PlatonicCard(db.Model):
     power = db.Column(db.Integer)
     armor = db.Column(db.Integer)
     flavor_text = db.Column(db.String(512))
-    house = db.Column(db.Enum(House))
     kf_house_id = db.Column(
         db.Integer,
         db.ForeignKey(KeyforgeHouse.__table__.c.id),
     )
     kf_house = db.relationship("KeyforgeHouse")
+    house = association_proxy("kf_house", "name")
     expansions = db.relationship("PlatonicCardInSet", back_populates="card")
     is_non_deck = db.Column(db.Boolean, default=False)
 
@@ -388,12 +364,12 @@ class PlatonicCardInSet(db.Model):
     front_image = db.Column(db.String(100))
     # Every PlatonicCardInSet is either maverick or not, so actually it makes sense to
     # record house here. It can eventually be dropped from CardInDeck.
-    house = db.Column(db.Enum(House))
     kf_house_id = db.Column(
         db.Integer,
         db.ForeignKey(KeyforgeHouse.__table__.c.id),
     )
     kf_house = db.relationship("KeyforgeHouse")
+    house = association_proxy("kf_house", "name")
     is_maverick = db.Column(db.Boolean, default=False)
     # And enhanced vs. non-enhanced are also different ids
     is_enhanced = db.Column(db.Boolean, default=False)
@@ -449,8 +425,7 @@ class CardInDeck(db.Model):
         index=True,
     )
     deck = db.relationship("Deck", back_populates="cards_from_assoc")
-    # TODO: replace with association proxy to card_in_set
-    house = db.Column(db.Enum(House))
+    house = association_proxy("card_in_set", "house")
     # TODO: replace with association proxy to card_in_set
     is_enhanced = db.Column(db.Boolean, default=False)
     enhanced_amber = db.Column(db.Integer, default=0)
@@ -688,13 +663,13 @@ class HouseTurnCounts(db.Model):
         db.Integer, db.ForeignKey(Player.__table__.c.id), primary_key=True, index=True
     )
     player = db.relationship("Player")
-    house = db.Column(db.Enum(House))
     turns = db.Column(db.Integer)
     kf_house_id = db.Column(
         db.Integer,
         db.ForeignKey(KeyforgeHouse.__table__.c.id),
     )
     kf_house = db.relationship("KeyforgeHouse")
+    house = association_proxy("kf_house", "name")
 
 
 class TurnState(db.Model):

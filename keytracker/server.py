@@ -104,7 +104,6 @@ def shell_context():
         "EnhancedCard": schema.EnhancedCard,
         "Enhancements": schema.Enhancements,
         "Game": schema.Game,
-        "House": schema.House,
         "HouseTurnCounts": schema.HouseTurnCounts,
         "logging": logging,
         "Log": schema.Log,

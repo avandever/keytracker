@@ -15,7 +15,6 @@ from keytracker.schema import (
     Enhancements,
     Game,
     GlobalVariable,
-    House,
     HouseTurnCounts,
     KeyforgeCardType,
     KeyforgeHouse,
@@ -27,7 +26,6 @@ from keytracker.schema import (
     PodStats,
     POSSIBLE_LANGUAGES,
     Trait,
-    house_str_to_enum,
 )
 import operator
 import os
@@ -757,7 +755,7 @@ def randip() -> str:
 
 
 def get_or_create_house(name: str) -> KeyforgeHouse:
-    house = KeyforgeHouse.filter_by(name=name).first()
+    house = KeyforgeHouse.query.filter_by(name=name).first()
     if house is None:
         house = KeyforgeHouse(name=name)
         db.session.add(house)
@@ -772,7 +770,7 @@ def turn_counts_from_logs(game: Game) -> None:
         m = HOUSE_CHOICE_MATCHER.match(log.message)
         if m:
             username = m.group(1)
-            house = getattr(House, m.group(2).upper()).name
+            house = m.group(2)
             player = username_to_player(username)
             count = counts[username].get(house)
             if count is None:
@@ -792,7 +790,7 @@ def turn_counts_from_logs(game: Game) -> None:
             # This should be set from last hit on HOUSE_CHOICE_MATCHER
             count.turns -= 1
             username = n.group(1)
-            house = getattr(House, n.group(2).upper()).name
+            house = n.group(2)
             player = username_to_player(username)
             count = counts[username].get(house)
             if count is None:
@@ -873,7 +871,6 @@ def create_platonic_card(card: Card) -> PlatonicCard:
         armor=card.armor,
         flavor_text=card.flavor_text,
         is_non_deck=card.is_non_deck,
-        house=house_str_to_enum[card.house],
         kf_house=get_or_create_house(card.house),
     )
     db.session.add(platonic_card)
@@ -974,7 +971,7 @@ def calculate_pod_stats(deck: Deck) -> None:
     for card in deck.cards_from_assoc:
         house_to_cards[card.house].append(card)
     for house, cards in house_to_cards.items():
-        if house == House.THETIDE:
+        if house == "The Tide":
             continue
         enhancements, amber, capture, draw, damage = 0, 0, 0, 0, 0
         mutants, creatures, raw_amber = 0, 0, 0
@@ -1245,6 +1242,7 @@ def are_cards_okay(
             or card.is_non_deck != card_json["is_non_deck"]
             or card.rarity != card_json["rarity"]
             or card.card_type != card_json["card_type"]
+            or card.house != card_json["house"]
         ):
             current_app.logger.debug("Found mismatch in simple strings")
             if card.card_title != card_json["card_title"]:
@@ -1301,10 +1299,8 @@ def are_cards_okay(
                 current_app.logger.debug(
                     f"card_type: {card.card_type} vs {card_json['card_type']}"
                 )
-            return False
-        # Check enums
-        if card.house != house_str_to_enum[card_json["house"]]:
-            current_app.logger.debug("Found mismatch in enums")
+            if card.house != card_json["house"]:
+                current_app.logger.debug(f"house: {card.house} vs {card_json['house']}")
             return False
         # Check traits
         if card_json["traits"] and {t.name for t in card.traits} != set(
@@ -1381,7 +1377,6 @@ def add_cards_v2_new(
             platonic_card=pc,
             card_in_set=pcis,
             deck=deck,
-            house=house_str_to_enum[card_json["house"]],
             is_enhanced=card_json["is_enhanced"],
             enhanced_amber=0,
             enhanced_capture=0,
@@ -1460,6 +1455,8 @@ def update_platonic_info(
     platonic_card.power = normalize_stat(card_json["power"])
     platonic_card.armor = normalize_stat(card_json["armor"])
     platonic_card.flavor_text = card_json["flavor_text"]
+    house = get_or_create_house(card_json["house"])
+    card_in_set.kf_house = house
     # Don't set platonic card house for mavericks, anomalies, or revenants
     if not any(
         [
@@ -1470,7 +1467,7 @@ def update_platonic_info(
             card_json["card_title"] in MM_UNHOUSED_CARDS + REVENANTS,
         ]
     ):
-        platonic_card.house = house_str_to_enum[card_json["house"]]
+        platonic_card.kf_house = house
     platonic_card.is_non_deck = card_json["is_non_deck"]
     # Double-check that card in set info is right
     card_in_set.expansion = card_json["expansion"]

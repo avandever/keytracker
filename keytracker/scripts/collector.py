@@ -8,7 +8,6 @@ from keytracker.schema import (
     CardInDeck,
     Deck,
     GlobalVariable,
-    house_str_to_enum,
     PlatonicCard,
 )
 from aiohttp_requests import requests as arequests
@@ -42,7 +41,7 @@ click_log.basic_config()
 @click_log.simple_verbosity_option()
 @click.option("--image-dir", default="keyforge-images")
 @click.option("--group-by", default="expansion,house,rarity,card_type")
-@click.option("--only-house", default=None, type=click.Choice(house_str_to_enum.keys()))
+@click.option("--only-house", default=None, type=str)
 def get_images(image_dir: str, group_by: str, only_house: str = None) -> None:
     asyncio.run(
         _get_images(
@@ -59,7 +58,7 @@ async def _get_images(
     with current_app.app_context():
         pcq = PlatonicCard.query
         if only_house:
-            pcq = pcq.filter_by(house=house_str_to_enum[only_house])
+            pcq = pcq.filter_by(house=only_house)
         all_cards = pcq.all()
         for card in all_cards:
             await get_card_image(
