@@ -80,21 +80,6 @@ class CardType(enum.Enum):
 card_type_str_to_enum = {ct.value: ct for ct in CardType.__members__.values()}
 
 
-class Expansion(enum.Enum):
-    COTA = "Call of the Archons"
-    AOA = "Age of Ascension"
-    WC = "Worlds Collide"
-    MM = "Mass Mutation"
-    DT = "Dark Tidings"
-    WOE = "Winds of Exchange"
-    VM23 = "Vault Masters 2023"
-    UC22 = "Unchained 2022"
-    GR = "Grim Reminders"
-    M24 = "Menagerie 2024"
-    VM24 = "Vault Masters 2024"
-    MCW = "Martian Civil War"
-
-
 class Rarity(enum.Enum):
     COMMON = "Common"
     UNCOMMON = "Uncommon"
@@ -608,7 +593,6 @@ class Game(db.Model):
     winner_deck_name = db.Column(db.String(100))
     winner_keys = db.Column(db.Integer)
     winner_checks = db.Column(db.Integer)
-    winner_deck_expansion = db.Column(db.Enum(Expansion))
     winner_deck_kf_set_id = db.Column(
         db.Integer,
         db.ForeignKey(KeyforgeSet.__table__.c.number),
@@ -641,7 +625,6 @@ class Game(db.Model):
     loser_deck_name = db.Column(db.String(100))
     loser_keys = db.Column(db.Integer)
     loser_checks = db.Column(db.Integer)
-    loser_deck_expansion = db.Column(db.Enum(Expansion))
     loser_deck_kf_set_id = db.Column(
         db.Integer,
         db.ForeignKey(KeyforgeSet.__table__.c.number),

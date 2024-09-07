@@ -103,7 +103,6 @@ def shell_context():
         "DokDeck": schema.DokDeck,
         "EnhancedCard": schema.EnhancedCard,
         "Enhancements": schema.Enhancements,
-        "Expansion": schema.Expansion,
         "Game": schema.Game,
         "House": schema.House,
         "HouseTurnCounts": schema.HouseTurnCounts,
