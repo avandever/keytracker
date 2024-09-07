@@ -60,7 +60,7 @@ def upload_whole_game():
     db.session.add(game)
     db.session.commit()
     log_text = request.form["log"]
-    for (seq, log) in enumerate(log_text.split("\n")):
+    for seq, log in enumerate(log_text.split("\n")):
         log_obj = Log(
             game_id=game.id,
             message=log,
@@ -93,7 +93,7 @@ def upload_log():
     db.session.refresh(game)
     game.crucible_game_id = f"UNKNOWN-{game.id}"
     db.session.commit()
-    for (seq, log) in enumerate(log_text.split("\n")):
+    for seq, log in enumerate(log_text.split("\n")):
         log_obj = Log(
             game_id=game.id,
             message=log,

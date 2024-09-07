@@ -210,7 +210,9 @@ def render_input_number(
 def render_card_images(deck: Deck, house: str = None) -> str:
     output = ""
     if house:
-        cards = [c for c in deck.cards_from_assoc if c.house.value.replace(" ", "") == house]
+        cards = [
+            c for c in deck.cards_from_assoc if c.house.value.replace(" ", "") == house
+        ]
     else:
         cards = deck.cards_from_assoc
     for card in cards:
@@ -222,11 +224,11 @@ def render_card_images(deck: Deck, house: str = None) -> str:
 
 def get_pip_imgs(card: Card) -> str:
     pips = (
-        amber_pip * card.enhanced_amber +
-        draw_pip * card.enhanced_draw +
-        capture_pip * card.enhanced_capture +
-        damage_pip * card.enhanced_damage +
-        discard_pip * card.enhanced_discard
+        amber_pip * card.enhanced_amber
+        + draw_pip * card.enhanced_draw
+        + capture_pip * card.enhanced_capture
+        + damage_pip * card.enhanced_damage
+        + discard_pip * card.enhanced_discard
     )
     return pips
 
@@ -234,7 +236,9 @@ def get_pip_imgs(card: Card) -> str:
 def render_card_list(deck: Deck, house: str = None) -> str:
     output = []
     if house:
-        cards = [c for c in deck.cards_from_assoc if c.house.value.replace(" ", "") == house]
+        cards = [
+            c for c in deck.cards_from_assoc if c.house.value.replace(" ", "") == house
+        ]
     else:
         cards = deck.cards_from_assoc
     for card in cards:

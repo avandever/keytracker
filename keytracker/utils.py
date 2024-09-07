@@ -9,7 +9,6 @@ from keytracker.schema import (
     db,
     Card,
     CardInDeck,
-    CardType,
     Deck,
     DeckLanguage,
     DokDeck,
@@ -29,7 +28,6 @@ from keytracker.schema import (
     POSSIBLE_LANGUAGES,
     Trait,
     house_str_to_enum,
-    card_type_str_to_enum,
 )
 import operator
 import os
@@ -102,9 +100,30 @@ REVENANTS = [
 
 
 class CsvPod:
-    __slots__ = ("name", "sas", "expansion", "house", "cards", "link", "on_market", "price")
+    __slots__ = (
+        "name",
+        "sas",
+        "expansion",
+        "house",
+        "cards",
+        "link",
+        "on_market",
+        "price",
+    )
 
-    def __init__(self, name, expansion, link, house, sas, cards, for_sale, for_auction, for_trade, price) -> None:
+    def __init__(
+        self,
+        name,
+        expansion,
+        link,
+        house,
+        sas,
+        cards,
+        for_sale,
+        for_auction,
+        for_trade,
+        price,
+    ) -> None:
         self.name = name
         self.expansion = expansion
         self.house = house
@@ -122,13 +141,40 @@ class CsvPod:
 
 
 class DeckFromCsv:
-    __slots__ = ("name", "house1", "house2", "house3", "set_string", "house1_sas",
-                 "house2_sas", "house3_sas", "house1_cards", "house2_cards",
-                 "house3_cards", "link", "for_sale", "for_auction", "for_trade",
-                 "price")
-    ROWS_TO_READ = ('\ufeff"Name"', "Houses", "Expansion", "House 1 SAS", "House 2 SAS",
-                    "House 3 SAS", "House 1 Cards", "House 2 Cards", "House 3 Cards",
-                    "DoK Link", "For Sale", "For Auction", "For Trade", "Price")
+    __slots__ = (
+        "name",
+        "house1",
+        "house2",
+        "house3",
+        "set_string",
+        "house1_sas",
+        "house2_sas",
+        "house3_sas",
+        "house1_cards",
+        "house2_cards",
+        "house3_cards",
+        "link",
+        "for_sale",
+        "for_auction",
+        "for_trade",
+        "price",
+    )
+    ROWS_TO_READ = (
+        '\ufeff"Name"',
+        "Houses",
+        "Expansion",
+        "House 1 SAS",
+        "House 2 SAS",
+        "House 3 SAS",
+        "House 1 Cards",
+        "House 2 Cards",
+        "House 3 Cards",
+        "DoK Link",
+        "For Sale",
+        "For Auction",
+        "For Trade",
+        "Price",
+    )
 
     def __init__(
         self,
@@ -145,7 +191,7 @@ class DeckFromCsv:
         for_sale,
         for_auction,
         for_trade,
-        price
+        price,
     ):
         self.name = name
         houses = house_string.split(" | ")
@@ -164,20 +210,49 @@ class DeckFromCsv:
         self.price = price
 
     def __repr__(self) -> str:
-        return (f"{self.name} - {self.house1}: {self.house1_sas}, "
-                f"{self.house2}: {self.house2_sas}, {self.house3}: {self.house3_sas}")
+        return (
+            f"{self.name} - {self.house1}: {self.house1_sas}, "
+            f"{self.house2}: {self.house2_sas}, {self.house3}: {self.house3_sas}"
+        )
 
     def as_pods(self) -> List[CsvPod]:
         return [
-            CsvPod(self.name, self.set_string, self.link, self.house1, self.house1_sas,
-                self.house1_cards, self.for_sale, self.for_auction, self.for_trade,
-                self.price),
-            CsvPod(self.name, self.set_string, self.link, self.house2, self.house2_sas,
-                self.house2_cards, self.for_sale, self.for_auction, self.for_trade,
-                self.price),
-            CsvPod(self.name, self.set_string, self.link, self.house3, self.house3_sas,
-                self.house3_cards, self.for_sale, self.for_auction, self.for_trade,
-                self.price),
+            CsvPod(
+                self.name,
+                self.set_string,
+                self.link,
+                self.house1,
+                self.house1_sas,
+                self.house1_cards,
+                self.for_sale,
+                self.for_auction,
+                self.for_trade,
+                self.price,
+            ),
+            CsvPod(
+                self.name,
+                self.set_string,
+                self.link,
+                self.house2,
+                self.house2_sas,
+                self.house2_cards,
+                self.for_sale,
+                self.for_auction,
+                self.for_trade,
+                self.price,
+            ),
+            CsvPod(
+                self.name,
+                self.set_string,
+                self.link,
+                self.house3,
+                self.house3_sas,
+                self.house3_cards,
+                self.for_sale,
+                self.for_auction,
+                self.for_trade,
+                self.price,
+            ),
         ]
 
 
@@ -466,10 +541,12 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
 
 
 def loop_loading_missed_sas(batch_size: int, max_set_id: int = 700) -> None:
-    q = Deck.query.filter(and_(Deck.expansion<max_set_id, Deck.dok==None))
+    q = Deck.query.filter(and_(Deck.expansion < max_set_id, Deck.dok == None))
     query_times = []
     while q.count() > 0:
-        current_app.logger.info(f"{q.count()} decks left. Fetching {batch_size} to process.")
+        current_app.logger.info(
+            f"{q.count()} decks left. Fetching {batch_size} to process."
+        )
         decks = q.limit(batch_size).all()
         while decks:
             deck = decks.pop()
@@ -668,7 +745,7 @@ def add_game_sort(
     query: Query,
     sort_specs: Iterable[Tuple[str, str]],
 ) -> Query:
-    for (col, direction) in sort_specs:
+    for col, direction in sort_specs:
         query = query.order_by(getattr(getattr(Game, col), direction)())
     return query
 
@@ -691,7 +768,7 @@ def get_or_create_house(name: str) -> KeyforgeHouse:
 def turn_counts_from_logs(game: Game) -> None:
     counts = defaultdict(dict)
     players = {}
-    for (i, log) in enumerate(game.logs):
+    for i, log in enumerate(game.logs):
         m = HOUSE_CHOICE_MATCHER.match(log.message)
         if m:
             username = m.group(1)
@@ -788,7 +865,6 @@ def create_platonic_card(card: Card) -> PlatonicCard:
         db.session.add(card_type_obj)
     platonic_card = PlatonicCard(
         card_title=card.card_title,
-        card_type=card_type_str_to_enum[card_type],
         kf_card_type=card_type_obj,
         front_image=card.front_image,
         card_text=card.card_text,
@@ -815,7 +891,7 @@ def create_platonic_card(card: Card) -> PlatonicCard:
         pc_in_set = PlatonicCardInSet(
             card=platonic_card,
             expansion=card.expansion,
-            kf_rarity = rarity,
+            kf_rarity=rarity,
             card_number=card.card_number,
             is_anomaly=card.is_anomaly,
         )
@@ -905,7 +981,7 @@ def calculate_pod_stats(deck: Deck) -> None:
         for card in cards:
             if any(trait.name == "mutant" for trait in card.traits):
                 mutants += 1
-            if card.card_type == CardType.CREATURE:
+            if card.card_type == "Creature":
                 creatures += 1
             raw_amber += card.amber
             amber += card.enhanced_amber
@@ -1007,7 +1083,9 @@ def dump_page_json_to_file(
                 raise
         if "code" in data:
             if tries:
-                current_app.logger.error(f"Got error, retrying: {data['message'] + data['detail']}")
+                current_app.logger.error(
+                    f"Got error, retrying: {data['message'] + data['detail']}"
+                )
                 time.sleep(random.choice(range(20, 40)))
                 continue
             if data["code"] == 429:
@@ -1022,7 +1100,6 @@ def dump_page_json_to_file(
             finished = True
     with open(os.path.join(dest, f"{page}.json"), "w") as fh:
         json.dump(data, fh)
-
 
 
 def get_decks_from_page_v2(
@@ -1064,7 +1141,9 @@ def get_decks_from_page_v2(
                 raise
         if "code" in data:
             if tries:
-                current_app.logger.error(f"Got error, retrying: {data['message'] + data['detail']}")
+                current_app.logger.error(
+                    f"Got error, retrying: {data['message'] + data['detail']}"
+                )
                 time.sleep(random.choice(range(20, 40)))
                 continue
             if data["code"] == 429:
@@ -1089,14 +1168,18 @@ def get_decks_from_page_v2(
             add_one_deck_v2(deck_json, card_details, add_decks_cache, existing_deck)
             add_decks_cache["seen_deck_ids"].add(deck_json["id"])
     if update_highest_page and reverse and len(decks) == page_size:
-        highest_page = GlobalVariable.query.filter_by(name="highest_mv_page_scraped").first()
+        highest_page = GlobalVariable.query.filter_by(
+            name="highest_mv_page_scraped"
+        ).first()
         if page > highest_page.value_int:
             highest_page.value_int = page
             db.session.commit()
     return new_decks
 
 
-def add_one_deck_v2(deck_json, card_details, add_decks_cache=None, deck: Deck = None) -> int:
+def add_one_deck_v2(
+    deck_json, card_details, add_decks_cache=None, deck: Deck = None
+) -> int:
     new_deck = False
     if deck is None:
         deck = Deck(kf_id=deck_json["id"])
@@ -1118,7 +1201,9 @@ def add_one_deck_v2(deck_json, card_details, add_decks_cache=None, deck: Deck = 
         else:
             current_app.logger.debug(f"Clearing and re-adding cards for {deck_str}")
             deck.cards_from_assoc.clear()
-            add_cards_v2_new(deck, deck_card_ids, card_details, bonus_icons, add_decks_cache)
+            add_cards_v2_new(
+                deck, deck_card_ids, card_details, bonus_icons, add_decks_cache
+            )
     db.session.commit()
     return 1 if new_deck else 0
 
@@ -1147,8 +1232,10 @@ def are_cards_okay(
             or card.front_image != card_json["front_image"]
             or card.card_text != card_json["card_text"]
             or card.amber != int(card_json["amber"])
-            or card.power != int(0 if card_json["power"] in ("X", None) else card_json["power"])
-            or card.armor != int(0 if card_json["armor"] in ("X", None) else card_json["armor"])
+            or card.power
+            != int(0 if card_json["power"] in ("X", None) else card_json["power"])
+            or card.armor
+            != int(0 if card_json["armor"] in ("X", None) else card_json["armor"])
             or card.flavor_text != card_json["flavor_text"]
             or card.card_number != card_json["card_number"]
             or card.expansion != card_json["expansion"]
@@ -1157,14 +1244,21 @@ def are_cards_okay(
             or card.is_enhanced != card_json["is_enhanced"]
             or card.is_non_deck != card_json["is_non_deck"]
             or card.rarity != card_json["rarity"]
+            or card.card_type != card_json["card_type"]
         ):
             current_app.logger.debug("Found mismatch in simple strings")
             if card.card_title != card_json["card_title"]:
-                current_app.logger.debug(f"card_title: {diff_strings(card.card_title, card_json['card_title'])}")
+                current_app.logger.debug(
+                    f"card_title: {diff_strings(card.card_title, card_json['card_title'])}"
+                )
             if card.front_image != card_json["front_image"]:
-                current_app.logger.debug(f"front_image: {diff_strings(card.front_image, card_json['front_image'])}")
+                current_app.logger.debug(
+                    f"front_image: {diff_strings(card.front_image, card_json['front_image'])}"
+                )
             if card.card_text != card_json["card_text"]:
-                current_app.logger.debug(f"card_text: {diff_strings(card.card_text, card_json['card_text'])}")
+                current_app.logger.debug(
+                    f"card_text: {diff_strings(card.card_text, card_json['card_text'])}"
+                )
             if card.amber != card_json["amber"]:
                 current_app.logger.debug(f"amber: {card.amber} vs {card_json['amber']}")
             if card.power != normalize_stat(card_json["power"]):
@@ -1172,45 +1266,64 @@ def are_cards_okay(
             if card.armor != normalize_stat(card_json["armor"]):
                 current_app.logger.debug(f"armor: {card.armor} vs {card_json['armor']}")
             if card.flavor_text != card_json["flavor_text"]:
-                current_app.logger.debug(f"flavor_text: {card.flavor_text} vs {card_json['flavor_text']}")
+                current_app.logger.debug(
+                    f"flavor_text: {card.flavor_text} vs {card_json['flavor_text']}"
+                )
             if card.card_number != card_json["card_number"]:
-                current_app.logger.debug(f"card_number: {card.card_number} vs {card_json['card_number']}")
+                current_app.logger.debug(
+                    f"card_number: {card.card_number} vs {card_json['card_number']}"
+                )
             if card.expansion != card_json["expansion"]:
-                current_app.logger.debug(f"expansion: {card.expansion} vs {card_json['expansion']}")
+                current_app.logger.debug(
+                    f"expansion: {card.expansion} vs {card_json['expansion']}"
+                )
             if card.is_maverick != card_json["is_maverick"]:
-                current_app.logger.debug(f"is_maverick: {card.is_maverick} vs {card_json['is_maverick']}")
+                current_app.logger.debug(
+                    f"is_maverick: {card.is_maverick} vs {card_json['is_maverick']}"
+                )
             if card.is_anomaly != card_json["is_anomaly"]:
-                current_app.logger.debug(f"is_anomaly: {card.is_anomaly} vs {card_json['is_anomaly']}")
+                current_app.logger.debug(
+                    f"is_anomaly: {card.is_anomaly} vs {card_json['is_anomaly']}"
+                )
             if card.is_enhanced != card_json["is_enhanced"]:
-                current_app.logger.debug(f"is_enhanced: {card.is_enhanced} vs {card_json['is_enhanced']}")
+                current_app.logger.debug(
+                    f"is_enhanced: {card.is_enhanced} vs {card_json['is_enhanced']}"
+                )
             if card.is_non_deck != card_json["is_non_deck"]:
-                current_app.logger.debug(f"is_non_deck: {card.is_non_deck} vs {card_json['is_non_deck']}")
+                current_app.logger.debug(
+                    f"is_non_deck: {card.is_non_deck} vs {card_json['is_non_deck']}"
+                )
             if card.rarity != card_json["rarity"]:
-                current_app.logger.debug(f"rarity: {card.rarity} vs {card_json['rarity']}")
+                current_app.logger.debug(
+                    f"rarity: {card.rarity} vs {card_json['rarity']}"
+                )
+            if card.card_type != card_json["card_type"]:
+                current_app.logger.debug(
+                    f"card_type: {card.card_type} vs {card_json['card_type']}"
+                )
             return False
         # Check enums
-        if (
-            card.card_type != card_type_str_to_enum[card_json["card_type"]]
-            or card.house != house_str_to_enum[card_json["house"]]
-        ):
+        if card.house != house_str_to_enum[card_json["house"]]:
             current_app.logger.debug("Found mismatch in enums")
             return False
         # Check traits
-        if card_json["traits"] and {t.name for t in card.traits} != set(card_json["traits"].split(" • ")):
+        if card_json["traits"] and {t.name for t in card.traits} != set(
+            card_json["traits"].split(" • ")
+        ):
             current_app.logger.debug("Found mismatch in traits")
             return False
         return True
 
 
 def diff_strings(a: str, b: str) -> str:
-    msg =[f"{a} => {b}"]
+    msg = [f"{a} => {b}"]
     for i, s in enumerate(difflib.ndiff(a, b)):
         if s[0] == " ":
             continue
         elif s[0] == "0":
-            msg.append(f"Delete \"{s[-1]}\" from position {i}")
+            msg.append(f'Delete "{s[-1]}" from position {i}')
         elif s[0] == "+":
-            msg.append(f"Add \"{s[-1]}\" to position {i}")
+            msg.append(f'Add "{s[-1]}" to position {i}')
     return "\n".join(msg)
 
 
@@ -1242,7 +1355,9 @@ def add_cards_v2_new(
             )
             pc = add_decks_cache["platonic_card"].get(card_json["card_title"])
             if pc is None:
-                pc = PlatonicCard.query.filter_by(card_title=card_json["card_title"]).first()
+                pc = PlatonicCard.query.filter_by(
+                    card_title=card_json["card_title"]
+                ).first()
             if pc is None:
                 current_app.logger.info(
                     f"Creating new platonic card: {card_json['card_title']}"
@@ -1277,7 +1392,7 @@ def add_cards_v2_new(
         db.session.add(card)
         if card.is_enhanced:
             bling = copy.deepcopy(bonus_icons)
-            for (idx, enh) in enumerate(bling):
+            for idx, enh in enumerate(bling):
                 if enh["card_id"] == pcis.card_kf_id:
                     for icon in enh["bonus_icons"]:
                         if icon == "damage":
@@ -1291,10 +1406,14 @@ def add_cards_v2_new(
                         elif icon == "discard":
                             card.enhanced_discard += 1
                         else:
-                            raise MissingEnhancements(f"Could not pair enhancements in {deck.kf_id}")
+                            raise MissingEnhancements(
+                                f"Could not pair enhancements in {deck.kf_id}"
+                            )
                     break
             else:
-                raise MissingEnhancements(f"Could not pair enhancements in {deck.kf_id}")
+                raise MissingEnhancements(
+                    f"Could not pair enhancements in {deck.kf_id}"
+                )
         db.session.commit()
 
 
@@ -1303,7 +1422,7 @@ def normalize_stat(stat: Optional[str]) -> int:
         return 0
     else:
         return int(stat)
-            
+
 
 def update_platonic_info(
     platonic_card: PlatonicCard,
@@ -1324,9 +1443,13 @@ def update_platonic_info(
                 platonic_card.traits.append(trait)
     else:
         platonic_card.traits.clear()
-    platonic_card.card_type = card_type_str_to_enum[card_json["card_type"]]
-    if platonic_card.kf_card_type is None or platonic_card.kf_card_type != card_json["card_type"]:
-        card_type = KeyforgeCardType.query.filter_by(name=card_json["card_type"]).first()
+    if (
+        platonic_card.kf_card_type is None
+        or platonic_card.kf_card_type != card_json["card_type"]
+    ):
+        card_type = KeyforgeCardType.query.filter_by(
+            name=card_json["card_type"]
+        ).first()
         if card_type is None:
             card_type = KeyforgeCardType(name=card_json["card_type"])
             db.session.add(card_type)
@@ -1338,13 +1461,15 @@ def update_platonic_info(
     platonic_card.armor = normalize_stat(card_json["armor"])
     platonic_card.flavor_text = card_json["flavor_text"]
     # Don't set platonic card house for mavericks, anomalies, or revenants
-    if not any([
-        card_json["is_maverick"],
-        card_json["is_anomaly"],
-        # This actuall should cover all revenants
-        card_json["card_number"].startswith("R"),
-        card_json["card_title"] in MM_UNHOUSED_CARDS + REVENANTS,
-    ]):
+    if not any(
+        [
+            card_json["is_maverick"],
+            card_json["is_anomaly"],
+            # This actuall should cover all revenants
+            card_json["card_number"].startswith("R"),
+            card_json["card_title"] in MM_UNHOUSED_CARDS + REVENANTS,
+        ]
+    ):
         platonic_card.house = house_str_to_enum[card_json["house"]]
     platonic_card.is_non_deck = card_json["is_non_deck"]
     # Double-check that card in set info is right
@@ -1352,7 +1477,10 @@ def update_platonic_info(
     card_in_set.card_number = card_json["card_number"]
     card_in_set.is_anomaly = card_json["is_anomaly"]
     card_in_set.front_image = card_json["front_image"]
-    if card_in_set.kf_rarity is None or card_in_set.kf_rarity.name != card_json["rarity"]:
+    if (
+        card_in_set.kf_rarity is None
+        or card_in_set.kf_rarity.name != card_json["rarity"]
+    ):
         rarity = KeyforgeRarity.query.filter_by(name=card_json["rarity"]).first()
         if rarity is None:
             rarity = KeyforgeRarity(name=card_json["rarity"])

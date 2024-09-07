@@ -44,14 +44,18 @@ click_log.basic_config()
 @click.option("--group-by", default="expansion,house,rarity,card_type")
 @click.option("--only-house", default=None, type=click.Choice(house_str_to_enum.keys()))
 def get_images(image_dir: str, group_by: str, only_house: str = None) -> None:
-    asyncio.run(_get_images(
-        image_dir,
-        group_by=None if group_by == "" else group_by.split(","),
-        only_house=only_house,
-    ))
+    asyncio.run(
+        _get_images(
+            image_dir,
+            group_by=None if group_by == "" else group_by.split(","),
+            only_house=only_house,
+        )
+    )
 
 
-async def _get_images(image_dir: str, group_by: List[str] = None, only_house: str = None) -> None:
+async def _get_images(
+    image_dir: str, group_by: List[str] = None, only_house: str = None
+) -> None:
     with current_app.app_context():
         pcq = PlatonicCard.query
         if only_house:
@@ -194,22 +198,20 @@ def load_decks_from_dir(source: str, max_files: int = 0) -> None:
             decks = data["data"]
             cards = data["_linked"]["cards"]
             card_details = {c["id"]: c for c in cards}
-            existing_decks_query = (
-                Deck.query
-                .options(
-                    joinedload(Deck.cards_from_assoc)
-                    .subqueryload(CardInDeck.card_in_set),
-                    joinedload(Deck.cards_from_assoc)
-                    .subqueryload(CardInDeck.platonic_card),
-                )
-                .filter(Deck.kf_id.in_([d["id"] for d in decks]))
-            )
+            existing_decks_query = Deck.query.options(
+                joinedload(Deck.cards_from_assoc).subqueryload(CardInDeck.card_in_set),
+                joinedload(Deck.cards_from_assoc).subqueryload(
+                    CardInDeck.platonic_card
+                ),
+            ).filter(Deck.kf_id.in_([d["id"] for d in decks]))
             existing_decks = existing_decks_query.all()
             id_to_existing_deck = {deck.kf_id: deck for deck in existing_decks}
             # new_decks = len(decks) - len(existing_decks)
             for deck_json in decks:
                 existing_deck = id_to_existing_deck.get(deck_json["id"])
-                add_one_deck_v2(deck_json, card_details, add_decks_cache, deck=existing_deck)
+                add_one_deck_v2(
+                    deck_json, card_details, add_decks_cache, deck=existing_deck
+                )
             os.remove(path)
             done_count += 1
 
@@ -228,7 +230,11 @@ def tail_v2(interval: int = 20) -> None:
     start_time = time.time()
     last_run = start_time - interval
     while True:
-        highest_page = GlobalVariable.query.filter_by(name="highest_mv_page_scraped").first().value_int
+        highest_page = (
+            GlobalVariable.query.filter_by(name="highest_mv_page_scraped")
+            .first()
+            .value_int
+        )
         now = time.time()
         delta = now - last_run
         if delta < interval:

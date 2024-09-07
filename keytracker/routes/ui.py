@@ -273,7 +273,9 @@ def csv_to_pods_post():
                     name_to_deck[deck.name] = deck
             else:
                 logger.debug("Missing too many decks from db, skipping some.")
-                flash(f"Warning: {missing_deck_count} unrecognized decks in csv. Skipping them for now, but if you try again later they may be available.")
+                flash(
+                    f"Warning: {missing_deck_count} unrecognized decks in csv. Skipping them for now, but if you try again later they may be available."
+                )
                 house_stats = [p for p in house_stats if p.name in name_to_deck.keys()]
         return render_template(
             "csv_to_pods.html",
@@ -348,7 +350,7 @@ def upload_post():
         db.session.refresh(game)
         game.crucible_game_id = f"UNKNOWN-{game.id}"
         db.session.commit()
-        for (seq, log) in enumerate(log_text.split("\n")):
+        for seq, log in enumerate(log_text.split("\n")):
             log_obj = Log(
                 game_id=game.id,
                 message=log,
@@ -392,9 +394,7 @@ def upload_simple():
 def upload_simple_post():
     """Manual game upload page with just simple options"""
     game = basic_stats_to_game(**request.form)
-    existing_game = Game.query.filter_by(
-        crucible_game_id=game.crucible_game_id
-    ).first()
+    existing_game = Game.query.filter_by(crucible_game_id=game.crucible_game_id).first()
     if existing_game is None:
         logger.debug(f"Confirmed no existing record for {game.crucible_game_id}")
         db.session.add(game)
@@ -419,9 +419,9 @@ def login_post():
     email = request.form.get("email")
     password = request.form.get("password")
     remember = bool(request.form.get("remember"))
-    
+
     user = User.query.filter_by(email=email).first()
-    
+
     if user and check_password_hash(user.password, password):
         login_user(user, remember=remember)
         return redirect(url_for("ui.profile"))
@@ -430,10 +430,9 @@ def login_post():
         return redirect(url_for("ui.login"))
 
 
-
 @blueprint.route("/signup")
 def signup():
-    return render_template("signup.html" )
+    return render_template("signup.html")
 
 
 @blueprint.route("/signup", methods=["POST"])
@@ -473,7 +472,10 @@ def profile():
 @blueprint.route("/oauth/redirect")
 def oauth_redirect():
     oauth_client = patreon.OAuth(patreon_client_id, patreon_client_secret)
-    tokens = oauth_client.get_tokens(request.args.get("code"), "https://tracker.ancientbearrepublic.com/oauth/redirect")
+    tokens = oauth_client.get_tokens(
+        request.args.get("code"),
+        "https://tracker.ancientbearrepublic.com/oauth/redirect",
+    )
     print(f"tokens: {tokens}")
     access_token = tokens["access_token"]
     api_client = patreon.API(access_token)

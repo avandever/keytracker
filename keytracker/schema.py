@@ -64,19 +64,6 @@ class House(enum.Enum):
 house_str_to_enum = {h.value: h for h in House.__members__.values()}
 
 
-class CardType(enum.Enum):
-    ACTION = "Action"
-    CREATURE = "Creature"
-    UPGRADE = "Upgrade"
-    ARTIFACT = "Artifact"
-    CREATURE2 = "Creature2"
-    THETIDE = "The Tide"
-    TOKEN_CREATURE = "Token Creature"
-
-
-card_type_str_to_enum = {ct.value: ct for ct in CardType.__members__.values()}
-
-
 ExpansionValues = namedtuple(
     "ExpansionValues", ["name", "shortname", "dokname", "number"]
 )
@@ -354,12 +341,12 @@ class PlatonicCard(db.Model):
     __tablename__ = "tracker_platonic_card"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     card_title = db.Column(db.String(64))
-    card_type = db.Column(db.Enum(CardType))
     kf_card_type_id = db.Column(
         db.Integer,
         db.ForeignKey(KeyforgeCardType.__table__.c.id),
     )
     kf_card_type = db.relationship("KeyforgeCardType")
+    card_type = association_proxy("kf_card_type", "name")
     front_image = db.Column(db.String(100))
     card_text = db.Column(db.String(512))
     traits = db.relationship("Trait", secondary=platonic_card_traits)
@@ -472,7 +459,6 @@ class CardInDeck(db.Model):
     enhanced_damage = db.Column(db.Integer, default=0)
     enhanced_discard = db.Column(db.Integer, default=0)
     card_title = association_proxy("platonic_card", "card_title")
-    card_type = association_proxy("platonic_card", "card_type")
     card_text = association_proxy("platonic_card", "card_text")
     traits = association_proxy("platonic_card", "traits")
     amber = association_proxy("platonic_card", "amber")
@@ -481,6 +467,7 @@ class CardInDeck(db.Model):
     flavor_text = association_proxy("platonic_card", "flavor_text")
     is_non_deck = association_proxy("platonic_card", "is_non_deck")
     natural_house = association_proxy("platonic_card", "house")
+    card_type = association_proxy("card_in_set", "card_type")
     card_kf_id = association_proxy("card_in_set", "card_kf_id")
     front_image = association_proxy("card_in_set", "front_image")
     expansion = association_proxy("card_in_set", "expansion")
@@ -491,10 +478,7 @@ class CardInDeck(db.Model):
     # TODO: replace with association proxy to card_in_set
     @hybrid_property
     def is_maverick(self):
-        return (
-            self.house != self.natural_house
-            and not self.is_anomaly
-        )
+        return self.house != self.natural_house and not self.is_anomaly
 
     def __repr__(self) -> str:
         return (
