@@ -9,6 +9,7 @@ from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import column_property, mapped_column
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.mysql import TINYINT
 import datetime
 import enum
 from collections import namedtuple
@@ -428,11 +429,11 @@ class CardInDeck(db.Model):
     house = association_proxy("card_in_set", "house")
     # TODO: replace with association proxy to card_in_set
     is_enhanced = db.Column(db.Boolean, default=False)
-    enhanced_amber = db.Column(db.Integer, default=0)
-    enhanced_capture = db.Column(db.Integer, default=0)
-    enhanced_draw = db.Column(db.Integer, default=0)
-    enhanced_damage = db.Column(db.Integer, default=0)
-    enhanced_discard = db.Column(db.Integer, default=0)
+    enhanced_amber = db.Column(TINYINT(unsigned=True), default=0)
+    enhanced_capture = db.Column(TINYINT(unsigned=True), default=0)
+    enhanced_draw = db.Column(TINYINT(unsigned=True), default=0)
+    enhanced_damage = db.Column(TINYINT(unsigned=True), default=0)
+    enhanced_discard = db.Column(TINYINT(unsigned=True), default=0)
     card_title = association_proxy("platonic_card", "card_title")
     card_text = association_proxy("platonic_card", "card_text")
     traits = association_proxy("platonic_card", "traits")
