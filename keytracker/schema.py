@@ -257,6 +257,7 @@ class PodStats(db.Model):
     enhanced_draw = db.Column(db.Integer, default=0)
     enhanced_damage = db.Column(db.Integer, default=0)
     enhanced_discard = db.Column(db.Integer, default=0)
+    enhanced_house = db.Column(TINYINT(unsigned=True), default=0)
     # not derived because should be indexable
     num_enhancements = db.Column(db.Integer, default=0, index=True)
     aerc_score = db.Column(db.Integer, default=0, index=True)
@@ -434,6 +435,8 @@ class CardInDeck(db.Model):
     enhanced_draw = db.Column(TINYINT(unsigned=True), default=0)
     enhanced_damage = db.Column(TINYINT(unsigned=True), default=0)
     enhanced_discard = db.Column(TINYINT(unsigned=True), default=0)
+    enhanced_houses = db.Column(TINYINT(unsigned=True), default=0)
+    house_enhancements = db.relationship("HouseEnhancement", back_populates="card")
     card_title = association_proxy("platonic_card", "card_title")
     card_text = association_proxy("platonic_card", "card_text")
     traits = association_proxy("platonic_card", "traits")
@@ -463,6 +466,23 @@ class CardInDeck(db.Model):
             f"{self.enhanced_draw}f|{self.enhanced_damage}d|"
             f"{self.enhanced_discard}D,{self.deck.dok_url})>"
         )
+
+
+class HouseEnhancement(db.Model):
+    __tablename__ = "tracker_house_enhancement"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    card_id = db.Column(
+        db.Integer,
+        db.ForeignKey(CardInDeck.__table__.c.id),
+        index=True,
+    )
+    card = db.relationship("CardInDeck", back_populates="house_enhancements")
+    house_id = db.Column(
+        db.Integer,
+        db.ForeignKey(KeyforgeHouse.__table__.c.id),
+    )
+    kf_house = db.relationship("KeyforgeHouse")
+    house = association_proxy("kf_house", "name")
 
 
 class DokDeck(db.Model):

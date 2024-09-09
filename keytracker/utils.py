@@ -15,6 +15,7 @@ from keytracker.schema import (
     Enhancements,
     Game,
     GlobalVariable,
+    HouseEnhancement,
     HouseTurnCounts,
     KeyforgeCardType,
     KeyforgeHouse,
@@ -754,6 +755,12 @@ def randip() -> str:
     return f"192.168.{third}.{fourth}"
 
 
+def get_house_for_enhancement(name: str) -> KeyforgeHouse:
+    house = KeyforgeHouse.query.filter(KeyforgeHouse.name.ilike(name)).first()
+    assert house is not None, f"Can't find house for {name}"
+    return house
+
+
 def get_or_create_house(name: str) -> KeyforgeHouse:
     house = KeyforgeHouse.query.filter_by(name=name).first()
     if house is None:
@@ -1383,6 +1390,7 @@ def add_cards_v2_new(
             enhanced_draw=0,
             enhanced_damage=0,
             enhanced_discard=0,
+            enhanced_house=0,
         )
         db.session.add(card)
         if card.is_enhanced:
@@ -1400,6 +1408,13 @@ def add_cards_v2_new(
                             card.enhanced_capture += 1
                         elif icon == "discard":
                             card.enhanced_discard += 1
+                        elif icon in VALID_HOUSE_ENHANCEMENTS:
+                            card.enhanced_house += 1
+                            house_enhancement = HouseEnhancement(
+                                card=card,
+                                house=get_house_for_enhancement(icon),
+                            )
+                            db.session.add(house_enhancement)
                         else:
                             raise MissingEnhancements(
                                 f"Could not pair enhancements in {deck.kf_id}"
