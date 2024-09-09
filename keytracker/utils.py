@@ -53,6 +53,22 @@ import threading
 from lingua import LanguageDetectorBuilder
 
 
+VALID_HOUSE_ENHANCEMENTS = [
+    'brobnar',
+    'dis',
+    'ekwidon',
+    'geistoid',
+    'logos',
+    'mars',
+    'redemption',
+    'sanctum',
+    'saurian',
+    'shadows',
+    'skyborn',
+    'staralliance',  # ?
+    'unfathomable',
+    'untamed',
+]
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
 FIRST_PLAYER_MATCHER = re.compile(r"^(.*) (won the flip|chooses to go first)")
 SHUFFLE_MATCHER = re.compile(r"^(.*) is shuffling their deck")
@@ -1390,7 +1406,7 @@ def add_cards_v2_new(
             enhanced_draw=0,
             enhanced_damage=0,
             enhanced_discard=0,
-            enhanced_house=0,
+            enhanced_houses=0,
         )
         db.session.add(card)
         if card.is_enhanced:
@@ -1409,10 +1425,10 @@ def add_cards_v2_new(
                         elif icon == "discard":
                             card.enhanced_discard += 1
                         elif icon in VALID_HOUSE_ENHANCEMENTS:
-                            card.enhanced_house += 1
+                            card.enhanced_houses += 1
                             house_enhancement = HouseEnhancement(
                                 card=card,
-                                house=get_house_for_enhancement(icon),
+                                kf_house=get_house_for_enhancement(icon),
                             )
                             db.session.add(house_enhancement)
                         else:

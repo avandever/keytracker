@@ -257,7 +257,7 @@ class PodStats(db.Model):
     enhanced_draw = db.Column(db.Integer, default=0)
     enhanced_damage = db.Column(db.Integer, default=0)
     enhanced_discard = db.Column(db.Integer, default=0)
-    enhanced_house = db.Column(TINYINT(unsigned=True), default=0)
+    enhanced_houses = db.Column(TINYINT(unsigned=True), default=0)
     # not derived because should be indexable
     num_enhancements = db.Column(db.Integer, default=0, index=True)
     aerc_score = db.Column(db.Integer, default=0, index=True)
