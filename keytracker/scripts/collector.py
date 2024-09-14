@@ -9,6 +9,7 @@ from keytracker.schema import (
     Deck,
     GlobalVariable,
     PlatonicCard,
+    PlatonicCardInSet,
 )
 from aiohttp_requests import requests as arequests
 import click_log
@@ -30,6 +31,7 @@ import json
 import logging
 import shutil
 from sqlalchemy.orm import joinedload
+from sqlalchemy import and_
 
 
 collector = AppGroup("collector")
@@ -42,24 +44,43 @@ click_log.basic_config()
 @click.option("--image-dir", default="keyforge-images")
 @click.option("--group-by", default="expansion,house,rarity,card_type")
 @click.option("--only-house", default=None, type=str)
-def get_images(image_dir: str, group_by: str, only_house: str = None) -> None:
+@click.option("--only-set", default=None, type=int)
+def get_images(
+    image_dir: str,
+    group_by: str,
+    only_house: str = None,
+    only_set: int = None,
+) -> None:
     asyncio.run(
         _get_images(
             image_dir,
             group_by=None if group_by == "" else group_by.split(","),
             only_house=only_house,
+            only_set=only_set,
         )
     )
 
 
 async def _get_images(
-    image_dir: str, group_by: List[str] = None, only_house: str = None
+    image_dir: str,
+    group_by: List[str] = None,
+    only_house: str = None,
+    only_set: int = None,
 ) -> None:
     with current_app.app_context():
-        pcq = PlatonicCard.query
-        if only_house:
-            pcq = pcq.filter_by(house=only_house)
-        all_cards = pcq.all()
+        if only_set:
+            filters = [
+                PlatonicCardInSet.expansion==only_set,
+                PlatonicCardInSet.is_maverick==False,
+            ]
+            if only_house:
+                filters.append(PlatonicCardInSet.house==only_house)
+            query = PlatonicCardInSet.query.filter(and_(*filters))
+        else:
+            query = PlatonicCard.query
+            if only_house:
+                query = query.filter_by(house=only_house)
+        all_cards = query.all()
         for card in all_cards:
             await get_card_image(
                 card,
@@ -76,7 +97,10 @@ def build_image_dirs(
     if group_by is None:
         return [base_dir]
     if "expansion" in group_by:
-        expansions = card.expansions
+        if isinstance(card, PlatonicCardInSet):
+            expansions = [card]
+        else:
+            expansions = card.expansions
     else:
         expansions = [""]
     paths = []

@@ -1220,6 +1220,8 @@ def add_one_deck_v2(
             current_app.logger.debug(f"Existing deck is ok: {deck_str}")
         else:
             current_app.logger.debug(f"Clearing and re-adding cards for {deck_str}")
+            for card in deck.cards_from_assoc:
+                db.session.delete(card)
             deck.cards_from_assoc.clear()
             add_cards_v2_new(
                 deck, deck_card_ids, card_details, bonus_icons, add_decks_cache
@@ -1331,7 +1333,7 @@ def are_cards_okay(
         ):
             current_app.logger.debug("Found mismatch in traits")
             return False
-        return True
+    return True
 
 
 def diff_strings(a: str, b: str) -> str:
@@ -1514,3 +1516,23 @@ def update_platonic_info(
             rarity = KeyforgeRarity(name=card_json["rarity"])
             db.session.add(rarity)
         card_in_set.kf_rarity = rarity
+
+
+def fix_mavericks(expansion: int) -> int:
+    """Look for pcis with broken is_maverick attribute, fix them. Returns number of
+    fixed pcis."""
+    pciss = PlatonicCardInSet.query.filter_by(expansion=expansion).all()
+    fixed = 0
+    for pcis in pciss:
+        should_be_maverick = pcis.house != pcis.card.house
+        if should_be_maverick != pcis.is_maverick:
+            fixed += 1
+            pcis.is_maverick = should_be_maverick
+    db.session.commit()
+    return fixed
+
+
+def fix_pcis_house(pcis: PlatonicCardInSet) -> None:
+    card = CardInDeck.query.filter_by(card_in_set_id=pcis.id).first()
+    refresh_deck_from_mv(card.deck)
+    db.session.commit()
