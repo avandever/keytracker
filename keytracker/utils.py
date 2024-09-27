@@ -186,7 +186,7 @@ class DeckFromCsv:
         "House 3 Cards",
         "DoK Link",
         "For Sale",
-        "For Auction",
+        # "For Auction",
         "For Trade",
         "Price",
     )
