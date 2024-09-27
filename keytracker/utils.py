@@ -135,7 +135,6 @@ class CsvPod:
         sas,
         cards,
         for_sale,
-        for_auction,
         for_trade,
         price,
     ) -> None:
@@ -145,7 +144,7 @@ class CsvPod:
         self.link = link
         self.sas = float(sas)
         self.cards = cards
-        self.on_market = "true" in (for_sale, for_trade, for_auction)
+        self.on_market = "true" in (for_sale, for_trade)
         self.price = price
 
     def headers(self) -> List[str]:
@@ -170,7 +169,6 @@ class DeckFromCsv:
         "house3_cards",
         "link",
         "for_sale",
-        "for_auction",
         "for_trade",
         "price",
     )
@@ -186,7 +184,6 @@ class DeckFromCsv:
         "House 3 Cards",
         "DoK Link",
         "For Sale",
-        # "For Auction",
         "For Trade",
         "Price",
     )
@@ -204,7 +201,6 @@ class DeckFromCsv:
         house3_cards,
         link,
         for_sale,
-        for_auction,
         for_trade,
         price,
     ):
@@ -220,7 +216,6 @@ class DeckFromCsv:
         self.house3_cards = house3_cards
         self.link = link
         self.for_sale = for_sale
-        self.for_auction = for_auction
         self.for_trade = for_trade
         self.price = price
 
@@ -240,7 +235,6 @@ class DeckFromCsv:
                 self.house1_sas,
                 self.house1_cards,
                 self.for_sale,
-                self.for_auction,
                 self.for_trade,
                 self.price,
             ),
@@ -252,7 +246,6 @@ class DeckFromCsv:
                 self.house2_sas,
                 self.house2_cards,
                 self.for_sale,
-                self.for_auction,
                 self.for_trade,
                 self.price,
             ),
@@ -264,7 +257,6 @@ class DeckFromCsv:
                 self.house3_sas,
                 self.house3_cards,
                 self.for_sale,
-                self.for_auction,
                 self.for_trade,
                 self.price,
             ),
