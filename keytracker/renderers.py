@@ -237,7 +237,9 @@ def render_card_list(deck: Deck, house: str = None) -> str:
     output = []
     if house:
         cards = [
-            c for c in deck.cards_from_assoc if (c.house or "").replace(" ", "") == house
+            c
+            for c in deck.cards_from_assoc
+            if (c.house or "").replace(" ", "") == house
         ]
     else:
         cards = deck.cards_from_assoc

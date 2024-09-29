@@ -70,11 +70,11 @@ async def _get_images(
     with current_app.app_context():
         if only_set:
             filters = [
-                PlatonicCardInSet.expansion==only_set,
-                PlatonicCardInSet.is_maverick==False,
+                PlatonicCardInSet.expansion == only_set,
+                PlatonicCardInSet.is_maverick == False,
             ]
             if only_house:
-                filters.append(PlatonicCardInSet.house==only_house)
+                filters.append(PlatonicCardInSet.house == only_house)
             query = PlatonicCardInSet.query.filter(and_(*filters))
         else:
             query = PlatonicCard.query

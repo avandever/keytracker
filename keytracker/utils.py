@@ -2,6 +2,7 @@ import csv
 from collections import Counter, defaultdict
 import configparser
 import copy
+from dataclasses import dataclass
 import datetime
 import difflib
 import io
@@ -53,21 +54,78 @@ import threading
 from lingua import LanguageDetectorBuilder
 
 
+@dataclass
+class CardSetHouseOverride:
+    """Class for representing an override for cards whose natural house is different in
+    a newer set
+    """
+
+    card_title: str
+    expansion: int
+    house: str
+
+
+CARD_SET_HOUSE_OVERRIDES = [
+    CardSetHouseOverride("Armageddon Cloak", 855, "Redemption"),
+    CardSetHouseOverride("Avenging Aura", 855, "Redemption"),
+    CardSetHouseOverride("Book of Malefaction", 855, "Redemption"),
+    CardSetHouseOverride("Eye of Judgment", 855, "Redemption"),
+    CardSetHouseOverride("Hymn to Duma", 855, "Redemption"),
+    CardSetHouseOverride("Johnny Longfingers", 855, "Redemption"),
+    CardSetHouseOverride("Lord Golgotha", 855, "Redemption"),
+    CardSetHouseOverride("Mantle of the Zealot", 855, "Redemption"),
+    CardSetHouseOverride("Martyr's End", 855, "Redemption"),
+    CardSetHouseOverride("Master of the Grey", 855, "Redemption"),
+    CardSetHouseOverride("Mighty Lance", 855, "Redemption"),
+    CardSetHouseOverride("One Stood Against Many", 855, "Redemption"),
+    CardSetHouseOverride("Rogue Ogre", 855, "Redemption"),
+    CardSetHouseOverride("The Promised Blade", 855, "Redemption"),
+    CardSetHouseOverride("Champion Tabris", 855, "Redemption"),
+    CardSetHouseOverride("Dark Centurion", 855, "Redemption"),
+    CardSetHouseOverride("First or Last", 855, "Redemption"),
+    CardSetHouseOverride("Francus", 855, "Redemption"),
+    CardSetHouseOverride("Glorious Few", 855, "Redemption"),
+    CardSetHouseOverride("Gorm of Omm", 855, "Redemption"),
+    CardSetHouseOverride("Grey Abbess", 855, "Redemption"),
+    CardSetHouseOverride("Professor Terato", 855, "Redemption"),
+    CardSetHouseOverride("Scrivener Favian", 855, "Redemption"),
+    CardSetHouseOverride("Bordan the Redeemed", 855, "Redemption"),
+    CardSetHouseOverride("Bull-Wark", 855, "Redemption"),
+    CardSetHouseOverride("Burning Glare", 855, "Redemption"),
+    CardSetHouseOverride("Citizen Shrix", 855, "Redemption"),
+    CardSetHouseOverride("Retribution", 855, "Redemption"),
+    CardSetHouseOverride("Shifting Battlefield", 855, "Redemption"),
+    CardSetHouseOverride("Snarette", 855, "Redemption"),
+    CardSetHouseOverride("Subtle Otto", 855, "Redemption"),
+    CardSetHouseOverride("Even Ivan", 855, "Redemption"),
+    CardSetHouseOverride("Odd Clawde", 855, "Redemption"),
+    CardSetHouseOverride("Sacro-Alien", 855, "Redemption"),
+    CardSetHouseOverride("Sacro-Beast", 855, "Redemption"),
+    CardSetHouseOverride("Sacro-Bot", 855, "Redemption"),
+    CardSetHouseOverride("Sacro-Fiend", 855, "Redemption"),
+    CardSetHouseOverride("Sacro-Saurus", 855, "Redemption"),
+    CardSetHouseOverride("Sacro-Thief", 855, "Redemption"),
+]
+CARD_EXP_TO_OVERRIDE = {
+    (x.card_title, x.expansion): x for x in CARD_SET_HOUSE_OVERRIDES
+}
+
+
 VALID_HOUSE_ENHANCEMENTS = [
-    'brobnar',
-    'dis',
-    'ekwidon',
-    'geistoid',
-    'logos',
-    'mars',
-    'redemption',
-    'sanctum',
-    'saurian',
-    'shadows',
-    'skyborn',
-    'staralliance',  # ?
-    'unfathomable',
-    'untamed',
+    "brobnar",
+    "dis",
+    "ekwidon",
+    "geistoid",
+    "logos",
+    "mars",
+    "redemption",
+    "sanctum",
+    "saurian",
+    "shadows",
+    "skyborn",
+    "staralliance",  # ?
+    "unfathomable",
+    "untamed",
 ]
 PLAYER_DECK_MATCHER = re.compile(r"^(.*) brings (.*) to The Crucible")
 FIRST_PLAYER_MATCHER = re.compile(r"^(.*) (won the flip|chooses to go first)")
@@ -1349,6 +1407,9 @@ def add_cards_v2_new(
         add_decks_cache = defaultdict(dict)
     for card_id in deck_card_ids:
         card_json = card_details[card_id]
+        override = CARD_EXP_TO_OVERRIDE.get(
+            (card_json["card_title"], card_json["expansion"])
+        )
         if card_json["card_title"] == "Archon's Callback":
             card_json["card_title"] = "Archon’s Callback"
         if card_json["card_type"] == "Creature1":
@@ -1366,9 +1427,15 @@ def add_cards_v2_new(
             )
             pc = add_decks_cache["platonic_card"].get(card_json["card_title"])
             if pc is None:
-                pc = PlatonicCard.query.filter_by(
-                    card_title=card_json["card_title"]
-                ).first()
+                if override is None:
+                    pc = PlatonicCard.query.filter_by(
+                        card_title=card_json["card_title"]
+                    ).first()
+                else:
+                    pc = PlatonicCard.query.filter_by(
+                        card_title=card_json["card_title"],
+                        house=override.house,
+                    ).first()
             if pc is None:
                 current_app.logger.info(
                     f"Creating new platonic card: {card_json['card_title']}"
@@ -1387,7 +1454,7 @@ def add_cards_v2_new(
             pc = pcis.card
         add_decks_cache["card_in_set"]["card_id"] = pcis
         add_decks_cache["platonic_card"][card_json["card_title"]] = pc
-        update_platonic_info(pc, pcis, card_json)
+        update_platonic_info(pc, pcis, card_json, override)
         card = CardInDeck(
             platonic_card=pc,
             card_in_set=pcis,
@@ -1446,6 +1513,7 @@ def update_platonic_info(
     platonic_card: PlatonicCard,
     card_in_set: PlatonicCardInSet,
     card_json,
+    override: CardSetHouseOverride = None,
 ) -> None:
     # Double-check that platonic card info is right
     if card_json["traits"]:
@@ -1490,7 +1558,10 @@ def update_platonic_info(
             card_json["card_title"] in MM_UNHOUSED_CARDS + REVENANTS,
         ]
     ):
-        platonic_card.kf_house = house
+        if override is None:
+            platonic_card.kf_house = house
+        else:
+            platonic_card.kf_house = get_or_create_house(override.house)
     platonic_card.is_non_deck = card_json["is_non_deck"]
     # Double-check that card in set info is right
     card_in_set.expansion = card_json["expansion"]
