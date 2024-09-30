@@ -1455,6 +1455,13 @@ def add_cards_v2_new(
         add_decks_cache["card_in_set"]["card_id"] = pcis
         add_decks_cache["platonic_card"][card_json["card_title"]] = pc
         update_platonic_info(pc, pcis, card_json, override)
+        if (
+            card_json["expansion"] == deck.expansion
+            or PlatonicCardInSet.query.filter_by(card=pc, expansion=deck.expansion).count() > 0
+        ):
+            is_legacy = False
+        else:
+            is_legacy = True
         card = CardInDeck(
             platonic_card=pc,
             card_in_set=pcis,
@@ -1466,6 +1473,7 @@ def add_cards_v2_new(
             enhanced_damage=0,
             enhanced_discard=0,
             enhanced_houses=0,
+            is_legacy=is_legacy,
         )
         db.session.add(card)
         if card.is_enhanced:

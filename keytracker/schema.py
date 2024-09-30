@@ -454,6 +454,7 @@ class CardInDeck(db.Model):
     card_number = association_proxy("card_in_set", "card_number")
     is_anomaly = association_proxy("card_in_set", "is_anomaly")
     is_maverick = association_proxy("card_in_set", "is_maverick")
+    is_legacy = db.Column(db.Boolean, default=False)
 
     def __repr__(self) -> str:
         return (
