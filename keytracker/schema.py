@@ -453,11 +453,7 @@ class CardInDeck(db.Model):
     rarity = association_proxy("card_in_set", "rarity")
     card_number = association_proxy("card_in_set", "card_number")
     is_anomaly = association_proxy("card_in_set", "is_anomaly")
-
-    # TODO: replace with association proxy to card_in_set
-    @hybrid_property
-    def is_maverick(self):
-        return self.house != self.natural_house and not self.is_anomaly
+    is_maverick = association_proxy("card_in_set", "is_maverick")
 
     def __repr__(self) -> str:
         return (
