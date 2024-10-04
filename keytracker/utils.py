@@ -792,7 +792,6 @@ def turn_counts_from_logs(game: Game) -> None:
                 count = HouseTurnCounts(
                     game=game,
                     player=player,
-                    house=house,
                     kf_house=get_or_create_house(house),
                     turns=0,
                     winner=player.username == game.winner,
@@ -812,7 +811,6 @@ def turn_counts_from_logs(game: Game) -> None:
                 count = HouseTurnCounts(
                     game=game,
                     player=player,
-                    house=house,
                     kf_house=get_or_create_house(house),
                     turns=0,
                     winner=player.username == game.winner,
