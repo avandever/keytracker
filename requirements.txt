@@ -10,7 +10,7 @@ backcall==0.2.0
 blinker==1.7.0
 Brotli==1.1.0
 certifi==2023.11.17
-cffi==1.16.0
+cffi
 charset-normalizer==3.3.2
 click==8.1.7
 click-log==0.4.0
