@@ -428,6 +428,7 @@ class CardInDeck(db.Model):
     )
     deck = db.relationship("Deck", back_populates="cards_from_assoc")
     house = association_proxy("card_in_set", "house")
+    kf_house = association_proxy("card_in_set", "kf_house")
     # TODO: replace with association proxy to card_in_set
     is_enhanced = db.Column(db.Boolean, default=False)
     enhanced_amber = db.Column(TINYINT(unsigned=True), default=0)
