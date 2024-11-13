@@ -1070,7 +1070,7 @@ def calculate_pod_stats(deck: Deck) -> None:
         else:
             pod = PodStats()
             db.session.add(pod)
-        pod.house = house
+        pod.house = get_or_create_house(house)
         pod.kf_house = get_or_create_house(house.value)
         pod.deck = deck
         pod.enhanced_amber = amber
