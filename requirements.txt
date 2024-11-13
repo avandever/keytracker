@@ -69,7 +69,7 @@ msgpack==1.1.0
 multidict==6.1.0
 mypy-extensions==1.0.0
 mysql-connector-python==9.1.0
-mysqlclient==2.1.9
+mysqlclient==2.1.1
 packaging==24.2
 parso==0.8.4
 pathspec==0.12.1
