@@ -1455,13 +1455,6 @@ def add_cards_v2_new(
         add_decks_cache["card_in_set"]["card_id"] = pcis
         add_decks_cache["platonic_card"][card_json["card_title"]] = pc
         update_platonic_info(pc, pcis, card_json, override)
-        if (
-            card_json["expansion"] == deck.expansion
-            or PlatonicCardInSet.query.filter_by(card=pc, expansion=deck.expansion).count() > 0
-        ):
-            is_legacy = False
-        else:
-            is_legacy = True
         card = CardInDeck(
             platonic_card=pc,
             card_in_set=pcis,
@@ -1473,7 +1466,7 @@ def add_cards_v2_new(
             enhanced_damage=0,
             enhanced_discard=0,
             enhanced_houses=0,
-            is_legacy=is_legacy,
+            is_legacy=check_is_legacy(pc, deck),
         )
         db.session.add(card)
         if card.is_enhanced:
@@ -1508,6 +1501,45 @@ def add_cards_v2_new(
                     f"Could not pair enhancements in {deck.kf_id}"
                 )
         db.session.commit()
+
+
+def check_is_legacy(pc: PlatonicCard, deck: Deck) -> bool:
+    # Originally, I thought of having this as the easiest, cheapest check, but then
+    # again I've come to distrust MV data.
+    # if card_json["expansion"] = deck.expansion:
+    #     return False
+    # Trust sqlalchemy to cache this reasonably
+    platonic_card_ids_in_expansion = {
+        pcis.card_id
+        for pcis
+        in PlatonicCardInSet.query.with_entities(
+            PlatonicCardInSet.card_id
+        ).filter_by(expansion=deck.expansion).all()
+    }
+    # If the platonic card id matches, great
+    if pc.id in platonic_card_ids_in_expansion:
+        return False
+    # apostrophe in the card title is handled inconsistently across sets, special case
+    # it
+    if (
+        "'" in pc.card_title
+        and PlatonicCardInSet.query.filter_by(
+            expansion=deck.expansion,
+            card_title=pc.card_title.replace("'", "’")
+        ).count() > 0
+    ):
+        return False
+    if (
+        "’" in pc.card_title
+        and PlatonicCardInSet.query.filter_by(
+            expansion=deck.expansion,
+            card_title=pc.card_title.replace("’", "'")
+        ).count() > 0
+    ):
+        return False
+    # Need to catch anomalies?
+    # Otherwise, we're dealing with a legacy!
+    return True
 
 
 def normalize_stat(stat: Optional[str]) -> int:

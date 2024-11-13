@@ -80,7 +80,7 @@ class KeyforgeRarity(db.Model):
 class KeyforgeCardType(db.Model):
     __tablename__ = "tracker_card_type"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    name = db.Column(db.String(20), nullable=False, index=True)
+    name = db.Column(db.String(64), nullable=False, index=True)
 
 
 class KeyforgeHouse(db.Model):
