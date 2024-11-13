@@ -57,6 +57,9 @@ EXPANSION_VALUES = [
     ExpansionValues("Grim Reminders", "GR", "GR", 700),
     ExpansionValues("Menagerie 2024", "M24", "M24", 722),
     ExpansionValues("Vault Masters 2024", "VM24", "VM24", 737),
+    ExpansionValues("Aember Skies", "AES", "AES", 800),
+    ExpansionValues("More Mutation", "MoMU", "MoMu", 874),
+    ExpansionValues("Tokens of Change", "ToC", "ToC", 855),
     ExpansionValues("Martian Civil War", "MCW", "MCW", 892),
 ]
 
