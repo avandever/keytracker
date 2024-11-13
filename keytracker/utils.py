@@ -1040,9 +1040,9 @@ def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
 def calculate_pod_stats(deck: Deck) -> None:
     house_to_cards = defaultdict(list)
     for card in deck.cards_from_assoc:
-        house_to_cards[card.house].append(card)
-    for house, cards in house_to_cards.items():
-        if house == "The Tide":
+        house_to_cards[card.kf_house].append(card)
+    for kf_house, cards in house_to_cards.items():
+        if kf_house.value == "The Tide":
             continue
         enhancements, amber, capture, draw, damage = 0, 0, 0, 0, 0
         mutants, creatures, raw_amber = 0, 0, 0
@@ -1065,13 +1065,11 @@ def calculate_pod_stats(deck: Deck) -> None:
                 ]
             )
         for pod in deck.pod_stats:
-            if pod.house == house:
+            if pod.kf_house == kf_house:
                 break
         else:
-            pod = PodStats(deck=deck)
+            pod = PodStats(deck=deck, kf_house=kf_house)
             db.session.add(pod)
-        pod.house = get_or_create_house(house)
-        pod.kf_house = get_or_create_house(house.value)
         pod.enhanced_amber = amber
         pod.enhanced_capture = capture
         pod.enhanced_draw = draw
