@@ -1068,11 +1068,10 @@ def calculate_pod_stats(deck: Deck) -> None:
             if pod.house == house:
                 break
         else:
-            pod = PodStats()
+            pod = PodStats(deck=deck)
             db.session.add(pod)
         pod.house = get_or_create_house(house)
         pod.kf_house = get_or_create_house(house.value)
-        pod.deck = deck
         pod.enhanced_amber = amber
         pod.enhanced_capture = capture
         pod.enhanced_draw = draw
