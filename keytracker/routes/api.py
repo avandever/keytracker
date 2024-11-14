@@ -173,3 +173,17 @@ def deck_json(deck_id):
     resp = make_response(deck.as_json())
     resp.mimetype = "text/json"
     return resp
+
+@blueprint.route("/api/deck_check/abr12alliance/<deck_id>", methods=["GET"])
+def abr12alliance(deck_id):
+    house = request.args.get("house")
+    explain = request.args.get("explain", False)
+    if house is None:
+        if explain:
+            return make_response("Must provide house")
+        else:
+            return make_response("Bad Query")
+    if explain:
+        return make_response("Feature not implemented yet")
+    else:
+        return make_response("PASS")
