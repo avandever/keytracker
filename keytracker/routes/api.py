@@ -177,13 +177,10 @@ def deck_json(deck_id):
 @blueprint.route("/api/deck_check/abr12alliance/<deck_id>", methods=["GET"])
 def abr12alliance(deck_id):
     house = request.args.get("house")
-    explain = request.args.get("explain", False)
     if house is None:
-        if explain:
-            return make_response("Must provide house")
-        else:
-            return make_response("Bad Query")
-    if explain:
-        return make_response("Feature not implemented yet")
+        result = "FAIL"
+        message = "Must specify house to check"
     else:
-        return make_response("PASS")
+        result = "PASS"
+        message = "Feature not implemented yet"
+    return make_response(jsonify(result=result, message=message))
