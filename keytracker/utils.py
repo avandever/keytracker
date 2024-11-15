@@ -144,7 +144,7 @@ MV_API_BASE = "https://www.keyforgegame.com/api/decks"
 DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 DOK_DECK_BASE = "https://decksofkeyforge.com/public-api/v3/decks"
 LATEST_SAS_VERSION = 43
-SAS_MAX_AGE_DAYS = 90
+SAS_MAX_AGE_DAYS = 15
 SAS_TD = datetime.timedelta(days=SAS_MAX_AGE_DAYS)
 SEARCH_PARAMS = {
     "page_size": 25,
