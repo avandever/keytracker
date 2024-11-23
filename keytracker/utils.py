@@ -1508,10 +1508,9 @@ def check_is_legacy(pc: PlatonicCard, deck: Deck) -> bool:
     # Trust sqlalchemy to cache this reasonably
     platonic_card_ids_in_expansion = {
         pcis.card_id
-        for pcis
-        in PlatonicCardInSet.query.with_entities(
-            PlatonicCardInSet.card_id
-        ).filter_by(expansion=deck.expansion).all()
+        for pcis in PlatonicCardInSet.query.with_entities(PlatonicCardInSet.card_id)
+        .filter_by(expansion=deck.expansion)
+        .all()
     }
     # If the platonic card id matches, great
     if pc.id in platonic_card_ids_in_expansion:
@@ -1521,17 +1520,17 @@ def check_is_legacy(pc: PlatonicCard, deck: Deck) -> bool:
     if (
         "'" in pc.card_title
         and PlatonicCardInSet.query.filter_by(
-            expansion=deck.expansion,
-            card_title=pc.card_title.replace("'", "’")
-        ).count() > 0
+            expansion=deck.expansion, card_title=pc.card_title.replace("'", "’")
+        ).count()
+        > 0
     ):
         return False
     if (
         "’" in pc.card_title
         and PlatonicCardInSet.query.filter_by(
-            expansion=deck.expansion,
-            card_title=pc.card_title.replace("’", "'")
-        ).count() > 0
+            expansion=deck.expansion, card_title=pc.card_title.replace("’", "'")
+        ).count()
+        > 0
     ):
         return False
     # Need to catch anomalies?

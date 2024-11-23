@@ -174,6 +174,7 @@ def deck_json(deck_id):
     resp.mimetype = "text/json"
     return resp
 
+
 @blueprint.route("/api/deck_check/abr12alliance/<deck_id>", methods=["GET"])
 def abr12alliance(deck_id):
     house = request.args.get("house")
@@ -184,6 +185,7 @@ def abr12alliance(deck_id):
         result = "PASS"
         message = "Feature not implemented yet"
     return make_response(jsonify(result=result, message=message))
+
 
 @blueprint.route("/api/deck_check/haskeyofdarkness/<deck_id>", methods=["GET"])
 def haskeyofdarkness(deck_id):
