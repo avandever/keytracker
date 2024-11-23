@@ -19,6 +19,8 @@ from keytracker.utils import (
     get_deck_by_id_with_zeal,
     log_to_game,
     get_deck_by_id_with_zeal,
+    GG_ALLIANCE_RESTRICTED_LIST,
+    KEY_CHEATS_STRICT,
 )
 import datetime
 
@@ -175,15 +177,32 @@ def deck_json(deck_id):
     return resp
 
 
+ABR12ALLIANCE_BANNED_CARDS = KEY_CHEATS_STRICT | GG_ALLIANCE_RESTRICTED_LIST
+
+
 @blueprint.route("/api/deck_check/abr12alliance/<deck_id>", methods=["GET"])
 def abr12alliance(deck_id):
+    FAIL = "FAIL"
     house = request.args.get("house")
     if house is None:
-        result = "FAIL"
         message = "Must specify house to check"
+        return make_response(jsonify(result=FAIL, message=message))
     else:
-        result = "PASS"
-        message = "Feature not implemented yet"
+        deck = get_deck_by_id_with_zeal(deck_id)
+        if not any(pod.house.lower() == house.lower() for pod in deck.pod_stats):
+            message = f"House {house} not in deck"
+            return make_response(jsonify(result=FAIL, message=message))
+        pod_cards = {
+            c.card_title
+            for c in deck.cards_from_assoc
+            if c.house.lower() == house.lower() and c.card_type != "Token Creature"
+        }
+        violating_cards = pod_cards & ABR12ALLIANCE_BANNED_CARDS
+        if violating_cards:
+            message = f"Violating cards: {','.join(violating_cards)}"
+            return make_response(jsonify(result=FAIL, message=message))
+    result = "PASS"
+    message = "Pod passes the check!"
     return make_response(jsonify(result=result, message=message))
 
 
