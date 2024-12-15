@@ -37,13 +37,12 @@ def gen_csv(num_decks, out_file, sets):
                     [exp.number for exp in EXPANSION_VALUES if exp.shortname in sets]
                 )
             )
-        query = query.order_by(func.rand()).limit(num_decks)
+        query = query.order_by(func.rand()).limit(num_decks).with_entities(Deck.kf_id)
         print(query)
-        results = query.with_entities(Deck.kf_id).all()
+        results = query.all()
         writer = csv.writer(out_file)
-        dok_links = [f"https://decksofkeyforge.com/decks/{d.kf_id}" for d in results]
-        for res in results:
-            writer.writerows([[link] for link in dok_links])
+        dok_links = [[f"https://decksofkeyforge.com/decks/{d.kf_id}"] for d in results]
+        writer.writerows(dok_links)
 
 
 if __name__ == "__main__":
