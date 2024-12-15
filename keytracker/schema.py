@@ -219,6 +219,11 @@ class Deck(db.Model):
         return ET.tostring(deck)
 
     def as_json(self) -> str:
+        tokens = [c for c in self.cards_from_assoc if c.card_type == "Token Creature"]
+        if not tokens:
+            token = None
+        else:
+            token = tokens[0].card_title
         return json.dumps(
             {
                 "id": self.kf_id,
@@ -227,6 +232,7 @@ class Deck(db.Model):
                 "sas_rating": getattr(self.dok, "sas_rating", "UNKNOWN"),
                 "aerc_score": getattr(self.dok, "aerc_score", "UNKNOWN"),
                 "houses": sorted([ps.house for ps in self.pod_stats]),
+                "token": token,
             }
         )
 
