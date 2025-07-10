@@ -17,13 +17,15 @@ from asyncio import create_task, Lock, Queue, Task
 from typing import Iterable, List, Set
 from keytracker.utils import (
     add_one_deck_v2,
-    get_decks_from_page,
     get_decks_from_page_v2,
     get_deck_by_id_with_zeal,
     dump_page_json_to_file,
     InternalServerError,
     loop_loading_missed_sas,
+    MV_API_BASE,
+    randip,
     RequestThrottled,
+    SEARCH_PARAMS,
 )
 import time
 import os
@@ -32,11 +34,31 @@ import logging
 import shutil
 from sqlalchemy.orm import joinedload
 from sqlalchemy import and_
+from aiohttp.client_exceptions import ContentTypeError
 
 
 collector = AppGroup("collector")
 page_one_stopper = "/tmp/stop_page_one_loop"
 click_log.basic_config()
+
+
+class MyMVApi:
+    def __init__(self, seconds_per_call: float = 5.0):
+        self.lock = asyncio.Lock()
+        self.last_call_time = 0.0
+        self.seconds_per_call = seconds_per_call
+
+    async def callMV(self, *args, **kwargs):
+        async with self.lock:
+            time_since_last_call = time.time() - self.last_call_time
+            time_to_sleep = max(0.0, self.seconds_per_call - time_since_last_call)
+            await asyncio.sleep(time_to_sleep)
+            self.last_call_time = time.time()
+            response = await arequests.get(*args, **kwargs)
+            return response
+
+
+my_mv_api = MyMVApi(1.0)
 
 
 @collector.command("get_images")
@@ -481,6 +503,27 @@ async def start_deck_fetchers(
     current_app.logger.debug("Starting deck fetchers")
     fetcher = DeckFetcher(in_q)
     return [create_task(fetcher(f"fetcher-{x}")) for x in range(workers)]
+
+
+async def get_decks_from_page(page: int) -> Iterable[str]:
+    params = SEARCH_PARAMS.copy()
+    params["page"] = page
+    headers = {"X-Forwarded-For": randip()}
+    response = await my_mv_api.callMV(MV_API_BASE, params=params, headers=headers)
+    try:
+        data = await response.json()
+    except (json.decoder.JSONDecodeError, ContentTypeError):
+        current_app.logger.error(f"raw response: {response}")
+        raise
+    if "code" in data:
+        if data["code"] == 429:
+            raise RequestThrottled(data["message"] + data["detail"])
+        # "Internal Server Error" - means page does not exist
+        elif data["code"] == 0:
+            raise InternalServerError(data["message"] + data["detail"])
+        else:
+            logging.error(f"Unrecognized json response {data}")
+    return [deck["id"] for deck in data["data"]]
 
 
 class PageProcessor:

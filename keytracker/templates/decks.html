@@ -13,7 +13,8 @@
                 <br />
                 <button type="submit">Submit</button>
             </form>
-            <script type="text/javascript" src="{{ url_for("static", filename="js/cleanform.js") }}"></script>
+            <script type="text/javascript"
+                    src="{{ url_for("static", filename="js/cleanform.js") }}"></script>
             {% if decks %}
                 <div class="decks_list">
                     {% for deck in decks %}

@@ -37,7 +37,6 @@ import requests
 
 from aiohttp_requests import requests as arequests
 from aiohttp.client_exceptions import ContentTypeError
-import asyncio
 import re
 import sqlalchemy
 from sqlalchemy import and_, or_
@@ -399,7 +398,6 @@ def house_stats_to_csv(pods: List[CsvPod]) -> IO:
 
 class MVApi:
     def __init__(self, seconds_per_call: float = 5.0):
-        self.lock = asyncio.Lock()
         self.lock_sync = threading.Lock()
         self.last_call_time = 0.0
         self.seconds_per_call = seconds_per_call
@@ -411,15 +409,6 @@ class MVApi:
             time.sleep(time_to_sleep)
             self.last_call_time = time.time()
             response = requests.get(*args, **kwargs)
-            return response
-
-    async def callMV(self, *args, **kwargs):
-        async with self.lock:
-            time_since_last_call = time.time() - self.last_call_time
-            time_to_sleep = max(0.0, self.seconds_per_call - time_since_last_call)
-            await asyncio.sleep(time_to_sleep)
-            self.last_call_time = time.time()
-            response = await arequests.get(*args, **kwargs)
             return response
 
 
@@ -1144,27 +1133,6 @@ def guess_deck_language(deck: Deck) -> None:
             language = DeckLanguage(name=guess.name)
             db.session.add(language)
         deck.deck_language = language
-
-
-async def get_decks_from_page(page: int) -> Iterable[str]:
-    params = SEARCH_PARAMS.copy()
-    params["page"] = page
-    headers = {"X-Forwarded-For": randip()}
-    response = await mv_api.callMV(MV_API_BASE, params=params, headers=headers)
-    try:
-        data = await response.json()
-    except (json.decoder.JSONDecodeError, ContentTypeError):
-        current_app.logger.error(f"raw response: {response}")
-        raise
-    if "code" in data:
-        if data["code"] == 429:
-            raise RequestThrottled(data["message"] + data["detail"])
-        # "Internal Server Error" - means page does not exist
-        elif data["code"] == 0:
-            raise InternalServerError(data["message"] + data["detail"])
-        else:
-            logging.error(f"Unrecognized json response {data}")
-    return [deck["id"] for deck in data["data"]]
 
 
 def dump_page_json_to_file(

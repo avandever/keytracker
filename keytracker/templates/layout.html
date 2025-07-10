@@ -12,7 +12,10 @@
         <meta property="og:title" content="{{ title }}" />
         <meta property="og:description" content="{{ description }}" />
         <meta property="og:image" content="https://ancientbearrepublic.com/abr.png" />
-        {% block css %}<link href="{{ url_for("static", filename="css/style.css") }}" rel="stylesheet" />{% endblock %}
+        {% block css %}
+            <link href="{{ url_for("static", filename="css/style.css") }}"
+                  rel="stylesheet" />
+        {% endblock %}
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
     </head>
     <body>
