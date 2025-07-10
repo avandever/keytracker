@@ -206,7 +206,7 @@ def abr12alliance(deck_id):
     return make_response(jsonify(result=result, message=message))
 
 
-@bluepint.route("/api/deck_check/abr13alliance/<deck_id>", methods=["GET"])
+@blueprint.route("/api/deck_check/abr13alliance/<deck_id>", methods=["GET"])
 def abr13alliance(deck_id):
     return make_response(jsonify(result="PASS", message="Check not implemented yet"))
 
