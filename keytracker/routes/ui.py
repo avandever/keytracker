@@ -490,3 +490,7 @@ def oauth_redirect():
 @blueprint.route("/patreon")
 def patreon():
     return render_template("patreon.html")
+
+@blueprint.route("/robots.txt")
+def static_from_root():
+    return send_from_directory(app.static_folder, request.path[1:])
