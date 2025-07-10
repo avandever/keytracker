@@ -61,6 +61,10 @@ EXPANSION_VALUES = [
     ExpansionValues("More Mutation", "MoMU", "MoMu", 874),
     ExpansionValues("Tokens of Change", "ToC", "ToC", 855),
     ExpansionValues("Martian Civil War", "MCW", "MCW", 892),
+    ExpansionValues("Discovery", "Disc", "Disc", 907),
+    ExpansionValues("Prophetic Visions", "PV", "PV", 886),
+    ExpansionValues("Crucible Clash", "CC", "CC", 918),
+    ExpansionValues("Vault Masters 2025", "VM25", "VM25", 939),
 ]
 
 EXPANSION_ID_TO_ABBR = {exp.number: exp.shortname for exp in EXPANSION_VALUES}
