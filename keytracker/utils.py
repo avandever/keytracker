@@ -1091,7 +1091,10 @@ def calculate_pod_stats(deck: Deck) -> None:
     for card in deck.cards_from_assoc:
         house_to_cards[card.kf_house].append(card)
     for kf_house, cards in house_to_cards.items():
-        if kf_house is None or kf_house.name == "The Tide":
+        if kf_house is None or kf_house.name in [
+            "The Tide",
+            "Prophecy",
+        ]:
             continue
         enhancements, amber, capture, draw, damage = 0, 0, 0, 0, 0
         mutants, creatures, raw_amber = 0, 0, 0
