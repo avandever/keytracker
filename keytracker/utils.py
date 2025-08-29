@@ -122,7 +122,7 @@ VALID_HOUSE_ENHANCEMENTS = [
     "saurian",
     "shadows",
     "skyborn",
-    "staralliance",  # ?
+    "star alliance",
     "unfathomable",
     "untamed",
 ]
