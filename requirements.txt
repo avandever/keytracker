@@ -67,7 +67,7 @@ Jinja2==3.1.6
 jsbeautifier==1.15.4
 json5==0.12.0
 keyring==25.6.0
-lingua-language-detector
+lingua-language-detector==2.1.1
 Mako==1.3.10
 MarkupSafe==3.0.2
 matplotlib-inline==0.1.7
@@ -84,7 +84,6 @@ pbs-installer==2025.7.8
 pexpect==4.9.0
 pickleshare==0.7.5
 pip-review==1.3.0
-pkgconfig
 pkginfo==1.12.1.2
 platformdirs==4.3.8
 poetry==2.1.3
