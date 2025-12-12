@@ -35,8 +35,8 @@ from typing import Any, Dict, IO, Iterable, List, Optional, Tuple
 import random
 import requests
 
-from aiohttp_requests import requests as arequests
-from aiohttp.client_exceptions import ContentTypeError
+# from aiohttp_requests import requests as arequests
+# from aiohttp.client_exceptions import ContentTypeError
 import re
 import sqlalchemy
 from sqlalchemy import and_, or_
