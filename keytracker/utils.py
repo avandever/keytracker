@@ -50,7 +50,7 @@ import logging
 import json
 import time
 import threading
-from lingua import LanguageDetectorBuilder
+# from lingua import LanguageDetectorBuilder
 
 
 @dataclass
@@ -150,7 +150,7 @@ SEARCH_PARAMS = {
     "ordering": "-date",
 }
 
-language_detector = LanguageDetectorBuilder.from_languages(*POSSIBLE_LANGUAGES).build()
+# language_detector = LanguageDetectorBuilder.from_languages(*POSSIBLE_LANGUAGES).build()
 
 MM_UNHOUSED_CARDS = [
     "It’s Coming...",
@@ -1122,17 +1122,17 @@ def calculate_pod_stats(deck: Deck) -> None:
         pod.total_amber = raw_amber + amber
 
 
-def guess_deck_language(deck: Deck) -> None:
-    guess = language_detector.detect_language_of(deck.name)
-    if guess is None:
-        deck.language = None
-    else:
-        deck.language = guess.name
-        language = DeckLanguage.query.filter_by(name=guess.name).first()
-        if language is None:
-            language = DeckLanguage(name=guess.name)
-            db.session.add(language)
-        deck.deck_language = language
+# def guess_deck_language(deck: Deck) -> None:
+#     guess = language_detector.detect_language_of(deck.name)
+#     if guess is None:
+#         deck.language = None
+#     else:
+#         deck.language = guess.name
+#         language = DeckLanguage.query.filter_by(name=guess.name).first()
+#         if language is None:
+#             language = DeckLanguage(name=guess.name)
+#             db.session.add(language)
+#         deck.deck_language = language
 
 
 def dump_page_json_to_file(

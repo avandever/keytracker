@@ -17,7 +17,7 @@ from typing import List
 import copy
 import xml.etree.ElementTree as ET
 import json
-from lingua import Language
+# from lingua import Language
 
 
 db = SQLAlchemy()
@@ -25,18 +25,18 @@ db = SQLAlchemy()
 
 # Changing order will break enum in db. Can add to end, but don't subtract or move
 POSSIBLE_LANGUAGES = [
-    Language.CHINESE,
-    Language.ENGLISH,
-    Language.FRENCH,
-    Language.GERMAN,
-    Language.ITALIAN,
-    Language.KOREAN,
-    Language.POLISH,
-    Language.PORTUGUESE,
-    Language.RUSSIAN,
-    Language.SPANISH,
-    Language.THAI,
-    Language.VIETNAMESE,
+    # Language.CHINESE,
+    # Language.ENGLISH,
+    # Language.FRENCH,
+    # Language.GERMAN,
+    # Language.ITALIAN,
+    # Language.KOREAN,
+    # Language.POLISH,
+    # Language.PORTUGUESE,
+    # Language.RUSSIAN,
+    # Language.SPANISH,
+    # Language.THAI,
+    # Language.VIETNAMESE,
 ]
 
 
