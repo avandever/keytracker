@@ -19,7 +19,7 @@ from keytracker.routes import (
     ui,
     api,
 )
-from keytracker.scripts.collector import collector
+# from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
 import sqlalchemy
 from sqlalchemy.exc import (
@@ -71,7 +71,7 @@ app.jinja_env.globals.update(
 app.register_blueprint(ui.blueprint)
 app.register_blueprint(api.blueprint)
 
-app.cli.add_command(collector)
+# app.cli.add_command(collector)
 app.cli.add_command(sealed)
 
 
