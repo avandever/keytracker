@@ -1,7 +1,11 @@
-FROM python:3-slim
-WORKDIR .
-COPY . .
+FROM python:3.12-slim
+WORKDIR /tracker
 RUN apt-get update
-RUN apt-get install python3-dev default-libmysqlclient-dev gcc  -y
+RUN apt-get upgrade
+RUN apt-get install -y git pkg-config build-essential libmariadb-dev
+RUN git clone "https://github.com/avandever/keytracker.git" .
 RUN pip install -r requirements.txt
-ENTRYPOINT exec gunicorn -b :$PORT -w 4 keytracker.server:app --log-level debug --log-file - --timeout 60
+RUN pip install keytracker
+RUN cd keytracker/&& ls && pip install .
+EXPOSE 3001
+CMD ["flask", "--app", "keytracker.server", "run"]
