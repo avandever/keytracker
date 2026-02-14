@@ -47,14 +47,26 @@ docker run -p 3001:3001 keytracker
 **Business logic**: `keytracker/utils.py` — Master Vault API client (rate-limited to 1 req/sec), DoK API integration, game creation from logs and manual stats, deck fetching/caching, pod stats calculation, CSV import/export, and MySQL retry decorators.
 
 **Routes**:
-- `keytracker/routes/ui.py` — Web UI: game/deck/player browsing, search with filtering, CSV tools, auth pages
-- `keytracker/routes/api.py` — REST API: game upload (full data or log file), deck enhancement queries, search endpoint
+- `keytracker/routes/ui.py` — Jinja2 Web UI: game/deck/player browsing, search with filtering, CSV tools, auth pages
+- `keytracker/routes/api.py` — REST API v1: game upload (full data or log file), deck enhancement queries
+- `keytracker/routes/api_v2.py` — REST API v2 (JSON): read endpoints for games/decks/users, upload endpoints. Powers the MUI frontend.
 
-**Rendering**: `keytracker/renderers.py` — formats game log messages into styled HTML with card hover images via regex matching.
+**Serializers**: `keytracker/serializers.py` — converts SQLAlchemy models to dicts for JSON API responses.
+
+**Rendering**: `keytracker/renderers.py` — formats game log messages into styled HTML with card hover images via regex matching (used by Jinja2 UI).
 
 **Data collection**: `keytracker/scripts/collector.py` — async CLI tool (registered as Flask command) that bulk-fetches deck data from Master Vault API with rate limiting and caching.
 
 **Templates**: `keytracker/templates/` — 20 Jinja2 templates, base layout in `layout.html`.
+
+**Material UI Frontend**: `frontend/` — React + TypeScript + Material UI SPA served at `/mui/`. Uses Vite for builds. API client in `frontend/src/api/`, pages in `frontend/src/pages/`. Dev server proxies `/api` to Flask.
+
+### Frontend Development
+```bash
+cd frontend && npm install && npm run dev   # Dev server on port 5173
+cd frontend && npm run build                # Build to frontend/dist/
+```
+The Flask app serves the built frontend at `/mui/`. During development, run both the Vite dev server and Flask.
 
 ## Configuration
 

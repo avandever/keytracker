@@ -18,6 +18,7 @@ from keytracker.renderers import (
 from keytracker.routes import (
     ui,
     api,
+    api_v2,
 )
 # from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
@@ -70,6 +71,21 @@ app.jinja_env.globals.update(
 )
 app.register_blueprint(ui.blueprint)
 app.register_blueprint(api.blueprint)
+app.register_blueprint(api_v2.blueprint)
+
+# Serve React Material UI frontend at /mui/
+FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+
+
+@app.route("/mui/")
+@app.route("/mui/<path:path>")
+def serve_react(path=""):
+    from flask import send_from_directory
+
+    full_path = os.path.join(FRONTEND_DIST, path)
+    if path and os.path.isfile(full_path):
+        return send_from_directory(FRONTEND_DIST, path)
+    return send_from_directory(FRONTEND_DIST, "index.html")
 
 # app.cli.add_command(collector)
 app.cli.add_command(sealed)

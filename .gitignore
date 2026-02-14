@@ -18,3 +18,5 @@ alembic_local/
 alembic_local
 alembic_remote/
 alembic_remote
+frontend/node_modules/
+frontend/dist/
