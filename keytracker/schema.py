@@ -366,7 +366,7 @@ class PlatonicCardInSet(db.Model):
     )
     card = db.relationship("PlatonicCard", back_populates="expansions")
     card_kf_id = db.Column(db.String(36))
-    expansion = db.Column(db.Integer, primary_key=True)
+    expansion = db.Column(db.Integer, index=True)
     kf_rarity_id = db.Column(
         db.Integer,
         db.ForeignKey(KeyforgeRarity.__table__.c.id),
@@ -754,5 +754,7 @@ class User(UserMixin, db.Model):
     __tablename__ = "tracker_user"
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True)
-    password = db.Column(db.String(200))
+    password = db.Column(db.String(200), nullable=True)
     name = db.Column(db.String(100))
+    google_id = db.Column(db.String(200), unique=True, nullable=True)
+    avatar_url = db.Column(db.String(500), nullable=True)

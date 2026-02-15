@@ -16,4 +16,4 @@ COPY . .
 RUN pip install .
 COPY --from=frontend-build /frontend/dist /tracker/frontend/dist
 EXPOSE 3001
-CMD ["flask", "--app", "keytracker.server", "run"]
+CMD ["flask", "--app", "keytracker.server", "run", "--host=0.0.0.0", "--port=3001"]

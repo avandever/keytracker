@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import current_app, Flask, jsonify
+from flask import current_app, Flask, jsonify, redirect, request
 from flask_login import LoginManager
 from keytracker.schema import (
     db,
@@ -19,6 +19,7 @@ from keytracker.routes import (
     ui,
     api,
     api_v2,
+    auth,
 )
 # from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
@@ -60,7 +61,42 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 
+auth.init_oauth(app)
+
 db.create_all()
+
+# Add google_id and avatar_url columns if they don't exist (migration)
+with app.app_context():
+    try:
+        from sqlalchemy import inspect as sa_inspect, text
+
+        inspector = sa_inspect(db.engine)
+        if inspector.has_table("tracker_user"):
+            columns = {c["name"] for c in inspector.get_columns("tracker_user")}
+            with db.engine.begin() as conn:
+                if "google_id" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN google_id VARCHAR(200) UNIQUE"
+                        )
+                    )
+                if "avatar_url" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN avatar_url VARCHAR(500)"
+                        )
+                    )
+    except Exception:
+        pass
+
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Authentication required"}), 401
+    return redirect("/auth/google/login?next=" + request.path)
+
+
 app.jinja_env.globals.update(
     render_card_images=render_card_images,
     render_card_list=render_card_list,
@@ -69,6 +105,7 @@ app.jinja_env.globals.update(
     render_input_number=render_input_number,
     render_log=render_log,
 )
+app.register_blueprint(auth.blueprint)
 app.register_blueprint(ui.blueprint)
 app.register_blueprint(api.blueprint)
 app.register_blueprint(api_v2.blueprint)

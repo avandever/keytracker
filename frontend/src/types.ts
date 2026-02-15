@@ -1,3 +1,10 @@
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+  avatar_url: string | null;
+}
+
 export interface GameSummary {
   crucible_game_id: string;
   date: string | null;

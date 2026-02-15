@@ -4,6 +4,7 @@ from flask import (
     jsonify,
     request,
 )
+from flask_login import current_user, login_required
 from keytracker.schema import (
     db,
     Deck,
@@ -38,6 +39,20 @@ import time
 
 
 blueprint = Blueprint("api_v2", __name__, url_prefix="/api/v2")
+
+@blueprint.route("/auth/me")
+def auth_me():
+    if current_user.is_authenticated:
+        return jsonify(
+            {
+                "id": current_user.id,
+                "email": current_user.email,
+                "name": current_user.name,
+                "avatar_url": current_user.avatar_url,
+            }
+        )
+    return jsonify({"error": "Not authenticated"}), 401
+
 
 SORT_ALLOWLIST = {
     "date",
@@ -183,6 +198,7 @@ def user_detail(username):
 
 
 @blueprint.route("/upload/log", methods=["POST"])
+@login_required
 def upload_log():
     data = request.get_json(silent=True) or {}
     log_text = data.get("log", "")
@@ -224,6 +240,7 @@ def upload_log():
 
 
 @blueprint.route("/upload/simple", methods=["POST"])
+@login_required
 def upload_simple():
     data = request.get_json(silent=True) or {}
     try:
@@ -239,6 +256,7 @@ def upload_simple():
 
 
 @blueprint.route("/csv/pods", methods=["POST"])
+@login_required
 def csv_pods():
     if "decks_csv" not in request.files:
         return jsonify({"error": "Missing 'decks_csv' file"}), 400

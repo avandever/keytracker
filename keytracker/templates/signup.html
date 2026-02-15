@@ -1,16 +1,12 @@
 {% extends "layout.html" %}
 {% block content %}
-    <form method="POST" action="/signup">
-        <input class="input"
-               type="email"
-               name="email"
-               placeholder="Your Email"
-               autofocus="">
-        <input class="input" type="text" name="name" placeholder="Name" autofocus="">
-        <input class="input"
-               type="password"
-               name="password"
-               placeholder="Your Password">
-        <button class="button">Sign Up</button>
-    </form>
+    <div style="text-align: center; margin-top: 2em;">
+        <h2>Sign Up</h2>
+        <p>Use your Google account to create an account.</p>
+        <a href="/auth/google/login?next={{ request.args.get('next', '/') }}"
+           class="button"
+           style="display: inline-block; margin-top: 1em;">
+            Sign in with Google
+        </a>
+    </div>
 {% endblock %}

@@ -457,11 +457,18 @@ def load_config() -> Dict[str, str]:
     if config_path == "ENV":
         config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
         config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "placeholder")
+        config["GOOGLE_CLIENT_ID"] = os.environ.get("GOOGLE_CLIENT_ID", "")
+        config["GOOGLE_CLIENT_SECRET"] = os.environ.get("GOOGLE_CLIENT_SECRET", "")
     else:
         cparser = configparser.ConfigParser()
         cparser.read(config_path)
         config["SQLALCHEMY_DATABASE_URI"] = config_to_uri(**cparser["db"])
         config["SECRET_KEY"] = cparser["app"]["secret_key"]
+        if "google" in cparser:
+            config["GOOGLE_CLIENT_ID"] = cparser["google"].get("client_id", "")
+            config["GOOGLE_CLIENT_SECRET"] = cparser["google"].get(
+                "client_secret", ""
+            )
     assert config["SQLALCHEMY_DATABASE_URI"] is not None
     assert config["SECRET_KEY"] != "placeholder"
     return config
