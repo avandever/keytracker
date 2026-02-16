@@ -21,7 +21,7 @@ export default function AccountPage() {
         <Typography color="text.secondary" sx={{ mb: 3 }}>
           Sign in to view your account.
         </Typography>
-        <Button variant="contained" href="/auth/google/login?next=/mui/account">
+        <Button variant="contained" href="/auth/google/login?next=/account">
           Sign in with Google
         </Button>
       </Container>
@@ -44,7 +44,7 @@ export default function AccountPage() {
         </Typography>
         <Button
           variant="outlined"
-          href="/auth/logout?next=/mui/"
+          href="/auth/logout?next=/"
           sx={{ mt: 3 }}
         >
           Sign Out

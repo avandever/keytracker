@@ -29,7 +29,7 @@ function Layout() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter basename="/mui">
+      <BrowserRouter basename="/">
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />

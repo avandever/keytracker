@@ -68,13 +68,13 @@ export default function AppBar() {
                 <MenuItem component={RouterLink} to="/account" onClick={() => setAnchorEl(null)}>
                   Profile
                 </MenuItem>
-                <MenuItem component="a" href="/auth/logout?next=/mui/">
+                <MenuItem component="a" href="/auth/logout?next=/">
                   Sign Out
                 </MenuItem>
               </Menu>
             </>
           ) : (
-            <Button color="inherit" href="/auth/google/login?next=/mui/">
+            <Button color="inherit" href="/auth/google/login?next=/">
               Sign in with Google
             </Button>
           )

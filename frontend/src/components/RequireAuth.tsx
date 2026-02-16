@@ -23,7 +23,7 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
         </Typography>
         <Button
           variant="contained"
-          href="/auth/google/login?next=/mui/"
+          href="/auth/google/login?next=/"
         >
           Sign in with Google
         </Button>

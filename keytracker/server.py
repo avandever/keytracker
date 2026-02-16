@@ -7,16 +7,7 @@ from keytracker.schema import (
 )
 from keytracker import utils
 from keytracker import schema
-from keytracker.renderers import (
-    render_card_images,
-    render_card_list,
-    render_dropdown,
-    render_input_number,
-    render_log,
-    render_game_listing,
-)
 from keytracker.routes import (
-    ui,
     api,
     api_v2,
     auth,
@@ -50,7 +41,6 @@ db.app = app
 db.init_app(app)
 
 login_manager = LoginManager()
-login_manager.login_view = "ui.login"
 login_manager.init_app(app)
 
 from keytracker.schema import User
@@ -97,25 +87,22 @@ def unauthorized():
     return redirect("/auth/google/login?next=" + request.path)
 
 
-app.jinja_env.globals.update(
-    render_card_images=render_card_images,
-    render_card_list=render_card_list,
-    render_dropdown=render_dropdown,
-    render_game_listing=render_game_listing,
-    render_input_number=render_input_number,
-    render_log=render_log,
-)
 app.register_blueprint(auth.blueprint)
-app.register_blueprint(ui.blueprint)
 app.register_blueprint(api.blueprint)
 app.register_blueprint(api_v2.blueprint)
 
-# Serve React Material UI frontend at /mui/
+# Serve React frontend at /
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
 
 @app.route("/mui/")
 @app.route("/mui/<path:path>")
+def serve_react_legacy(path=""):
+    return redirect("/" + path, code=301)
+
+
+@app.route("/")
+@app.route("/<path:path>")
 def serve_react(path=""):
     from flask import send_from_directory
 
