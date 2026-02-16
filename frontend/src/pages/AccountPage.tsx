@@ -8,16 +8,24 @@ import {
   Container,
   Divider,
   Paper,
+  TextField,
   Typography,
   CircularProgress,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+import { updateSettings } from '../api/auth';
 import { useSearchParams } from 'react-router-dom';
 
 export default function AccountPage() {
   const { user, loading, refresh } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [alert, setAlert] = useState<{ severity: 'success' | 'error'; message: string } | null>(null);
+  const [dokKey, setDokKey] = useState(user?.dok_api_key || '');
+  const [dokSaving, setDokSaving] = useState(false);
+
+  useEffect(() => {
+    if (user) setDokKey(user.dok_api_key || '');
+  }, [user]);
 
   useEffect(() => {
     if (searchParams.get('patreon_linked') === 'true') {
@@ -142,6 +150,43 @@ export default function AccountPage() {
             </Box>
           </>
         )}
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="h6" gutterBottom>
+          Decks of Keyforge
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Enter your personal DoK API key to enable enhanced deck lookups.
+        </Typography>
+        <TextField
+          fullWidth
+          size="small"
+          value={dokKey}
+          onChange={(e) => setDokKey(e.target.value)}
+          placeholder="xxxxxxxx-xxxx-4xxx-xxxx-xxxxxxxxxxxx"
+          inputProps={{ style: { fontFamily: 'monospace' } }}
+          sx={{ mb: 1 }}
+        />
+        <Button
+          variant="contained"
+          size="small"
+          disabled={dokSaving}
+          onClick={async () => {
+            setDokSaving(true);
+            try {
+              await updateSettings({ dok_api_key: dokKey });
+              await refresh();
+              setAlert({ severity: 'success', message: 'DoK API key saved.' });
+            } catch (e: any) {
+              setAlert({ severity: 'error', message: e.response?.data?.error || 'Failed to save.' });
+            } finally {
+              setDokSaving(false);
+            }
+          }}
+        >
+          {dokSaving ? 'Saving...' : 'Save'}
+        </Button>
 
         <Divider sx={{ my: 3 }} />
 

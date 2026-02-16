@@ -124,6 +124,12 @@ with app.app_context():
                             "ALTER TABLE tracker_user ADD COLUMN free_membership BOOLEAN NOT NULL DEFAULT FALSE"
                         )
                     )
+                if "dok_api_key" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN dok_api_key VARCHAR(36)"
+                        )
+                    )
     except Exception:
         pass
 

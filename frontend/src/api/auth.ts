@@ -9,3 +9,8 @@ export async function getAuthMe(): Promise<AuthUser | null> {
     return null;
   }
 }
+
+export async function updateSettings(settings: Record<string, unknown>): Promise<AuthUser> {
+  const { data } = await apiClient.put<AuthUser>('/auth/settings', settings);
+  return data;
+}

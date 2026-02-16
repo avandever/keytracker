@@ -7,6 +7,7 @@ export interface AuthUser {
   is_member: boolean;
   patreon_tier_title: string | null;
   patreon_linked: boolean;
+  dok_api_key: string | null;
 }
 
 export interface GameSummary {

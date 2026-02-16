@@ -35,6 +35,7 @@ from keytracker.utils import (
 )
 from sqlalchemy import or_
 import datetime
+import re
 import time
 
 
@@ -53,9 +54,42 @@ def auth_me():
                 "is_member": current_user.is_member,
                 "patreon_tier_title": current_user.patreon_tier_title,
                 "patreon_linked": current_user.patreon_id is not None,
+                "dok_api_key": current_user.dok_api_key,
             }
         )
     return jsonify({"error": "Not authenticated"}), 401
+
+
+UUID4_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+
+
+@blueprint.route("/auth/settings", methods=["PUT"])
+@login_required
+def auth_settings():
+    data = request.get_json(silent=True) or {}
+    if "dok_api_key" in data:
+        val = (data["dok_api_key"] or "").strip()
+        if val == "":
+            current_user.dok_api_key = None
+        elif UUID4_RE.match(val):
+            current_user.dok_api_key = val
+        else:
+            return jsonify({"error": "Invalid DoK API key format (expected UUID v4)"}), 400
+    db.session.commit()
+    return jsonify({
+        "id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "avatar_url": current_user.avatar_url,
+        "is_patron": current_user.is_patron,
+        "is_member": current_user.is_member,
+        "patreon_tier_title": current_user.patreon_tier_title,
+        "patreon_linked": current_user.patreon_id is not None,
+        "dok_api_key": current_user.dok_api_key,
+    })
 
 
 SORT_ALLOWLIST = {
