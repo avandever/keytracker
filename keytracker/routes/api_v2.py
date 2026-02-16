@@ -49,6 +49,9 @@ def auth_me():
                 "email": current_user.email,
                 "name": current_user.name,
                 "avatar_url": current_user.avatar_url,
+                "is_patron": current_user.is_patron,
+                "patreon_tier_title": current_user.patreon_tier_title,
+                "patreon_linked": current_user.patreon_id is not None,
             }
         )
     return jsonify({"error": "Not authenticated"}), 401

@@ -6,6 +6,7 @@ import {
   Button,
   Box,
   Avatar,
+  Badge,
   Menu,
   MenuItem,
   IconButton,
@@ -52,11 +53,27 @@ export default function AppBar() {
           user ? (
             <>
               <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0 }}>
-                <Avatar
-                  src={user.avatar_url || undefined}
-                  alt={user.name}
-                  sx={{ width: 32, height: 32 }}
-                />
+                <Badge
+                  invisible={!user.is_patron}
+                  overlap="circular"
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                  badgeContent="★"
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      fontSize: '0.6rem',
+                      minWidth: 14,
+                      height: 14,
+                      backgroundColor: '#FF424D',
+                      color: '#fff',
+                    },
+                  }}
+                >
+                  <Avatar
+                    src={user.avatar_url || undefined}
+                    alt={user.name}
+                    sx={{ width: 32, height: 32 }}
+                  />
+                </Badge>
               </IconButton>
               <Menu
                 anchorEl={anchorEl}

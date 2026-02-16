@@ -459,6 +459,9 @@ def load_config() -> Dict[str, str]:
         config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "placeholder")
         config["GOOGLE_CLIENT_ID"] = os.environ.get("GOOGLE_CLIENT_ID", "")
         config["GOOGLE_CLIENT_SECRET"] = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+        config["PATREON_CLIENT_ID"] = os.environ.get("PATREON_CLIENT_ID", "")
+        config["PATREON_CLIENT_SECRET"] = os.environ.get("PATREON_CLIENT_SECRET", "")
+        config["PATREON_CAMPAIGN_ID"] = os.environ.get("PATREON_CAMPAIGN_ID", "")
     else:
         cparser = configparser.ConfigParser()
         cparser.read(config_path)
@@ -468,6 +471,14 @@ def load_config() -> Dict[str, str]:
             config["GOOGLE_CLIENT_ID"] = cparser["google"].get("client_id", "")
             config["GOOGLE_CLIENT_SECRET"] = cparser["google"].get(
                 "client_secret", ""
+            )
+        if "patreon" in cparser:
+            config["PATREON_CLIENT_ID"] = cparser["patreon"].get("client_id", "")
+            config["PATREON_CLIENT_SECRET"] = cparser["patreon"].get(
+                "client_secret", ""
+            )
+            config["PATREON_CAMPAIGN_ID"] = cparser["patreon"].get(
+                "campaign_id", ""
             )
     assert config["SQLALCHEMY_DATABASE_URI"] is not None
     assert config["SECRET_KEY"] != "placeholder"

@@ -3,6 +3,9 @@ export interface AuthUser {
   email: string;
   name: string;
   avatar_url: string | null;
+  is_patron: boolean;
+  patreon_tier_title: string | null;
+  patreon_linked: boolean;
 }
 
 export interface GameSummary {

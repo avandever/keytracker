@@ -76,6 +76,48 @@ with app.app_context():
                             "ALTER TABLE tracker_user ADD COLUMN avatar_url VARCHAR(500)"
                         )
                     )
+                if "patreon_id" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN patreon_id VARCHAR(200) UNIQUE"
+                        )
+                    )
+                if "patreon_access_token" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN patreon_access_token VARCHAR(500)"
+                        )
+                    )
+                if "patreon_refresh_token" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN patreon_refresh_token VARCHAR(500)"
+                        )
+                    )
+                if "is_patron" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN is_patron BOOLEAN NOT NULL DEFAULT FALSE"
+                        )
+                    )
+                if "patreon_tier_title" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN patreon_tier_title VARCHAR(200)"
+                        )
+                    )
+                if "patreon_pledge_cents" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN patreon_pledge_cents INTEGER"
+                        )
+                    )
+                if "patreon_linked_at" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN patreon_linked_at DATETIME"
+                        )
+                    )
     except Exception:
         pass
 
