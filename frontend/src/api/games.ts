@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { GameSummary, GameDetail } from '../types';
+import type { GameSummary, GameDetail, MyGamesResponse } from '../types';
 
 export async function getRecentGames(limit: number = 5): Promise<GameSummary[]> {
   const { data } = await apiClient.get('/games/recent', { params: { limit } });
@@ -16,5 +16,10 @@ export async function searchGames(params: Record<string, string | undefined>): P
 
 export async function getGame(crucibleGameId: string): Promise<GameDetail> {
   const { data } = await apiClient.get(`/games/${crucibleGameId}`);
+  return data;
+}
+
+export async function getMyGames(page: number = 1): Promise<MyGamesResponse> {
+  const { data } = await apiClient.get('/games/mine', { params: { page } });
   return data;
 }

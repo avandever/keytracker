@@ -16,6 +16,7 @@ import CsvToPodsPage from './pages/CsvToPodsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import ComingSoonPage from './pages/ComingSoonPage';
 import AccountPage from './pages/AccountPage';
+import MyGamesPage from './pages/MyGamesPage';
 
 function Layout() {
   return (
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/upload_simple" element={<RequireAuth><UploadSimplePage /></RequireAuth>} />
             <Route path="/csv_to_pods" element={<RequireAuth><CsvToPodsPage /></RequireAuth>} />
             <Route path="/account" element={<AccountPage />} />
+            <Route path="/my-games" element={<RequireAuth><MyGamesPage /></RequireAuth>} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/fame" element={<ComingSoonPage title="Hall of Fame" />} />
             <Route path="/leaderboard" element={<ComingSoonPage title="Leaderboard" />} />

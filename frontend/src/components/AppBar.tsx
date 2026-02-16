@@ -52,6 +52,9 @@ export default function AppBar() {
         {!loading && (
           user ? (
             <>
+              <Button color="inherit" component={RouterLink} to="/my-games">
+                My Games
+              </Button>
               <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0 }}>
                 <Badge
                   invisible={!user.is_patron}

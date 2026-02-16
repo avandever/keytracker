@@ -121,6 +121,40 @@ SORT_ALLOWLIST = {
 }
 
 
+@blueprint.route("/games/mine")
+@login_required
+def games_mine():
+    usernames = [t.username for t in current_user.tco_usernames]
+    if not usernames:
+        return jsonify({
+            "error": "No TCO usernames configured",
+            "tco_usernames": [],
+            "games_won": 0,
+            "games_lost": 0,
+            "games": [],
+        })
+    games_won = Game.query.filter(Game.winner.in_(usernames)).count()
+    games_lost = Game.query.filter(Game.loser.in_(usernames)).count()
+    page = request.args.get("page", 1, type=int)
+    per_page = min(request.args.get("per_page", 50, type=int), 200)
+    offset = (page - 1) * per_page
+    user_games = (
+        Game.query.filter(
+            or_(Game.winner.in_(usernames), Game.loser.in_(usernames))
+        )
+        .order_by(Game.date.desc())
+        .limit(per_page)
+        .offset(offset)
+        .all()
+    )
+    return jsonify({
+        "tco_usernames": usernames,
+        "games_won": games_won,
+        "games_lost": games_lost,
+        "games": [serialize_game_summary(g) for g in user_games],
+    })
+
+
 @blueprint.route("/games/recent")
 def games_recent():
     limit = request.args.get("limit", 5, type=int)

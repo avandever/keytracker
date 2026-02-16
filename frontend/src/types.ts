@@ -89,6 +89,14 @@ export interface UserStats {
   games: GameSummary[];
 }
 
+export interface MyGamesResponse {
+  tco_usernames: string[];
+  games_won: number;
+  games_lost: number;
+  games: GameSummary[];
+  error?: string;
+}
+
 export interface CsvPod {
   name: string;
   sas: number;
