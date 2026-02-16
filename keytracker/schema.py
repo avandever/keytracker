@@ -767,7 +767,20 @@ class User(UserMixin, db.Model):
     patreon_linked_at = db.Column(db.DateTime, nullable=True)
     free_membership = db.Column(db.Boolean, default=False, nullable=False)
     dok_api_key = db.Column(db.String(36), nullable=True)
+    tco_usernames = db.relationship(
+        "TcoUsername", back_populates="user", cascade="all, delete-orphan"
+    )
 
     @property
     def is_member(self):
         return bool(self.is_patron) or bool(self.free_membership)
+
+
+class TcoUsername(db.Model):
+    __tablename__ = "tracker_tco_username"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False, index=True
+    )
+    username = db.Column(db.String(100), nullable=False)
+    user = db.relationship("User", back_populates="tco_usernames")

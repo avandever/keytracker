@@ -22,6 +22,8 @@ export default function AccountPage() {
   const [alert, setAlert] = useState<{ severity: 'success' | 'error'; message: string } | null>(null);
   const [dokKey, setDokKey] = useState(user?.dok_api_key || '');
   const [dokSaving, setDokSaving] = useState(false);
+  const [newTcoName, setNewTcoName] = useState('');
+  const [tcoSaving, setTcoSaving] = useState(false);
 
   useEffect(() => {
     if (user) setDokKey(user.dok_api_key || '');
@@ -187,6 +189,81 @@ export default function AccountPage() {
         >
           {dokSaving ? 'Saving...' : 'Save'}
         </Button>
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="h6" gutterBottom>
+          TCO Usernames
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Link your Crucible Online usernames to track your games.
+        </Typography>
+        {user.tco_usernames.length > 0 && (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, justifyContent: 'center' }}>
+            {user.tco_usernames.map((name) => (
+              <Chip
+                key={name}
+                label={name}
+                onDelete={async () => {
+                  setTcoSaving(true);
+                  try {
+                    await updateSettings({
+                      tco_usernames: user.tco_usernames.filter((u) => u !== name),
+                    });
+                    await refresh();
+                  } catch (e: any) {
+                    setAlert({ severity: 'error', message: 'Failed to remove username.' });
+                  } finally {
+                    setTcoSaving(false);
+                  }
+                }}
+                disabled={tcoSaving}
+              />
+            ))}
+          </Box>
+        )}
+        <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+          <TextField
+            size="small"
+            value={newTcoName}
+            onChange={(e) => setNewTcoName(e.target.value)}
+            placeholder="TCO username"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const trimmed = newTcoName.trim();
+                if (!trimmed || user.tco_usernames.includes(trimmed)) return;
+                setTcoSaving(true);
+                updateSettings({ tco_usernames: [...user.tco_usernames, trimmed] })
+                  .then(() => refresh())
+                  .then(() => { setNewTcoName(''); })
+                  .catch(() => setAlert({ severity: 'error', message: 'Failed to add username.' }))
+                  .finally(() => setTcoSaving(false));
+              }
+            }}
+          />
+          <Button
+            variant="contained"
+            size="small"
+            disabled={tcoSaving || !newTcoName.trim()}
+            onClick={async () => {
+              const trimmed = newTcoName.trim();
+              if (!trimmed || user.tco_usernames.includes(trimmed)) return;
+              setTcoSaving(true);
+              try {
+                await updateSettings({ tco_usernames: [...user.tco_usernames, trimmed] });
+                await refresh();
+                setNewTcoName('');
+              } catch {
+                setAlert({ severity: 'error', message: 'Failed to add username.' });
+              } finally {
+                setTcoSaving(false);
+              }
+            }}
+          >
+            Add
+          </Button>
+        </Box>
 
         <Divider sx={{ my: 3 }} />
 

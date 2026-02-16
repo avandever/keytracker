@@ -11,6 +11,7 @@ from keytracker.schema import (
     Game,
     Log,
     Player,
+    TcoUsername,
 )
 from keytracker.serializers import (
     serialize_deck_detail,
@@ -55,6 +56,7 @@ def auth_me():
                 "patreon_tier_title": current_user.patreon_tier_title,
                 "patreon_linked": current_user.patreon_id is not None,
                 "dok_api_key": current_user.dok_api_key,
+                "tco_usernames": [t.username for t in current_user.tco_usernames],
             }
         )
     return jsonify({"error": "Not authenticated"}), 401
@@ -78,6 +80,20 @@ def auth_settings():
             current_user.dok_api_key = val
         else:
             return jsonify({"error": "Invalid DoK API key format (expected UUID v4)"}), 400
+    if "tco_usernames" in data:
+        names = data["tco_usernames"]
+        if not isinstance(names, list):
+            return jsonify({"error": "tco_usernames must be a list"}), 400
+        cleaned = []
+        for n in names:
+            if not isinstance(n, str):
+                return jsonify({"error": "Each TCO username must be a string"}), 400
+            n = n.strip()
+            if n and len(n) <= 100:
+                cleaned.append(n)
+        TcoUsername.query.filter_by(user_id=current_user.id).delete()
+        for name in cleaned:
+            db.session.add(TcoUsername(user_id=current_user.id, username=name))
     db.session.commit()
     return jsonify({
         "id": current_user.id,
@@ -89,6 +105,7 @@ def auth_settings():
         "patreon_tier_title": current_user.patreon_tier_title,
         "patreon_linked": current_user.patreon_id is not None,
         "dok_api_key": current_user.dok_api_key,
+        "tco_usernames": [t.username for t in current_user.tco_usernames],
     })
 
 
