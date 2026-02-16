@@ -13,7 +13,9 @@ RUN apt-get update && apt-get install -y pkg-config build-essential libmariadb-d
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
-RUN pip install .
+RUN pip install . gunicorn
 COPY --from=frontend-build /frontend/dist /tracker/frontend/dist
-EXPOSE 3001
-CMD ["flask", "--app", "keytracker.server", "run", "--host=0.0.0.0", "--port=3001"]
+EXPOSE 3001 3443
+ENV HTTP_PORT=3001
+ENV HTTPS_PORT=3443
+CMD ["bash", "start.sh"]
