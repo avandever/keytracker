@@ -765,3 +765,8 @@ class User(UserMixin, db.Model):
     patreon_tier_title = db.Column(db.String(200), nullable=True)
     patreon_pledge_cents = db.Column(db.Integer, nullable=True)
     patreon_linked_at = db.Column(db.DateTime, nullable=True)
+    free_membership = db.Column(db.Boolean, default=False, nullable=False)
+
+    @property
+    def is_member(self):
+        return bool(self.is_patron) or bool(self.free_membership)

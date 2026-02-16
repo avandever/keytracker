@@ -4,6 +4,7 @@ export interface AuthUser {
   name: string;
   avatar_url: string | null;
   is_patron: boolean;
+  is_member: boolean;
   patreon_tier_title: string | null;
   patreon_linked: boolean;
 }

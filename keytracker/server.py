@@ -118,6 +118,12 @@ with app.app_context():
                             "ALTER TABLE tracker_user ADD COLUMN patreon_linked_at DATETIME"
                         )
                     )
+                if "free_membership" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN free_membership BOOLEAN NOT NULL DEFAULT FALSE"
+                        )
+                    )
     except Exception:
         pass
 

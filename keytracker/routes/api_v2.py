@@ -50,6 +50,7 @@ def auth_me():
                 "name": current_user.name,
                 "avatar_url": current_user.avatar_url,
                 "is_patron": current_user.is_patron,
+                "is_member": current_user.is_member,
                 "patreon_tier_title": current_user.patreon_tier_title,
                 "patreon_linked": current_user.patreon_id is not None,
             }
