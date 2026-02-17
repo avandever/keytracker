@@ -1,4 +1,14 @@
-from keytracker.schema import Deck, Game, Log, HouseTurnCounts, EXPANSION_ID_TO_ABBR
+from keytracker.schema import (
+    Deck,
+    Game,
+    Log,
+    HouseTurnCounts,
+    League,
+    LeagueSignup,
+    Team,
+    TeamMember,
+    EXPANSION_ID_TO_ABBR,
+)
 
 
 def serialize_game_summary(game: Game) -> dict:
@@ -84,4 +94,64 @@ def serialize_deck_detail(deck: Deck) -> dict:
         for ps in deck.pod_stats
         if ps.house != "Archon Power"
     ]
+    return data
+
+
+def serialize_user_brief(user) -> dict:
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "avatar_url": user.avatar_url,
+    }
+
+
+def serialize_team_member(member: TeamMember) -> dict:
+    return {
+        "id": member.id,
+        "user": serialize_user_brief(member.user),
+        "is_captain": member.is_captain,
+        "has_paid": member.has_paid,
+    }
+
+
+def serialize_team_detail(team: Team) -> dict:
+    return {
+        "id": team.id,
+        "name": team.name,
+        "order_number": team.order_number,
+        "members": [serialize_team_member(m) for m in team.members],
+    }
+
+
+def serialize_signup(signup: LeagueSignup) -> dict:
+    return {
+        "id": signup.id,
+        "user": serialize_user_brief(signup.user),
+        "signup_order": signup.signup_order,
+        "status": signup.status,
+        "signed_up_at": signup.signed_up_at.isoformat() if signup.signed_up_at else None,
+    }
+
+
+def serialize_league_summary(league: League) -> dict:
+    return {
+        "id": league.id,
+        "name": league.name,
+        "description": league.description,
+        "fee_amount": float(league.fee_amount) if league.fee_amount is not None else None,
+        "team_size": league.team_size,
+        "num_teams": league.num_teams,
+        "status": league.status,
+        "created_by": serialize_user_brief(league.created_by),
+        "signup_count": len(league.signups),
+        "created_at": league.created_at.isoformat() if league.created_at else None,
+    }
+
+
+def serialize_league_detail(league: League) -> dict:
+    data = serialize_league_summary(league)
+    data["teams"] = [serialize_team_detail(t) for t in sorted(league.teams, key=lambda t: t.order_number)]
+    data["signups"] = [serialize_signup(s) for s in sorted(league.signups, key=lambda s: s.signup_order)]
+    data["admins"] = [serialize_user_brief(a.user) for a in league.admins]
     return data
