@@ -9,6 +9,7 @@ export interface AuthUser {
   patreon_linked: boolean;
   dok_api_key: string | null;
   tco_usernames: string[];
+  is_league_admin: boolean;
 }
 
 export interface GameSummary {
@@ -95,6 +96,95 @@ export interface MyGamesResponse {
   games_lost: number;
   games: GameSummary[];
   error?: string;
+}
+
+// --- League types ---
+
+export interface UserBrief {
+  id: number;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+}
+
+export interface TeamMemberInfo {
+  id: number;
+  user: UserBrief;
+  is_captain: boolean;
+  has_paid: boolean;
+}
+
+export interface TeamDetail {
+  id: number;
+  name: string;
+  order_number: number;
+  members: TeamMemberInfo[];
+}
+
+export interface SignupInfo {
+  id: number;
+  user: UserBrief;
+  signup_order: number;
+  status: string;
+  signed_up_at: string | null;
+}
+
+export interface LeagueSummary {
+  id: number;
+  name: string;
+  description: string | null;
+  fee_amount: number | null;
+  team_size: number;
+  num_teams: number;
+  status: string;
+  created_by: UserBrief;
+  signup_count: number;
+  created_at: string | null;
+}
+
+export interface LeagueDetail extends LeagueSummary {
+  teams: TeamDetail[];
+  signups: SignupInfo[];
+  admins: UserBrief[];
+  is_admin: boolean;
+  is_signed_up: boolean;
+  my_team_id: number | null;
+  is_captain: boolean;
+}
+
+export interface DraftPickInfo {
+  round_number: number;
+  pick_number: number;
+  team_id: number;
+  team_name: string | null;
+  picked_user: UserBrief | null;
+  picked_at: string | null;
+}
+
+export interface DraftSlot {
+  team_id: number;
+  team_name: string;
+  pick: DraftPickInfo | null;
+}
+
+export interface DraftRound {
+  round: number;
+  picks: DraftSlot[];
+}
+
+export interface DraftState {
+  league_id: number;
+  status: string;
+  is_complete: boolean;
+  total_picks: number;
+  picks_made: number;
+  current_round: number | null;
+  current_pick: number | null;
+  current_team: TeamDetail | null;
+  available_players: UserBrief[];
+  pick_history: DraftPickInfo[];
+  draft_board: DraftRound[];
+  teams: TeamDetail[];
 }
 
 export interface CsvPod {
