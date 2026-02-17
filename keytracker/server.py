@@ -15,6 +15,7 @@ from keytracker.routes import (
 )
 # from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
+from keytracker.scripts.test_user import test_user
 import sqlalchemy
 from sqlalchemy.exc import (
     OperationalError,
@@ -190,27 +191,7 @@ def serve_react(path=""):
 
 # app.cli.add_command(collector)
 app.cli.add_command(sealed)
-
-
-import click
-
-
-@app.cli.command("create-test-users")
-def create_test_users():
-    """Create 20 test users (TestUser1–TestUser20) for league testing."""
-    created = 0
-    for i in range(1, 21):
-        name = f"TestUser{i}"
-        email = f"testuser{i}@test.local"
-        existing = User.query.filter_by(email=email).first()
-        if existing:
-            click.echo(f"  {name} already exists, skipping")
-            continue
-        user = User(name=name, email=email, is_test_user=True)
-        db.session.add(user)
-        created += 1
-    db.session.commit()
-    click.echo(f"Created {created} test users ({20 - created} already existed)")
+app.cli.add_command(test_user)
 
 
 @app.errorhandler(OperationalError)
