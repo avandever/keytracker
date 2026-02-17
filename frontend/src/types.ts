@@ -105,6 +105,7 @@ export interface UserBrief {
   name: string;
   email: string;
   avatar_url: string | null;
+  is_test_user: boolean;
 }
 
 export interface TeamMemberInfo {
@@ -137,6 +138,7 @@ export interface LeagueSummary {
   team_size: number;
   num_teams: number;
   status: string;
+  is_test: boolean;
   created_by: UserBrief;
   signup_count: number;
   created_at: string | null;

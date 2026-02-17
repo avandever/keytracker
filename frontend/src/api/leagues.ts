@@ -4,6 +4,7 @@ import type {
   LeagueDetail,
   TeamDetail,
   DraftState,
+  UserBrief,
 } from '../types';
 
 export async function listLeagues(): Promise<LeagueSummary[]> {
@@ -17,6 +18,7 @@ export async function createLeague(payload: {
   fee_amount?: number | null;
   team_size: number;
   num_teams: number;
+  is_test?: boolean;
 }): Promise<LeagueDetail> {
   const { data } = await apiClient.post('/leagues/', payload);
   return data;
@@ -134,5 +136,10 @@ export async function makePick(
   const { data } = await apiClient.post(`/leagues/${leagueId}/draft/pick`, {
     user_id: userId,
   });
+  return data;
+}
+
+export async function listTestUsers(): Promise<UserBrief[]> {
+  const { data } = await apiClient.get('/leagues/test-users');
   return data;
 }

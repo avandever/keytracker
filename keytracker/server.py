@@ -137,6 +137,21 @@ with app.app_context():
                             "ALTER TABLE tracker_user ADD COLUMN is_league_admin BOOLEAN NOT NULL DEFAULT FALSE"
                         )
                     )
+                if "is_test_user" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN is_test_user BOOLEAN NOT NULL DEFAULT FALSE"
+                        )
+                    )
+        if inspector.has_table("tracker_league"):
+            columns = {c["name"] for c in inspector.get_columns("tracker_league")}
+            with db.engine.begin() as conn:
+                if "is_test" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league ADD COLUMN is_test BOOLEAN NOT NULL DEFAULT FALSE"
+                        )
+                    )
     except Exception:
         pass
 
@@ -175,6 +190,27 @@ def serve_react(path=""):
 
 # app.cli.add_command(collector)
 app.cli.add_command(sealed)
+
+
+import click
+
+
+@app.cli.command("create-test-users")
+def create_test_users():
+    """Create 20 test users (TestUser1–TestUser20) for league testing."""
+    created = 0
+    for i in range(1, 21):
+        name = f"TestUser{i}"
+        email = f"testuser{i}@test.local"
+        existing = User.query.filter_by(email=email).first()
+        if existing:
+            click.echo(f"  {name} already exists, skipping")
+            continue
+        user = User(name=name, email=email, is_test_user=True)
+        db.session.add(user)
+        created += 1
+    db.session.commit()
+    click.echo(f"Created {created} test users ({20 - created} already existed)")
 
 
 @app.errorhandler(OperationalError)

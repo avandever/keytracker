@@ -74,7 +74,10 @@ export default function LeagueDetailPage() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <Box>
-          <Typography variant="h4">{league.name}</Typography>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Typography variant="h4">{league.name}</Typography>
+            {league.is_test && <Chip label="Test" size="small" color="secondary" />}
+          </Box>
           {league.description && (
             <Typography color="text.secondary" sx={{ mt: 1 }}>{league.description}</Typography>
           )}

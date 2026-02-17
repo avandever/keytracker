@@ -7,6 +7,8 @@ import {
   Button,
   Box,
   Alert,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import { createLeague } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,6 +21,7 @@ export default function CreateLeaguePage() {
   const [feeAmount, setFeeAmount] = useState('');
   const [teamSize, setTeamSize] = useState('4');
   const [numTeams, setNumTeams] = useState('4');
+  const [isTest, setIsTest] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -41,6 +44,7 @@ export default function CreateLeaguePage() {
         fee_amount: feeAmount ? parseFloat(feeAmount) : null,
         team_size: parseInt(teamSize, 10),
         num_teams: parseInt(numTeams, 10),
+        is_test: isTest,
       });
       navigate(`/league/${league.id}`);
     } catch (e: any) {
@@ -91,6 +95,10 @@ export default function CreateLeaguePage() {
           type="number"
           inputProps={{ min: '2' }}
           required
+        />
+        <FormControlLabel
+          control={<Checkbox checked={isTest} onChange={(e) => setIsTest(e.target.checked)} />}
+          label="Test League"
         />
         <Button type="submit" variant="contained" disabled={submitting}>
           {submitting ? 'Creating...' : 'Create League'}

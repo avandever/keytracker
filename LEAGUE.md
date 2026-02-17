@@ -68,6 +68,33 @@ Blueprint: `/api/v2/leagues`
 - `/league/:id/my-info` — MyLeagueInfoPage: team info, fee status
 - `/league/:id/my-team` — MyTeamPage: captain-only team management
 
+## Test Users & Impersonation
+
+### Test Users
+- `is_test_user` boolean on User model
+- Created via CLI: `flask create-test-users` (creates TestUser1–TestUser20, idempotent)
+- No password/Google auth — only usable via impersonation
+
+### Test Leagues
+- `is_test` boolean on League model, set at creation time
+- Shown as "Test" chip in league list and detail pages
+
+### Per-Tab Impersonation
+Allows an admin to act as different test users in different browser tabs:
+
+1. **Frontend**: `TestUserContext` stores `testUserId` in React state (per component tree = per tab)
+2. **API interceptor**: Axios request interceptor attaches `X-Test-User-Id` header when set
+3. **Backend**: `get_effective_user()` in `keytracker/routes/leagues.py` validates:
+   - Real `current_user` is a league admin (`is_league_admin`)
+   - Target user is a test user (`is_test_user == True`)
+   - Returns the test User object instead of `current_user`
+4. All league endpoints use `get_effective_user()` for user identity
+5. Non-league endpoints (auth/me, etc.) are unaffected
+6. `TestUserPicker` component (floating bottom-right panel) visible only to league admins
+
+### API Endpoint
+- `GET /api/v2/leagues/test-users` — returns list of test users (league admins only)
+
 ## Key Design Decisions
 
 1. `is_league_admin` on User controls who can create leagues; `LeagueAdmin` table controls per-league admin access

@@ -103,6 +103,7 @@ def serialize_user_brief(user) -> dict:
         "name": user.name,
         "email": user.email,
         "avatar_url": user.avatar_url,
+        "is_test_user": user.is_test_user,
     }
 
 
@@ -143,6 +144,7 @@ def serialize_league_summary(league: League) -> dict:
         "team_size": league.team_size,
         "num_teams": league.num_teams,
         "status": league.status,
+        "is_test": league.is_test,
         "created_by": serialize_user_brief(league.created_by),
         "signup_count": len(league.signups),
         "created_at": league.created_at.isoformat() if league.created_at else None,

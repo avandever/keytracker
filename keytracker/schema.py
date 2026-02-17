@@ -768,6 +768,7 @@ class User(UserMixin, db.Model):
     patreon_linked_at = db.Column(db.DateTime, nullable=True)
     free_membership = db.Column(db.Boolean, default=False, nullable=False)
     is_league_admin = db.Column(db.Boolean, default=False, nullable=False)
+    is_test_user = db.Column(db.Boolean, default=False, nullable=False)
     dok_api_key = db.Column(db.String(36), nullable=True)
     tco_usernames = db.relationship(
         "TcoUsername", back_populates="user", cascade="all, delete-orphan"
@@ -810,6 +811,7 @@ class League(db.Model):
     team_size = db.Column(db.Integer, nullable=False)
     num_teams = db.Column(db.Integer, nullable=False)
     status = db.Column(db.String(20), nullable=False, default=LeagueStatus.SETUP.value)
+    is_test = db.Column(db.Boolean, default=False, nullable=False)
     created_by_id = db.Column(
         db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
     )

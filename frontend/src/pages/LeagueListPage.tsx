@@ -57,7 +57,10 @@ export default function LeagueListPage() {
           <CardActionArea component={RouterLink} to={`/league/${league.id}`}>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography variant="h6">{league.name}</Typography>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Typography variant="h6">{league.name}</Typography>
+                  {league.is_test && <Chip label="Test" size="small" color="secondary" />}
+                </Box>
                 <Chip
                   label={league.status}
                   size="small"

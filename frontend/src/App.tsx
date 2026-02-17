@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { Box } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
+import { TestUserProvider } from './contexts/TestUserContext';
 import AppBar from './components/AppBar';
+import TestUserPicker from './components/TestUserPicker';
 import RequireAuth from './components/RequireAuth';
 import HomePage from './pages/HomePage';
 import GameDetailPage from './pages/GameDetailPage';
@@ -37,34 +39,37 @@ function Layout() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter basename="/">
-        <Routes>
-          <Route element={<Layout />}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/game/:crucibleGameId" element={<GameDetailPage />} />
-            <Route path="/games" element={<GamesSearchPage />} />
-            <Route path="/deck/:deckId" element={<DeckDetailPage />} />
-            <Route path="/decks" element={<DecksSearchPage />} />
-            <Route path="/user" element={<UserSearchPage />} />
-            <Route path="/user/:username" element={<UserProfilePage />} />
-            <Route path="/upload" element={<RequireAuth><UploadLogPage /></RequireAuth>} />
-            <Route path="/upload_simple" element={<RequireAuth><UploadSimplePage /></RequireAuth>} />
-            <Route path="/csv_to_pods" element={<RequireAuth><CsvToPodsPage /></RequireAuth>} />
-            <Route path="/account" element={<AccountPage />} />
-            <Route path="/my-games" element={<RequireAuth><MyGamesPage /></RequireAuth>} />
-            <Route path="/leagues" element={<LeagueListPage />} />
-            <Route path="/leagues/new" element={<RequireAuth><CreateLeaguePage /></RequireAuth>} />
-            <Route path="/league/:leagueId" element={<LeagueDetailPage />} />
-            <Route path="/league/:leagueId/admin" element={<RequireAuth><LeagueAdminPage /></RequireAuth>} />
-            <Route path="/league/:leagueId/draft" element={<RequireAuth><DraftBoardPage /></RequireAuth>} />
-            <Route path="/league/:leagueId/my-info" element={<RequireAuth><MyLeagueInfoPage /></RequireAuth>} />
-            <Route path="/league/:leagueId/my-team" element={<RequireAuth><MyTeamPage /></RequireAuth>} />
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/fame" element={<ComingSoonPage title="Hall of Fame" />} />
-            <Route path="/leaderboard" element={<ComingSoonPage title="Leaderboard" />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <TestUserProvider>
+        <BrowserRouter basename="/">
+          <Routes>
+            <Route element={<Layout />}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/game/:crucibleGameId" element={<GameDetailPage />} />
+              <Route path="/games" element={<GamesSearchPage />} />
+              <Route path="/deck/:deckId" element={<DeckDetailPage />} />
+              <Route path="/decks" element={<DecksSearchPage />} />
+              <Route path="/user" element={<UserSearchPage />} />
+              <Route path="/user/:username" element={<UserProfilePage />} />
+              <Route path="/upload" element={<RequireAuth><UploadLogPage /></RequireAuth>} />
+              <Route path="/upload_simple" element={<RequireAuth><UploadSimplePage /></RequireAuth>} />
+              <Route path="/csv_to_pods" element={<RequireAuth><CsvToPodsPage /></RequireAuth>} />
+              <Route path="/account" element={<AccountPage />} />
+              <Route path="/my-games" element={<RequireAuth><MyGamesPage /></RequireAuth>} />
+              <Route path="/leagues" element={<LeagueListPage />} />
+              <Route path="/leagues/new" element={<RequireAuth><CreateLeaguePage /></RequireAuth>} />
+              <Route path="/league/:leagueId" element={<LeagueDetailPage />} />
+              <Route path="/league/:leagueId/admin" element={<RequireAuth><LeagueAdminPage /></RequireAuth>} />
+              <Route path="/league/:leagueId/draft" element={<RequireAuth><DraftBoardPage /></RequireAuth>} />
+              <Route path="/league/:leagueId/my-info" element={<RequireAuth><MyLeagueInfoPage /></RequireAuth>} />
+              <Route path="/league/:leagueId/my-team" element={<RequireAuth><MyTeamPage /></RequireAuth>} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/fame" element={<ComingSoonPage title="Hall of Fame" />} />
+              <Route path="/leaderboard" element={<ComingSoonPage title="Leaderboard" />} />
+            </Route>
+          </Routes>
+          <TestUserPicker />
+        </BrowserRouter>
+      </TestUserProvider>
     </AuthProvider>
   );
 }

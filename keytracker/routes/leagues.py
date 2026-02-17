@@ -10,6 +10,7 @@ from keytracker.schema import (
     Team,
     TeamMember,
     DraftPick,
+    User,
 )
 from keytracker.serializers import (
     serialize_league_summary,
@@ -25,11 +26,36 @@ logger = logging.getLogger(__name__)
 blueprint = Blueprint("leagues", __name__, url_prefix="/api/v2/leagues")
 
 
-def _is_league_admin(league):
-    if not current_user.is_authenticated:
-        return False
+def get_effective_user():
+    """Return the effective user for league operations.
+
+    If the X-Test-User-Id header is present, validates that the real current_user
+    is a league admin and the target is a test user, then returns the test user.
+    Otherwise returns current_user.
+    """
+    test_user_id = request.headers.get("X-Test-User-Id")
+    if not test_user_id:
+        return current_user
+    if not current_user.is_authenticated or not current_user.is_league_admin:
+        return current_user
+    try:
+        test_user_id = int(test_user_id)
+    except (ValueError, TypeError):
+        return current_user
+    test_user = db.session.get(User, test_user_id)
+    if not test_user or not test_user.is_test_user:
+        return current_user
+    return test_user
+
+
+def _is_league_admin(league, user=None):
+    user = user or current_user
+    if not hasattr(user, "is_authenticated") or not user.is_authenticated:
+        # Test users from get_effective_user() are plain User objects (not UserMixin login)
+        # so check by id directly
+        pass
     return LeagueAdmin.query.filter_by(
-        league_id=league.id, user_id=current_user.id
+        league_id=league.id, user_id=user.id
     ).first() is not None
 
 
@@ -73,6 +99,7 @@ def create_league():
         fee_amount=data.get("fee_amount"),
         team_size=team_size,
         num_teams=num_teams,
+        is_test=bool(data.get("is_test", False)),
         status=LeagueStatus.SETUP.value,
         created_by_id=current_user.id,
     )
@@ -90,16 +117,17 @@ def get_league(league_id):
     if err:
         return err
     data = serialize_league_detail(league)
+    effective = get_effective_user()
     if current_user.is_authenticated:
-        data["is_admin"] = _is_league_admin(league)
+        data["is_admin"] = _is_league_admin(league, effective)
         signup = LeagueSignup.query.filter_by(
-            league_id=league.id, user_id=current_user.id
+            league_id=league.id, user_id=effective.id
         ).first()
         data["is_signed_up"] = signup is not None
         # Find user's team membership
         member = TeamMember.query.join(Team).filter(
             Team.league_id == league.id,
-            TeamMember.user_id == current_user.id,
+            TeamMember.user_id == effective.id,
         ).first()
         data["my_team_id"] = member.team_id if member else None
         data["is_captain"] = member.is_captain if member else False
@@ -117,7 +145,7 @@ def update_league(league_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    if not _is_league_admin(league):
+    if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Can only edit league during setup"}), 400
@@ -151,8 +179,9 @@ def signup(league_id):
         return err
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Signups only during setup"}), 400
+    effective = get_effective_user()
     existing = LeagueSignup.query.filter_by(
-        league_id=league.id, user_id=current_user.id
+        league_id=league.id, user_id=effective.id
     ).first()
     if existing:
         return jsonify({"error": "Already signed up"}), 409
@@ -161,7 +190,7 @@ def signup(league_id):
     ).scalar() or 0
     signup_entry = LeagueSignup(
         league_id=league.id,
-        user_id=current_user.id,
+        user_id=effective.id,
         signup_order=max_order + 1,
         status=SignupStatus.SIGNED_UP.value,
     )
@@ -178,8 +207,9 @@ def withdraw(league_id):
         return err
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Can only withdraw during setup"}), 400
+    effective = get_effective_user()
     existing = LeagueSignup.query.filter_by(
-        league_id=league.id, user_id=current_user.id
+        league_id=league.id, user_id=effective.id
     ).first()
     if not existing:
         return jsonify({"error": "Not signed up"}), 404
@@ -205,7 +235,7 @@ def create_team(league_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    if not _is_league_admin(league):
+    if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
     if len(league.teams) >= league.num_teams:
         return jsonify({"error": "Maximum number of teams reached"}), 400
@@ -234,11 +264,12 @@ def update_team(league_id, team_id):
     team = db.session.get(Team, team_id)
     if not team or team.league_id != league.id:
         return jsonify({"error": "Team not found"}), 404
+    effective = get_effective_user()
     # Allow league admin or team captain
     is_captain = TeamMember.query.filter_by(
-        team_id=team.id, user_id=current_user.id, is_captain=True
+        team_id=team.id, user_id=effective.id, is_captain=True
     ).first() is not None
-    if not _is_league_admin(league) and not is_captain:
+    if not _is_league_admin(league, effective) and not is_captain:
         return jsonify({"error": "Admin or captain access required"}), 403
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
@@ -254,7 +285,7 @@ def delete_team(league_id, team_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    if not _is_league_admin(league):
+    if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Can only delete teams during setup"}), 400
@@ -274,7 +305,7 @@ def assign_captain(league_id, team_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    if not _is_league_admin(league):
+    if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
     team = db.session.get(Team, team_id)
     if not team or team.league_id != league.id:
@@ -323,10 +354,11 @@ def toggle_fee_paid(league_id, team_id, user_id):
     team = db.session.get(Team, team_id)
     if not team or team.league_id != league.id:
         return jsonify({"error": "Team not found"}), 404
+    effective = get_effective_user()
     is_captain = TeamMember.query.filter_by(
-        team_id=team.id, user_id=current_user.id, is_captain=True
+        team_id=team.id, user_id=effective.id, is_captain=True
     ).first() is not None
-    if not _is_league_admin(league) and not is_captain:
+    if not _is_league_admin(league, effective) and not is_captain:
         return jsonify({"error": "Admin or captain access required"}), 403
     member = TeamMember.query.filter_by(team_id=team.id, user_id=user_id).first()
     if not member:
@@ -345,7 +377,7 @@ def add_admin(league_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    if not _is_league_admin(league):
+    if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
     data = request.get_json(silent=True) or {}
     user_id = data.get("user_id")
@@ -367,7 +399,7 @@ def remove_admin(league_id, user_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    if not _is_league_admin(league):
+    if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
     admin = LeagueAdmin.query.filter_by(
         league_id=league.id, user_id=user_id
@@ -482,7 +514,7 @@ def start_draft(league_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    if not _is_league_admin(league):
+    if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Draft can only start from setup status"}), 400
@@ -534,11 +566,12 @@ def get_draft(league_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
+    effective = get_effective_user()
     # Only captains and league admins can see draft board
-    is_admin = _is_league_admin(league)
+    is_admin = _is_league_admin(league, effective)
     is_captain = TeamMember.query.join(Team).filter(
         Team.league_id == league.id,
-        TeamMember.user_id == current_user.id,
+        TeamMember.user_id == effective.id,
         TeamMember.is_captain == True,
     ).first() is not None
     if not is_admin and not is_captain:
@@ -564,10 +597,11 @@ def make_pick(league_id):
         return jsonify({"error": "No current team"}), 400
 
     # Check permission: must be captain of current team or league admin
-    is_admin = _is_league_admin(league)
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
     is_current_captain = TeamMember.query.filter_by(
         team_id=current_team_data["id"],
-        user_id=current_user.id,
+        user_id=effective.id,
         is_captain=True,
     ).first() is not None
     if not is_admin and not is_current_captain:
@@ -609,3 +643,14 @@ def make_pick(league_id):
 
     db.session.commit()
     return jsonify(compute_draft_state(league))
+
+
+# --- Test users ---
+
+@blueprint.route("/test-users", methods=["GET"])
+@login_required
+def list_test_users():
+    if not current_user.is_league_admin:
+        return jsonify({"error": "League admin permission required"}), 403
+    test_users = User.query.filter_by(is_test_user=True).order_by(User.name).all()
+    return jsonify([serialize_user_brief(u) for u in test_users])
