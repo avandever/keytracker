@@ -17,6 +17,13 @@ import PrivacyPage from './pages/PrivacyPage';
 import ComingSoonPage from './pages/ComingSoonPage';
 import AccountPage from './pages/AccountPage';
 import MyGamesPage from './pages/MyGamesPage';
+import LeagueListPage from './pages/LeagueListPage';
+import CreateLeaguePage from './pages/CreateLeaguePage';
+import LeagueDetailPage from './pages/LeagueDetailPage';
+import LeagueAdminPage from './pages/LeagueAdminPage';
+import DraftBoardPage from './pages/DraftBoardPage';
+import MyLeagueInfoPage from './pages/MyLeagueInfoPage';
+import MyTeamPage from './pages/MyTeamPage';
 
 function Layout() {
   return (
@@ -45,6 +52,13 @@ export default function App() {
             <Route path="/csv_to_pods" element={<RequireAuth><CsvToPodsPage /></RequireAuth>} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/my-games" element={<RequireAuth><MyGamesPage /></RequireAuth>} />
+            <Route path="/leagues" element={<LeagueListPage />} />
+            <Route path="/leagues/new" element={<RequireAuth><CreateLeaguePage /></RequireAuth>} />
+            <Route path="/league/:leagueId" element={<LeagueDetailPage />} />
+            <Route path="/league/:leagueId/admin" element={<RequireAuth><LeagueAdminPage /></RequireAuth>} />
+            <Route path="/league/:leagueId/draft" element={<RequireAuth><DraftBoardPage /></RequireAuth>} />
+            <Route path="/league/:leagueId/my-info" element={<RequireAuth><MyLeagueInfoPage /></RequireAuth>} />
+            <Route path="/league/:leagueId/my-team" element={<RequireAuth><MyTeamPage /></RequireAuth>} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/fame" element={<ComingSoonPage title="Hall of Fame" />} />
             <Route path="/leaderboard" element={<ComingSoonPage title="Leaderboard" />} />
