@@ -1671,3 +1671,73 @@ def fix_pcis_house(pcis: PlatonicCardInSet) -> None:
     card = CardInDeck.query.filter_by(card_in_set_id=pcis.id).first()
     refresh_deck_from_mv(card.deck)
     db.session.commit()
+
+
+def run_background_collector(app, stop_event=None):
+    """Background thread that continuously scrapes deck pages from Master Vault."""
+    import logging
+    import socket
+
+    logger = logging.getLogger("collector")
+    CAUGHT_UP_SLEEP = 300  # 5 minutes
+
+    # Use an abstract Unix socket as a cross-process lock so only one
+    # gunicorn worker runs the collector. The socket is automatically
+    # released when the process exits.
+    lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    try:
+        lock_socket.bind("\0keytracker_collector_lock")
+    except OSError:
+        logger.info("Another process already running the collector, skipping")
+        return
+
+    add_decks_cache = {
+        "seen_deck_ids": set(),
+        "card_in_set": {},
+        "platonic_card": {},
+    }
+
+    logger.info("Background collector started")
+
+    while stop_event is None or not stop_event.is_set():
+        try:
+            with app.app_context():
+                highest_page_var = GlobalVariable.query.filter_by(
+                    name="highest_mv_page_scraped"
+                ).first()
+                if highest_page_var is None:
+                    logger.error(
+                        "GlobalVariable 'highest_mv_page_scraped' not found, "
+                        "sleeping 60s"
+                    )
+                    time.sleep(60)
+                    continue
+
+                page = highest_page_var.value_int + 1
+                logger.info(f"Fetching page {page}")
+
+                new_decks = get_decks_from_page_v2(
+                    page,
+                    reverse=True,
+                    add_decks_cache=add_decks_cache,
+                    update_highest_page=True,
+                )
+
+                if new_decks == 0:
+                    logger.info(
+                        f"Page {page} returned 0 new decks, sleeping "
+                        f"{CAUGHT_UP_SLEEP}s"
+                    )
+                    time.sleep(CAUGHT_UP_SLEEP)
+                else:
+                    logger.info(f"Page {page}: {new_decks} new decks")
+
+        except InternalServerError:
+            logger.info(
+                f"Page beyond last page (InternalServerError), sleeping "
+                f"{CAUGHT_UP_SLEEP}s"
+            )
+            time.sleep(CAUGHT_UP_SLEEP)
+        except Exception:
+            logger.exception("Background collector error, sleeping 60s")
+            time.sleep(60)

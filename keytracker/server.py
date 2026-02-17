@@ -211,5 +211,17 @@ def shell_context():
     }
 
 
+if os.getenv("ENABLE_COLLECTOR", "").lower() in ("1", "true", "yes"):
+    import threading
+
+    collector_thread = threading.Thread(
+        target=utils.run_background_collector,
+        args=(app,),
+        daemon=True,
+    )
+    collector_thread.start()
+    logging.getLogger("collector").info("Background collector thread launched")
+
+
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=True)
