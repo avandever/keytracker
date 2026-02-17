@@ -373,3 +373,231 @@ def remove_admin(league_id, user_id):
     db.session.delete(admin)
     db.session.commit()
     return jsonify({"success": True})
+
+
+# --- Draft system ---
+
+def compute_draft_state(league):
+    """Pure function: compute draft state from DraftPick records + team order."""
+    teams = sorted(league.teams, key=lambda t: t.order_number)
+    num_teams = len(teams)
+    # Captains count as 1, so draft picks fill team_size - 1 slots
+    picks_per_team = league.team_size - 1
+    total_picks = picks_per_team * num_teams
+
+    # Get existing picks ordered
+    picks = (
+        DraftPick.query.filter_by(league_id=league.id)
+        .order_by(DraftPick.round_number, DraftPick.pick_number)
+        .all()
+    )
+
+    # Build pick history
+    pick_history = []
+    picked_user_ids = set()
+    for p in picks:
+        pick_history.append({
+            "round_number": p.round_number,
+            "pick_number": p.pick_number,
+            "team_id": p.team_id,
+            "team_name": p.team.name if p.team else None,
+            "picked_user": serialize_user_brief(p.picked_user) if p.picked_user else None,
+            "picked_at": p.picked_at.isoformat() if p.picked_at else None,
+        })
+        picked_user_ids.add(p.picked_user_id)
+
+    # Available players: signed_up status, not yet picked, not a captain
+    captain_user_ids = set()
+    for team in teams:
+        for m in team.members:
+            if m.is_captain:
+                captain_user_ids.add(m.user_id)
+
+    available = []
+    for s in league.signups:
+        if s.status == SignupStatus.DRAFTED.value and s.user_id not in picked_user_ids and s.user_id not in captain_user_ids:
+            available.append(serialize_user_brief(s.user))
+
+    # Compute current pick
+    picks_made = len(picks)
+    is_complete = picks_made >= total_picks
+
+    current_round = None
+    current_pick = None
+    current_team = None
+    if not is_complete and num_teams > 0:
+        current_round = (picks_made // num_teams) + 1
+        pick_in_round = picks_made % num_teams
+        # Snake: odd rounds (1-indexed) go forward, even rounds go reverse
+        if current_round % 2 == 1:
+            current_team_idx = pick_in_round
+        else:
+            current_team_idx = num_teams - 1 - pick_in_round
+        current_pick = pick_in_round + 1
+        current_team = serialize_team_detail(teams[current_team_idx])
+
+    # Build draft board (rounds x teams grid)
+    draft_board = []
+    for r in range(1, picks_per_team + 1):
+        round_picks = []
+        for t in teams:
+            pick = next(
+                (p for p in pick_history if p["round_number"] == r and p["team_id"] == t.id),
+                None,
+            )
+            round_picks.append({
+                "team_id": t.id,
+                "team_name": t.name,
+                "pick": pick,
+            })
+        draft_board.append({"round": r, "picks": round_picks})
+
+    return {
+        "league_id": league.id,
+        "status": league.status,
+        "is_complete": is_complete,
+        "total_picks": total_picks,
+        "picks_made": picks_made,
+        "current_round": current_round,
+        "current_pick": current_pick,
+        "current_team": current_team,
+        "available_players": available,
+        "pick_history": pick_history,
+        "draft_board": draft_board,
+        "teams": [serialize_team_detail(t) for t in teams],
+    }
+
+
+@blueprint.route("/<int:league_id>/draft/start", methods=["POST"])
+@login_required
+def start_draft(league_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league):
+        return jsonify({"error": "Admin access required"}), 403
+    if league.status != LeagueStatus.SETUP.value:
+        return jsonify({"error": "Draft can only start from setup status"}), 400
+
+    teams = sorted(league.teams, key=lambda t: t.order_number)
+    if len(teams) < 2:
+        return jsonify({"error": "Need at least 2 teams"}), 400
+
+    # Validate all teams have captains
+    for team in teams:
+        has_captain = any(m.is_captain for m in team.members)
+        if not has_captain:
+            return jsonify({"error": f"Team '{team.name}' has no captain"}), 400
+
+    # Determine total spots: num_teams * team_size, minus captains (1 per team)
+    total_draft_spots = league.num_teams * (league.team_size - 1)
+    signups = sorted(league.signups, key=lambda s: s.signup_order)
+
+    # Captain user IDs
+    captain_ids = set()
+    for team in teams:
+        for m in team.members:
+            if m.is_captain:
+                captain_ids.add(m.user_id)
+
+    # Non-captain signups
+    non_captain_signups = [s for s in signups if s.user_id not in captain_ids]
+
+    # Mark drafted vs waitlisted
+    for i, s in enumerate(non_captain_signups):
+        if i < total_draft_spots:
+            s.status = SignupStatus.DRAFTED.value
+        else:
+            s.status = SignupStatus.WAITLISTED.value
+
+    # Mark captain signups as drafted
+    for s in signups:
+        if s.user_id in captain_ids:
+            s.status = SignupStatus.DRAFTED.value
+
+    league.status = LeagueStatus.DRAFTING.value
+    db.session.commit()
+    return jsonify(compute_draft_state(league))
+
+
+@blueprint.route("/<int:league_id>/draft", methods=["GET"])
+@login_required
+def get_draft(league_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    # Only captains and league admins can see draft board
+    is_admin = _is_league_admin(league)
+    is_captain = TeamMember.query.join(Team).filter(
+        Team.league_id == league.id,
+        TeamMember.user_id == current_user.id,
+        TeamMember.is_captain == True,
+    ).first() is not None
+    if not is_admin and not is_captain:
+        return jsonify({"error": "Captains and admins only"}), 403
+    return jsonify(compute_draft_state(league))
+
+
+@blueprint.route("/<int:league_id>/draft/pick", methods=["POST"])
+@login_required
+def make_pick(league_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if league.status != LeagueStatus.DRAFTING.value:
+        return jsonify({"error": "Draft is not active"}), 400
+
+    state = compute_draft_state(league)
+    if state["is_complete"]:
+        return jsonify({"error": "Draft is already complete"}), 400
+
+    current_team_data = state["current_team"]
+    if not current_team_data:
+        return jsonify({"error": "No current team"}), 400
+
+    # Check permission: must be captain of current team or league admin
+    is_admin = _is_league_admin(league)
+    is_current_captain = TeamMember.query.filter_by(
+        team_id=current_team_data["id"],
+        user_id=current_user.id,
+        is_captain=True,
+    ).first() is not None
+    if not is_admin and not is_current_captain:
+        return jsonify({"error": "Not your turn to pick"}), 403
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    # Verify user is available
+    available_ids = {p["id"] for p in state["available_players"]}
+    if user_id not in available_ids:
+        return jsonify({"error": "Player not available"}), 400
+
+    # Create the pick
+    pick = DraftPick(
+        league_id=league.id,
+        round_number=state["current_round"],
+        pick_number=state["current_pick"],
+        team_id=current_team_data["id"],
+        picked_user_id=user_id,
+    )
+    db.session.add(pick)
+
+    # Add to team
+    member = TeamMember(
+        team_id=current_team_data["id"],
+        user_id=user_id,
+        is_captain=False,
+    )
+    db.session.add(member)
+    db.session.flush()
+
+    # Check if draft is now complete
+    new_state = compute_draft_state(league)
+    if new_state["is_complete"]:
+        league.status = LeagueStatus.ACTIVE.value
+
+    db.session.commit()
+    return jsonify(compute_draft_state(league))
