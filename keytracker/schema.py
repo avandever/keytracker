@@ -12,6 +12,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.dialects.mysql import TINYINT
 import datetime
 import enum
+from enum import Enum as PyEnum
 from collections import namedtuple
 from typing import List
 import copy
@@ -766,6 +767,7 @@ class User(UserMixin, db.Model):
     patreon_pledge_cents = db.Column(db.Integer, nullable=True)
     patreon_linked_at = db.Column(db.DateTime, nullable=True)
     free_membership = db.Column(db.Boolean, default=False, nullable=False)
+    is_league_admin = db.Column(db.Boolean, default=False, nullable=False)
     dok_api_key = db.Column(db.String(36), nullable=True)
     tco_usernames = db.relationship(
         "TcoUsername", back_populates="user", cascade="all, delete-orphan"
@@ -784,3 +786,133 @@ class TcoUsername(db.Model):
     )
     username = db.Column(db.String(100), nullable=False)
     user = db.relationship("User", back_populates="tco_usernames")
+
+
+class LeagueStatus(PyEnum):
+    SETUP = "setup"
+    DRAFTING = "drafting"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+
+
+class SignupStatus(PyEnum):
+    SIGNED_UP = "signed_up"
+    DRAFTED = "drafted"
+    WAITLISTED = "waitlisted"
+
+
+class League(db.Model):
+    __tablename__ = "tracker_league"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    fee_amount = db.Column(db.Numeric(10, 2), nullable=True)
+    team_size = db.Column(db.Integer, nullable=False)
+    num_teams = db.Column(db.Integer, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default=LeagueStatus.SETUP.value)
+    created_by_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
+    admins = db.relationship("LeagueAdmin", back_populates="league", cascade="all, delete-orphan")
+    teams = db.relationship("Team", back_populates="league", cascade="all, delete-orphan")
+    signups = db.relationship("LeagueSignup", back_populates="league", cascade="all, delete-orphan")
+    draft_picks = db.relationship("DraftPick", back_populates="league", cascade="all, delete-orphan")
+
+
+class LeagueAdmin(db.Model):
+    __tablename__ = "tracker_league_admin"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), nullable=False
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    league = db.relationship("League", back_populates="admins")
+    user = db.relationship("User")
+    __table_args__ = (
+        db.UniqueConstraint("league_id", "user_id", name="uq_league_admin"),
+    )
+
+
+class Team(db.Model):
+    __tablename__ = "tracker_team"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), nullable=False
+    )
+    name = db.Column(db.String(200), nullable=False)
+    order_number = db.Column(db.Integer, nullable=False)
+    league = db.relationship("League", back_populates="teams")
+    members = db.relationship("TeamMember", back_populates="team", cascade="all, delete-orphan")
+
+
+class TeamMember(db.Model):
+    __tablename__ = "tracker_team_member"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    team_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_team.id"), nullable=False
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    is_captain = db.Column(db.Boolean, default=False, nullable=False)
+    has_paid = db.Column(db.Boolean, default=False, nullable=False)
+    team = db.relationship("Team", back_populates="members")
+    user = db.relationship("User")
+    __table_args__ = (
+        db.UniqueConstraint("team_id", "user_id", name="uq_team_member"),
+    )
+
+
+class LeagueSignup(db.Model):
+    __tablename__ = "tracker_league_signup"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), nullable=False
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    signup_order = db.Column(db.Integer, nullable=False)
+    status = db.Column(
+        db.String(20), nullable=False, default=SignupStatus.SIGNED_UP.value
+    )
+    signed_up_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    league = db.relationship("League", back_populates="signups")
+    user = db.relationship("User")
+    __table_args__ = (
+        db.UniqueConstraint("league_id", "user_id", name="uq_league_signup"),
+    )
+
+
+class DraftPick(db.Model):
+    __tablename__ = "tracker_draft_pick"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), nullable=False
+    )
+    round_number = db.Column(db.Integer, nullable=False)
+    pick_number = db.Column(db.Integer, nullable=False)
+    team_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_team.id"), nullable=False
+    )
+    picked_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    picked_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    league = db.relationship("League", back_populates="draft_picks")
+    team = db.relationship("Team")
+    picked_user = db.relationship("User")
+    __table_args__ = (
+        db.UniqueConstraint(
+            "league_id", "round_number", "pick_number", name="uq_draft_pick"
+        ),
+    )

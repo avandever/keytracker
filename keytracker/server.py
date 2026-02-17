@@ -130,6 +130,12 @@ with app.app_context():
                             "ALTER TABLE tracker_user ADD COLUMN dok_api_key VARCHAR(36)"
                         )
                     )
+                if "is_league_admin" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN is_league_admin BOOLEAN NOT NULL DEFAULT FALSE"
+                        )
+                    )
     except Exception:
         pass
 
