@@ -57,6 +57,7 @@ def auth_me():
                 "patreon_linked": current_user.patreon_id is not None,
                 "dok_api_key": current_user.dok_api_key,
                 "tco_usernames": [t.username for t in current_user.tco_usernames],
+                "is_league_admin": current_user.is_league_admin,
             }
         )
     return jsonify({"error": "Not authenticated"}), 401
@@ -106,6 +107,7 @@ def auth_settings():
         "patreon_linked": current_user.patreon_id is not None,
         "dok_api_key": current_user.dok_api_key,
         "tco_usernames": [t.username for t in current_user.tco_usernames],
+        "is_league_admin": current_user.is_league_admin,
     })
 
 
