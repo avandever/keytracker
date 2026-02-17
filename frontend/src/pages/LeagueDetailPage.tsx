@@ -173,24 +173,28 @@ export default function LeagueDetailPage() {
         </Card>
       ))}
 
-      {/* Signups */}
-      <Divider sx={{ my: 3 }} />
-      <Typography variant="h5" sx={{ mb: 2 }}>Signups ({league.signups.length})</Typography>
-      <List dense>
-        {league.signups.map((s) => (
-          <ListItem key={s.id}>
-            <ListItemAvatar>
-              <Avatar src={s.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
-                {s.user.name?.[0]}
-              </Avatar>
-            </ListItemAvatar>
-            <ListItemText
-              primary={s.user.name}
-              secondary={`#${s.signup_order} - ${s.status}`}
-            />
-          </ListItem>
-        ))}
-      </List>
+      {/* Signups - only visible to league admins and team captains */}
+      {(league.is_admin || league.is_captain) && (
+        <>
+          <Divider sx={{ my: 3 }} />
+          <Typography variant="h5" sx={{ mb: 2 }}>Signups ({league.signups.length})</Typography>
+          <List dense>
+            {league.signups.map((s) => (
+              <ListItem key={s.id}>
+                <ListItemAvatar>
+                  <Avatar src={s.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
+                    {s.user.name?.[0]}
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={s.user.name}
+                  secondary={`#${s.signup_order} - ${s.status}`}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </>
+      )}
     </Container>
   );
 }
