@@ -18,7 +18,9 @@ from keytracker.serializers import (
     serialize_user_brief,
 )
 import datetime
+import logging
 
+logger = logging.getLogger(__name__)
 
 blueprint = Blueprint("leagues", __name__, url_prefix="/api/v2/leagues")
 
@@ -47,6 +49,12 @@ def list_leagues():
 @blueprint.route("/", methods=["POST"])
 @login_required
 def create_league():
+    logger.warning(
+        "create_league called: user_id=%s, is_league_admin=%r, type=%s",
+        current_user.id,
+        current_user.is_league_admin,
+        type(current_user.is_league_admin),
+    )
     if not current_user.is_league_admin:
         return jsonify({"error": "League admin permission required"}), 403
     data = request.get_json(silent=True) or {}
