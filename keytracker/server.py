@@ -11,6 +11,7 @@ from keytracker.routes import (
     api,
     api_v2,
     auth,
+    leagues,
 )
 # from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
@@ -150,6 +151,7 @@ def unauthorized():
 app.register_blueprint(auth.blueprint)
 app.register_blueprint(api.blueprint)
 app.register_blueprint(api_v2.blueprint)
+app.register_blueprint(leagues.blueprint)
 
 # Serve React frontend at /
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
