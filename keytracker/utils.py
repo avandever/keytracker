@@ -694,6 +694,8 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
         params={"links": "cards,notes"},
     )
     all_data = response.json()
+    if "data" not in all_data:
+        current_app.logger.error(f"No data in response from mv: {response}")
     data = all_data["data"]
     card_json = all_data["_linked"]["cards"]
     card_details = {c["id"]: c for c in card_json}
