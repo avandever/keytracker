@@ -652,5 +652,5 @@ def make_pick(league_id):
 def list_test_users():
     if not current_user.is_league_admin:
         return jsonify({"error": "League admin permission required"}), 403
-    test_users = User.query.filter_by(is_test_user=True).order_by(User.name).all()
+    test_users = User.query.filter_by(is_test_user=True).order_by(User.id).all()
     return jsonify([serialize_user_brief(u) for u in test_users])

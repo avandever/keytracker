@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import { getDraft, makePick } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
+import { useTestUser } from '../contexts/TestUserContext';
 import type { DraftState } from '../types';
 
 export default function DraftBoardPage() {
@@ -71,12 +72,11 @@ export default function DraftBoardPage() {
   if (error && !draft) return <Container sx={{ mt: 3 }}><Alert severity="error">{error}</Alert></Container>;
   if (!draft) return null;
 
-  // Can current user pick? They must be captain of current team or league admin
+  // Can current user pick? They must be captain of current team
+  const { testUserId } = useTestUser();
+  const effectiveUserId = testUserId ?? user?.id;
   const currentTeamCaptainId = draft.current_team?.members.find((m) => m.is_captain)?.user.id;
-  const isMyPick = user && draft.current_team && (
-    currentTeamCaptainId === user.id ||
-    draft.status === 'active' // admin can always pick (handled server-side)
-  );
+  const isMyPick = user && draft.current_team && currentTeamCaptainId === effectiveUserId;
 
   return (
     <Container maxWidth="lg" sx={{ mt: 3 }}>
