@@ -20,7 +20,6 @@ import {
   FormControl,
   InputLabel,
   IconButton,
-  Divider,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -40,7 +39,7 @@ import type { LeagueDetail } from '../types';
 
 export default function LeagueAdminPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
-  const { user } = useAuth();
+  useAuth();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

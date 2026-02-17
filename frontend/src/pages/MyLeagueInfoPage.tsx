@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import { getLeague } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
-import type { LeagueDetail, TeamDetail } from '../types';
+import type { LeagueDetail } from '../types';
 
 export default function MyLeagueInfoPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
