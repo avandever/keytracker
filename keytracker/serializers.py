@@ -5,10 +5,16 @@ from keytracker.schema import (
     HouseTurnCounts,
     League,
     LeagueSignup,
+    LeagueWeek,
+    WeekMatchup,
+    PlayerMatchup,
+    PlayerDeckSelection,
+    MatchGame,
     Team,
     TeamMember,
     EXPANSION_ID_TO_ABBR,
 )
+import json
 
 
 def serialize_game_summary(game: Game) -> dict:
@@ -156,4 +162,94 @@ def serialize_league_detail(league: League) -> dict:
     data["teams"] = [serialize_team_detail(t) for t in sorted(league.teams, key=lambda t: t.order_number)]
     data["signups"] = [serialize_signup(s) for s in sorted(league.signups, key=lambda s: s.signup_order)]
     data["admins"] = [serialize_user_brief(a.user) for a in league.admins]
+    data["weeks"] = [
+        serialize_league_week(w) for w in sorted(league.weeks, key=lambda w: w.week_number)
+    ]
     return data
+
+
+def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
+    allowed_sets = None
+    if week.allowed_sets:
+        try:
+            allowed_sets = json.loads(week.allowed_sets)
+        except (json.JSONDecodeError, TypeError):
+            allowed_sets = None
+    data = {
+        "id": week.id,
+        "league_id": week.league_id,
+        "week_number": week.week_number,
+        "format_type": week.format_type,
+        "status": week.status,
+        "best_of_n": week.best_of_n,
+        "allowed_sets": allowed_sets,
+        "max_sas": week.max_sas,
+        "combined_max_sas": week.combined_max_sas,
+        "set_diversity": week.set_diversity,
+        "house_diversity": week.house_diversity,
+        "decks_per_player": week.decks_per_player,
+        "sealed_pools_generated": week.sealed_pools_generated,
+        "matchups": [serialize_week_matchup(m, viewer=viewer) for m in week.matchups],
+        "deck_selections": [serialize_deck_selection(ds) for ds in week.deck_selections],
+    }
+    return data
+
+
+def serialize_week_matchup(matchup: WeekMatchup, viewer=None) -> dict:
+    return {
+        "id": matchup.id,
+        "week_id": matchup.week_id,
+        "team1": serialize_team_detail(matchup.team1),
+        "team2": serialize_team_detail(matchup.team2),
+        "player_matchups": [
+            serialize_player_matchup(pm, viewer=viewer) for pm in matchup.player_matchups
+        ],
+    }
+
+
+def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
+    data = {
+        "id": pm.id,
+        "week_matchup_id": pm.week_matchup_id,
+        "player1": serialize_user_brief(pm.player1),
+        "player2": serialize_user_brief(pm.player2),
+        "player1_started": pm.player1_started,
+        "player2_started": pm.player2_started,
+        "games": [serialize_match_game(g) for g in sorted(pm.games, key=lambda g: g.game_number)],
+    }
+    # Include strike info
+    data["strikes"] = [
+        {
+            "striking_user_id": s.striking_user_id,
+            "struck_deck_selection_id": s.struck_deck_selection_id,
+        }
+        for s in pm.strikes
+    ]
+    return data
+
+
+def serialize_deck_selection(sel: PlayerDeckSelection) -> dict:
+    return {
+        "id": sel.id,
+        "week_id": sel.week_id,
+        "user_id": sel.user_id,
+        "slot_number": sel.slot_number,
+        "deck": serialize_deck_summary(sel.deck) if sel.deck else None,
+    }
+
+
+def serialize_match_game(game: MatchGame) -> dict:
+    return {
+        "id": game.id,
+        "player_matchup_id": game.player_matchup_id,
+        "game_number": game.game_number,
+        "winner_id": game.winner_id,
+        "player1_keys": game.player1_keys,
+        "player2_keys": game.player2_keys,
+        "went_to_time": game.went_to_time,
+        "loser_conceded": game.loser_conceded,
+        "player1_deck_id": game.player1_deck_id,
+        "player2_deck_id": game.player2_deck_id,
+        "reported_by_id": game.reported_by_id,
+        "created_at": game.created_at.isoformat() if game.created_at else None,
+    }

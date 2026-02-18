@@ -24,8 +24,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Chip,
+  ListItemButton,
+  Collapse,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import {
   getLeague,
   updateLeague,
@@ -33,9 +38,28 @@ import {
   deleteTeam,
   assignCaptain,
   startDraft,
+  createWeek,
+  openDeckSelection,
+  generateMatchups,
+  publishWeek,
+  getSets,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
-import type { LeagueDetail } from '../types';
+import type { LeagueDetail, KeyforgeSetInfo, LeagueWeek } from '../types';
+
+const FORMAT_LABELS: Record<string, string> = {
+  archon_standard: 'Archon Standard',
+  triad: 'Triad',
+  sealed_archon: 'Sealed Archon',
+};
+
+const STATUS_COLORS: Record<string, 'default' | 'info' | 'warning' | 'success'> = {
+  setup: 'default',
+  deck_selection: 'info',
+  pairing: 'warning',
+  published: 'success',
+  completed: 'success',
+};
 
 export default function LeagueAdminPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
@@ -61,6 +85,17 @@ export default function LeagueAdminPage() {
   // Start draft dialog
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
 
+  // Week creation
+  const [weekDialogOpen, setWeekDialogOpen] = useState(false);
+  const [weekFormat, setWeekFormat] = useState('archon_standard');
+  const [weekBestOf, setWeekBestOf] = useState('1');
+  const [weekMaxSas, setWeekMaxSas] = useState('');
+  const [weekAllowedSets, setWeekAllowedSets] = useState<number[]>([]);
+  const [availableSets, setAvailableSets] = useState<KeyforgeSetInfo[]>([]);
+
+  // Week expanded
+  const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({});
+
   const refresh = useCallback(() => {
     if (!leagueId) return;
     getLeague(parseInt(leagueId, 10))
@@ -78,11 +113,16 @@ export default function LeagueAdminPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  useEffect(() => {
+    getSets().then(setAvailableSets).catch(() => {});
+  }, []);
+
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
   if (!league) return <Container sx={{ mt: 3 }}><Alert severity="error">{error || 'League not found'}</Alert></Container>;
   if (!league.is_admin) return <Container sx={{ mt: 3 }}><Alert severity="error">Admin access required</Alert></Container>;
 
   const isSetup = league.status === 'setup';
+  const isActive = league.status === 'active';
 
   const handleSaveSettings = async () => {
     setError('');
@@ -148,10 +188,86 @@ export default function LeagueAdminPage() {
     }
   };
 
+  const handleCreateWeek = async () => {
+    setError('');
+    setWeekDialogOpen(false);
+    try {
+      await createWeek(league.id, {
+        format_type: weekFormat,
+        best_of_n: parseInt(weekBestOf, 10) || 1,
+        max_sas: weekMaxSas ? parseInt(weekMaxSas, 10) : null,
+        allowed_sets: weekAllowedSets.length > 0 ? weekAllowedSets : null,
+      });
+      setSuccess('Week created!');
+      setWeekFormat('archon_standard');
+      setWeekBestOf('1');
+      setWeekMaxSas('');
+      setWeekAllowedSets([]);
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleWeekAction = async (weekId: number, action: string) => {
+    setError('');
+    setSuccess('');
+    try {
+      if (action === 'open_deck_selection') {
+        await openDeckSelection(league.id, weekId);
+        setSuccess('Deck selection opened');
+      } else if (action === 'generate_matchups') {
+        await generateMatchups(league.id, weekId);
+        setSuccess('Matchups generated');
+      } else if (action === 'publish') {
+        await publishWeek(league.id, weekId);
+        setSuccess('Week published');
+      }
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const toggleWeekExpanded = (weekId: number) => {
+    setExpandedWeeks((prev) => ({ ...prev, [weekId]: !prev[weekId] }));
+  };
+
   // Get captain IDs so we can exclude them from captain dropdown for other teams
   const assignedCaptainIds = new Set(
     league.teams.flatMap((t) => t.members.filter((m) => m.is_captain).map((m) => m.user.id))
   );
+
+  const toggleSet = (setNumber: number) => {
+    setWeekAllowedSets((prev) =>
+      prev.includes(setNumber) ? prev.filter((s) => s !== setNumber) : [...prev, setNumber]
+    );
+  };
+
+  const renderWeekActions = (week: LeagueWeek) => {
+    switch (week.status) {
+      case 'setup':
+        return (
+          <Button size="small" variant="contained" onClick={() => handleWeekAction(week.id, 'open_deck_selection')}>
+            Open Deck Selection
+          </Button>
+        );
+      case 'deck_selection':
+        return (
+          <Button size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_matchups')}>
+            Generate Matchups
+          </Button>
+        );
+      case 'pairing':
+        return (
+          <Button size="small" variant="contained" color="success" onClick={() => handleWeekAction(week.id, 'publish')}>
+            Publish Pairings
+          </Button>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <Container maxWidth="md" sx={{ mt: 3 }}>
@@ -282,6 +398,81 @@ export default function LeagueAdminPage() {
         </Box>
       )}
 
+      {/* Weeks management */}
+      {isActive && (
+        <Card sx={{ mb: 3 }}>
+          <CardContent>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">Weeks ({league.weeks?.length || 0})</Typography>
+              <Button variant="contained" size="small" onClick={() => setWeekDialogOpen(true)}>
+                Add Week
+              </Button>
+            </Box>
+            {(league.weeks || []).map((week) => (
+              <Box key={week.id} sx={{ mb: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                <ListItemButton onClick={() => toggleWeekExpanded(week.id)} sx={{ py: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flex: 1 }}>
+                    <Typography variant="subtitle1">Week {week.week_number}</Typography>
+                    <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" />
+                    <Chip label={week.status.replace('_', ' ')} size="small" color={STATUS_COLORS[week.status] || 'default'} />
+                    <Typography variant="body2" color="text.secondary">
+                      Bo{week.best_of_n}
+                    </Typography>
+                    {week.max_sas && (
+                      <Typography variant="body2" color="text.secondary">
+                        Max SAS: {week.max_sas}
+                      </Typography>
+                    )}
+                  </Box>
+                  {expandedWeeks[week.id] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </ListItemButton>
+                <Collapse in={expandedWeeks[week.id]}>
+                  <Box sx={{ p: 2, pt: 0 }}>
+                    {/* Week actions */}
+                    <Box sx={{ mb: 2 }}>
+                      {renderWeekActions(week)}
+                    </Box>
+
+                    {/* Deck selections summary */}
+                    {week.deck_selections.length > 0 && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" gutterBottom>Deck Selections ({week.deck_selections.length})</Typography>
+                        {week.deck_selections.map((ds) => (
+                          <Typography key={ds.id} variant="body2" color="text.secondary">
+                            User #{ds.user_id} slot {ds.slot_number}: {ds.deck?.name || 'Unknown'}
+                            {ds.deck?.sas_rating != null && ` (SAS: ${ds.deck.sas_rating})`}
+                          </Typography>
+                        ))}
+                      </Box>
+                    )}
+
+                    {/* Matchups */}
+                    {week.matchups.length > 0 && (
+                      <Box>
+                        <Typography variant="subtitle2" gutterBottom>Matchups</Typography>
+                        {week.matchups.map((m) => (
+                          <Box key={m.id} sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+                            <Typography variant="body2" fontWeight="bold">
+                              {m.team1.name} vs {m.team2.name}
+                            </Typography>
+                            {m.player_matchups.map((pm) => (
+                              <Typography key={pm.id} variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                                {pm.player1.name} vs {pm.player2.name}
+                                {pm.games.length > 0 && ` (${pm.games.length} game${pm.games.length !== 1 ? 's' : ''} played)`}
+                              </Typography>
+                            ))}
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+                  </Box>
+                </Collapse>
+              </Box>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <Dialog open={draftDialogOpen} onClose={() => setDraftDialogOpen(false)}>
         <DialogTitle>Start Draft?</DialogTitle>
         <DialogContent>
@@ -293,6 +484,60 @@ export default function LeagueAdminPage() {
         <DialogActions>
           <Button onClick={() => setDraftDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleStartDraft} variant="contained" color="warning">Start Draft</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Week dialog */}
+      <Dialog open={weekDialogOpen} onClose={() => setWeekDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Week</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel>Format</InputLabel>
+              <Select value={weekFormat} label="Format" onChange={(e) => setWeekFormat(e.target.value)}>
+                <MenuItem value="archon_standard">Archon Standard</MenuItem>
+                <MenuItem value="triad">Triad</MenuItem>
+                <MenuItem value="sealed_archon">Sealed Archon</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Best of</InputLabel>
+              <Select value={weekBestOf} label="Best of" onChange={(e) => setWeekBestOf(e.target.value)}>
+                <MenuItem value="1">Best of 1</MenuItem>
+                <MenuItem value="3">Best of 3</MenuItem>
+                <MenuItem value="5">Best of 5</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Max SAS (optional)"
+              value={weekMaxSas}
+              onChange={(e) => setWeekMaxSas(e.target.value)}
+              type="number"
+            />
+            {availableSets.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  Allowed Sets {weekAllowedSets.length > 0 ? `(${weekAllowedSets.length} selected)` : '(all)'}
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {availableSets.map((s) => (
+                    <Chip
+                      key={s.number}
+                      label={s.shortname}
+                      size="small"
+                      variant={weekAllowedSets.includes(s.number) ? 'filled' : 'outlined'}
+                      color={weekAllowedSets.includes(s.number) ? 'primary' : 'default'}
+                      onClick={() => toggleSet(s.number)}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setWeekDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleCreateWeek} variant="contained">Create Week</Button>
         </DialogActions>
       </Dialog>
     </Container>

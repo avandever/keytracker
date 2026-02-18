@@ -2,9 +2,14 @@ import apiClient from './client';
 import type {
   LeagueSummary,
   LeagueDetail,
+  LeagueWeek,
   TeamDetail,
   DraftState,
   UserBrief,
+  DeckSelectionInfo,
+  PlayerMatchupInfo,
+  MatchGameInfo,
+  KeyforgeSetInfo,
 } from '../types';
 
 export async function listLeagues(): Promise<LeagueSummary[]> {
@@ -141,5 +146,132 @@ export async function makePick(
 
 export async function listTestUsers(): Promise<UserBrief[]> {
   const { data } = await apiClient.get('/leagues/test-users');
+  return data;
+}
+
+// --- Sets ---
+
+export async function getSets(): Promise<KeyforgeSetInfo[]> {
+  const { data } = await apiClient.get('/leagues/sets');
+  return data;
+}
+
+// --- Weeks ---
+
+export async function getWeeks(leagueId: number): Promise<LeagueWeek[]> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/weeks`);
+  return data;
+}
+
+export async function createWeek(
+  leagueId: number,
+  payload: {
+    format_type: string;
+    best_of_n: number;
+    allowed_sets?: number[] | null;
+    max_sas?: number | null;
+    combined_max_sas?: number | null;
+    set_diversity?: boolean;
+    house_diversity?: boolean;
+    decks_per_player?: number | null;
+  },
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks`, payload);
+  return data;
+}
+
+export async function updateWeek(
+  leagueId: number,
+  weekId: number,
+  payload: Record<string, unknown>,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.put(`/leagues/${leagueId}/weeks/${weekId}`, payload);
+  return data;
+}
+
+export async function openDeckSelection(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/open-deck-selection`);
+  return data;
+}
+
+export async function generateMatchups(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/generate-matchups`);
+  return data;
+}
+
+export async function publishWeek(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/publish`);
+  return data;
+}
+
+// --- Deck Selection ---
+
+export async function submitDeckSelection(
+  leagueId: number,
+  weekId: number,
+  payload: { deck_url: string; slot_number?: number; user_id?: number },
+): Promise<DeckSelectionInfo[]> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/deck-selection`,
+    payload,
+  );
+  return data;
+}
+
+export async function removeDeckSelection(
+  leagueId: number,
+  weekId: number,
+  slot: number,
+  userId?: number,
+): Promise<void> {
+  const params = userId ? `?user_id=${userId}` : '';
+  await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}/deck-selection/${slot}${params}`);
+}
+
+// --- Matches ---
+
+export async function startMatch(
+  leagueId: number,
+  matchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/matches/${matchupId}/start`);
+  return data;
+}
+
+export async function getMatch(
+  leagueId: number,
+  matchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/matches/${matchupId}`);
+  return data;
+}
+
+export async function reportGame(
+  leagueId: number,
+  matchupId: number,
+  payload: {
+    game_number: number;
+    winner_id: number;
+    player1_keys: number;
+    player2_keys: number;
+    went_to_time?: boolean;
+    loser_conceded?: boolean;
+    player1_deck_id?: number;
+    player2_deck_id?: number;
+  },
+): Promise<MatchGameInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/games`,
+    payload,
+  );
   return data;
 }

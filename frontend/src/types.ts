@@ -148,6 +148,7 @@ export interface LeagueDetail extends LeagueSummary {
   teams: TeamDetail[];
   signups: SignupInfo[];
   admins: UserBrief[];
+  weeks: LeagueWeek[];
   is_admin: boolean;
   is_signed_up: boolean;
   my_team_id: number | null;
@@ -187,6 +188,79 @@ export interface DraftState {
   pick_history: DraftPickInfo[];
   draft_board: DraftRound[];
   teams: TeamDetail[];
+}
+
+// --- League Week types ---
+
+export interface KeyforgeSetInfo {
+  number: number;
+  name: string;
+  shortname: string;
+}
+
+export interface LeagueWeek {
+  id: number;
+  league_id: number;
+  week_number: number;
+  format_type: string;
+  status: string;
+  best_of_n: number;
+  allowed_sets: number[] | null;
+  max_sas: number | null;
+  combined_max_sas: number | null;
+  set_diversity: boolean | null;
+  house_diversity: boolean | null;
+  decks_per_player: number | null;
+  sealed_pools_generated: boolean;
+  matchups: WeekMatchup[];
+  deck_selections: DeckSelectionInfo[];
+}
+
+export interface WeekMatchup {
+  id: number;
+  week_id: number;
+  team1: TeamDetail;
+  team2: TeamDetail;
+  player_matchups: PlayerMatchupInfo[];
+}
+
+export interface PlayerMatchupInfo {
+  id: number;
+  week_matchup_id: number;
+  player1: UserBrief;
+  player2: UserBrief;
+  player1_started: boolean;
+  player2_started: boolean;
+  games: MatchGameInfo[];
+  strikes: StrikeInfo[];
+}
+
+export interface DeckSelectionInfo {
+  id: number;
+  week_id: number;
+  user_id: number;
+  slot_number: number;
+  deck: DeckSummary | null;
+}
+
+export interface MatchGameInfo {
+  id: number;
+  player_matchup_id: number;
+  game_number: number;
+  winner_id: number;
+  player1_keys: number;
+  player2_keys: number;
+  went_to_time: boolean;
+  loser_conceded: boolean;
+  player1_deck_id: number | null;
+  player2_deck_id: number | null;
+  reported_by_id: number | null;
+  created_at: string | null;
+}
+
+export interface StrikeInfo {
+  striking_user_id: number;
+  struck_deck_selection_id: number;
 }
 
 export interface CsvPod {

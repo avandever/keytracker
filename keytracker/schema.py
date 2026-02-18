@@ -802,6 +802,20 @@ class SignupStatus(PyEnum):
     WAITLISTED = "waitlisted"
 
 
+class WeekFormat(PyEnum):
+    ARCHON_STANDARD = "archon_standard"
+    TRIAD = "triad"
+    SEALED_ARCHON = "sealed_archon"
+
+
+class WeekStatus(PyEnum):
+    SETUP = "setup"
+    DECK_SELECTION = "deck_selection"
+    PAIRING = "pairing"
+    PUBLISHED = "published"
+    COMPLETED = "completed"
+
+
 class League(db.Model):
     __tablename__ = "tracker_league"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -918,3 +932,167 @@ class DraftPick(db.Model):
             "league_id", "round_number", "pick_number", name="uq_draft_pick"
         ),
     )
+
+
+class LeagueWeek(db.Model):
+    __tablename__ = "tracker_league_week"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), nullable=False
+    )
+    week_number = db.Column(db.Integer, nullable=False)
+    format_type = db.Column(db.String(30), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default=WeekStatus.SETUP.value)
+    best_of_n = db.Column(db.Integer, nullable=False, default=1)
+    allowed_sets = db.Column(db.Text, nullable=True)
+    max_sas = db.Column(db.Integer, nullable=True)
+    # Triad-specific
+    combined_max_sas = db.Column(db.Integer, nullable=True)
+    set_diversity = db.Column(db.Boolean, nullable=True)
+    house_diversity = db.Column(db.Boolean, nullable=True)
+    # Sealed-specific
+    decks_per_player = db.Column(db.Integer, nullable=True)
+    sealed_pools_generated = db.Column(db.Boolean, default=False, nullable=False)
+
+    league = db.relationship("League", backref="weeks")
+    matchups = db.relationship("WeekMatchup", back_populates="week", cascade="all, delete-orphan")
+    deck_selections = db.relationship("PlayerDeckSelection", back_populates="week", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        db.UniqueConstraint("league_id", "week_number", name="uq_league_week"),
+    )
+
+
+class WeekMatchup(db.Model):
+    __tablename__ = "tracker_week_matchup"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+    )
+    team1_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_team.id"), nullable=False
+    )
+    team2_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_team.id"), nullable=False
+    )
+    week = db.relationship("LeagueWeek", back_populates="matchups")
+    team1 = db.relationship("Team", foreign_keys=[team1_id])
+    team2 = db.relationship("Team", foreign_keys=[team2_id])
+    player_matchups = db.relationship("PlayerMatchup", back_populates="week_matchup", cascade="all, delete-orphan")
+
+
+class PlayerMatchup(db.Model):
+    __tablename__ = "tracker_player_matchup"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_week_matchup.id"), nullable=False
+    )
+    player1_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    player2_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    player1_started = db.Column(db.Boolean, default=False, nullable=False)
+    player2_started = db.Column(db.Boolean, default=False, nullable=False)
+
+    week_matchup = db.relationship("WeekMatchup", back_populates="player_matchups")
+    player1 = db.relationship("User", foreign_keys=[player1_id])
+    player2 = db.relationship("User", foreign_keys=[player2_id])
+    games = db.relationship("MatchGame", back_populates="player_matchup", cascade="all, delete-orphan")
+    strikes = db.relationship("StrikeSelection", back_populates="player_matchup", cascade="all, delete-orphan")
+
+
+class PlayerDeckSelection(db.Model):
+    __tablename__ = "tracker_player_deck_selection"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    deck_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False
+    )
+    slot_number = db.Column(db.Integer, nullable=False, default=1)
+
+    week = db.relationship("LeagueWeek", back_populates="deck_selections")
+    user = db.relationship("User")
+    deck = db.relationship("Deck")
+
+    __table_args__ = (
+        db.UniqueConstraint("week_id", "user_id", "slot_number", name="uq_deck_selection"),
+    )
+
+
+class MatchGame(db.Model):
+    __tablename__ = "tracker_match_game"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_matchup.id"), nullable=False
+    )
+    game_number = db.Column(db.Integer, nullable=False)
+    winner_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    player1_keys = db.Column(db.Integer, nullable=False, default=0)
+    player2_keys = db.Column(db.Integer, nullable=False, default=0)
+    went_to_time = db.Column(db.Boolean, default=False, nullable=False)
+    loser_conceded = db.Column(db.Boolean, default=False, nullable=False)
+    player1_deck_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_deck.id"), nullable=True
+    )
+    player2_deck_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_deck.id"), nullable=True
+    )
+    reported_by_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=True
+    )
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    player_matchup = db.relationship("PlayerMatchup", back_populates="games")
+    winner = db.relationship("User", foreign_keys=[winner_id])
+    player1_deck = db.relationship("Deck", foreign_keys=[player1_deck_id])
+    player2_deck = db.relationship("Deck", foreign_keys=[player2_deck_id])
+    reported_by = db.relationship("User", foreign_keys=[reported_by_id])
+
+    __table_args__ = (
+        db.UniqueConstraint("player_matchup_id", "game_number", name="uq_match_game"),
+    )
+
+
+class StrikeSelection(db.Model):
+    __tablename__ = "tracker_strike_selection"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_matchup.id"), nullable=False
+    )
+    striking_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    struck_deck_selection_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_deck_selection.id"), nullable=False
+    )
+
+    player_matchup = db.relationship("PlayerMatchup", back_populates="strikes")
+    striking_user = db.relationship("User", foreign_keys=[striking_user_id])
+    struck_deck_selection = db.relationship("PlayerDeckSelection")
+
+
+class SealedPoolDeck(db.Model):
+    __tablename__ = "tracker_sealed_pool_deck"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+    )
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    deck_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False
+    )
+
+    week = db.relationship("LeagueWeek")
+    user = db.relationship("User")
+    deck = db.relationship("Deck")
