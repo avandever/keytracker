@@ -65,6 +65,7 @@ def serialize_game_detail(game: Game) -> dict:
 
 def serialize_deck_summary(deck: Deck) -> dict:
     return {
+        "db_id": deck.id,
         "kf_id": deck.kf_id,
         "name": deck.name,
         "expansion": deck.expansion,

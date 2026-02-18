@@ -89,6 +89,17 @@ export default function MyLeagueInfoPage() {
       .finally(() => setLoading(false));
   }, [leagueId]);
 
+  const loadSealedPool = useCallback(async (weekId: number) => {
+    if (!league) return;
+    if (sealedPools[weekId]) return;
+    try {
+      const pool = await getSealedPool(league.id, weekId);
+      setSealedPools((prev) => ({ ...prev, [weekId]: pool }));
+    } catch {
+      // Silently fail — pool may not be generated yet
+    }
+  }, [league, sealedPools]);
+
   useEffect(() => { refresh(); }, [refresh]);
 
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
@@ -107,16 +118,6 @@ export default function MyLeagueInfoPage() {
   const captain = myTeam.members.find((m) => m.is_captain);
   const myMember = myTeam.members.find((m) => m.user.id === user.id);
   const weeks = league.weeks || [];
-
-  const loadSealedPool = useCallback(async (weekId: number) => {
-    if (sealedPools[weekId]) return;
-    try {
-      const pool = await getSealedPool(league.id, weekId);
-      setSealedPools((prev) => ({ ...prev, [weekId]: pool }));
-    } catch {
-      // Silently fail — pool may not be generated yet
-    }
-  }, [league.id, sealedPools]);
 
   const handleSubmitSealedDeck = async (weekId: number) => {
     if (!sealedDeckId) return;

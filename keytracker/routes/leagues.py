@@ -1182,7 +1182,7 @@ def generate_sealed_pools(league_id, week_id):
 @blueprint.route("/<int:league_id>/weeks/<int:week_id>/sealed-pool", methods=["GET"])
 @login_required
 def get_sealed_pool(league_id, week_id):
-    """Get the sealed pool for the current user."""
+    """Get the sealed pool for a user (defaults to current user)."""
     league, err = _get_league_or_404(league_id)
     if err:
         return err
@@ -1191,8 +1191,22 @@ def get_sealed_pool(league_id, week_id):
         return jsonify({"error": "Week not found"}), 404
 
     effective = get_effective_user()
+    target_user_id = request.args.get("user_id", type=int) or effective.id
+
+    if target_user_id != effective.id:
+        is_admin = _is_league_admin(league, effective)
+        is_captain_of_team = False
+        for team in league.teams:
+            team_user_ids = {m.user_id for m in team.members}
+            if target_user_id in team_user_ids:
+                if any(m.user_id == effective.id and m.is_captain for m in team.members):
+                    is_captain_of_team = True
+                break
+        if not is_admin and not is_captain_of_team:
+            return jsonify({"error": "Cannot view sealed pool for this user"}), 403
+
     pool = SealedPoolDeck.query.filter_by(
-        week_id=week.id, user_id=effective.id
+        week_id=week.id, user_id=target_user_id
     ).all()
     return jsonify([
         {

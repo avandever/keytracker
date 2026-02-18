@@ -20,6 +20,10 @@ import {
   Tab,
   Tabs,
   Link,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
   getLeague,
@@ -27,9 +31,11 @@ import {
   toggleFeePaid,
   submitDeckSelection,
   removeDeckSelection,
+  getSealedPool,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import type { LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
+import type { SealedPoolEntry } from '../api/leagues';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
@@ -47,8 +53,13 @@ export default function MyTeamPage() {
   const [editName, setEditName] = useState('');
   const [weekTab, setWeekTab] = useState(0);
 
-  // Captain deck submission for teammates
+  // Deck submission state
   const [teammateDeckUrls, setTeammateDeckUrls] = useState<Record<string, string>>({});
+
+  // Sealed pool state: keyed by `${weekId}-${userId}`
+  const [sealedPools, setSealedPools] = useState<Record<string, SealedPoolEntry[]>>({});
+  // Sealed selection state: keyed by `${weekId}-${userId}-${slotNumber}`
+  const [sealedSelections, setSealedSelections] = useState<Record<string, number>>({});
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -64,14 +75,45 @@ export default function MyTeamPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Fetch sealed pools for sealed_archon weeks
+  useEffect(() => {
+    if (!league || !user) return;
+    const myTeam = league.teams.find((t) => t.id === league.my_team_id);
+    if (!myTeam) return;
+    const isCaptain = league.is_captain;
+
+    const sealedWeeks = (league.weeks || []).filter(
+      (w) => w.format_type === 'sealed_archon' && w.sealed_pools_generated,
+    );
+    if (sealedWeeks.length === 0) return;
+
+    sealedWeeks.forEach((week) => {
+      const members = isCaptain
+        ? myTeam.members
+        : myTeam.members.filter((m) => m.user.id === user.id);
+
+      members.forEach((m) => {
+        const key = `${week.id}-${m.user.id}`;
+        if (sealedPools[key]) return; // already fetched
+        getSealedPool(league.id, week.id, m.user.id)
+          .then((pool) => {
+            setSealedPools((prev) => ({ ...prev, [key]: pool }));
+          })
+          .catch(() => {
+            // Silently ignore - pool may not be accessible
+          });
+      });
+    });
+  }, [league, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
   if (error && !league) return <Container sx={{ mt: 3 }}><Alert severity="error">{error}</Alert></Container>;
   if (!league || !user) return null;
 
-  if (!league.is_captain) {
+  if (!league.my_team_id) {
     return (
       <Container sx={{ mt: 3 }}>
-        <Alert severity="error">Captain access required</Alert>
+        <Alert severity="error">You are not on a team in this league</Alert>
       </Container>
     );
   }
@@ -79,6 +121,7 @@ export default function MyTeamPage() {
   const myTeam = league.teams.find((t) => t.id === league.my_team_id);
   if (!myTeam) return null;
 
+  const isCaptain = league.is_captain;
   const weeks = league.weeks || [];
 
   const handleUpdateName = async () => {
@@ -103,30 +146,52 @@ export default function MyTeamPage() {
     }
   };
 
-  const handleSubmitForTeammate = async (weekId: number, userId: number, slotNumber: number) => {
+  const handleSubmitDeck = async (weekId: number, userId: number, slotNumber: number) => {
     const key = `${weekId}-${userId}-${slotNumber}`;
     const url = teammateDeckUrls[key];
     if (!url?.trim()) return;
     setError('');
     setSuccess('');
     try {
-      await submitDeckSelection(league.id, weekId, {
+      const payload: { deck_url: string; slot_number: number; user_id?: number } = {
         deck_url: url.trim(),
         slot_number: slotNumber,
-        user_id: userId,
-      });
+      };
+      if (userId !== user.id) payload.user_id = userId;
+      await submitDeckSelection(league.id, weekId, payload);
       setTeammateDeckUrls((prev) => ({ ...prev, [key]: '' }));
-      setSuccess('Deck submitted for teammate');
+      setSuccess('Deck submitted');
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
     }
   };
 
-  const handleRemoveForTeammate = async (weekId: number, slot: number, userId: number) => {
+  const handleSubmitSealed = async (weekId: number, userId: number, slotNumber: number) => {
+    const key = `${weekId}-${userId}-${slotNumber}`;
+    const deckId = sealedSelections[key];
+    if (!deckId) return;
+    setError('');
+    setSuccess('');
+    try {
+      const payload: { deck_id: number; slot_number: number; user_id?: number } = {
+        deck_id: deckId,
+        slot_number: slotNumber,
+      };
+      if (userId !== user.id) payload.user_id = userId;
+      await submitDeckSelection(league.id, weekId, payload);
+      setSealedSelections((prev) => ({ ...prev, [key]: 0 }));
+      setSuccess('Deck submitted');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleRemoveDeck = async (weekId: number, slot: number, userId: number) => {
     setError('');
     try {
-      await removeDeckSelection(league.id, weekId, slot, userId);
+      await removeDeckSelection(league.id, weekId, slot, userId !== user.id ? userId : undefined);
       setSuccess('Deck removed');
       refresh();
     } catch (e: any) {
@@ -138,8 +203,83 @@ export default function MyTeamPage() {
     return week.deck_selections.filter((ds) => ds.user_id === userId);
   };
 
+  const renderDeckInput = (week: LeagueWeek, userId: number, slotNumber: number) => {
+    if (week.format_type === 'sealed_archon') {
+      const poolKey = `${week.id}-${userId}`;
+      const pool = sealedPools[poolKey];
+      if (!pool) {
+        return (
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+            Pools not yet generated
+          </Typography>
+        );
+      }
+
+      // Filter out already-selected decks
+      const selections = getMemberSelections(week, userId);
+      const selectedDeckIds = new Set(selections.map((s) => s.deck?.db_id).filter(Boolean));
+      const availableDecks = pool.filter((p) => p.deck && !selectedDeckIds.has(p.deck.db_id));
+
+      const selKey = `${week.id}-${userId}-${slotNumber}`;
+      return (
+        <Box sx={{ display: 'flex', gap: 1, ml: 4, mt: 0.5, alignItems: 'center' }}>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Select deck from pool</InputLabel>
+            <Select
+              value={sealedSelections[selKey] || ''}
+              onChange={(e) => setSealedSelections((prev) => ({
+                ...prev,
+                [selKey]: e.target.value as number,
+              }))}
+              label="Select deck from pool"
+            >
+              {availableDecks.map((p) => (
+                <MenuItem key={p.deck!.db_id} value={p.deck!.db_id}>
+                  {p.deck!.name} {p.deck!.sas_rating != null ? `(SAS: ${p.deck!.sas_rating})` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => handleSubmitSealed(week.id, userId, slotNumber)}
+            disabled={!sealedSelections[selKey]}
+          >
+            Submit
+          </Button>
+        </Box>
+      );
+    }
+
+    // Normal URL input for non-sealed formats
+    const urlKey = `${week.id}-${userId}-${slotNumber}`;
+    return (
+      <Box sx={{ display: 'flex', gap: 1, ml: 4, mt: 0.5 }}>
+        <TextField
+          label="Deck URL"
+          value={teammateDeckUrls[urlKey] || ''}
+          onChange={(e) => setTeammateDeckUrls((prev) => ({
+            ...prev,
+            [urlKey]: e.target.value,
+          }))}
+          size="small"
+          fullWidth
+          placeholder="https://decksofkeyforge.com/decks/..."
+        />
+        <Button
+          size="small"
+          variant="outlined"
+          onClick={() => handleSubmitDeck(week.id, userId, slotNumber)}
+        >
+          Submit
+        </Button>
+      </Box>
+    );
+  };
+
   const renderWeekContent = (week: LeagueWeek) => {
-    const canEdit = week.status === 'deck_selection' || week.status === 'pairing';
+    const isWeekEditable = week.status === 'deck_selection' || week.status === 'pairing';
     const maxSlots = week.format_type === 'triad' ? 3 : 1;
 
     return (
@@ -152,6 +292,8 @@ export default function MyTeamPage() {
           </Box>
 
           {myTeam.members.map((m) => {
+            const isMe = m.user.id === user.id;
+            const canEditMember = isWeekEditable && (isMe || isCaptain);
             const selections = getMemberSelections(week, m.user.id);
             return (
               <Box key={m.id} sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
@@ -159,64 +301,63 @@ export default function MyTeamPage() {
                   <Avatar src={m.user.avatar_url || undefined} sx={{ width: 24, height: 24 }}>
                     {m.user.name?.[0]}
                   </Avatar>
-                  <Typography variant="subtitle2">{m.user.name}</Typography>
+                  <Typography variant="subtitle2">
+                    {m.user.name}
+                    {isMe ? ' (you)' : ''}
+                  </Typography>
                   {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
                 </Box>
 
-                {/* Show existing selections */}
-                {selections.map((sel) => (
-                  <Box key={sel.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, ml: 4 }}>
-                    {maxSlots > 1 && <Chip label={`Slot ${sel.slot_number}`} size="small" variant="outlined" />}
-                    <Typography variant="body2">{sel.deck?.name || 'Unknown'}</Typography>
-                    {sel.deck?.sas_rating != null && (
-                      <Chip label={`SAS: ${sel.deck.sas_rating}`} size="small" variant="outlined" />
-                    )}
-                    {sel.deck?.expansion_name && (
-                      <Chip label={sel.deck.expansion_name} size="small" variant="outlined" />
-                    )}
-                    {sel.deck && (
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Link href={sel.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
-                        <Link href={sel.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                {/* Render all slots */}
+                {Array.from({ length: maxSlots }, (_, i) => i + 1).map((slotNum) => {
+                  const sel = selections.find((s) => s.slot_number === slotNum);
+                  if (sel) {
+                    return (
+                      <Box key={slotNum} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, ml: 4 }}>
+                        {maxSlots > 1 && <Chip label={`Slot ${slotNum}`} size="small" variant="outlined" />}
+                        <Typography variant="body2">{sel.deck?.name || 'Unknown'}</Typography>
+                        {sel.deck?.sas_rating != null && (
+                          <Chip label={`SAS: ${sel.deck.sas_rating}`} size="small" variant="outlined" />
+                        )}
+                        {sel.deck?.expansion_name && (
+                          <Chip label={sel.deck.expansion_name} size="small" variant="outlined" />
+                        )}
+                        {sel.deck && (
+                          <Box sx={{ display: 'flex', gap: 0.5 }}>
+                            <Link href={sel.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                            <Link href={sel.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                          </Box>
+                        )}
+                        {canEditMember && (
+                          <Button size="small" color="error" onClick={() => handleRemoveDeck(week.id, slotNum, m.user.id)}>
+                            Remove
+                          </Button>
+                        )}
                       </Box>
-                    )}
-                    {canEdit && (
-                      <Button size="small" color="error" onClick={() => handleRemoveForTeammate(week.id, sel.slot_number, m.user.id)}>
-                        Remove
-                      </Button>
-                    )}
-                  </Box>
-                ))}
-
-                {/* Submit for teammate */}
-                {canEdit && selections.length < maxSlots && (
-                  <Box sx={{ display: 'flex', gap: 1, ml: 4, mt: 0.5 }}>
-                    <TextField
-                      label="Deck URL"
-                      value={teammateDeckUrls[`${week.id}-${m.user.id}-${selections.length + 1}`] || ''}
-                      onChange={(e) => setTeammateDeckUrls((prev) => ({
-                        ...prev,
-                        [`${week.id}-${m.user.id}-${selections.length + 1}`]: e.target.value,
-                      }))}
-                      size="small"
-                      fullWidth
-                      placeholder="https://decksofkeyforge.com/decks/..."
-                    />
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => handleSubmitForTeammate(week.id, m.user.id, selections.length + 1)}
-                    >
-                      Submit
-                    </Button>
-                  </Box>
-                )}
-
-                {selections.length === 0 && !canEdit && (
-                  <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
-                    No deck selected
-                  </Typography>
-                )}
+                    );
+                  }
+                  // Empty slot
+                  if (canEditMember) {
+                    return (
+                      <Box key={slotNum}>
+                        {maxSlots > 1 && (
+                          <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: 0.5 }}>
+                            Slot {slotNum}:
+                          </Typography>
+                        )}
+                        {renderDeckInput(week, m.user.id, slotNum)}
+                      </Box>
+                    );
+                  }
+                  return (
+                    <Box key={slotNum} sx={{ ml: 4, mb: 0.5 }}>
+                      {maxSlots > 1 && <Chip label={`Slot ${slotNum}`} size="small" variant="outlined" sx={{ mr: 1 }} />}
+                      <Typography variant="body2" color="text.secondary" component="span">
+                        No deck selected
+                      </Typography>
+                    </Box>
+                  );
+                })}
               </Box>
             );
           })}
@@ -269,15 +410,19 @@ export default function MyTeamPage() {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>Team Name</Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <TextField
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              size="small"
-              fullWidth
-            />
-            <Button variant="contained" onClick={handleUpdateName}>Save</Button>
-          </Box>
+          {isCaptain ? (
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <TextField
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                size="small"
+                fullWidth
+              />
+              <Button variant="contained" onClick={handleUpdateName}>Save</Button>
+            </Box>
+          ) : (
+            <Typography variant="body1">{myTeam.name}</Typography>
+          )}
         </CardContent>
       </Card>
 
@@ -305,11 +450,13 @@ export default function MyTeamPage() {
                     <Typography variant="body2" color="text.secondary">
                       {m.has_paid ? 'Paid' : 'Unpaid'}
                     </Typography>
-                    <Switch
-                      checked={m.has_paid}
-                      onChange={() => handleToggleFee(m.user.id, m.has_paid)}
-                      size="small"
-                    />
+                    {isCaptain && (
+                      <Switch
+                        checked={m.has_paid}
+                        onChange={() => handleToggleFee(m.user.id, m.has_paid)}
+                        size="small"
+                      />
+                    )}
                   </Box>
                 )}
               </ListItem>

@@ -220,7 +220,7 @@ export async function publishWeek(
 export async function submitDeckSelection(
   leagueId: number,
   weekId: number,
-  payload: { deck_url: string; slot_number?: number; user_id?: number },
+  payload: { deck_url?: string; deck_id?: number; slot_number?: number; user_id?: number },
 ): Promise<DeckSelectionInfo[]> {
   const { data } = await apiClient.post(
     `/leagues/${leagueId}/weeks/${weekId}/deck-selection`,
@@ -257,8 +257,10 @@ export interface SealedPoolEntry {
 export async function getSealedPool(
   leagueId: number,
   weekId: number,
+  userId?: number,
 ): Promise<SealedPoolEntry[]> {
-  const { data } = await apiClient.get(`/leagues/${leagueId}/weeks/${weekId}/sealed-pool`);
+  const params = userId ? `?user_id=${userId}` : '';
+  const { data } = await apiClient.get(`/leagues/${leagueId}/weeks/${weekId}/sealed-pool${params}`);
   return data;
 }
 
