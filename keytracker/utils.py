@@ -652,13 +652,13 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
         or datetime.datetime.utcnow() - deck.dok.last_refresh > SAS_TD
     ):
         update_sas_scores(deck)
-    #if len(deck.cards_from_assoc) == 0:
-    #    refresh_deck_from_mv(deck)
-    #    db.session.refresh(deck)
-    #if len(deck.pod_stats) == 0:
-    #    calculate_pod_stats(deck)
-    #    db.session.commit()
-    #    db.session.refresh(deck)
+    if len(deck.cards_from_assoc) == 0:
+        refresh_deck_from_mv(deck)
+        db.session.refresh(deck)
+    if len(deck.pod_stats) == 0:
+        calculate_pod_stats(deck)
+        db.session.commit()
+        db.session.refresh(deck)
     return deck
 
 
@@ -689,10 +689,10 @@ def loop_loading_missed_sas(batch_size: int, max_set_id: int = 700) -> None:
 def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
-    deck_url = os.path.join(MV_API_BASE, "v2", deck.kf_id)
+    deck_url = os.path.join(MV_API_BASE, deck.kf_id)
     response = mv_api.callMVSync(
         deck_url,
-        params={"links": "cards,notes"},
+        params={"links": "cards"},
     )
     all_data = response.json()
     if "data" not in all_data:
