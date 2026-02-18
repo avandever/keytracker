@@ -32,6 +32,7 @@ import {
   removeDeckSelection,
   startMatch,
   reportGame,
+  submitStrike,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import type {
@@ -66,6 +67,11 @@ export default function MyLeagueInfoPage() {
   const [reportP2Keys, setReportP2Keys] = useState('0');
   const [reportWentToTime, setReportWentToTime] = useState(false);
   const [reportLoserConceded, setReportLoserConceded] = useState(false);
+
+  // Triad: strike selection and deck pickers
+  const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
+  const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
+  const [reportP2DeckId, setReportP2DeckId] = useState<number | ''>('');
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -127,6 +133,20 @@ export default function MyLeagueInfoPage() {
     }
   };
 
+  const handleSubmitStrike = async (matchupId: number) => {
+    if (!strikeSelectionId) return;
+    setError('');
+    setSuccess('');
+    try {
+      await submitStrike(league.id, matchupId, strikeSelectionId as number);
+      setSuccess('Strike submitted!');
+      setStrikeSelectionId('');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const handleStartMatch = async (matchupId: number) => {
     setError('');
     try {
@@ -151,6 +171,8 @@ export default function MyLeagueInfoPage() {
         player2_keys: parseInt(reportP2Keys, 10) || 0,
         went_to_time: reportWentToTime,
         loser_conceded: reportLoserConceded,
+        player1_deck_id: reportP1DeckId || undefined,
+        player2_deck_id: reportP2DeckId || undefined,
       });
       setSuccess('Game reported!');
       setReportWinnerId('');
@@ -158,6 +180,8 @@ export default function MyLeagueInfoPage() {
       setReportP2Keys('0');
       setReportWentToTime(false);
       setReportLoserConceded(false);
+      setReportP1DeckId('');
+      setReportP2DeckId('');
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -314,6 +338,76 @@ export default function MyLeagueInfoPage() {
                 </Button>
               )}
 
+              {/* Triad Strike Phase */}
+              {week.format_type === 'triad' && myMatchup.player1_started && myMatchup.player2_started && (() => {
+                const myStrike = myMatchup.strikes.find((s) => s.striking_user_id === user.id);
+                const opponentId = myMatchup.player1.id === user.id ? myMatchup.player2.id : myMatchup.player1.id;
+                const opponentSelections = week.deck_selections.filter((ds) => ds.user_id === opponentId);
+                const opponentStrike = myMatchup.strikes.find((s) => s.striking_user_id === opponentId);
+                const bothStruck = myMatchup.strikes.length >= 2;
+
+                return (
+                  <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                    <Typography variant="subtitle2" gutterBottom>Strike Phase</Typography>
+                    {!myStrike ? (
+                      <Box>
+                        <Typography variant="body2" sx={{ mb: 1 }}>Select one of your opponent's decks to strike:</Typography>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          <FormControl size="small" sx={{ minWidth: 250 }}>
+                            <InputLabel>Deck to strike</InputLabel>
+                            <Select
+                              value={strikeSelectionId}
+                              label="Deck to strike"
+                              onChange={(e) => setStrikeSelectionId(e.target.value as number)}
+                            >
+                              {opponentSelections.map((ds) => (
+                                <MenuItem key={ds.id} value={ds.id}>
+                                  Slot {ds.slot_number}: {ds.deck?.name || 'Unknown'}
+                                  {ds.deck?.sas_rating != null ? ` (SAS: ${ds.deck.sas_rating})` : ''}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <Button
+                            variant="contained"
+                            color="warning"
+                            onClick={() => handleSubmitStrike(myMatchup.id)}
+                            disabled={!strikeSelectionId}
+                          >
+                            Strike
+                          </Button>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Box>
+                        <Typography variant="body2" color="success.main">
+                          You have submitted your strike.
+                        </Typography>
+                        {bothStruck && opponentStrike && (
+                          <Box sx={{ mt: 1 }}>
+                            <Typography variant="body2">
+                              Opponent struck your deck: {
+                                week.deck_selections.find((ds) => ds.id === opponentStrike.struck_deck_selection_id)?.deck?.name || 'Unknown'
+                              }
+                            </Typography>
+                            <Typography variant="body2">
+                              You struck: {
+                                week.deck_selections.find((ds) => ds.id === myStrike.struck_deck_selection_id)?.deck?.name || 'Unknown'
+                              }
+                            </Typography>
+                          </Box>
+                        )}
+                        {!bothStruck && (
+                          <Typography variant="body2" color="text.secondary">
+                            Waiting for opponent to submit their strike...
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })()}
+
               {/* Games played */}
               {myMatchup.games.length > 0 && (
                 <Box sx={{ mb: 2 }}>
@@ -361,6 +455,57 @@ export default function MyLeagueInfoPage() {
                         <MenuItem value={myMatchup.player2.id}>{myMatchup.player2.name}</MenuItem>
                       </Select>
                     </FormControl>
+                    {week.format_type === 'triad' && (() => {
+                      const strickenSelIds = new Set(myMatchup.strikes.map((s) => s.struck_deck_selection_id));
+                      const p1Sels = week.deck_selections.filter(
+                        (ds) => ds.user_id === myMatchup.player1.id && !strickenSelIds.has(ds.id)
+                      );
+                      const p2Sels = week.deck_selections.filter(
+                        (ds) => ds.user_id === myMatchup.player2.id && !strickenSelIds.has(ds.id)
+                      );
+                      // Filter out decks that already won
+                      const p1WonDeckIds = new Set(
+                        myMatchup.games.filter((g) => g.winner_id === myMatchup.player1.id).map((g) => g.player1_deck_id)
+                      );
+                      const p2WonDeckIds = new Set(
+                        myMatchup.games.filter((g) => g.winner_id === myMatchup.player2.id).map((g) => g.player2_deck_id)
+                      );
+                      const p1Available = p1Sels.filter((ds) => ds.deck?.db_id && !p1WonDeckIds.has(ds.deck.db_id));
+                      const p2Available = p2Sels.filter((ds) => ds.deck?.db_id && !p2WonDeckIds.has(ds.deck.db_id));
+
+                      return (
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                          <FormControl size="small" sx={{ flex: 1 }}>
+                            <InputLabel>{myMatchup.player1.name}'s Deck</InputLabel>
+                            <Select
+                              value={reportP1DeckId}
+                              label={`${myMatchup.player1.name}'s Deck`}
+                              onChange={(e) => setReportP1DeckId(e.target.value as number)}
+                            >
+                              {p1Available.map((ds) => (
+                                <MenuItem key={ds.id} value={ds.deck!.db_id!}>
+                                  {ds.deck?.name || 'Unknown'}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <FormControl size="small" sx={{ flex: 1 }}>
+                            <InputLabel>{myMatchup.player2.name}'s Deck</InputLabel>
+                            <Select
+                              value={reportP2DeckId}
+                              label={`${myMatchup.player2.name}'s Deck`}
+                              onChange={(e) => setReportP2DeckId(e.target.value as number)}
+                            >
+                              {p2Available.map((ds) => (
+                                <MenuItem key={ds.id} value={ds.deck!.db_id!}>
+                                  {ds.deck?.name || 'Unknown'}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Box>
+                      );
+                    })()}
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       <FormControl size="small" sx={{ flex: 1 }}>
                         <InputLabel>{myMatchup.player1.name} Keys</InputLabel>

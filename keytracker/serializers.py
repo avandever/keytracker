@@ -229,12 +229,16 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
 
 
 def serialize_deck_selection(sel: PlayerDeckSelection) -> dict:
+    deck_data = None
+    if sel.deck:
+        deck_data = serialize_deck_summary(sel.deck)
+        deck_data["db_id"] = sel.deck.id
     return {
         "id": sel.id,
         "week_id": sel.week_id,
         "user_id": sel.user_id,
         "slot_number": sel.slot_number,
-        "deck": serialize_deck_summary(sel.deck) if sel.deck else None,
+        "deck": deck_data,
     }
 
 

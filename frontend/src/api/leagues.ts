@@ -237,6 +237,20 @@ export async function removeDeckSelection(
   await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}/deck-selection/${slot}${params}`);
 }
 
+// --- Strikes (Triad) ---
+
+export async function submitStrike(
+  leagueId: number,
+  matchupId: number,
+  struckDeckSelectionId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/strike`,
+    { struck_deck_selection_id: struckDeckSelectionId },
+  );
+  return data;
+}
+
 // --- Matches ---
 
 export async function startMatch(

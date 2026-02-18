@@ -13,6 +13,7 @@ from keytracker.schema import (
     PlayerMatchup,
     PlayerDeckSelection,
     MatchGame,
+    StrikeSelection,
     SignupStatus,
     WeekFormat,
     WeekStatus,
@@ -1201,6 +1202,48 @@ def submit_deck_selection(league_id, week_id):
         )
         db.session.add(sel)
 
+    db.session.flush()
+
+    # Triad-specific validation (when all slots are filled)
+    if week.format_type == WeekFormat.TRIAD.value:
+        all_selections = PlayerDeckSelection.query.filter_by(
+            week_id=week.id, user_id=target_user_id
+        ).all()
+        if len(all_selections) == 3:
+            selected_decks = [Deck.query.get(s.deck_id) for s in all_selections]
+            selected_decks = [d for d in selected_decks if d is not None]
+
+            # Combined max SAS
+            if week.combined_max_sas is not None:
+                total_sas = sum(d.sas_rating or 0 for d in selected_decks)
+                if total_sas > week.combined_max_sas:
+                    db.session.rollback()
+                    return jsonify({"error": f"Combined SAS ({total_sas}) exceeds limit ({week.combined_max_sas})"}), 400
+
+            # Set diversity: no two decks share an expansion
+            if week.set_diversity:
+                expansions = [d.expansion for d in selected_decks]
+                if len(set(expansions)) != len(expansions):
+                    db.session.rollback()
+                    return jsonify({"error": "Set diversity required: no two decks can share an expansion"}), 400
+
+            # House diversity: no two decks share any house
+            if week.house_diversity:
+                all_houses = []
+                for d in selected_decks:
+                    houses = {ps.house for ps in d.pod_stats if ps.house != "Archon Power"}
+                    if all_houses and houses & set().union(*[set(h) for h in all_houses]):
+                        # Check pairwise
+                        pass
+                    all_houses.append(houses)
+                # Check all pairs
+                for i in range(len(all_houses)):
+                    for j in range(i + 1, len(all_houses)):
+                        shared = all_houses[i] & all_houses[j]
+                        if shared:
+                            db.session.rollback()
+                            return jsonify({"error": f"House diversity required: decks share house(s): {', '.join(shared)}"}), 400
+
     db.session.commit()
 
     # Return all selections for this user/week
@@ -1249,6 +1292,63 @@ def remove_deck_selection(league_id, week_id, slot):
     db.session.delete(sel)
     db.session.commit()
     return jsonify({"success": True})
+
+
+# --- Strike phase (Triad) ---
+
+@blueprint.route("/<int:league_id>/matches/<int:matchup_id>/strike", methods=["POST"])
+@login_required
+def submit_strike(league_id, matchup_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.TRIAD.value:
+        return jsonify({"error": "Strikes are only for Triad format"}), 400
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    # Both must have started
+    if not pm.player1_started or not pm.player2_started:
+        return jsonify({"error": "Both players must start before striking"}), 400
+
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    # Check not already struck
+    existing_strike = StrikeSelection.query.filter_by(
+        player_matchup_id=pm.id, striking_user_id=effective.id
+    ).first()
+    if existing_strike:
+        return jsonify({"error": "You have already submitted a strike"}), 400
+
+    data = request.get_json(silent=True) or {}
+    struck_selection_id = data.get("struck_deck_selection_id")
+    if not struck_selection_id:
+        return jsonify({"error": "struck_deck_selection_id is required"}), 400
+
+    # Validate: struck deck must belong to the opponent
+    opponent_id = pm.player2_id if effective.id == pm.player1_id else pm.player1_id
+    struck_sel = db.session.get(PlayerDeckSelection, struck_selection_id)
+    if not struck_sel or struck_sel.user_id != opponent_id or struck_sel.week_id != week.id:
+        return jsonify({"error": "Invalid deck selection to strike"}), 400
+
+    strike = StrikeSelection(
+        player_matchup_id=pm.id,
+        striking_user_id=effective.id,
+        struck_deck_selection_id=struck_selection_id,
+    )
+    db.session.add(strike)
+    db.session.commit()
+
+    return jsonify(serialize_player_matchup(pm))
 
 
 # --- Match flow ---
@@ -1368,6 +1468,35 @@ def report_game(league_id, matchup_id):
     if not isinstance(p2_keys, int) or p2_keys < 0 or p2_keys > 3:
         return jsonify({"error": "player2_keys must be 0-3"}), 400
 
+    p1_deck_id = data.get("player1_deck_id")
+    p2_deck_id = data.get("player2_deck_id")
+
+    # Triad-specific validation
+    if week.format_type == WeekFormat.TRIAD.value:
+        if not p1_deck_id or not p2_deck_id:
+            return jsonify({"error": "player1_deck_id and player2_deck_id required for Triad"}), 400
+
+        # Get stricken deck selection IDs
+        stricken_sel_ids = {s.struck_deck_selection_id for s in pm.strikes}
+        stricken_deck_ids = set()
+        for sel_id in stricken_sel_ids:
+            sel = db.session.get(PlayerDeckSelection, sel_id)
+            if sel:
+                stricken_deck_ids.add(sel.deck_id)
+
+        # Validate decks aren't stricken
+        if p1_deck_id in stricken_deck_ids:
+            return jsonify({"error": "Player 1's selected deck has been stricken"}), 400
+        if p2_deck_id in stricken_deck_ids:
+            return jsonify({"error": "Player 2's selected deck has been stricken"}), 400
+
+        # Validate decks that already won can't be reused
+        for g in existing_games:
+            if g.winner_id == pm.player1_id and g.player1_deck_id == p1_deck_id:
+                return jsonify({"error": "Player 1's deck already won a game and cannot be reused"}), 400
+            if g.winner_id == pm.player2_id and g.player2_deck_id == p2_deck_id:
+                return jsonify({"error": "Player 2's deck already won a game and cannot be reused"}), 400
+
     game = MatchGame(
         player_matchup_id=pm.id,
         game_number=game_number,
@@ -1376,8 +1505,8 @@ def report_game(league_id, matchup_id):
         player2_keys=p2_keys,
         went_to_time=bool(data.get("went_to_time", False)),
         loser_conceded=bool(data.get("loser_conceded", False)),
-        player1_deck_id=data.get("player1_deck_id"),
-        player2_deck_id=data.get("player2_deck_id"),
+        player1_deck_id=p1_deck_id,
+        player2_deck_id=p2_deck_id,
         reported_by_id=effective.id,
     )
     db.session.add(game)

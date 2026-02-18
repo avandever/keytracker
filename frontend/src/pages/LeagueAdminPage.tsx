@@ -27,6 +27,8 @@ import {
   Chip,
   ListItemButton,
   Collapse,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -91,6 +93,10 @@ export default function LeagueAdminPage() {
   const [weekBestOf, setWeekBestOf] = useState('1');
   const [weekMaxSas, setWeekMaxSas] = useState('');
   const [weekAllowedSets, setWeekAllowedSets] = useState<number[]>([]);
+  // Triad-specific
+  const [weekCombinedMaxSas, setWeekCombinedMaxSas] = useState('');
+  const [weekSetDiversity, setWeekSetDiversity] = useState(false);
+  const [weekHouseDiversity, setWeekHouseDiversity] = useState(false);
   const [availableSets, setAvailableSets] = useState<KeyforgeSetInfo[]>([]);
 
   // Week expanded
@@ -197,12 +203,18 @@ export default function LeagueAdminPage() {
         best_of_n: parseInt(weekBestOf, 10) || 1,
         max_sas: weekMaxSas ? parseInt(weekMaxSas, 10) : null,
         allowed_sets: weekAllowedSets.length > 0 ? weekAllowedSets : null,
+        combined_max_sas: weekCombinedMaxSas ? parseInt(weekCombinedMaxSas, 10) : null,
+        set_diversity: weekSetDiversity || undefined,
+        house_diversity: weekHouseDiversity || undefined,
       });
       setSuccess('Week created!');
       setWeekFormat('archon_standard');
       setWeekBestOf('1');
       setWeekMaxSas('');
       setWeekAllowedSets([]);
+      setWeekCombinedMaxSas('');
+      setWeekSetDiversity(false);
+      setWeekHouseDiversity(false);
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -514,6 +526,35 @@ export default function LeagueAdminPage() {
               onChange={(e) => setWeekMaxSas(e.target.value)}
               type="number"
             />
+            {weekFormat === 'triad' && (
+              <>
+                <TextField
+                  label="Combined Max SAS (optional)"
+                  value={weekCombinedMaxSas}
+                  onChange={(e) => setWeekCombinedMaxSas(e.target.value)}
+                  type="number"
+                  helperText="Sum of all 3 decks' SAS must be at or below this"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={weekSetDiversity}
+                      onChange={(e) => setWeekSetDiversity(e.target.checked)}
+                    />
+                  }
+                  label="Set diversity (no two decks from same expansion)"
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={weekHouseDiversity}
+                      onChange={(e) => setWeekHouseDiversity(e.target.checked)}
+                    />
+                  }
+                  label="House diversity (no two decks share a house)"
+                />
+              </>
+            )}
             {availableSets.length > 0 && (
               <Box>
                 <Typography variant="subtitle2" gutterBottom>

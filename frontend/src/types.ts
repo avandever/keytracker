@@ -57,6 +57,7 @@ export interface DeckSummary {
   aerc_score: number | null;
   mv_url: string;
   dok_url: string;
+  db_id?: number;
 }
 
 export interface PodStat {
