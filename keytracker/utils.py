@@ -652,13 +652,13 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
         or datetime.datetime.utcnow() - deck.dok.last_refresh > SAS_TD
     ):
         update_sas_scores(deck)
-    if len(deck.cards_from_assoc) == 0:
-        refresh_deck_from_mv(deck)
-        db.session.refresh(deck)
-    if len(deck.pod_stats) == 0:
-        calculate_pod_stats(deck)
-        db.session.commit()
-        db.session.refresh(deck)
+    #if len(deck.cards_from_assoc) == 0:
+    #    refresh_deck_from_mv(deck)
+    #    db.session.refresh(deck)
+    #if len(deck.pod_stats) == 0:
+    #    calculate_pod_stats(deck)
+    #    db.session.commit()
+    #    db.session.refresh(deck)
     return deck
 
 
