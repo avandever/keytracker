@@ -90,6 +90,7 @@ export default function LeagueAdminPage() {
 
   // Week creation
   const [weekDialogOpen, setWeekDialogOpen] = useState(false);
+  const [weekName, setWeekName] = useState('');
   const [weekFormat, setWeekFormat] = useState('archon_standard');
   const [weekBestOf, setWeekBestOf] = useState('1');
   const [weekMaxSas, setWeekMaxSas] = useState('');
@@ -202,6 +203,7 @@ export default function LeagueAdminPage() {
     setWeekDialogOpen(false);
     try {
       await createWeek(league.id, {
+        name: weekName.trim() || undefined,
         format_type: weekFormat,
         best_of_n: parseInt(weekBestOf, 10) || 1,
         max_sas: weekMaxSas ? parseInt(weekMaxSas, 10) : null,
@@ -212,6 +214,7 @@ export default function LeagueAdminPage() {
         decks_per_player: weekFormat === 'sealed_archon' ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
       });
       setSuccess('Week created!');
+      setWeekName('');
       setWeekFormat('archon_standard');
       setWeekBestOf('1');
       setWeekMaxSas('');
@@ -448,7 +451,7 @@ export default function LeagueAdminPage() {
               <Box key={week.id} sx={{ mb: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                 <ListItemButton onClick={() => toggleWeekExpanded(week.id)} sx={{ py: 1 }}>
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flex: 1 }}>
-                    <Typography variant="subtitle1">Week {week.week_number}</Typography>
+                    <Typography variant="subtitle1">{week.name || `Week ${week.week_number}`}</Typography>
                     <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" />
                     <Chip label={week.status.replace('_', ' ')} size="small" color={STATUS_COLORS[week.status] || 'default'} />
                     <Typography variant="body2" color="text.secondary">
@@ -528,6 +531,12 @@ export default function LeagueAdminPage() {
         <DialogTitle>Add Week</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="Week Name (optional)"
+              value={weekName}
+              onChange={(e) => setWeekName(e.target.value)}
+              placeholder="e.g. Round 1, Finals, etc."
+            />
             <FormControl fullWidth>
               <InputLabel>Format</InputLabel>
               <Select value={weekFormat} label="Format" onChange={(e) => setWeekFormat(e.target.value)}>

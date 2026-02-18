@@ -203,6 +203,7 @@ export interface LeagueWeek {
   id: number;
   league_id: number;
   week_number: number;
+  name: string | null;
   format_type: string;
   status: string;
   best_of_n: number;

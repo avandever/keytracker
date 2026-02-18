@@ -146,7 +146,7 @@ export default function MyTeamPage() {
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Week {week.week_number}</Typography>
+            <Typography variant="h6">{week.name || `Week ${week.week_number}`}</Typography>
             <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" />
             <Chip label={week.status.replace('_', ' ')} size="small" color="info" />
           </Box>
@@ -330,7 +330,7 @@ export default function MyTeamPage() {
             scrollButtons="auto"
           >
             {weeks.map((w) => (
-              <Tab key={w.id} label={`Week ${w.week_number}`} />
+              <Tab key={w.id} label={w.name || `Week ${w.week_number}`} />
             ))}
           </Tabs>
           {weeks[weekTab] && renderWeekContent(weeks[weekTab])}

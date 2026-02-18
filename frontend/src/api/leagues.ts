@@ -167,6 +167,7 @@ export async function getWeeks(leagueId: number): Promise<LeagueWeek[]> {
 export async function createWeek(
   leagueId: number,
   payload: {
+    name?: string;
     format_type: string;
     best_of_n: number;
     allowed_sets?: number[] | null;

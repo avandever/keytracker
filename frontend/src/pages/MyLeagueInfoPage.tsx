@@ -726,7 +726,7 @@ export default function MyLeagueInfoPage() {
                 key={w.id}
                 label={
                   <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                    Week {w.week_number}
+                    {w.name || `Week ${w.week_number}`}
                     <Chip
                       label={FORMAT_LABELS[w.format_type] || w.format_type}
                       size="small"

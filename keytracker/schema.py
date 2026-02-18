@@ -941,6 +941,7 @@ class LeagueWeek(db.Model):
         db.Integer, db.ForeignKey("tracker_league.id"), nullable=False
     )
     week_number = db.Column(db.Integer, nullable=False)
+    name = db.Column(db.String(200), nullable=True)
     format_type = db.Column(db.String(30), nullable=False)
     status = db.Column(db.String(20), nullable=False, default=WeekStatus.SETUP.value)
     best_of_n = db.Column(db.Integer, nullable=False, default=1)

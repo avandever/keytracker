@@ -3,6 +3,7 @@ from flask_login import current_user, login_required
 from keytracker.schema import (
     db,
     Deck,
+    EXPANSION_VALUES,
     KeyforgeSet,
     League,
     LeagueAdmin,
@@ -682,9 +683,15 @@ def list_test_users():
 @blueprint.route("/sets", methods=["GET"])
 def list_sets():
     sets = KeyforgeSet.query.order_by(KeyforgeSet.number).all()
+    if sets:
+        return jsonify([
+            {"number": s.number, "name": s.name, "shortname": s.shortname}
+            for s in sets
+        ])
+    # Fallback to hardcoded EXPANSION_VALUES
     return jsonify([
-        {"number": s.number, "name": s.name, "shortname": s.shortname}
-        for s in sets
+        {"number": ev.number, "name": ev.name, "shortname": ev.shortname}
+        for ev in EXPANSION_VALUES
     ])
 
 
@@ -870,9 +877,12 @@ def create_week(league_id):
     if allowed_sets and isinstance(allowed_sets, list):
         allowed_sets_json = json.dumps(allowed_sets)
 
+    week_name = (data.get("name") or "").strip() or None
+
     week = LeagueWeek(
         league_id=league.id,
         week_number=max_week + 1,
+        name=week_name,
         format_type=format_type,
         status=WeekStatus.SETUP.value,
         best_of_n=best_of_n,
@@ -927,6 +937,8 @@ def update_week(league_id, week_id):
         return jsonify({"error": "Can only edit week during setup"}), 400
 
     data = request.get_json(silent=True) or {}
+    if "name" in data:
+        week.name = (data["name"] or "").strip() or None
     if "format_type" in data:
         valid_formats = [f.value for f in WeekFormat]
         if data["format_type"] in valid_formats:

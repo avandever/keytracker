@@ -79,7 +79,7 @@ export default function LeagueDetailPage() {
   if (!league) return null;
 
   const weeks = league.weeks || [];
-  const tabs = ['Teams & Players', ...weeks.map((w) => `Week ${w.week_number}`)];
+  const tabs = ['Teams & Players', ...weeks.map((w) => w.name || `Week ${w.week_number}`)];
 
   const renderWeekTab = (week: LeagueWeek) => {
     return (

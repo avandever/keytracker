@@ -179,6 +179,7 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "id": week.id,
         "league_id": week.league_id,
         "week_number": week.week_number,
+        "name": week.name,
         "format_type": week.format_type,
         "status": week.status,
         "best_of_n": week.best_of_n,
