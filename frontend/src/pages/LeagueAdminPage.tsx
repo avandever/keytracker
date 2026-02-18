@@ -44,6 +44,7 @@ import {
   openDeckSelection,
   generateMatchups,
   publishWeek,
+  generateSealedPools,
   getSets,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
@@ -97,6 +98,8 @@ export default function LeagueAdminPage() {
   const [weekCombinedMaxSas, setWeekCombinedMaxSas] = useState('');
   const [weekSetDiversity, setWeekSetDiversity] = useState(false);
   const [weekHouseDiversity, setWeekHouseDiversity] = useState(false);
+  // Sealed-specific
+  const [weekDecksPerPlayer, setWeekDecksPerPlayer] = useState('4');
   const [availableSets, setAvailableSets] = useState<KeyforgeSetInfo[]>([]);
 
   // Week expanded
@@ -206,6 +209,7 @@ export default function LeagueAdminPage() {
         combined_max_sas: weekCombinedMaxSas ? parseInt(weekCombinedMaxSas, 10) : null,
         set_diversity: weekSetDiversity || undefined,
         house_diversity: weekHouseDiversity || undefined,
+        decks_per_player: weekFormat === 'sealed_archon' ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
       });
       setSuccess('Week created!');
       setWeekFormat('archon_standard');
@@ -215,6 +219,7 @@ export default function LeagueAdminPage() {
       setWeekCombinedMaxSas('');
       setWeekSetDiversity(false);
       setWeekHouseDiversity(false);
+      setWeekDecksPerPlayer('4');
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -234,6 +239,9 @@ export default function LeagueAdminPage() {
       } else if (action === 'publish') {
         await publishWeek(league.id, weekId);
         setSuccess('Week published');
+      } else if (action === 'generate_sealed_pools') {
+        await generateSealedPools(league.id, weekId);
+        setSuccess('Sealed pools generated!');
       }
       refresh();
     } catch (e: any) {
@@ -257,28 +265,44 @@ export default function LeagueAdminPage() {
   };
 
   const renderWeekActions = (week: LeagueWeek) => {
+    const actions: React.ReactNode[] = [];
+
+    // Sealed pool generation
+    if (week.format_type === 'sealed_archon' && !week.sealed_pools_generated &&
+        (week.status === 'setup' || week.status === 'deck_selection')) {
+      actions.push(
+        <Button key="sealed" size="small" variant="contained" color="secondary"
+          onClick={() => handleWeekAction(week.id, 'generate_sealed_pools')}>
+          Generate Sealed Pools
+        </Button>
+      );
+    }
+
     switch (week.status) {
       case 'setup':
-        return (
-          <Button size="small" variant="contained" onClick={() => handleWeekAction(week.id, 'open_deck_selection')}>
+        actions.push(
+          <Button key="open" size="small" variant="contained" onClick={() => handleWeekAction(week.id, 'open_deck_selection')}>
             Open Deck Selection
           </Button>
         );
+        break;
       case 'deck_selection':
-        return (
-          <Button size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_matchups')}>
+        actions.push(
+          <Button key="matchups" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_matchups')}>
             Generate Matchups
           </Button>
         );
+        break;
       case 'pairing':
-        return (
-          <Button size="small" variant="contained" color="success" onClick={() => handleWeekAction(week.id, 'publish')}>
+        actions.push(
+          <Button key="publish" size="small" variant="contained" color="success" onClick={() => handleWeekAction(week.id, 'publish')}>
             Publish Pairings
           </Button>
         );
-      default:
-        return null;
+        break;
     }
+
+    return actions.length > 0 ? <Box sx={{ display: 'flex', gap: 1 }}>{actions}</Box> : null;
   };
 
   return (
@@ -554,6 +578,16 @@ export default function LeagueAdminPage() {
                   label="House diversity (no two decks share a house)"
                 />
               </>
+            )}
+            {weekFormat === 'sealed_archon' && (
+              <TextField
+                label="Decks per Player"
+                value={weekDecksPerPlayer}
+                onChange={(e) => setWeekDecksPerPlayer(e.target.value)}
+                type="number"
+                inputProps={{ min: '2' }}
+                helperText="Number of random decks each player receives in their sealed pool"
+              />
             )}
             {availableSets.length > 0 && (
               <Box>

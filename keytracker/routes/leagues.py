@@ -14,6 +14,7 @@ from keytracker.schema import (
     PlayerDeckSelection,
     MatchGame,
     StrikeSelection,
+    SealedPoolDeck,
     SignupStatus,
     WeekFormat,
     WeekStatus,
@@ -29,6 +30,7 @@ from keytracker.serializers import (
     serialize_week_matchup,
     serialize_player_matchup,
     serialize_deck_selection,
+    serialize_deck_summary,
     serialize_match_game,
     serialize_team_detail,
     serialize_user_brief,
@@ -1108,6 +1110,87 @@ def publish_week(league_id, week_id):
     return jsonify(serialize_league_week(week))
 
 
+# --- Sealed pool generation ---
+
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>/generate-sealed-pools", methods=["POST"])
+@login_required
+def generate_sealed_pools(league_id, week_id):
+    from sqlalchemy.sql.expression import func
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.format_type != WeekFormat.SEALED_ARCHON.value:
+        return jsonify({"error": "Sealed pools only for Sealed Archon format"}), 400
+    if week.sealed_pools_generated:
+        return jsonify({"error": "Sealed pools already generated"}), 400
+
+    decks_per_player = week.decks_per_player or 4
+    active_members = _get_active_players(league)
+    num_players = len(active_members)
+    total_decks_needed = decks_per_player * num_players
+
+    # Query random decks from allowed sets
+    query = Deck.query
+    if week.allowed_sets:
+        try:
+            allowed = json.loads(week.allowed_sets)
+            query = query.filter(Deck.expansion.in_(allowed))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    decks = query.order_by(func.rand()).limit(total_decks_needed).all()
+    if len(decks) < total_decks_needed:
+        return jsonify({
+            "error": f"Not enough decks in database ({len(decks)} available, {total_decks_needed} needed)"
+        }), 400
+
+    # Assign decks to players
+    random.shuffle(decks)
+    for i, member in enumerate(active_members):
+        player_decks = decks[i * decks_per_player:(i + 1) * decks_per_player]
+        for d in player_decks:
+            spd = SealedPoolDeck(
+                week_id=week.id,
+                user_id=member.user_id,
+                deck_id=d.id,
+            )
+            db.session.add(spd)
+
+    week.sealed_pools_generated = True
+    db.session.commit()
+    return jsonify(serialize_league_week(week))
+
+
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>/sealed-pool", methods=["GET"])
+@login_required
+def get_sealed_pool(league_id, week_id):
+    """Get the sealed pool for the current user."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+
+    effective = get_effective_user()
+    pool = SealedPoolDeck.query.filter_by(
+        week_id=week.id, user_id=effective.id
+    ).all()
+    return jsonify([
+        {
+            "id": spd.id,
+            "deck": serialize_deck_summary(spd.deck) if spd.deck else None,
+        }
+        for spd in pool
+    ])
+
+
 # --- Deck selection ---
 
 @blueprint.route("/<int:league_id>/weeks/<int:week_id>/deck-selection", methods=["POST"])
@@ -1152,25 +1235,41 @@ def submit_deck_selection(league_id, week_id):
     if not member:
         return jsonify({"error": "User is not a member of this league"}), 400
 
-    deck_url = (data.get("deck_url") or "").strip()
-    if not deck_url:
-        return jsonify({"error": "deck_url is required"}), 400
-
-    kf_id = _parse_deck_url(deck_url)
-    if not kf_id:
-        return jsonify({"error": "Could not parse deck ID from URL"}), 400
-
     slot_number = data.get("slot_number", 1)
     max_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
 
-    # Fetch/ensure deck in DB
-    try:
-        deck = get_deck_by_id_with_zeal(kf_id)
-    except Exception as e:
-        logger.error("Failed to fetch deck %s: %s", kf_id, e)
-        return jsonify({"error": f"Failed to fetch deck: {str(e)}"}), 400
+    # Sealed Archon: select from pool by deck_id
+    if week.format_type == WeekFormat.SEALED_ARCHON.value:
+        deck_db_id = data.get("deck_id")
+        if not deck_db_id:
+            return jsonify({"error": "deck_id is required for Sealed Archon"}), 400
+        # Verify deck is in player's sealed pool
+        pool_entry = SealedPoolDeck.query.filter_by(
+            week_id=week.id, user_id=target_user_id, deck_id=deck_db_id
+        ).first()
+        if not pool_entry:
+            return jsonify({"error": "Deck is not in your sealed pool"}), 400
+        deck = db.session.get(Deck, deck_db_id)
+        if not deck:
+            return jsonify({"error": "Deck not found"}), 400
+    else:
+        # Normal: parse deck URL
+        deck_url = (data.get("deck_url") or "").strip()
+        if not deck_url:
+            return jsonify({"error": "deck_url is required"}), 400
+
+        kf_id = _parse_deck_url(deck_url)
+        if not kf_id:
+            return jsonify({"error": "Could not parse deck ID from URL"}), 400
+
+        # Fetch/ensure deck in DB
+        try:
+            deck = get_deck_by_id_with_zeal(kf_id)
+        except Exception as e:
+            logger.error("Failed to fetch deck %s: %s", kf_id, e)
+            return jsonify({"error": f"Failed to fetch deck: {str(e)}"}), 400
 
     # Validate allowed sets
     if week.allowed_sets:

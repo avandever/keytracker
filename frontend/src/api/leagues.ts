@@ -6,6 +6,7 @@ import type {
   TeamDetail,
   DraftState,
   UserBrief,
+  DeckSummary,
   DeckSelectionInfo,
   PlayerMatchupInfo,
   MatchGameInfo,
@@ -235,6 +236,29 @@ export async function removeDeckSelection(
 ): Promise<void> {
   const params = userId ? `?user_id=${userId}` : '';
   await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}/deck-selection/${slot}${params}`);
+}
+
+// --- Sealed Pools ---
+
+export async function generateSealedPools(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/generate-sealed-pools`);
+  return data;
+}
+
+export interface SealedPoolEntry {
+  id: number;
+  deck: DeckSummary | null;
+}
+
+export async function getSealedPool(
+  leagueId: number,
+  weekId: number,
+): Promise<SealedPoolEntry[]> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/weeks/${weekId}/sealed-pool`);
+  return data;
 }
 
 // --- Strikes (Triad) ---

@@ -33,7 +33,9 @@ import {
   startMatch,
   reportGame,
   submitStrike,
+  getSealedPool,
 } from '../api/leagues';
+import type { SealedPoolEntry } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import type {
   LeagueDetail,
@@ -73,6 +75,10 @@ export default function MyLeagueInfoPage() {
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
   const [reportP2DeckId, setReportP2DeckId] = useState<number | ''>('');
 
+  // Sealed: pool and selection
+  const [sealedPools, setSealedPools] = useState<Record<number, SealedPoolEntry[]>>({});
+  const [sealedDeckId, setSealedDeckId] = useState<number | ''>('');
+
   const refresh = useCallback(() => {
     if (!leagueId) return;
     getLeague(parseInt(leagueId, 10))
@@ -101,6 +107,37 @@ export default function MyLeagueInfoPage() {
   const captain = myTeam.members.find((m) => m.is_captain);
   const myMember = myTeam.members.find((m) => m.user.id === user.id);
   const weeks = league.weeks || [];
+
+  const loadSealedPool = useCallback(async (weekId: number) => {
+    if (sealedPools[weekId]) return;
+    try {
+      const pool = await getSealedPool(league.id, weekId);
+      setSealedPools((prev) => ({ ...prev, [weekId]: pool }));
+    } catch {
+      // Silently fail — pool may not be generated yet
+    }
+  }, [league.id, sealedPools]);
+
+  const handleSubmitSealedDeck = async (weekId: number) => {
+    if (!sealedDeckId) return;
+    setError('');
+    setSuccess('');
+    setSubmitting(true);
+    try {
+      await submitDeckSelection(league.id, weekId, {
+        deck_url: '', // not used for sealed
+        deck_id: sealedDeckId as number,
+        slot_number: 1,
+      } as any);
+      setSealedDeckId('');
+      setSuccess('Deck selected!');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSubmitDeck = async (weekId: number, slotNumber: number = 1) => {
     if (!deckUrl.trim()) return;
@@ -262,7 +299,7 @@ export default function MyLeagueInfoPage() {
             )}
 
             {/* Submit new deck */}
-            {canSelectDeck && mySelections.length < maxSlots && (
+            {canSelectDeck && mySelections.length < maxSlots && week.format_type !== 'sealed_archon' && (
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                 <TextField
                   label="Deck URL or ID"
@@ -281,6 +318,71 @@ export default function MyLeagueInfoPage() {
                 </Button>
               </Box>
             )}
+
+            {/* Sealed Archon: show pool and dropdown */}
+            {week.format_type === 'sealed_archon' && canSelectDeck && mySelections.length < 1 && (() => {
+              // Load pool on first render
+              if (!sealedPools[week.id]) {
+                loadSealedPool(week.id);
+              }
+              const pool = sealedPools[week.id] || [];
+              return (
+                <Box>
+                  {pool.length > 0 ? (
+                    <>
+                      <Typography variant="subtitle2" gutterBottom>Your Sealed Pool</Typography>
+                      <Box sx={{ mb: 2 }}>
+                        {pool.map((entry) => (
+                          <Box key={entry.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                            <Typography variant="body2">{entry.deck?.name || 'Unknown'}</Typography>
+                            {entry.deck?.sas_rating != null && (
+                              <Chip label={`SAS: ${entry.deck.sas_rating}`} size="small" variant="outlined" />
+                            )}
+                            {entry.deck?.expansion_name && (
+                              <Chip label={entry.deck.expansion_name} size="small" variant="outlined" />
+                            )}
+                            {entry.deck && (
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <Link href={entry.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                                <Link href={entry.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                              </Box>
+                            )}
+                          </Box>
+                        ))}
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <FormControl size="small" sx={{ minWidth: 300 }}>
+                          <InputLabel>Select deck from pool</InputLabel>
+                          <Select
+                            value={sealedDeckId}
+                            label="Select deck from pool"
+                            onChange={(e) => setSealedDeckId(e.target.value as number)}
+                          >
+                            {pool.map((entry) => (
+                              <MenuItem key={entry.id} value={entry.deck?.db_id || 0}>
+                                {entry.deck?.name || 'Unknown'}
+                                {entry.deck?.sas_rating != null ? ` (SAS: ${entry.deck.sas_rating})` : ''}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <Button
+                          variant="contained"
+                          onClick={() => handleSubmitSealedDeck(week.id)}
+                          disabled={submitting || !sealedDeckId}
+                        >
+                          Select
+                        </Button>
+                      </Box>
+                    </>
+                  ) : (
+                    <Typography color="text.secondary">
+                      Sealed pools have not been generated yet.
+                    </Typography>
+                  )}
+                </Box>
+              );
+            })()}
 
             {!canSelectDeck && mySelections.length === 0 && week.status !== 'setup' && (
               <Typography color="text.secondary">No deck selected</Typography>
