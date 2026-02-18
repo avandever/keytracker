@@ -397,7 +397,7 @@ def house_stats_to_csv(pods: List[CsvPod]) -> IO:
 
 
 class MVApi:
-    def __init__(self, seconds_per_call: float = 5.0):
+    def __init__(self, seconds_per_call: float = 10.0):
         self.lock_sync = threading.Lock()
         self.last_call_time = 0.0
         self.seconds_per_call = seconds_per_call
