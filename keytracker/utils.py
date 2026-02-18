@@ -413,7 +413,7 @@ class MVApi:
             return response
 
 
-mv_api = MVApi(10.0)
+mv_api = MVApi(5.0)
 
 
 class CantAnonymize(Exception):
