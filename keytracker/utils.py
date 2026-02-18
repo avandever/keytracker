@@ -406,6 +406,7 @@ class MVApi:
         with self.lock_sync:
             time_since_last_call = time.time() - self.last_call_time
             time_to_sleep = max(0.0, self.seconds_per_call - time_since_last_call)
+            current_app.logger.debug(f"Sleeping {time_to_sleep} before calling mv api")
             time.sleep(time_to_sleep)
             self.last_call_time = time.time()
             response = requests.get(*args, **kwargs)
