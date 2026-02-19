@@ -1174,7 +1174,6 @@ def dump_page_json_to_file(
     response = mv_api.callMVSync(
         api_base,
         params=params,
-        headers={"X-Forwarded-For": randip()},
     )
     finished = False
     while tries and not finished:
@@ -1232,7 +1231,6 @@ def get_decks_from_page_v2(
     response = mv_api.callMVSync(
         api_base,
         params=params,
-        headers={"X-Forwarded-For": randip()},
     )
     finished = False
     while tries and not finished:
