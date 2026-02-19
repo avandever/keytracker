@@ -409,6 +409,7 @@ class MVApi:
             current_app.logger.debug(f"Sleeping {time_to_sleep} before calling mv api")
             time.sleep(time_to_sleep)
             self.last_call_time = time.time()
+            current_app.logger.debug(f"Calling {args}, {kwargs}")
             response = requests.get(*args, **kwargs)
             return response
 
