@@ -7,7 +7,11 @@ import {
   Chip,
   Container,
   Divider,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   TextField,
   Typography,
   CircularProgress,
@@ -24,9 +28,18 @@ export default function AccountPage() {
   const [dokSaving, setDokSaving] = useState(false);
   const [newTcoName, setNewTcoName] = useState('');
   const [tcoSaving, setTcoSaving] = useState(false);
+  const [dokProfileUrl, setDokProfileUrl] = useState(user?.dok_profile_url || '');
+  const [country, setCountry] = useState(user?.country || '');
+  const [timezone, setTimezone] = useState(user?.timezone || '');
+  const [profileSaving, setProfileSaving] = useState(false);
 
   useEffect(() => {
-    if (user) setDokKey(user.dok_api_key || '');
+    if (user) {
+      setDokKey(user.dok_api_key || '');
+      setDokProfileUrl(user.dok_profile_url || '');
+      setCountry(user.country || '');
+      setTimezone(user.timezone || '');
+    }
   }, [user]);
 
   useEffect(() => {
@@ -152,6 +165,80 @@ export default function AccountPage() {
             </Box>
           </>
         )}
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="h6" gutterBottom>
+          League Profile
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Required for league signup. Set your DoK profile, country, and timezone.
+        </Typography>
+        <TextField
+          fullWidth
+          size="small"
+          value={dokProfileUrl}
+          onChange={(e) => setDokProfileUrl(e.target.value)}
+          placeholder="https://decksofkeyforge.com/users/your-username"
+          label="DoK Profile URL"
+          sx={{ mb: 2 }}
+        />
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel>Country</InputLabel>
+          <Select value={country} label="Country" onChange={(e) => setCountry(e.target.value)}>
+            <MenuItem value="">-- Select --</MenuItem>
+            {[
+              'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Canada',
+              'Chile', 'China', 'Colombia', 'Czech Republic', 'Denmark', 'Finland',
+              'France', 'Germany', 'Greece', 'Hungary', 'India', 'Indonesia',
+              'Ireland', 'Israel', 'Italy', 'Japan', 'Malaysia', 'Mexico',
+              'Netherlands', 'New Zealand', 'Norway', 'Peru', 'Philippines',
+              'Poland', 'Portugal', 'Romania', 'Russia', 'Singapore',
+              'South Africa', 'South Korea', 'Spain', 'Sweden', 'Switzerland',
+              'Taiwan', 'Thailand', 'Turkey', 'Ukraine', 'United Kingdom',
+              'United States', 'Vietnam',
+            ].map((c) => (
+              <MenuItem key={c} value={c}>{c}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel>Timezone</InputLabel>
+          <Select value={timezone} label="Timezone" onChange={(e) => setTimezone(e.target.value)}>
+            <MenuItem value="">-- Select --</MenuItem>
+            {[
+              'NZST (UTC+12)', 'AEST (UTC+10)', 'JST (UTC+9)', 'CST-Asia (UTC+8)',
+              'IST (UTC+5:30)', 'EET (UTC+2)', 'CET (UTC+1)', 'GMT (UTC+0)',
+              'BRT (UTC-3)', 'EST (UTC-5)', 'CST (UTC-6)', 'MST (UTC-7)',
+              'PST (UTC-8)', 'AKST (UTC-9)', 'HST (UTC-10)',
+            ].map((tz) => (
+              <MenuItem key={tz} value={tz}>{tz}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Button
+          variant="contained"
+          size="small"
+          disabled={profileSaving}
+          onClick={async () => {
+            setProfileSaving(true);
+            try {
+              await updateSettings({
+                dok_profile_url: dokProfileUrl,
+                country,
+                timezone,
+              });
+              await refresh();
+              setAlert({ severity: 'success', message: 'League profile saved.' });
+            } catch (e: any) {
+              setAlert({ severity: 'error', message: e.response?.data?.error || 'Failed to save.' });
+            } finally {
+              setProfileSaving(false);
+            }
+          }}
+        >
+          {profileSaving ? 'Saving...' : 'Save Profile'}
+        </Button>
 
         <Divider sx={{ my: 3 }} />
 

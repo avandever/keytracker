@@ -21,7 +21,14 @@ def create(name, email):
         existing = User.query.filter_by(email=email).first()
         if existing:
             raise EmailExists(f"User with email {email} already exists")
-        user = User(name=name, email=email, is_test_user=True)
+        user = User(
+            name=name,
+            email=email,
+            is_test_user=True,
+            dok_profile_url="https://decksofkeyforge.com/users/xoque",
+            country="US",
+            timezone="PST (UTC-8)",
+        )
         db.session.add(user)
         db.session.commit()
 

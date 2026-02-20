@@ -191,6 +191,39 @@ def update_league(league_id):
     return jsonify(serialize_league_detail(league))
 
 
+@blueprint.route("/<int:league_id>", methods=["DELETE"])
+@login_required
+def delete_league(league_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    if not league.is_test:
+        return jsonify({"error": "Only test leagues can be deleted"}), 400
+
+    # Cascade delete all related data
+    for week in LeagueWeek.query.filter_by(league_id=league.id).all():
+        for matchup in WeekMatchup.query.filter_by(week_id=week.id).all():
+            for pm in PlayerMatchup.query.filter_by(week_matchup_id=matchup.id).all():
+                MatchGame.query.filter_by(player_matchup_id=pm.id).delete()
+                StrikeSelection.query.filter_by(player_matchup_id=pm.id).delete()
+                db.session.delete(pm)
+            db.session.delete(matchup)
+        PlayerDeckSelection.query.filter_by(week_id=week.id).delete()
+        SealedPoolDeck.query.filter_by(week_id=week.id).delete()
+        db.session.delete(week)
+    for team in Team.query.filter_by(league_id=league.id).all():
+        TeamMember.query.filter_by(team_id=team.id).delete()
+        DraftPick.query.filter_by(team_id=team.id).delete()
+        db.session.delete(team)
+    LeagueSignup.query.filter_by(league_id=league.id).delete()
+    LeagueAdmin.query.filter_by(league_id=league.id).delete()
+    db.session.delete(league)
+    db.session.commit()
+    return jsonify({"success": True}), 200
+
+
 # --- Signups ---
 
 @blueprint.route("/<int:league_id>/signup", methods=["POST"])
@@ -202,6 +235,15 @@ def signup(league_id):
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Signups only during setup"}), 400
     effective = get_effective_user()
+    if not effective.dok_profile_url or not effective.country or not effective.timezone:
+        return (
+            jsonify(
+                {
+                    "error": "You must set your DoK profile URL, country, and timezone in your account settings before signing up for a league."
+                }
+            ),
+            400,
+        )
     existing = LeagueSignup.query.filter_by(
         league_id=league.id, user_id=effective.id
     ).first()
@@ -867,6 +909,9 @@ def create_week(league_id):
     if not isinstance(best_of_n, int) or best_of_n < 1 or best_of_n % 2 == 0:
         return jsonify({"error": "best_of_n must be a positive odd integer"}), 400
 
+    if format_type == "triad":
+        best_of_n = 3
+
     # Determine next week number
     max_week = db.session.query(db.func.max(LeagueWeek.week_number)).filter_by(
         league_id=league.id
@@ -897,6 +942,33 @@ def create_week(league_id):
     db.session.commit()
     db.session.refresh(week)
     return jsonify(serialize_league_week(week)), 201
+
+
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>", methods=["DELETE"])
+@login_required
+def delete_week(league_id, week_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.status != WeekStatus.SETUP.value:
+        return jsonify({"error": "Can only delete weeks in setup status"}), 400
+
+    for matchup in WeekMatchup.query.filter_by(week_id=week.id).all():
+        for pm in PlayerMatchup.query.filter_by(week_matchup_id=matchup.id).all():
+            MatchGame.query.filter_by(player_matchup_id=pm.id).delete()
+            StrikeSelection.query.filter_by(player_matchup_id=pm.id).delete()
+            db.session.delete(pm)
+        db.session.delete(matchup)
+    PlayerDeckSelection.query.filter_by(week_id=week.id).delete()
+    SealedPoolDeck.query.filter_by(week_id=week.id).delete()
+    db.session.delete(week)
+    db.session.commit()
+    return jsonify({"success": True}), 200
 
 
 @blueprint.route("/<int:league_id>/weeks", methods=["GET"])

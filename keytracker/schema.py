@@ -770,6 +770,9 @@ class User(UserMixin, db.Model):
     is_league_admin = db.Column(db.Boolean, default=False, nullable=False)
     is_test_user = db.Column(db.Boolean, default=False, nullable=False)
     dok_api_key = db.Column(db.String(36), nullable=True)
+    dok_profile_url = db.Column(db.String(500), nullable=True)
+    country = db.Column(db.String(100), nullable=True)
+    timezone = db.Column(db.String(100), nullable=True)
     tco_usernames = db.relationship(
         "TcoUsername", back_populates="user", cascade="all, delete-orphan"
     )

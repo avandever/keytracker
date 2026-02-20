@@ -12,6 +12,7 @@ from keytracker.schema import (
     Log,
     Player,
     TcoUsername,
+    User,
 )
 from keytracker.serializers import (
     serialize_deck_detail,
@@ -58,6 +59,9 @@ def auth_me():
                 "dok_api_key": current_user.dok_api_key,
                 "tco_usernames": [t.username for t in current_user.tco_usernames],
                 "is_league_admin": current_user.is_league_admin,
+                "dok_profile_url": current_user.dok_profile_url,
+                "country": current_user.country,
+                "timezone": current_user.timezone,
             }
         )
     return jsonify({"error": "Not authenticated"}), 401
@@ -81,6 +85,27 @@ def auth_settings():
             current_user.dok_api_key = val
         else:
             return jsonify({"error": "Invalid DoK API key format (expected UUID v4)"}), 400
+    if "dok_profile_url" in data:
+        val = (data["dok_profile_url"] or "").strip()
+        if val == "":
+            current_user.dok_profile_url = None
+        elif val.startswith("https://decksofkeyforge.com/"):
+            current_user.dok_profile_url = val
+        else:
+            return (
+                jsonify(
+                    {
+                        "error": "DoK profile URL must start with https://decksofkeyforge.com/"
+                    }
+                ),
+                400,
+            )
+    if "country" in data:
+        val = (data["country"] or "").strip()
+        current_user.country = val if val else None
+    if "timezone" in data:
+        val = (data["timezone"] or "").strip()
+        current_user.timezone = val if val else None
     if "tco_usernames" in data:
         names = data["tco_usernames"]
         if not isinstance(names, list):
@@ -108,6 +133,9 @@ def auth_settings():
         "dok_api_key": current_user.dok_api_key,
         "tco_usernames": [t.username for t in current_user.tco_usernames],
         "is_league_admin": current_user.is_league_admin,
+        "dok_profile_url": current_user.dok_profile_url,
+        "country": current_user.country,
+        "timezone": current_user.timezone,
     })
 
 
@@ -379,3 +407,69 @@ def csv_pods():
         for pod in house_stats
     ]
     return jsonify(pods)
+
+
+# --- Admin ---
+
+ADMIN_EMAIL = "andrew.vandever@gmail.com"
+
+
+@blueprint.route("/admin/users", methods=["GET"])
+@login_required
+def admin_list_users():
+    if current_user.email != ADMIN_EMAIL:
+        return jsonify({"error": "Admin access required"}), 403
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 50, type=int)
+    per_page = min(per_page, 200)
+    q = User.query.order_by(User.id)
+    total = q.count()
+    users = q.offset((page - 1) * per_page).limit(per_page).all()
+    return jsonify(
+        {
+            "users": [
+                {
+                    "id": u.id,
+                    "name": u.name,
+                    "email": u.email,
+                    "is_member": u.is_member,
+                    "free_membership": u.free_membership,
+                    "is_patron": u.is_patron,
+                    "is_test_user": u.is_test_user,
+                    "is_league_admin": u.is_league_admin,
+                }
+                for u in users
+            ],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
+    )
+
+
+@blueprint.route("/admin/users/<int:user_id>", methods=["DELETE"])
+@login_required
+def admin_delete_user(user_id):
+    if current_user.email != ADMIN_EMAIL:
+        return jsonify({"error": "Admin access required"}), 403
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    if user.email == ADMIN_EMAIL:
+        return jsonify({"error": "Cannot delete admin user"}), 400
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"success": True}), 200
+
+
+@blueprint.route("/admin/users/<int:user_id>/free-membership", methods=["POST"])
+@login_required
+def admin_toggle_free_membership(user_id):
+    if current_user.email != ADMIN_EMAIL:
+        return jsonify({"error": "Admin access required"}), 403
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    user.free_membership = not user.free_membership
+    db.session.commit()
+    return jsonify({"success": True, "free_membership": user.free_membership}), 200

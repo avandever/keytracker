@@ -58,6 +58,11 @@ export default function AppBar() {
               <Button color="inherit" component={RouterLink} to="/my-games">
                 My Games
               </Button>
+              {user.email === 'andrew.vandever@gmail.com' && (
+                <Button color="inherit" component={RouterLink} to="/admin/users">
+                  Admin
+                </Button>
+              )}
               <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0 }}>
                 <Badge
                   invisible={!user.is_patron}

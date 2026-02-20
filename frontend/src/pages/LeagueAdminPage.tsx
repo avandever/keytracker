@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -46,6 +46,8 @@ import {
   publishWeek,
   generateSealedPools,
   getSets,
+  deleteLeague,
+  deleteWeek,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import type { LeagueDetail, KeyforgeSetInfo, LeagueWeek } from '../types';
@@ -66,6 +68,7 @@ const STATUS_COLORS: Record<string, 'default' | 'info' | 'warning' | 'success'> 
 
 export default function LeagueAdminPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
+  const navigate = useNavigate();
   useAuth();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,6 +108,10 @@ export default function LeagueAdminPage() {
 
   // Week expanded
   const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({});
+
+  // Delete dialogs
+  const [deleteLeagueDialogOpen, setDeleteLeagueDialogOpen] = useState(false);
+  const [deleteWeekId, setDeleteWeekId] = useState<number | null>(null);
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -252,6 +259,29 @@ export default function LeagueAdminPage() {
     }
   };
 
+  const handleDeleteLeague = async () => {
+    setDeleteLeagueDialogOpen(false);
+    setError('');
+    try {
+      await deleteLeague(league.id);
+      navigate('/leagues');
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleDeleteWeek = async (weekId: number) => {
+    setDeleteWeekId(null);
+    setError('');
+    try {
+      await deleteWeek(league.id, weekId);
+      setSuccess('Week deleted');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const toggleWeekExpanded = (weekId: number) => {
     setExpandedWeeks((prev) => ({ ...prev, [weekId]: !prev[weekId] }));
   };
@@ -286,6 +316,11 @@ export default function LeagueAdminPage() {
         actions.push(
           <Button key="open" size="small" variant="contained" onClick={() => handleWeekAction(week.id, 'open_deck_selection')}>
             Open Deck Selection
+          </Button>
+        );
+        actions.push(
+          <Button key="delete" size="small" variant="outlined" color="error" onClick={() => setDeleteWeekId(week.id)}>
+            Delete Week
           </Button>
         );
         break;
@@ -539,7 +574,11 @@ export default function LeagueAdminPage() {
             />
             <FormControl fullWidth>
               <InputLabel>Format</InputLabel>
-              <Select value={weekFormat} label="Format" onChange={(e) => setWeekFormat(e.target.value)}>
+              <Select value={weekFormat} label="Format" onChange={(e) => {
+                const fmt = e.target.value;
+                setWeekFormat(fmt);
+                if (fmt === 'triad') setWeekBestOf('3');
+              }}>
                 <MenuItem value="archon_standard">Archon Standard</MenuItem>
                 <MenuItem value="triad">Triad</MenuItem>
                 <MenuItem value="sealed_archon">Sealed Archon</MenuItem>
@@ -547,11 +586,21 @@ export default function LeagueAdminPage() {
             </FormControl>
             <FormControl fullWidth>
               <InputLabel>Best of</InputLabel>
-              <Select value={weekBestOf} label="Best of" onChange={(e) => setWeekBestOf(e.target.value)}>
+              <Select
+                value={weekBestOf}
+                label="Best of"
+                onChange={(e) => setWeekBestOf(e.target.value)}
+                disabled={weekFormat === 'triad'}
+              >
                 <MenuItem value="1">Best of 1</MenuItem>
                 <MenuItem value="3">Best of 3</MenuItem>
                 <MenuItem value="5">Best of 5</MenuItem>
               </Select>
+              {weekFormat === 'triad' && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Triad is always Best of 3
+                </Typography>
+              )}
             </FormControl>
             <TextField
               label="Max SAS (optional)"
@@ -622,6 +671,41 @@ export default function LeagueAdminPage() {
         <DialogActions>
           <Button onClick={() => setWeekDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleCreateWeek} variant="contained">Create Week</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete league button - test leagues only */}
+      {league.is_test && (
+        <Box sx={{ mt: 3, mb: 3 }}>
+          <Button variant="outlined" color="error" onClick={() => setDeleteLeagueDialogOpen(true)}>
+            Delete League
+          </Button>
+        </Box>
+      )}
+
+      <Dialog open={deleteLeagueDialogOpen} onClose={() => setDeleteLeagueDialogOpen(false)}>
+        <DialogTitle>Delete Test League?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this test league? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteLeagueDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleDeleteLeague} variant="contained" color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteWeekId !== null} onClose={() => setDeleteWeekId(null)}>
+        <DialogTitle>Delete Week?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete this week? This action cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteWeekId(null)}>Cancel</Button>
+          <Button onClick={() => deleteWeekId && handleDeleteWeek(deleteWeekId)} variant="contained" color="error">Delete</Button>
         </DialogActions>
       </Dialog>
     </Container>

@@ -18,6 +18,10 @@ import {
   Divider,
   Tab,
   Tabs,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import { getLeague, signup, withdraw } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +41,7 @@ export default function LeagueDetailPage() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [signupDialogOpen, setSignupDialogOpen] = useState(false);
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -50,6 +55,7 @@ export default function LeagueDetailPage() {
 
   const handleSignup = async () => {
     if (!leagueId) return;
+    setSignupDialogOpen(false);
     setActionLoading(true);
     try {
       await signup(parseInt(leagueId, 10));
@@ -264,7 +270,7 @@ export default function LeagueDetailPage() {
       {/* Action buttons */}
       <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
         {user && league.status === 'setup' && !league.is_signed_up && (
-          <Button variant="contained" onClick={handleSignup} disabled={actionLoading}>
+          <Button variant="contained" onClick={() => setSignupDialogOpen(true)} disabled={actionLoading}>
             Sign Up
           </Button>
         )}
@@ -321,6 +327,20 @@ export default function LeagueDetailPage() {
           {renderTeamsTab()}
         </>
       )}
+
+      <Dialog open={signupDialogOpen} onClose={() => setSignupDialogOpen(false)}>
+        <DialogTitle>Confirm Signup</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This league is more fun if you collaborate with your team! Please commit to actively
+            participating in your team's discord channel to participate in this league.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSignupDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSignup} variant="contained">I Commit</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

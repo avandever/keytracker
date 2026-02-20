@@ -57,6 +57,17 @@ export async function withdraw(leagueId: number): Promise<void> {
   await apiClient.delete(`/leagues/${leagueId}/signup`);
 }
 
+export async function deleteLeague(leagueId: number): Promise<void> {
+  await apiClient.delete(`/leagues/${leagueId}`);
+}
+
+export async function deleteWeek(
+  leagueId: number,
+  weekId: number,
+): Promise<void> {
+  await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}`);
+}
+
 export async function listTeams(leagueId: number): Promise<TeamDetail[]> {
   const { data } = await apiClient.get(`/leagues/${leagueId}/teams`);
   return data;
