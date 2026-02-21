@@ -1151,13 +1151,6 @@ def generate_team_pairings(league_id, week_id):
     if week.status != WeekStatus.DECK_SELECTION.value:
         return jsonify({"error": "Week must be in deck_selection status"}), 400
 
-    if week.week_number > 1:
-        prev_week = LeagueWeek.query.filter_by(
-            league_id=league.id, week_number=week.week_number - 1
-        ).first()
-        if prev_week and prev_week.status != WeekStatus.COMPLETED.value:
-            return jsonify({"error": "Previous week must be completed first"}), 400
-
     # Check all players have submitted deck selections
     required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
     active_members = _get_active_players(league)
@@ -1209,6 +1202,13 @@ def generate_player_matchups(league_id, week_id):
         return jsonify({"error": "Week not found"}), 404
     if week.status != WeekStatus.TEAM_PAIRED.value:
         return jsonify({"error": "Week must be in team_paired status"}), 400
+
+    if week.week_number > 1:
+        prev_week = LeagueWeek.query.filter_by(
+            league_id=league.id, week_number=week.week_number - 1
+        ).first()
+        if prev_week and prev_week.status != WeekStatus.COMPLETED.value:
+            return jsonify({"error": "Previous week must be completed before generating player matchups"}), 400
 
     matchups = WeekMatchup.query.filter_by(week_id=week.id).all()
     if not matchups:
