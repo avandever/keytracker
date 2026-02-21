@@ -402,6 +402,8 @@ export default function MyTeamPage() {
     );
   };
 
+  const topTabs = ['Membership', ...weeks.map((w) => w.name || `Week ${w.week_number}`)];
+
   return (
     <Container maxWidth="sm" sx={{ mt: 3 }}>
       <Typography variant="h4" gutterBottom>{league.name}</Typography>
@@ -409,82 +411,81 @@ export default function MyTeamPage() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>Team Name</Typography>
-          {isCaptain ? (
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                size="small"
-                fullWidth
-              />
-              <Button variant="contained" onClick={handleUpdateName}>Save</Button>
-            </Box>
-          ) : (
-            <Typography variant="body1">{myTeam.name}</Typography>
-          )}
-        </CardContent>
-      </Card>
+      <Tabs
+        value={weekTab}
+        onChange={(_, v) => setWeekTab(v)}
+        sx={{ mb: 2 }}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        {topTabs.map((label, i) => (
+          <Tab key={i} label={label} />
+        ))}
+      </Tabs>
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>Members</Typography>
-          <List>
-            {myTeam.members.map((m) => (
-              <ListItem key={m.id}>
-                <ListItemAvatar>
-                  <Avatar src={m.user.avatar_url || undefined} sx={{ width: 32, height: 32 }}>
-                    {m.user.name?.[0]}
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      {m.user.name}
-                      {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
-                    </Box>
-                  }
-                />
-                {league.fee_amount != null && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {m.has_paid ? 'Paid' : 'Unpaid'}
-                    </Typography>
-                    {isCaptain && (
-                      <Switch
-                        checked={m.has_paid}
-                        onChange={() => handleToggleFee(m.user.id, m.has_paid)}
-                        size="small"
-                      />
-                    )}
-                  </Box>
-                )}
-              </ListItem>
-            ))}
-          </List>
-        </CardContent>
-      </Card>
-
-      {/* Weekly tabs */}
-      {weeks.length > 0 && (
+      {weekTab === 0 && (
         <>
-          <Typography variant="h6" gutterBottom>Weeks</Typography>
-          <Tabs
-            value={weekTab}
-            onChange={(_, v) => setWeekTab(v)}
-            sx={{ mb: 2 }}
-            variant="scrollable"
-            scrollButtons="auto"
-          >
-            {weeks.map((w) => (
-              <Tab key={w.id} label={w.name || `Week ${w.week_number}`} />
-            ))}
-          </Tabs>
-          {weeks[weekTab] && renderWeekContent(weeks[weekTab])}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>Team Name</Typography>
+              {isCaptain ? (
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TextField
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    size="small"
+                    fullWidth
+                  />
+                  <Button variant="contained" onClick={handleUpdateName}>Save</Button>
+                </Box>
+              ) : (
+                <Typography variant="body1">{myTeam.name}</Typography>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>Members</Typography>
+              <List>
+                {myTeam.members.map((m) => (
+                  <ListItem key={m.id}>
+                    <ListItemAvatar>
+                      <Avatar src={m.user.avatar_url || undefined} sx={{ width: 32, height: 32 }}>
+                        {m.user.name?.[0]}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          {m.user.name}
+                          {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
+                        </Box>
+                      }
+                    />
+                    {league.fee_amount != null && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          {m.has_paid ? 'Paid' : 'Unpaid'}
+                        </Typography>
+                        {isCaptain && (
+                          <Switch
+                            checked={m.has_paid}
+                            onChange={() => handleToggleFee(m.user.id, m.has_paid)}
+                            size="small"
+                          />
+                        )}
+                      </Box>
+                    )}
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
         </>
       )}
+
+      {weekTab > 0 && weeks[weekTab - 1] && renderWeekContent(weeks[weekTab - 1])}
     </Container>
   );
 }
