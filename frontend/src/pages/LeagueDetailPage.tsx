@@ -280,7 +280,7 @@ export default function LeagueDetailPage() {
             Admin
           </Button>
         )}
-        {(league.is_admin || league.is_captain) && (league.status === 'drafting' || league.status === 'active') && (
+        {(league.is_admin || league.is_captain) && league.status === 'drafting' && (
           <Button variant="outlined" component={RouterLink} to={`/league/${league.id}/draft`}>
             Draft Board
           </Button>
