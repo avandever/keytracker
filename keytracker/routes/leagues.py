@@ -1401,17 +1401,17 @@ def submit_deck_selection(league_id, week_id):
 
     db.session.flush()
 
-    # Triad-specific validation (when all slots are filled)
+    # Triad-specific validation (check whenever 2+ decks selected)
     if week.format_type == WeekFormat.TRIAD.value:
         all_selections = PlayerDeckSelection.query.filter_by(
             week_id=week.id, user_id=target_user_id
         ).all()
-        if len(all_selections) == 3:
+        if len(all_selections) >= 2:
             selected_decks = [Deck.query.get(s.deck_id) for s in all_selections]
             selected_decks = [d for d in selected_decks if d is not None]
 
-            # Combined max SAS
-            if week.combined_max_sas is not None:
+            # Combined max SAS (only enforce when all 3 slots filled)
+            if len(all_selections) == 3 and week.combined_max_sas is not None:
                 total_sas = sum(d.sas_rating or 0 for d in selected_decks)
                 if total_sas > week.combined_max_sas:
                     db.session.rollback()
@@ -1429,11 +1429,7 @@ def submit_deck_selection(league_id, week_id):
                 all_houses = []
                 for d in selected_decks:
                     houses = {ps.house for ps in d.pod_stats if ps.house != "Archon Power"}
-                    if all_houses and houses & set().union(*[set(h) for h in all_houses]):
-                        # Check pairwise
-                        pass
                     all_houses.append(houses)
-                # Check all pairs
                 for i in range(len(all_houses)):
                     for j in range(i + 1, len(all_houses)):
                         shared = all_houses[i] & all_houses[j]
