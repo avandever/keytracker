@@ -74,14 +74,14 @@ def serialize_deck_summary(deck: Deck) -> dict:
         "aerc_score": deck.aerc_score,
         "mv_url": deck.mv_url,
         "dok_url": deck.dok_url,
+        "houses": sorted(
+            [ps.house for ps in deck.pod_stats if ps.house != "Archon Power"]
+        ),
     }
 
 
 def serialize_deck_detail(deck: Deck) -> dict:
     data = serialize_deck_summary(deck)
-    data["houses"] = sorted(
-        [ps.house for ps in deck.pod_stats if ps.house != "Archon Power"]
-    )
     data["pod_stats"] = [
         {
             "house": ps.house,

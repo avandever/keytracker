@@ -61,6 +61,7 @@ export interface DeckSummary {
   mv_url: string;
   dok_url: string;
   db_id?: number;
+  houses?: string[];
 }
 
 export interface PodStat {

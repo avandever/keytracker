@@ -33,6 +33,7 @@ import {
   removeDeckSelection,
   getSealedPool,
 } from '../api/leagues';
+import HouseIcons from '../components/HouseIcons';
 import { useAuth } from '../contexts/AuthContext';
 import type { LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
 import type { SealedPoolEntry } from '../api/leagues';
@@ -315,6 +316,7 @@ export default function MyTeamPage() {
                     return (
                       <Box key={slotNum} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, ml: 4 }}>
                         {maxSlots > 1 && <Chip label={`Slot ${slotNum}`} size="small" variant="outlined" />}
+                        {sel.deck?.houses && <HouseIcons houses={sel.deck.houses} />}
                         <Typography variant="body2">{sel.deck?.name || 'Unknown'}</Typography>
                         {sel.deck?.sas_rating != null && (
                           <Chip label={`SAS: ${sel.deck.sas_rating}`} size="small" variant="outlined" />

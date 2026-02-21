@@ -35,6 +35,7 @@ import {
   submitStrike,
   getSealedPool,
 } from '../api/leagues';
+import HouseIcons from '../components/HouseIcons';
 import type { SealedPoolEntry } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import type {
@@ -274,6 +275,7 @@ export default function MyLeagueInfoPage() {
                     {maxSlots > 1 && (
                       <Chip label={`Slot ${sel.slot_number}`} size="small" variant="outlined" />
                     )}
+                    {sel.deck?.houses && <HouseIcons houses={sel.deck.houses} />}
                     <Typography variant="body2">
                       {sel.deck?.name || 'Unknown deck'}
                     </Typography>
