@@ -409,35 +409,32 @@ export default function LeagueAdminPage() {
                     </IconButton>
                   )}
                 </Box>
-                {captain ? (
+                {captain && (
                   <Typography variant="body2" color="text.secondary">
                     Captain: {captain.user.name}
                   </Typography>
-                ) : (
-                  isSetup && (
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
-                      <FormControl size="small" sx={{ minWidth: 200 }}>
-                        <InputLabel>Assign Captain</InputLabel>
-                        <Select
-                          value={captainSelections[team.id] || ''}
-                          label="Assign Captain"
-                          onChange={(e) => setCaptainSelections({ ...captainSelections, [team.id]: e.target.value as number })}
-                        >
-                          {league.signups
-                            .filter((s) => !assignedCaptainIds.has(s.user.id))
-                            .map((s) => (
-                              <MenuItem key={s.user.id} value={s.user.id}>
-                                {s.user.name}
-                              </MenuItem>
-                            ))}
-                        </Select>
-                      </FormControl>
-                      <Button size="small" variant="outlined" onClick={() => handleAssignCaptain(team.id)}>
-                        Assign
-                      </Button>
-                    </Box>
-                  )
                 )}
+                <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
+                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <InputLabel>{captain ? 'Reassign Captain' : 'Assign Captain'}</InputLabel>
+                    <Select
+                      value={captainSelections[team.id] || ''}
+                      label={captain ? 'Reassign Captain' : 'Assign Captain'}
+                      onChange={(e) => setCaptainSelections({ ...captainSelections, [team.id]: e.target.value as number })}
+                    >
+                      {league.signups
+                        .filter((s) => !assignedCaptainIds.has(s.user.id))
+                        .map((s) => (
+                          <MenuItem key={s.user.id} value={s.user.id}>
+                            {s.user.name}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                  <Button size="small" variant="outlined" onClick={() => handleAssignCaptain(team.id)}>
+                    Assign
+                  </Button>
+                </Box>
                 {team.members.length > 0 && (
                   <List dense>
                     {team.members.map((m) => (
