@@ -316,9 +316,8 @@ export default function MyLeagueInfoPage() {
               </Box>
             )}
 
-            {/* Sealed Archon: show pool and dropdown */}
-            {week.format_type === 'sealed_archon' && canSelectDeck && mySelections.length < 1 && (() => {
-              // Load pool on first render
+            {/* Sealed Archon: always show pool, show dropdown only when selecting */}
+            {week.format_type === 'sealed_archon' && (() => {
               if (!sealedPools[week.id]) {
                 loadSealedPool(week.id);
               }
@@ -348,36 +347,38 @@ export default function MyLeagueInfoPage() {
                           </Box>
                         ))}
                       </Box>
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        <FormControl size="small" sx={{ minWidth: 300 }}>
-                          <InputLabel>Select deck from pool</InputLabel>
-                          <Select
-                            value={sealedDeckId}
-                            label="Select deck from pool"
-                            onChange={(e) => setSealedDeckId(e.target.value as number)}
+                      {canSelectDeck && mySelections.length < 1 && (
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                          <FormControl size="small" sx={{ minWidth: 300 }}>
+                            <InputLabel>Select deck from pool</InputLabel>
+                            <Select
+                              value={sealedDeckId}
+                              label="Select deck from pool"
+                              onChange={(e) => setSealedDeckId(e.target.value as number)}
+                            >
+                              {pool.map((entry) => (
+                                <MenuItem key={entry.id} value={entry.deck?.db_id || 0}>
+                                  {entry.deck?.name || 'Unknown'}
+                                  {entry.deck?.sas_rating != null ? ` (SAS: ${entry.deck.sas_rating})` : ''}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <Button
+                            variant="contained"
+                            onClick={() => handleSubmitSealedDeck(week.id)}
+                            disabled={submitting || !sealedDeckId}
                           >
-                            {pool.map((entry) => (
-                              <MenuItem key={entry.id} value={entry.deck?.db_id || 0}>
-                                {entry.deck?.name || 'Unknown'}
-                                {entry.deck?.sas_rating != null ? ` (SAS: ${entry.deck.sas_rating})` : ''}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <Button
-                          variant="contained"
-                          onClick={() => handleSubmitSealedDeck(week.id)}
-                          disabled={submitting || !sealedDeckId}
-                        >
-                          Select
-                        </Button>
-                      </Box>
+                            Select
+                          </Button>
+                        </Box>
+                      )}
                     </>
-                  ) : (
+                  ) : week.status !== 'setup' ? (
                     <Typography color="text.secondary">
                       Sealed pools have not been generated yet.
                     </Typography>
-                  )}
+                  ) : null}
                 </Box>
               );
             })()}
