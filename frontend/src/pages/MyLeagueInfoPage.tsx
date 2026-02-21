@@ -39,6 +39,7 @@ import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import type { SealedPoolEntry } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
+import { useTestUser } from '../contexts/TestUserContext';
 import type {
   LeagueDetail,
   LeagueWeek,
@@ -49,6 +50,8 @@ import type {
 export default function MyLeagueInfoPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const { user } = useAuth();
+  const { testUserId } = useTestUser();
+  const effectiveUserId = testUserId ?? user?.id;
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -112,7 +115,7 @@ export default function MyLeagueInfoPage() {
   }
 
   const captain = myTeam.members.find((m) => m.is_captain);
-  const myMember = myTeam.members.find((m) => m.user.id === user.id);
+  const myMember = myTeam.members.find((m) => m.user.id === effectiveUserId);
   const weeks = league.weeks || [];
 
   const handleSubmitSealedDeck = async (weekId: number) => {
@@ -225,7 +228,7 @@ export default function MyLeagueInfoPage() {
   const getMyMatchup = (week: LeagueWeek): PlayerMatchupInfo | null => {
     for (const wm of week.matchups) {
       for (const pm of wm.player_matchups) {
-        if (pm.player1.id === user.id || pm.player2.id === user.id) {
+        if (pm.player1.id === effectiveUserId || pm.player2.id === effectiveUserId) {
           return pm;
         }
       }
@@ -234,7 +237,7 @@ export default function MyLeagueInfoPage() {
   };
 
   const getMySelections = (week: LeagueWeek): DeckSelectionInfo[] => {
-    return week.deck_selections.filter((ds) => ds.user_id === user.id);
+    return week.deck_selections.filter((ds) => ds.user_id === effectiveUserId);
   };
 
   const isMatchDecided = (pm: PlayerMatchupInfo, bestOfN: number): boolean => {
@@ -411,7 +414,7 @@ export default function MyLeagueInfoPage() {
                   <Avatar src={myMatchup.player1.avatar_url || undefined} sx={{ width: 32, height: 32 }}>
                     {myMatchup.player1.name?.[0]}
                   </Avatar>
-                  <Typography fontWeight={myMatchup.player1.id === user.id ? 'bold' : 'normal'}>
+                  <Typography fontWeight={myMatchup.player1.id === effectiveUserId ? 'bold' : 'normal'}>
                     {myMatchup.player1.name}
                   </Typography>
                 </Box>
@@ -420,7 +423,7 @@ export default function MyLeagueInfoPage() {
                   <Avatar src={myMatchup.player2.avatar_url || undefined} sx={{ width: 32, height: 32 }}>
                     {myMatchup.player2.name?.[0]}
                   </Avatar>
-                  <Typography fontWeight={myMatchup.player2.id === user.id ? 'bold' : 'normal'}>
+                  <Typography fontWeight={myMatchup.player2.id === effectiveUserId ? 'bold' : 'normal'}>
                     {myMatchup.player2.name}
                   </Typography>
                 </Box>
@@ -441,8 +444,8 @@ export default function MyLeagueInfoPage() {
               </Box>
 
               {/* Start button */}
-              {((myMatchup.player1.id === user.id && !myMatchup.player1_started) ||
-                (myMatchup.player2.id === user.id && !myMatchup.player2_started)) && (
+              {((myMatchup.player1.id === effectiveUserId && !myMatchup.player1_started) ||
+                (myMatchup.player2.id === effectiveUserId && !myMatchup.player2_started)) && (
                 <Button variant="contained" onClick={() => handleStartMatch(myMatchup.id)} sx={{ mb: 2 }}>
                   Start Match
                 </Button>
@@ -450,8 +453,8 @@ export default function MyLeagueInfoPage() {
 
               {/* Triad Strike Phase */}
               {week.format_type === 'triad' && myMatchup.player1_started && myMatchup.player2_started && (() => {
-                const myStrike = myMatchup.strikes.find((s) => s.striking_user_id === user.id);
-                const opponentId = myMatchup.player1.id === user.id ? myMatchup.player2.id : myMatchup.player1.id;
+                const myStrike = myMatchup.strikes.find((s) => s.striking_user_id === effectiveUserId);
+                const opponentId = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.id : myMatchup.player1.id;
                 const opponentSelections = week.deck_selections.filter((ds) => ds.user_id === opponentId);
                 const opponentStrike = myMatchup.strikes.find((s) => s.striking_user_id === opponentId);
                 const bothStruck = myMatchup.strikes.length >= 2;
@@ -710,7 +713,7 @@ export default function MyLeagueInfoPage() {
                       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         {m.user.name}
                         {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
-                        {m.user.id === user.id && <Chip label="You" size="small" variant="outlined" />}
+                        {m.user.id === effectiveUserId && <Chip label="You" size="small" variant="outlined" />}
                       </Box>
                     }
                   />
