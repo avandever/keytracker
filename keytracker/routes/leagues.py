@@ -450,6 +450,14 @@ def reassign_member(league_id, team_id, member_user_id):
     member.user_id = new_user_id
     member.is_captain = was_captain
 
+    # Transfer deck selections from old user to new user
+    week_ids = [w.id for w in league.weeks]
+    if week_ids:
+        PlayerDeckSelection.query.filter(
+            PlayerDeckSelection.week_id.in_(week_ids),
+            PlayerDeckSelection.user_id == member_user_id,
+        ).update({PlayerDeckSelection.user_id: new_user_id}, synchronize_session=False)
+
     db.session.commit()
     db.session.refresh(team)
     return jsonify(serialize_team_detail(team))
