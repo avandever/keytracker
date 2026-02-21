@@ -407,6 +407,54 @@ def assign_captain(league_id, team_id):
     return jsonify(serialize_team_detail(team))
 
 
+# --- Member reassignment ---
+
+@blueprint.route("/<int:league_id>/teams/<int:team_id>/members/<int:member_user_id>", methods=["PUT"])
+@login_required
+def reassign_member(league_id, team_id, member_user_id):
+    """Replace a team member with a different signed-up user."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    team = db.session.get(Team, team_id)
+    if not team or team.league_id != league.id:
+        return jsonify({"error": "Team not found"}), 404
+    data = request.get_json(silent=True) or {}
+    new_user_id = data.get("new_user_id")
+    if not new_user_id:
+        return jsonify({"error": "new_user_id is required"}), 400
+
+    # Find the existing member
+    member = TeamMember.query.filter_by(team_id=team.id, user_id=member_user_id).first()
+    if not member:
+        return jsonify({"error": "Member not found on this team"}), 404
+
+    # Verify new user is signed up
+    new_signup = LeagueSignup.query.filter_by(
+        league_id=league.id, user_id=new_user_id
+    ).first()
+    if not new_signup:
+        return jsonify({"error": "New user must be signed up for the league"}), 400
+
+    # Verify new user isn't already on a team
+    existing = TeamMember.query.filter(
+        TeamMember.user_id == new_user_id,
+        TeamMember.team_id.in_([t.id for t in league.teams]),
+    ).first()
+    if existing:
+        return jsonify({"error": "New user is already on a team"}), 400
+
+    was_captain = member.is_captain
+    member.user_id = new_user_id
+    member.is_captain = was_captain
+
+    db.session.commit()
+    db.session.refresh(team)
+    return jsonify(serialize_team_detail(team))
+
+
 # --- Fee tracking ---
 
 @blueprint.route("/<int:league_id>/teams/<int:team_id>/fees/<int:user_id>", methods=["POST"])

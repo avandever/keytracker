@@ -109,6 +109,19 @@ export async function assignCaptain(
   return data;
 }
 
+export async function reassignMember(
+  leagueId: number,
+  teamId: number,
+  memberUserId: number,
+  newUserId: number,
+): Promise<TeamDetail> {
+  const { data } = await apiClient.put(
+    `/leagues/${leagueId}/teams/${teamId}/members/${memberUserId}`,
+    { new_user_id: newUserId },
+  );
+  return data;
+}
+
 export async function toggleFeePaid(
   leagueId: number,
   teamId: number,

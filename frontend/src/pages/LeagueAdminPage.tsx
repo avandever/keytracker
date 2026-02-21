@@ -41,6 +41,7 @@ import {
   createTeam,
   deleteTeam,
   assignCaptain,
+  reassignMember,
   startDraft,
   createWeek,
   openDeckSelection,
@@ -93,6 +94,10 @@ export default function LeagueAdminPage() {
 
   // Captain assignment
   const [captainSelections, setCaptainSelections] = useState<Record<number, number>>({});
+
+  // Member reassignment: key is `${teamId}-${userId}`, value is the new user id
+  const [reassignSelections, setReassignSelections] = useState<Record<string, number>>({});
+  const [reassigningMember, setReassigningMember] = useState<string | null>(null);
 
   // Start draft dialog
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
@@ -202,6 +207,22 @@ export default function LeagueAdminPage() {
     }
   };
 
+  const handleReassignMember = async (teamId: number, memberUserId: number) => {
+    const key = `${teamId}-${memberUserId}`;
+    const newUserId = reassignSelections[key];
+    if (!newUserId) return;
+    setError('');
+    try {
+      await reassignMember(league.id, teamId, memberUserId, newUserId);
+      setReassigningMember(null);
+      setReassignSelections((prev) => ({ ...prev, [key]: 0 }));
+      setSuccess('Member reassigned');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const handleStartDraft = async () => {
     setError('');
     setDraftDialogOpen(false);
@@ -305,6 +326,14 @@ export default function LeagueAdminPage() {
   const assignedCaptainIds = new Set(
     league.teams.flatMap((t) => t.members.filter((m) => m.is_captain).map((m) => m.user.id))
   );
+
+  // All user IDs currently on teams
+  const allTeamMemberIds = new Set(
+    league.teams.flatMap((t) => t.members.map((m) => m.user.id))
+  );
+
+  // Signed-up users not on any team (available for reassignment)
+  const availableForReassign = league.signups.filter((s) => !allTeamMemberIds.has(s.user.id));
 
   const toggleSet = (setNumber: number) => {
     setWeekAllowedSets((prev) =>
@@ -457,18 +486,65 @@ export default function LeagueAdminPage() {
                     </Box>
                     {team.members.length > 0 && (
                       <List dense>
-                        {team.members.map((m) => (
-                          <ListItem key={m.id} sx={{ py: 0 }}>
-                            <ListItemAvatar>
-                              <Avatar src={m.user.avatar_url || undefined} sx={{ width: 24, height: 24 }}>
-                                {m.user.name?.[0]}
-                              </Avatar>
-                            </ListItemAvatar>
-                            <ListItemText
-                              primary={`${m.user.name}${m.is_captain ? ' (Captain)' : ''}`}
-                            />
-                          </ListItem>
-                        ))}
+                        {team.members.map((m) => {
+                          const reassignKey = `${team.id}-${m.user.id}`;
+                          const isReassigning = reassigningMember === reassignKey;
+                          return (
+                            <ListItem key={m.id} sx={{ py: 0.5, flexWrap: 'wrap' }}>
+                              <ListItemAvatar>
+                                <Avatar src={m.user.avatar_url || undefined} sx={{ width: 24, height: 24 }}>
+                                  {m.user.name?.[0]}
+                                </Avatar>
+                              </ListItemAvatar>
+                              <ListItemText
+                                primary={`${m.user.name}${m.is_captain ? ' (Captain)' : ''}`}
+                              />
+                              {!isReassigning ? (
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  onClick={() => setReassigningMember(reassignKey)}
+                                >
+                                  Replace
+                                </Button>
+                              ) : (
+                                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', width: '100%', ml: 7, mt: 0.5 }}>
+                                  <FormControl size="small" sx={{ minWidth: 180 }}>
+                                    <InputLabel>Replace with</InputLabel>
+                                    <Select
+                                      value={reassignSelections[reassignKey] || ''}
+                                      label="Replace with"
+                                      onChange={(e) => setReassignSelections((prev) => ({
+                                        ...prev,
+                                        [reassignKey]: e.target.value as number,
+                                      }))}
+                                    >
+                                      {availableForReassign.map((s) => (
+                                        <MenuItem key={s.user.id} value={s.user.id}>
+                                          {s.user.name}
+                                        </MenuItem>
+                                      ))}
+                                    </Select>
+                                  </FormControl>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => handleReassignMember(team.id, m.user.id)}
+                                    disabled={!reassignSelections[reassignKey]}
+                                  >
+                                    Confirm
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    onClick={() => setReassigningMember(null)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </Box>
+                              )}
+                            </ListItem>
+                          );
+                        })}
                       </List>
                     )}
                   </Box>
