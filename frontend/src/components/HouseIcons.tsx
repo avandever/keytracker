@@ -6,6 +6,7 @@ const S3_BASE = 'https://mastervault-storage-prod.s3.amazonaws.com/media/houses'
 const HOUSE_FILE_OVERRIDES: Record<string, string> = {
   Geistoid: 'KF_Geistoid',
   Ekwidon: 'Ekwidon200',
+  'Star Alliance': 'Star_Alliance',
 };
 
 function houseImageUrl(house: string): string {
