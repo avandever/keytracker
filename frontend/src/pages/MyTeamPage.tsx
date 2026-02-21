@@ -309,6 +309,36 @@ export default function MyTeamPage() {
                   {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
                 </Box>
 
+                {/* Sealed pool display */}
+                {week.format_type === 'sealed_archon' && (() => {
+                  const poolKey = `${week.id}-${m.user.id}`;
+                  const pool = sealedPools[poolKey];
+                  if (!pool || pool.length === 0) return null;
+                  return (
+                    <Box sx={{ ml: 4, mb: 1 }}>
+                      <Typography variant="caption" color="text.secondary">Sealed Pool:</Typography>
+                      {pool.map((entry) => (
+                        <Box key={entry.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                          {entry.deck?.houses && <HouseIcons houses={entry.deck.houses} />}
+                          <Typography variant="body2">{entry.deck?.name || 'Unknown'}</Typography>
+                          {entry.deck?.sas_rating != null && (
+                            <Chip label={`SAS: ${entry.deck.sas_rating}`} size="small" variant="outlined" />
+                          )}
+                          {entry.deck?.expansion_name && (
+                            <Chip label={entry.deck.expansion_name} size="small" variant="outlined" />
+                          )}
+                          {entry.deck && (
+                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                              <Link href={entry.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                              <Link href={entry.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                            </Box>
+                          )}
+                        </Box>
+                      ))}
+                    </Box>
+                  );
+                })()}
+
                 {/* Render all slots */}
                 {Array.from({ length: maxSlots }, (_, i) => i + 1).map((slotNum) => {
                   const sel = selections.find((s) => s.slot_number === slotNum);
