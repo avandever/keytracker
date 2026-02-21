@@ -1,14 +1,20 @@
 import { Chip } from '@mui/material';
-import type { LeagueWeek } from '../types';
+import type { KeyforgeSetInfo, LeagueWeek } from '../types';
 
 interface WeekConstraintsProps {
   week: LeagueWeek;
   size?: 'small' | 'medium';
+  sets?: KeyforgeSetInfo[];
 }
 
-export default function WeekConstraints({ week, size = 'small' }: WeekConstraintsProps) {
+export default function WeekConstraints({ week, size = 'small', sets }: WeekConstraintsProps) {
   const chips: React.ReactNode[] = [];
 
+  if (week.allowed_sets && week.allowed_sets.length > 0) {
+    const setMap = new Map((sets || []).map((s) => [s.number, s.shortname]));
+    const labels = week.allowed_sets.map((n) => setMap.get(n) ?? String(n));
+    chips.push(<Chip key="allowed-sets" label={`Sets: ${labels.join(', ')}`} size={size} variant="outlined" color="secondary" />);
+  }
   if (week.max_sas) {
     chips.push(<Chip key="max-sas" label={`Max SAS: ${week.max_sas}`} size={size} variant="outlined" />);
   }

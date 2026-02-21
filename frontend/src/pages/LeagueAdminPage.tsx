@@ -127,6 +127,10 @@ export default function LeagueAdminPage() {
   const [deleteLeagueDialogOpen, setDeleteLeagueDialogOpen] = useState(false);
   const [deleteWeekId, setDeleteWeekId] = useState<number | null>(null);
 
+  // Force-matchup confirmation (when some players haven't submitted decks)
+  const [forceMatchupWeekId, setForceMatchupWeekId] = useState<number | null>(null);
+  const [forceMatchupMissing, setForceMatchupMissing] = useState<string[]>([]);
+
   const refresh = useCallback(() => {
     if (!leagueId) return;
     getLeague(parseInt(leagueId, 10))
@@ -280,8 +284,17 @@ export default function LeagueAdminPage() {
         await generateTeamPairings(league.id, weekId);
         setSuccess('Team pairings generated');
       } else if (action === 'generate_player_matchups') {
-        await generatePlayerMatchups(league.id, weekId);
-        setSuccess('Player matchups generated');
+        try {
+          await generatePlayerMatchups(league.id, weekId);
+          setSuccess('Player matchups generated');
+        } catch (matchupErr: any) {
+          if (matchupErr.response?.data?.incomplete_decks) {
+            setForceMatchupMissing(matchupErr.response.data.missing || []);
+            setForceMatchupWeekId(weekId);
+            return;
+          }
+          throw matchupErr;
+        }
       } else if (action === 'publish') {
         await publishWeek(league.id, weekId);
         setSuccess('Week published');
@@ -289,6 +302,21 @@ export default function LeagueAdminPage() {
         await generateSealedPools(league.id, weekId);
         setSuccess('Sealed pools generated!');
       }
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleForcePlayerMatchups = async () => {
+    if (forceMatchupWeekId === null) return;
+    const weekId = forceMatchupWeekId;
+    setForceMatchupWeekId(null);
+    setForceMatchupMissing([]);
+    setError('');
+    try {
+      await generatePlayerMatchups(league.id, weekId, true);
+      setSuccess('Player matchups generated');
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -619,7 +647,7 @@ export default function LeagueAdminPage() {
                     <Typography variant="body2" color="text.secondary">
                       Bo{week.best_of_n}
                     </Typography>
-                    <WeekConstraints week={week} />
+                    <WeekConstraints week={week} sets={availableSets} />
                   </Box>
                   {expandedWeeks[week.id] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                 </ListItemButton>
@@ -794,6 +822,25 @@ export default function LeagueAdminPage() {
         <DialogActions>
           <Button onClick={() => setWeekDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleCreateWeek} variant="contained">Create Week</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={forceMatchupWeekId !== null} onClose={() => { setForceMatchupWeekId(null); setForceMatchupMissing([]); }}>
+        <DialogTitle>Some Deck Selections Missing</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            The following players have not submitted all their deck selections:
+          </Typography>
+          <Box component="ul" sx={{ mt: 0, pl: 3 }}>
+            {forceMatchupMissing.map((name) => (
+              <li key={name}><Typography variant="body2">{name}</Typography></li>
+            ))}
+          </Box>
+          <Typography>Generate player matchups anyway?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setForceMatchupWeekId(null); setForceMatchupMissing([]); }}>Cancel</Button>
+          <Button onClick={handleForcePlayerMatchups} variant="contained" color="warning">Generate Anyway</Button>
         </DialogActions>
       </Dialog>
 

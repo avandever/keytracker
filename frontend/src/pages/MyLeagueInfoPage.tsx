@@ -34,6 +34,7 @@ import {
   reportGame,
   submitStrike,
   getSealedPool,
+  getSets,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
@@ -41,6 +42,7 @@ import type { SealedPoolEntry } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import { useTestUser } from '../contexts/TestUserContext';
 import type {
+  KeyforgeSetInfo,
   LeagueDetail,
   LeagueWeek,
   PlayerMatchupInfo,
@@ -53,6 +55,7 @@ export default function MyLeagueInfoPage() {
   const { testUserId } = useTestUser();
   const effectiveUserId = testUserId ?? user?.id;
   const [league, setLeague] = useState<LeagueDetail | null>(null);
+  const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -100,6 +103,7 @@ export default function MyLeagueInfoPage() {
   }, [league, sealedPools]);
 
   useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
   if (error && !league) return <Container sx={{ mt: 3 }}><Alert severity="error">{error}</Alert></Container>;
@@ -267,7 +271,7 @@ export default function MyLeagueInfoPage() {
 
             {/* Week constraints */}
             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
-              <WeekConstraints week={week} />
+              <WeekConstraints week={week} sets={sets} />
             </Box>
 
             {/* Current selections */}

@@ -242,8 +242,12 @@ export async function generateTeamPairings(
 export async function generatePlayerMatchups(
   leagueId: number,
   weekId: number,
+  force?: boolean,
 ): Promise<LeagueWeek> {
-  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/generate-player-matchups`);
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/generate-player-matchups`,
+    force ? { force: true } : {},
+  );
   return data;
 }
 

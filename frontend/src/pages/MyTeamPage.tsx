@@ -24,6 +24,10 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   getLeague,
@@ -32,11 +36,12 @@ import {
   submitDeckSelection,
   removeDeckSelection,
   getSealedPool,
+  getSets,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import { useAuth } from '../contexts/AuthContext';
-import type { LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
+import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
 import type { SealedPoolEntry } from '../api/leagues';
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -54,6 +59,15 @@ export default function MyTeamPage() {
   const [success, setSuccess] = useState('');
   const [editName, setEditName] = useState('');
   const [weekTab, setWeekTab] = useState(0);
+
+  // Available sets for constraint display
+  const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
+
+  // Captain override confirmation for PAIRING status
+  type PendingDeckAction =
+    | { type: 'submit'; weekId: number; userId: number; slotNumber: number; playerName: string }
+    | { type: 'remove'; weekId: number; slot: number; userId: number; playerName: string };
+  const [pendingDeckAction, setPendingDeckAction] = useState<PendingDeckAction | null>(null);
 
   // Deck submission state
   const [teammateDeckUrls, setTeammateDeckUrls] = useState<Record<string, string>>({});
@@ -76,6 +90,8 @@ export default function MyTeamPage() {
   }, [leagueId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
   // Fetch sealed pools for sealed_archon weeks
   useEffect(() => {
@@ -148,7 +164,7 @@ export default function MyTeamPage() {
     }
   };
 
-  const handleSubmitDeck = async (weekId: number, userId: number, slotNumber: number) => {
+  const doSubmitDeck = async (weekId: number, userId: number, slotNumber: number) => {
     const key = `${weekId}-${userId}-${slotNumber}`;
     const url = teammateDeckUrls[key];
     if (!url?.trim()) return;
@@ -169,7 +185,7 @@ export default function MyTeamPage() {
     }
   };
 
-  const handleSubmitSealed = async (weekId: number, userId: number, slotNumber: number) => {
+  const doSubmitSealed = async (weekId: number, userId: number, slotNumber: number) => {
     const key = `${weekId}-${userId}-${slotNumber}`;
     const deckId = sealedSelections[key];
     if (!deckId) return;
@@ -190,7 +206,7 @@ export default function MyTeamPage() {
     }
   };
 
-  const handleRemoveDeck = async (weekId: number, slot: number, userId: number) => {
+  const doRemoveDeck = async (weekId: number, slot: number, userId: number) => {
     setError('');
     try {
       await removeDeckSelection(league.id, weekId, slot, userId !== user.id ? userId : undefined);
@@ -198,6 +214,58 @@ export default function MyTeamPage() {
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  // Returns the player's display name from team member list
+  const getPlayerName = (userId: number): string => {
+    for (const team of league.teams) {
+      const m = team.members.find((tm) => tm.user.id === userId);
+      if (m) return m.user.name || `User ${userId}`;
+    }
+    return `User ${userId}`;
+  };
+
+  // Wrap deck actions: captain editing a teammate's deck in PAIRING status gets a confirmation
+  const needsPairingWarning = (weekId: number, userId: number): boolean => {
+    if (!isCaptain) return false;
+    if (userId === user.id) return false;
+    const week = (league.weeks || []).find((w) => w.id === weekId);
+    return week?.status === 'pairing';
+  };
+
+  const handleSubmitDeck = (weekId: number, userId: number, slotNumber: number) => {
+    if (needsPairingWarning(weekId, userId)) {
+      setPendingDeckAction({ type: 'submit', weekId, userId, slotNumber, playerName: getPlayerName(userId) });
+    } else {
+      doSubmitDeck(weekId, userId, slotNumber);
+    }
+  };
+
+  const handleSubmitSealed = (weekId: number, userId: number, slotNumber: number) => {
+    if (needsPairingWarning(weekId, userId)) {
+      setPendingDeckAction({ type: 'submit', weekId, userId, slotNumber, playerName: getPlayerName(userId) });
+    } else {
+      doSubmitSealed(weekId, userId, slotNumber);
+    }
+  };
+
+  const handleRemoveDeck = (weekId: number, slot: number, userId: number) => {
+    if (needsPairingWarning(weekId, userId)) {
+      setPendingDeckAction({ type: 'remove', weekId, slot, userId, playerName: getPlayerName(userId) });
+    } else {
+      doRemoveDeck(weekId, slot, userId);
+    }
+  };
+
+  const handleConfirmDeckAction = () => {
+    if (!pendingDeckAction) return;
+    const action = pendingDeckAction;
+    setPendingDeckAction(null);
+    if (action.type === 'submit') {
+      doSubmitDeck(action.weekId, action.userId, action.slotNumber);
+    } else {
+      doRemoveDeck(action.weekId, action.slot, action.userId);
     }
   };
 
@@ -291,7 +359,7 @@ export default function MyTeamPage() {
             <Typography variant="h6">{week.name || `Week ${week.week_number}`}</Typography>
             <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" />
             <Chip label={week.status.replace('_', ' ')} size="small" color="info" />
-            <WeekConstraints week={week} />
+            <WeekConstraints week={week} sets={sets} />
           </Box>
 
           {myTeam.members.map((m) => {
@@ -525,6 +593,21 @@ export default function MyTeamPage() {
       )}
 
       {weekTab > 0 && weeks[weekTab - 1] && renderWeekContent(weeks[weekTab - 1])}
+
+      <Dialog open={pendingDeckAction !== null} onClose={() => setPendingDeckAction(null)}>
+        <DialogTitle>Override Deck Selection?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Player matchups are already generated. Changing{' '}
+            <strong>{pendingDeckAction?.playerName ?? ''}</strong>'s deck selection at this stage
+            overrides the normal rules. Continue?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDeckAction(null)}>Cancel</Button>
+          <Button onClick={handleConfirmDeckAction} variant="contained" color="warning">Override</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }
