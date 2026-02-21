@@ -5,6 +5,7 @@ const S3_BASE = 'https://mastervault-storage-prod.s3.amazonaws.com/media/houses'
 // Some houses use a KF_ prefix in the S3 bucket
 const HOUSE_FILE_OVERRIDES: Record<string, string> = {
   Geistoid: 'KF_Geistoid',
+  Ekwidon: 'Ekwidon200',
 };
 
 function houseImageUrl(house: string): string {
