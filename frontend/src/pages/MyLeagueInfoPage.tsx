@@ -45,12 +45,6 @@ import type {
   DeckSelectionInfo,
 } from '../types';
 
-const FORMAT_LABELS: Record<string, string> = {
-  archon_standard: 'Archon Standard',
-  triad: 'Triad',
-  sealed_archon: 'Sealed Archon',
-};
-
 export default function MyLeagueInfoPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const { user } = useAuth();
@@ -660,6 +654,10 @@ export default function MyLeagueInfoPage() {
     );
   };
 
+  const topTabs = ['Team', ...(league.fee_amount != null ? ['Fee Status'] : []), ...weeks.map((w) => w.name || `Week ${w.week_number}`)];
+  const feeOffset = league.fee_amount != null ? 1 : 0;
+  const weekStartIdx = 1 + feeOffset;
+
   return (
     <Container maxWidth="sm" sx={{ mt: 3 }}>
       <Typography variant="h4" gutterBottom>{league.name}</Typography>
@@ -667,39 +665,53 @@ export default function MyLeagueInfoPage() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6">{myTeam.name}</Typography>
-          {captain && (
-            <Typography color="text.secondary" sx={{ mb: 1 }}>
-              Captain: {captain.user.name}
-            </Typography>
-          )}
-          <List dense>
-            {myTeam.members.map((m) => (
-              <ListItem key={m.id}>
-                <ListItemAvatar>
-                  <Avatar src={m.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
-                    {m.user.name?.[0]}
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                      {m.user.name}
-                      {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
-                      {m.user.id === user.id && <Chip label="You" size="small" variant="outlined" />}
-                    </Box>
-                  }
-                />
-              </ListItem>
-            ))}
-          </List>
-        </CardContent>
-      </Card>
+      <Tabs
+        value={activeTab}
+        onChange={(_, v) => setActiveTab(v)}
+        sx={{ mb: 2 }}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        {topTabs.map((label, i) => (
+          <Tab key={i} label={label} />
+        ))}
+      </Tabs>
 
-      {league.fee_amount != null && (
-        <Card sx={{ mb: 3 }}>
+      {activeTab === 0 && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6">{myTeam.name}</Typography>
+            {captain && (
+              <Typography color="text.secondary" sx={{ mb: 1 }}>
+                Captain: {captain.user.name}
+              </Typography>
+            )}
+            <List dense>
+              {myTeam.members.map((m) => (
+                <ListItem key={m.id}>
+                  <ListItemAvatar>
+                    <Avatar src={m.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
+                      {m.user.name?.[0]}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        {m.user.name}
+                        {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
+                        {m.user.id === user.id && <Chip label="You" size="small" variant="outlined" />}
+                      </Box>
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </CardContent>
+        </Card>
+      )}
+
+      {league.fee_amount != null && activeTab === 1 && (
+        <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Fee Status</Typography>
             <Typography>
@@ -714,35 +726,7 @@ export default function MyLeagueInfoPage() {
         </Card>
       )}
 
-      {/* Weekly tabs */}
-      {weeks.length > 0 && (
-        <>
-          <Tabs
-            value={activeTab}
-            onChange={(_, v) => setActiveTab(v)}
-            sx={{ mb: 2 }}
-            variant="scrollable"
-            scrollButtons="auto"
-          >
-            {weeks.map((w) => (
-              <Tab
-                key={w.id}
-                label={
-                  <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                    {w.name || `Week ${w.week_number}`}
-                    <Chip
-                      label={FORMAT_LABELS[w.format_type] || w.format_type}
-                      size="small"
-                      sx={{ height: 18, fontSize: '0.65rem' }}
-                    />
-                  </Box>
-                }
-              />
-            ))}
-          </Tabs>
-          {weeks[activeTab] && renderWeekContent(weeks[activeTab])}
-        </>
-      )}
+      {activeTab >= weekStartIdx && weeks[activeTab - weekStartIdx] && renderWeekContent(weeks[activeTab - weekStartIdx])}
     </Container>
   );
 }
