@@ -1207,18 +1207,6 @@ def generate_team_pairings(league_id, week_id):
     if week.status != WeekStatus.DECK_SELECTION.value:
         return jsonify({"error": "Week must be in deck_selection status"}), 400
 
-    # Check all players have submitted deck selections
-    required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
-    active_members = _get_active_players(league)
-    for member in active_members:
-        selections = PlayerDeckSelection.query.filter_by(
-            week_id=week.id, user_id=member.user_id
-        ).count()
-        if selections < required_slots:
-            user = db.session.get(User, member.user_id)
-            name = user.name if user else f"User {member.user_id}"
-            return jsonify({"error": f"{name} has not submitted all deck selections ({selections}/{required_slots})"}), 400
-
     # Delete existing matchups
     WeekMatchup.query.filter_by(week_id=week.id).delete()
     db.session.flush()
@@ -1258,6 +1246,27 @@ def generate_player_matchups(league_id, week_id):
         return jsonify({"error": "Week not found"}), 404
     if week.status != WeekStatus.TEAM_PAIRED.value:
         return jsonify({"error": "Week must be in team_paired status"}), 400
+
+    # Check all players have submitted deck selections (warn but allow force)
+    data = request.get_json(silent=True) or {}
+    if not data.get("force"):
+        required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
+        active_members = _get_active_players(league)
+        missing = []
+        for member in active_members:
+            selections = PlayerDeckSelection.query.filter_by(
+                week_id=week.id, user_id=member.user_id
+            ).count()
+            if selections < required_slots:
+                u = db.session.get(User, member.user_id)
+                name = u.name if u else f"User {member.user_id}"
+                missing.append(f"{name} ({selections}/{required_slots})")
+        if missing:
+            return jsonify({
+                "error": f"Some players have not submitted all deck selections: {', '.join(missing)}",
+                "incomplete_decks": True,
+                "missing": missing,
+            }), 400
 
     if week.week_number > 1:
         prev_week = LeagueWeek.query.filter_by(
@@ -1462,7 +1471,7 @@ def submit_deck_selection(league_id, week_id):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
 
-    if week.status not in (WeekStatus.DECK_SELECTION.value, WeekStatus.PAIRING.value):
+    if week.status not in (WeekStatus.DECK_SELECTION.value, WeekStatus.TEAM_PAIRED.value, WeekStatus.PAIRING.value):
         return jsonify({"error": "Deck selection is not open"}), 400
 
     effective = get_effective_user()
@@ -1615,7 +1624,7 @@ def remove_deck_selection(league_id, week_id, slot):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
 
-    if week.status not in (WeekStatus.DECK_SELECTION.value, WeekStatus.PAIRING.value):
+    if week.status not in (WeekStatus.DECK_SELECTION.value, WeekStatus.TEAM_PAIRED.value, WeekStatus.PAIRING.value):
         return jsonify({"error": "Deck selection is not open"}), 400
 
     effective = get_effective_user()
