@@ -331,6 +331,7 @@ export default function MyLeagueInfoPage() {
                       <Box sx={{ mb: 2 }}>
                         {pool.map((entry) => (
                           <Box key={entry.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                            {entry.deck?.houses && <HouseIcons houses={entry.deck.houses} />}
                             <Typography variant="body2">{entry.deck?.name || 'Unknown'}</Typography>
                             {entry.deck?.sas_rating != null && (
                               <Chip label={`SAS: ${entry.deck.sas_rating}`} size="small" variant="outlined" />
