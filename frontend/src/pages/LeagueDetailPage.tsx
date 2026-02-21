@@ -15,7 +15,6 @@ import {
   ListItemText,
   ListItemAvatar,
   Avatar,
-  Divider,
   Tab,
   Tabs,
   Dialog,
@@ -85,7 +84,14 @@ export default function LeagueDetailPage() {
   if (!league) return null;
 
   const weeks = league.weeks || [];
-  const tabs = ['Teams & Players', ...weeks.map((w) => w.name || `Week ${w.week_number}`)];
+  const showSignups = league.is_admin || league.is_captain;
+  const tabs = [
+    'Teams',
+    ...(showSignups ? [`Signups (${league.signups.length})`] : []),
+    ...weeks.map((w) => w.name || `Week ${w.week_number}`),
+  ];
+  const signupsOffset = showSignups ? 1 : 0;
+  const weekStartIdx = 1 + signupsOffset;
 
   const renderWeekTab = (week: LeagueWeek) => {
     return (
@@ -179,69 +185,58 @@ export default function LeagueDetailPage() {
       {league.teams.length === 0 && (
         <Typography color="text.secondary" sx={{ mb: 2 }}>No teams created yet.</Typography>
       )}
-      {league.teams.map((team) => (
-        <Card key={team.id} sx={{ mb: 2 }}>
-          <CardContent>
-            <Typography variant="h6">{team.name}</Typography>
-            <List dense>
-              {team.members.map((m) => (
-                <ListItem key={m.id}>
-                  <ListItemAvatar>
-                    <Avatar src={m.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
-                      {m.user.name?.[0]}
-                    </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                        {m.user.name}
-                        {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
-                        {league.fee_amount != null && (
-                          <Chip
-                            label={m.has_paid ? 'Paid' : 'Unpaid'}
-                            size="small"
-                            color={m.has_paid ? 'success' : 'default'}
-                            variant="outlined"
-                          />
-                        )}
-                      </Box>
-                    }
-                  />
-                </ListItem>
-              ))}
-              {team.members.length === 0 && (
-                <ListItem>
-                  <ListItemText secondary="No members yet" />
-                </ListItem>
-              )}
-            </List>
-          </CardContent>
-        </Card>
-      ))}
-
-      {/* Signups - only visible to league admins and team captains */}
-      {(league.is_admin || league.is_captain) && (
-        <>
-          <Divider sx={{ my: 3 }} />
-          <Typography variant="h5" sx={{ mb: 2 }}>Signups ({league.signups.length})</Typography>
-          <List dense>
-            {league.signups.map((s) => (
-              <ListItem key={s.id}>
-                <ListItemAvatar>
-                  <Avatar src={s.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
-                    {s.user.name?.[0]}
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText
-                  primary={s.user.name}
-                  secondary={`#${s.signup_order} - ${s.status}`}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </>
-      )}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+        {league.teams.map((team) => (
+          <Card key={team.id} sx={{ flex: '1 1 220px', maxWidth: 320 }}>
+            <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>{team.name}</Typography>
+              <List dense disablePadding>
+                {team.members.map((m) => (
+                  <ListItem key={m.id} disableGutters sx={{ py: 0.25 }}>
+                    <ListItemAvatar sx={{ minWidth: 32 }}>
+                      <Avatar src={m.user.avatar_url || undefined} sx={{ width: 24, height: 24 }}>
+                        {m.user.name?.[0]}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                          <Typography variant="body2">{m.user.name}</Typography>
+                          {m.is_captain && <Chip label="C" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem' }} />}
+                        </Box>
+                      }
+                    />
+                  </ListItem>
+                ))}
+                {team.members.length === 0 && (
+                  <ListItem disableGutters>
+                    <ListItemText secondary="No members yet" />
+                  </ListItem>
+                )}
+              </List>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
     </>
+  );
+
+  const renderSignupsTab = () => (
+    <List dense>
+      {league.signups.map((s) => (
+        <ListItem key={s.id}>
+          <ListItemAvatar>
+            <Avatar src={s.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
+              {s.user.name?.[0]}
+            </Avatar>
+          </ListItemAvatar>
+          <ListItemText
+            primary={s.user.name}
+            secondary={`#${s.signup_order} - ${s.status}`}
+          />
+        </ListItem>
+      ))}
+    </List>
   );
 
   return (
@@ -319,7 +314,8 @@ export default function LeagueDetailPage() {
           </Tabs>
 
           {activeTab === 0 && renderTeamsTab()}
-          {activeTab > 0 && weeks[activeTab - 1] && renderWeekTab(weeks[activeTab - 1])}
+          {showSignups && activeTab === 1 && renderSignupsTab()}
+          {activeTab >= weekStartIdx && weeks[activeTab - weekStartIdx] && renderWeekTab(weeks[activeTab - weekStartIdx])}
         </>
       ) : (
         <>
