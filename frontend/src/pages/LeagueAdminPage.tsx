@@ -29,6 +29,8 @@ import {
   Collapse,
   Checkbox,
   FormControlLabel,
+  Tab,
+  Tabs,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -112,6 +114,9 @@ export default function LeagueAdminPage() {
 
   // Week expanded
   const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({});
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState(0);
 
   // Delete dialogs
   const [deleteLeagueDialogOpen, setDeleteLeagueDialogOpen] = useState(false);
@@ -366,140 +371,172 @@ export default function LeagueAdminPage() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-      {/* League settings */}
-      {isSetup && (
+      <Tabs
+        value={activeTab}
+        onChange={(_, v) => setActiveTab(v)}
+        sx={{ mb: 2 }}
+        variant="scrollable"
+        scrollButtons="auto"
+      >
+        <Tab label="Teams" />
+        <Tab label={`Signups (${league.signups.length})`} />
+        <Tab label={`Weeks (${league.weeks?.length || 0})`} />
+      </Tabs>
+
+      {/* Teams tab */}
+      {activeTab === 0 && (
+        <>
+          {/* League settings */}
+          {isSetup && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>League Settings</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <TextField label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                  <TextField label="Description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} multiline rows={2} />
+                  <TextField label="Entry Fee" value={editFee} onChange={(e) => setEditFee(e.target.value)} type="number" inputProps={{ step: '0.01', min: '0' }} />
+                  <TextField label="Team Size" value={editTeamSize} onChange={(e) => setEditTeamSize(e.target.value)} type="number" inputProps={{ min: '2' }} />
+                  <TextField label="Number of Teams" value={editNumTeams} onChange={(e) => setEditNumTeams(e.target.value)} type="number" inputProps={{ min: '2' }} />
+                  <Button variant="contained" onClick={handleSaveSettings}>Save Settings</Button>
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>Teams ({league.teams.length}/{league.num_teams})</Typography>
+              {isSetup && league.teams.length < league.num_teams && (
+                <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                  <TextField
+                    label="Team Name"
+                    value={newTeamName}
+                    onChange={(e) => setNewTeamName(e.target.value)}
+                    size="small"
+                  />
+                  <Button variant="contained" onClick={handleCreateTeam}>Add Team</Button>
+                </Box>
+              )}
+              {league.teams.map((team) => {
+                const captain = team.members.find((m) => m.is_captain);
+                return (
+                  <Box key={team.id} sx={{ mb: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="subtitle1">{team.name}</Typography>
+                      {isSetup && (
+                        <IconButton size="small" onClick={() => handleDeleteTeam(team.id)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                    {captain && (
+                      <Typography variant="body2" color="text.secondary">
+                        Captain: {captain.user.name}
+                      </Typography>
+                    )}
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
+                      <FormControl size="small" sx={{ minWidth: 200 }}>
+                        <InputLabel>{captain ? 'Reassign Captain' : 'Assign Captain'}</InputLabel>
+                        <Select
+                          value={captainSelections[team.id] || ''}
+                          label={captain ? 'Reassign Captain' : 'Assign Captain'}
+                          onChange={(e) => setCaptainSelections({ ...captainSelections, [team.id]: e.target.value as number })}
+                        >
+                          {league.signups
+                            .filter((s) => !assignedCaptainIds.has(s.user.id))
+                            .map((s) => (
+                              <MenuItem key={s.user.id} value={s.user.id}>
+                                {s.user.name}
+                              </MenuItem>
+                            ))}
+                        </Select>
+                      </FormControl>
+                      <Button size="small" variant="outlined" onClick={() => handleAssignCaptain(team.id)}>
+                        Assign
+                      </Button>
+                    </Box>
+                    {team.members.length > 0 && (
+                      <List dense>
+                        {team.members.map((m) => (
+                          <ListItem key={m.id} sx={{ py: 0 }}>
+                            <ListItemAvatar>
+                              <Avatar src={m.user.avatar_url || undefined} sx={{ width: 24, height: 24 }}>
+                                {m.user.name?.[0]}
+                              </Avatar>
+                            </ListItemAvatar>
+                            <ListItemText
+                              primary={`${m.user.name}${m.is_captain ? ' (Captain)' : ''}`}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    )}
+                  </Box>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          {/* Start draft */}
+          {isSetup && (
+            <Box sx={{ mb: 3 }}>
+              <Button variant="contained" color="warning" onClick={() => setDraftDialogOpen(true)}>
+                Start Draft
+              </Button>
+            </Box>
+          )}
+
+          {/* Delete league button - test leagues only */}
+          {league.is_test && (
+            <Box sx={{ mt: 3, mb: 3 }}>
+              <Button variant="outlined" color="error" onClick={() => setDeleteLeagueDialogOpen(true)}>
+                Delete League
+              </Button>
+            </Box>
+          )}
+        </>
+      )}
+
+      {/* Signups tab */}
+      {activeTab === 1 && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
-            <Typography variant="h6" gutterBottom>League Settings</Typography>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <TextField label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-              <TextField label="Description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} multiline rows={2} />
-              <TextField label="Entry Fee" value={editFee} onChange={(e) => setEditFee(e.target.value)} type="number" inputProps={{ step: '0.01', min: '0' }} />
-              <TextField label="Team Size" value={editTeamSize} onChange={(e) => setEditTeamSize(e.target.value)} type="number" inputProps={{ min: '2' }} />
-              <TextField label="Number of Teams" value={editNumTeams} onChange={(e) => setEditNumTeams(e.target.value)} type="number" inputProps={{ min: '2' }} />
-              <Button variant="contained" onClick={handleSaveSettings}>Save Settings</Button>
-            </Box>
+            <Typography variant="h6" gutterBottom>Signups ({league.signups.length})</Typography>
+            <List dense>
+              {league.signups.map((s) => (
+                <ListItem key={s.id}>
+                  <ListItemAvatar>
+                    <Avatar src={s.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
+                      {s.user.name?.[0]}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText primary={s.user.name} secondary={`#${s.signup_order} - ${s.status}`} />
+                </ListItem>
+              ))}
+            </List>
           </CardContent>
         </Card>
       )}
 
-      {/* Team management */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>Teams ({league.teams.length}/{league.num_teams})</Typography>
-          {isSetup && league.teams.length < league.num_teams && (
-            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-              <TextField
-                label="Team Name"
-                value={newTeamName}
-                onChange={(e) => setNewTeamName(e.target.value)}
-                size="small"
-              />
-              <Button variant="contained" onClick={handleCreateTeam}>Add Team</Button>
-            </Box>
-          )}
-          {league.teams.map((team) => {
-            const captain = team.members.find((m) => m.is_captain);
-            return (
-              <Box key={team.id} sx={{ mb: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="subtitle1">{team.name}</Typography>
-                  {isSetup && (
-                    <IconButton size="small" onClick={() => handleDeleteTeam(team.id)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Box>
-                {captain && (
-                  <Typography variant="body2" color="text.secondary">
-                    Captain: {captain.user.name}
-                  </Typography>
-                )}
-                <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel>{captain ? 'Reassign Captain' : 'Assign Captain'}</InputLabel>
-                    <Select
-                      value={captainSelections[team.id] || ''}
-                      label={captain ? 'Reassign Captain' : 'Assign Captain'}
-                      onChange={(e) => setCaptainSelections({ ...captainSelections, [team.id]: e.target.value as number })}
-                    >
-                      {league.signups
-                        .filter((s) => !assignedCaptainIds.has(s.user.id))
-                        .map((s) => (
-                          <MenuItem key={s.user.id} value={s.user.id}>
-                            {s.user.name}
-                          </MenuItem>
-                        ))}
-                    </Select>
-                  </FormControl>
-                  <Button size="small" variant="outlined" onClick={() => handleAssignCaptain(team.id)}>
-                    Assign
-                  </Button>
-                </Box>
-                {team.members.length > 0 && (
-                  <List dense>
-                    {team.members.map((m) => (
-                      <ListItem key={m.id} sx={{ py: 0 }}>
-                        <ListItemAvatar>
-                          <Avatar src={m.user.avatar_url || undefined} sx={{ width: 24, height: 24 }}>
-                            {m.user.name?.[0]}
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          primary={`${m.user.name}${m.is_captain ? ' (Captain)' : ''}`}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
-              </Box>
-            );
-          })}
-        </CardContent>
-      </Card>
-
-      {/* Signup list */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>Signups ({league.signups.length})</Typography>
-          <List dense>
-            {league.signups.map((s) => (
-              <ListItem key={s.id}>
-                <ListItemAvatar>
-                  <Avatar src={s.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
-                    {s.user.name?.[0]}
-                  </Avatar>
-                </ListItemAvatar>
-                <ListItemText primary={s.user.name} secondary={`#${s.signup_order} - ${s.status}`} />
-              </ListItem>
-            ))}
-          </List>
-        </CardContent>
-      </Card>
-
-      {/* Start draft */}
-      {isSetup && (
-        <Box sx={{ mb: 3 }}>
-          <Button variant="contained" color="warning" onClick={() => setDraftDialogOpen(true)}>
-            Start Draft
-          </Button>
-        </Box>
-      )}
-
-      {/* Weeks management */}
-      {isActive && (
+      {/* Weeks tab */}
+      {activeTab === 2 && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">Weeks ({league.weeks?.length || 0})</Typography>
-              <Button variant="contained" size="small" onClick={() => setWeekDialogOpen(true)}>
-                Add Week
-              </Button>
+              {isActive && (
+                <Button variant="contained" size="small" onClick={() => setWeekDialogOpen(true)}>
+                  Add Week
+                </Button>
+              )}
             </Box>
+            {!isActive && (league.weeks || []).length === 0 && (
+              <Typography color="text.secondary">Weeks can be added after the draft is complete.</Typography>
+            )}
             {(league.weeks || []).map((week) => (
               <Box key={week.id} sx={{ mb: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                 <ListItemButton onClick={() => toggleWeekExpanded(week.id)} sx={{ py: 1 }}>
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flex: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flex: 1, flexWrap: 'wrap' }}>
                     <Typography variant="subtitle1">{week.name || `Week ${week.week_number}`}</Typography>
                     <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" />
                     <Chip label={week.status.replace('_', ' ')} size="small" color={STATUS_COLORS[week.status] || 'default'} />
@@ -683,15 +720,6 @@ export default function LeagueAdminPage() {
           <Button onClick={handleCreateWeek} variant="contained">Create Week</Button>
         </DialogActions>
       </Dialog>
-
-      {/* Delete league button - test leagues only */}
-      {league.is_test && (
-        <Box sx={{ mt: 3, mb: 3 }}>
-          <Button variant="outlined" color="error" onClick={() => setDeleteLeagueDialogOpen(true)}>
-            Delete League
-          </Button>
-        </Box>
-      )}
 
       <Dialog open={deleteLeagueDialogOpen} onClose={() => setDeleteLeagueDialogOpen(false)}>
         <DialogTitle>Delete Test League?</DialogTitle>
