@@ -34,6 +34,7 @@ import {
   getSealedPool,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
+import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import { useAuth } from '../contexts/AuthContext';
 import type { LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
 import type { SealedPoolEntry } from '../api/leagues';
@@ -290,6 +291,7 @@ export default function MyTeamPage() {
             <Typography variant="h6">{week.name || `Week ${week.week_number}`}</Typography>
             <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" />
             <Chip label={week.status.replace('_', ' ')} size="small" color="info" />
+            <WeekConstraints week={week} />
           </Box>
 
           {myTeam.members.map((m) => {
@@ -390,6 +392,13 @@ export default function MyTeamPage() {
                     </Box>
                   );
                 })}
+
+                {/* Combined SAS for multi-deck formats */}
+                {maxSlots > 1 && selections.length > 1 && (
+                  <Box sx={{ ml: 4, mt: 0.5 }}>
+                    <CombinedSas selections={selections} />
+                  </Box>
+                )}
               </Box>
             );
           })}

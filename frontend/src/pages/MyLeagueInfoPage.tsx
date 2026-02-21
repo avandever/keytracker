@@ -36,6 +36,7 @@ import {
   getSealedPool,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
+import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import type { SealedPoolEntry } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import type {
@@ -261,6 +262,11 @@ export default function MyLeagueInfoPage() {
               )}
             </Typography>
 
+            {/* Week constraints */}
+            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
+              <WeekConstraints week={week} />
+            </Box>
+
             {/* Current selections */}
             {mySelections.length > 0 && (
               <Box sx={{ mb: 2 }}>
@@ -292,6 +298,9 @@ export default function MyLeagueInfoPage() {
                     )}
                   </Box>
                 ))}
+                {maxSlots > 1 && mySelections.length > 1 && (
+                  <CombinedSas selections={mySelections} />
+                )}
               </Box>
             )}
 

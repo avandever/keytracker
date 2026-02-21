@@ -52,6 +52,7 @@ import {
   deleteWeek,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
+import WeekConstraints from '../components/WeekConstraints';
 import type { LeagueDetail, KeyforgeSetInfo, LeagueWeek } from '../types';
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -505,11 +506,7 @@ export default function LeagueAdminPage() {
                     <Typography variant="body2" color="text.secondary">
                       Bo{week.best_of_n}
                     </Typography>
-                    {week.max_sas && (
-                      <Typography variant="body2" color="text.secondary">
-                        Max SAS: {week.max_sas}
-                      </Typography>
-                    )}
+                    <WeekConstraints week={week} />
                   </Box>
                   {expandedWeeks[week.id] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                 </ListItemButton>

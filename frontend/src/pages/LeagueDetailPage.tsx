@@ -24,6 +24,7 @@ import {
 } from '@mui/material';
 import { getLeague, signup, withdraw } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
+import WeekConstraints from '../components/WeekConstraints';
 import type { LeagueDetail, LeagueWeek } from '../types';
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -103,7 +104,7 @@ export default function LeagueDetailPage() {
             label={week.status.replace('_', ' ')}
             color={week.status === 'completed' ? 'success' : week.status === 'published' ? 'info' : 'default'}
           />
-          {week.max_sas && <Chip label={`Max SAS: ${week.max_sas}`} variant="outlined" />}
+          <WeekConstraints week={week} />
         </Box>
 
         {/* Matchups and results */}
