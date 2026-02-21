@@ -45,6 +45,8 @@ import {
   generateMatchups,
   publishWeek,
   generateSealedPools,
+  generateTeamPairings,
+  generatePlayerMatchups,
   getSets,
   deleteLeague,
   deleteWeek,
@@ -61,6 +63,7 @@ const FORMAT_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, 'default' | 'info' | 'warning' | 'success'> = {
   setup: 'default',
   deck_selection: 'info',
+  team_paired: 'info',
   pairing: 'warning',
   published: 'success',
   completed: 'success',
@@ -246,6 +249,12 @@ export default function LeagueAdminPage() {
       } else if (action === 'generate_matchups') {
         await generateMatchups(league.id, weekId);
         setSuccess('Matchups generated');
+      } else if (action === 'generate_team_pairings') {
+        await generateTeamPairings(league.id, weekId);
+        setSuccess('Team pairings generated');
+      } else if (action === 'generate_player_matchups') {
+        await generatePlayerMatchups(league.id, weekId);
+        setSuccess('Player matchups generated');
       } else if (action === 'publish') {
         await publishWeek(league.id, weekId);
         setSuccess('Week published');
@@ -326,8 +335,15 @@ export default function LeagueAdminPage() {
         break;
       case 'deck_selection':
         actions.push(
-          <Button key="matchups" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_matchups')}>
-            Generate Matchups
+          <Button key="team-pairings" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_team_pairings')}>
+            Generate Team Pairings
+          </Button>
+        );
+        break;
+      case 'team_paired':
+        actions.push(
+          <Button key="player-matchups" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_player_matchups')}>
+            Generate Player Matchups
           </Button>
         );
         break;

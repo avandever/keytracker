@@ -814,6 +814,7 @@ class WeekFormat(PyEnum):
 class WeekStatus(PyEnum):
     SETUP = "setup"
     DECK_SELECTION = "deck_selection"
+    TEAM_PAIRED = "team_paired"
     PAIRING = "pairing"
     PUBLISHED = "published"
     COMPLETED = "completed"

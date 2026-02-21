@@ -1064,6 +1064,7 @@ def open_deck_selection(league_id, week_id):
 @blueprint.route("/<int:league_id>/weeks/<int:week_id>/generate-matchups", methods=["POST"])
 @login_required
 def generate_matchups(league_id, week_id):
+    """Legacy endpoint: generates both team pairings and player matchups in one step."""
     league, err = _get_league_or_404(league_id)
     if err:
         return err
@@ -1120,6 +1121,108 @@ def generate_matchups(league_id, week_id):
         db.session.flush()
 
         # Generate player pairings
+        player_pairs = _generate_player_pairings(team1, team2, league, week.week_number)
+        for p1_id, p2_id in player_pairs:
+            pm = PlayerMatchup(
+                week_matchup_id=wm.id,
+                player1_id=p1_id,
+                player2_id=p2_id,
+            )
+            db.session.add(pm)
+
+    week.status = WeekStatus.PAIRING.value
+    db.session.commit()
+    db.session.refresh(week)
+    return jsonify(serialize_league_week(week))
+
+
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>/generate-team-pairings", methods=["POST"])
+@login_required
+def generate_team_pairings(league_id, week_id):
+    """Generate team pairings only (no player matchups yet)."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.status != WeekStatus.DECK_SELECTION.value:
+        return jsonify({"error": "Week must be in deck_selection status"}), 400
+
+    if week.week_number > 1:
+        prev_week = LeagueWeek.query.filter_by(
+            league_id=league.id, week_number=week.week_number - 1
+        ).first()
+        if prev_week and prev_week.status != WeekStatus.COMPLETED.value:
+            return jsonify({"error": "Previous week must be completed first"}), 400
+
+    # Check all players have submitted deck selections
+    required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
+    active_members = _get_active_players(league)
+    for member in active_members:
+        selections = PlayerDeckSelection.query.filter_by(
+            week_id=week.id, user_id=member.user_id
+        ).count()
+        if selections < required_slots:
+            user = db.session.get(User, member.user_id)
+            name = user.name if user else f"User {member.user_id}"
+            return jsonify({"error": f"{name} has not submitted all deck selections ({selections}/{required_slots})"}), 400
+
+    # Delete existing matchups
+    WeekMatchup.query.filter_by(week_id=week.id).delete()
+    db.session.flush()
+
+    # Generate round-robin team pairings only
+    teams = sorted(league.teams, key=lambda t: t.order_number)
+    all_rounds = _generate_round_robin(teams)
+    round_idx = week.week_number - 1
+    if round_idx >= len(all_rounds):
+        return jsonify({"error": "No more round-robin pairings available for this week number"}), 400
+
+    for team1, team2 in all_rounds[round_idx]:
+        wm = WeekMatchup(
+            week_id=week.id,
+            team1_id=team1.id,
+            team2_id=team2.id,
+        )
+        db.session.add(wm)
+
+    week.status = WeekStatus.TEAM_PAIRED.value
+    db.session.commit()
+    db.session.refresh(week)
+    return jsonify(serialize_league_week(week))
+
+
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>/generate-player-matchups", methods=["POST"])
+@login_required
+def generate_player_matchups(league_id, week_id):
+    """Generate player matchups within existing team pairings."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.status != WeekStatus.TEAM_PAIRED.value:
+        return jsonify({"error": "Week must be in team_paired status"}), 400
+
+    matchups = WeekMatchup.query.filter_by(week_id=week.id).all()
+    if not matchups:
+        return jsonify({"error": "No team pairings found"}), 400
+
+    # Clear any existing player matchups
+    for wm in matchups:
+        PlayerMatchup.query.filter_by(week_matchup_id=wm.id).delete()
+
+    db.session.flush()
+
+    for wm in matchups:
+        team1 = db.session.get(Team, wm.team1_id)
+        team2 = db.session.get(Team, wm.team2_id)
         player_pairs = _generate_player_pairings(team1, team2, league, week.week_number)
         for p1_id, p2_id in player_pairs:
             pm = PlayerMatchup(
