@@ -105,6 +105,27 @@ export default function MyLeagueInfoPage() {
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
+  // Poll while any published week has an active (started but undecided) match
+  useEffect(() => {
+    if (!league) return;
+    const hasActiveMatch = (league.weeks || []).some((week) => {
+      if (week.status !== 'published') return false;
+      for (const wm of week.matchups) {
+        for (const pm of wm.player_matchups) {
+          if (!pm.player1_started || !pm.player2_started) continue;
+          const winsNeeded = Math.ceil(week.best_of_n / 2);
+          const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
+          const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
+          if (p1Wins < winsNeeded && p2Wins < winsNeeded) return true;
+        }
+      }
+      return false;
+    });
+    if (!hasActiveMatch) return;
+    const interval = setInterval(refresh, 10000);
+    return () => clearInterval(interval);
+  }, [league, refresh]);
+
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
   if (error && !league) return <Container sx={{ mt: 3 }}><Alert severity="error">{error}</Alert></Container>;
   if (!league || !user) return null;
