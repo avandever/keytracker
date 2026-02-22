@@ -22,14 +22,15 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
-import { getLeague, signup, withdraw } from '../api/leagues';
+import { getLeague, signup, withdraw, getSets } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
-import type { LeagueDetail, LeagueWeek, TeamDetail } from '../types';
+import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
 import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
 } from '@mui/material';
@@ -49,6 +50,7 @@ export default function LeagueDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [signupDialogOpen, setSignupDialogOpen] = useState(false);
+  const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -59,6 +61,7 @@ export default function LeagueDetailPage() {
   }, [leagueId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
   const handleSignup = async () => {
     if (!leagueId) return;
@@ -95,14 +98,54 @@ export default function LeagueDetailPage() {
   const showSignups = league.is_admin || league.is_captain;
   const tabs = [
     'Standings',
+    'Player Standings',
     'Teams',
     ...(showSignups ? [`Signups (${league.signups.length})`] : []),
     ...weeks.map((w) => w.name || `Week ${w.week_number}`),
   ];
   // tab index offsets
-  const teamsIdx = 1;
-  const signupsIdx = showSignups ? 2 : null;
-  const weekStartIdx = 2 + (showSignups ? 1 : 0);
+  const playerStandingsIdx = 1;
+  const teamsIdx = 2;
+  const signupsIdx = showSignups ? 3 : null;
+  const weekStartIdx = 3 + (showSignups ? 1 : 0);
+
+  const computeMatchWins = (playerId: number, targetWeeks: LeagueWeek[]): number => {
+    let wins = 0;
+    for (const week of targetWeeks) {
+      for (const wm of week.matchups) {
+        for (const pm of wm.player_matchups) {
+          if (pm.player1.id === playerId || pm.player2.id === playerId) {
+            const isP1 = pm.player1.id === playerId;
+            const myWins = pm.games.filter((g) => g.winner_id === (isP1 ? pm.player1.id : pm.player2.id)).length;
+            const theirWins = pm.games.filter((g) => g.winner_id === (isP1 ? pm.player2.id : pm.player1.id)).length;
+            if (myWins > theirWins) wins++;
+          }
+        }
+      }
+    }
+    return wins;
+  };
+
+  const computePowerScore = (playerId: number, weekNumber: number): number => {
+    const priorCompleted = weeks.filter(
+      (w) => w.week_number < weekNumber && w.status === 'completed',
+    );
+    if (priorCompleted.length === 0) return 0;
+    const myWins = computeMatchWins(playerId, priorCompleted);
+    let opponentBonus = 0;
+    for (const week of priorCompleted) {
+      for (const wm of week.matchups) {
+        for (const pm of wm.player_matchups) {
+          if (pm.player1.id === playerId) {
+            opponentBonus += computeMatchWins(pm.player2.id, priorCompleted) * 0.01;
+          } else if (pm.player2.id === playerId) {
+            opponentBonus += computeMatchWins(pm.player1.id, priorCompleted) * 0.01;
+          }
+        }
+      }
+    }
+    return myWins + opponentBonus;
+  };
 
   const renderWeekTab = (week: LeagueWeek) => {
     return (
@@ -114,7 +157,7 @@ export default function LeagueDetailPage() {
             label={week.status.replace('_', ' ')}
             color={week.status === 'completed' ? 'success' : week.status === 'published' ? 'info' : 'default'}
           />
-          <WeekConstraints week={week} />
+          <WeekConstraints week={week} sets={sets} />
         </Box>
 
         {/* Matchups and results */}
@@ -140,6 +183,11 @@ export default function LeagueDetailPage() {
                           fontWeight={winnerId === pm.player1.id ? 'bold' : 'normal'}
                         >
                           {pm.player1.name}
+                          {league.is_admin && (
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                              ({computePowerScore(pm.player1.id, week.week_number).toFixed(2)})
+                            </Typography>
+                          )}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           {pm.games.length > 0 ? `${p1Wins} - ${p2Wins}` : 'vs'}
@@ -149,6 +197,11 @@ export default function LeagueDetailPage() {
                           fontWeight={winnerId === pm.player2.id ? 'bold' : 'normal'}
                         >
                           {pm.player2.name}
+                          {league.is_admin && (
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                              ({computePowerScore(pm.player2.id, week.week_number).toFixed(2)})
+                            </Typography>
+                          )}
                         </Typography>
                         {pm.is_feature && <Chip label="Feature" size="small" color="warning" />}
                         {isComplete && <Chip label="Complete" size="small" color="success" />}
@@ -206,10 +259,12 @@ export default function LeagueDetailPage() {
     for (const team of league.teams) {
       rows[team.id] = { team, week_points: {}, total: 0 };
     }
+    const bonusPoints = league.week_bonus_points ?? 2;
     for (const week of qualifyingWeeks) {
       const winsNeeded = Math.ceil(week.best_of_n / 2);
       for (const wm of week.matchups) {
         const team1MemberIds = new Set(wm.team1.members.map((m) => m.user.id));
+        const totalMatchups = wm.player_matchups.length;
         let team1Wins = 0;
         let team2Wins = 0;
         let featureWinnerId: number | null = null;
@@ -232,15 +287,25 @@ export default function LeagueDetailPage() {
             featureWinnerId = winnerOfPm;
           }
         }
+        // Only award bonus when outcome is certain:
+        // - team won strictly more than half the total matchups, OR
+        // - team won exactly half AND also won the feature match (tiebreaker)
         let t1Bonus = 0;
         let t2Bonus = 0;
-        if (team1Wins > team2Wins) {
-          t1Bonus = 2;
-        } else if (team2Wins > team1Wins) {
-          t2Bonus = 2;
-        } else if (featureWinnerId !== null) {
-          if (team1MemberIds.has(featureWinnerId)) t1Bonus = 2;
-          else t2Bonus = 2;
+        const team1WonMajority = team1Wins > totalMatchups / 2;
+        const team2WonMajority = team2Wins > totalMatchups / 2;
+        const team1WonHalfPlusFeature =
+          team1Wins === totalMatchups / 2 &&
+          featureWinnerId !== null &&
+          team1MemberIds.has(featureWinnerId);
+        const team2WonHalfPlusFeature =
+          team2Wins === totalMatchups / 2 &&
+          featureWinnerId !== null &&
+          !team1MemberIds.has(featureWinnerId);
+        if (team1WonMajority || team1WonHalfPlusFeature) {
+          t1Bonus = bonusPoints;
+        } else if (team2WonMajority || team2WonHalfPlusFeature) {
+          t2Bonus = bonusPoints;
         }
         if (rows[wm.team1.id]) {
           rows[wm.team1.id].week_points[week.week_number] =
@@ -296,6 +361,173 @@ export default function LeagueDetailPage() {
           ))}
         </TableBody>
       </Table>
+    );
+  };
+
+  const renderPlayerStandingsTab = () => {
+    const qualifyingWeeks = weeks.filter(
+      (w) => w.status === 'published' || w.status === 'completed',
+    );
+    if (qualifyingWeeks.length === 0) {
+      return (
+        <Typography color="text.secondary">
+          No results yet — player standings will appear once weeks are published.
+        </Typography>
+      );
+    }
+
+    const standingsMap = computeStandings().reduce<Record<number, StandingsRow>>((acc, row) => {
+      acc[row.team.id] = row;
+      return acc;
+    }, {});
+
+    const sortedTeams = [...league.teams].sort((a, b) => a.id - b.id);
+
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {sortedTeams.map((team) => {
+          const teamStandings = standingsMap[team.id];
+
+          const sortedMembers = [...team.members].sort((a, b) => {
+            if (a.is_captain && !b.is_captain) return -1;
+            if (!a.is_captain && b.is_captain) return 1;
+            return computeMatchWins(b.user.id, qualifyingWeeks) - computeMatchWins(a.user.id, qualifyingWeeks);
+          });
+
+          const playerResults: Record<number, Record<number, string>> = {};
+          const playerWins: Record<number, number> = {};
+          const playerLosses: Record<number, number> = {};
+          for (const member of sortedMembers) {
+            playerResults[member.user.id] = {};
+            playerWins[member.user.id] = 0;
+            playerLosses[member.user.id] = 0;
+          }
+
+          const teamWeekWins: Record<number, number> = {};
+          const teamWeekLosses: Record<number, number> = {};
+
+          for (const week of qualifyingWeeks) {
+            teamWeekWins[week.week_number] = 0;
+            teamWeekLosses[week.week_number] = 0;
+
+            const wm = week.matchups.find(
+              (m) => m.team1.id === team.id || m.team2.id === team.id,
+            );
+            if (!wm) continue;
+
+            const teamIsTeam1 = wm.team1.id === team.id;
+            const winsNeeded = Math.ceil(week.best_of_n / 2);
+
+            for (const pm of wm.player_matchups) {
+              const ourPlayer = teamIsTeam1 ? pm.player1 : pm.player2;
+              const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
+              const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
+              const ourWins = teamIsTeam1 ? p1Wins : p2Wins;
+              const ourLosses = teamIsTeam1 ? p2Wins : p1Wins;
+
+              let result = '-';
+              if (ourWins >= winsNeeded) {
+                result = 'W';
+                teamWeekWins[week.week_number]++;
+                playerWins[ourPlayer.id] = (playerWins[ourPlayer.id] || 0) + 1;
+              } else if (ourLosses >= winsNeeded) {
+                result = 'L';
+                teamWeekLosses[week.week_number]++;
+                playerLosses[ourPlayer.id] = (playerLosses[ourPlayer.id] || 0) + 1;
+              }
+
+              if (playerResults[ourPlayer.id] !== undefined) {
+                playerResults[ourPlayer.id][week.week_number] = result;
+              }
+            }
+          }
+
+          const teamTotalWins = Object.values(teamWeekWins).reduce((a, b) => a + b, 0);
+          const teamTotalLosses = Object.values(teamWeekLosses).reduce((a, b) => a + b, 0);
+
+          return (
+            <Card key={team.id} sx={{ width: '100%' }}>
+              <CardContent>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell><strong>{team.name}</strong></TableCell>
+                        <TableCell align="center"><strong>W-L</strong></TableCell>
+                        {qualifyingWeeks.map((w) => (
+                          <TableCell key={w.id} align="center">
+                            <strong>{w.name || `Wk ${w.week_number}`}</strong>
+                          </TableCell>
+                        ))}
+                        <TableCell />
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {sortedMembers.map((member) => (
+                        <TableRow key={member.id}>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                              <Typography variant="body2">{member.user.name}</Typography>
+                              {member.is_captain && (
+                                <Chip label="C" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem' }} />
+                              )}
+                            </Box>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Typography variant="body2">
+                              {playerWins[member.user.id] ?? 0}-{playerLosses[member.user.id] ?? 0}
+                            </Typography>
+                          </TableCell>
+                          {qualifyingWeeks.map((w) => {
+                            const isFeature = w.feature_designations.find(
+                              (fd) => fd.team_id === team.id && fd.user_id === member.user.id,
+                            );
+                            const result = playerResults[member.user.id]?.[w.week_number] ?? '-';
+                            return (
+                              <TableCell
+                                key={w.id}
+                                align="center"
+                                sx={isFeature ? { bgcolor: 'cyan', color: 'black' } : {}}
+                              >
+                                {result}
+                              </TableCell>
+                            );
+                          })}
+                          <TableCell />
+                        </TableRow>
+                      ))}
+                      <TableRow>
+                        <TableCell><strong>Weekly Record</strong></TableCell>
+                        <TableCell align="center">
+                          <strong>{teamTotalWins}-{teamTotalLosses}</strong>
+                        </TableCell>
+                        {qualifyingWeeks.map((w) => (
+                          <TableCell key={w.id} align="center">
+                            {teamWeekWins[w.week_number] ?? 0}-{teamWeekLosses[w.week_number] ?? 0}
+                          </TableCell>
+                        ))}
+                        <TableCell align="center"><strong>Total Points</strong></TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell>Points Earned</TableCell>
+                        <TableCell />
+                        {qualifyingWeeks.map((w) => (
+                          <TableCell key={w.id} align="center">
+                            {teamStandings?.week_points[w.week_number] ?? 0}
+                          </TableCell>
+                        ))}
+                        <TableCell align="center">
+                          <strong>{teamStandings?.total ?? 0}</strong>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </Box>
     );
   };
 
@@ -433,6 +665,7 @@ export default function LeagueDetailPage() {
           </Tabs>
 
           {activeTab === 0 && renderStandingsTab()}
+          {activeTab === playerStandingsIdx && renderPlayerStandingsTab()}
           {activeTab === teamsIdx && renderTeamsTab()}
           {showSignups && activeTab === signupsIdx && renderSignupsTab()}
           {activeTab >= weekStartIdx && weeks[activeTab - weekStartIdx] && renderWeekTab(weeks[activeTab - weekStartIdx])}

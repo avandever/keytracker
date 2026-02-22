@@ -12,8 +12,10 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
 
   if (week.allowed_sets && week.allowed_sets.length > 0) {
     const setMap = new Map((sets || []).map((s) => [s.number, s.shortname]));
-    const labels = week.allowed_sets.map((n) => setMap.get(n) ?? String(n));
-    chips.push(<Chip key="allowed-sets" label={`Sets: ${labels.join(', ')}`} size={size} variant="outlined" color="secondary" />);
+    const labels = week.allowed_sets.map((n) => setMap.get(n)).filter((name): name is string => name != null);
+    if (labels.length > 0) {
+      chips.push(<Chip key="allowed-sets" label={`Sets: ${labels.join(', ')}`} size={size} variant="outlined" color="secondary" />);
+    }
   }
   if (week.max_sas) {
     chips.push(<Chip key="max-sas" label={`Max SAS: ${week.max_sas}`} size={size} variant="outlined" />);
