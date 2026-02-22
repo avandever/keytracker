@@ -176,9 +176,15 @@ def update_league(league_id):
         return err
     if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
-    if league.status != LeagueStatus.SETUP.value:
-        return jsonify({"error": "Can only edit league during setup"}), 400
     data = request.get_json(silent=True) or {}
+    # week_bonus_points can be edited at any status
+    if "week_bonus_points" in data:
+        if isinstance(data["week_bonus_points"], int) and data["week_bonus_points"] >= 0:
+            league.week_bonus_points = data["week_bonus_points"]
+    if league.status != LeagueStatus.SETUP.value:
+        db.session.commit()
+        db.session.refresh(league)
+        return jsonify(serialize_league_detail(league))
     if "name" in data:
         name = (data["name"] or "").strip()
         if name:
@@ -1136,12 +1142,16 @@ def update_week(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.status != WeekStatus.SETUP.value:
-        return jsonify({"error": "Can only edit week during setup"}), 400
 
     data = request.get_json(silent=True) or {}
     if "name" in data:
         week.name = (data["name"] or "").strip() or None
+
+    if week.status != WeekStatus.SETUP.value:
+        db.session.commit()
+        db.session.refresh(week)
+        return jsonify(serialize_league_week(week))
+
     if "format_type" in data:
         valid_formats = [f.value for f in WeekFormat]
         if data["format_type"] in valid_formats:

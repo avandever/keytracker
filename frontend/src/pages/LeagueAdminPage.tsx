@@ -38,6 +38,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import {
   getLeague,
   updateLeague,
+  updateWeek,
   createTeam,
   deleteTeam,
   assignCaptain,
@@ -89,6 +90,7 @@ export default function LeagueAdminPage() {
   const [editFee, setEditFee] = useState('');
   const [editTeamSize, setEditTeamSize] = useState('');
   const [editNumTeams, setEditNumTeams] = useState('');
+  const [editBonusPoints, setEditBonusPoints] = useState('2');
 
   // Team creation
   const [newTeamName, setNewTeamName] = useState('');
@@ -121,6 +123,9 @@ export default function LeagueAdminPage() {
   // Week expanded
   const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({});
 
+  // Week rename: keyed by weekId
+  const [weekNames, setWeekNames] = useState<Record<number, string>>({});
+
   // Tabs
   const [activeTab, setActiveTab] = useState(0);
 
@@ -137,11 +142,13 @@ export default function LeagueAdminPage() {
     getLeague(parseInt(leagueId, 10))
       .then((l) => {
         setLeague(l);
+        setWeekNames(Object.fromEntries((l.weeks || []).map((w) => [w.id, w.name || ''])));
         setEditName(l.name);
         setEditDescription(l.description || '');
         setEditFee(l.fee_amount != null ? String(l.fee_amount) : '');
         setEditTeamSize(String(l.team_size));
         setEditNumTeams(String(l.num_teams));
+        setEditBonusPoints(String(l.week_bonus_points ?? 2));
       })
       .catch((e) => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
@@ -159,18 +166,37 @@ export default function LeagueAdminPage() {
 
   const isSetup = league.status === 'setup';
   const isActive = league.status === 'active';
+  const draftComplete = isActive;
+
+  // Tab order depends on draft stage
+  let teamsIdx: number;
+  let signupsIdx: number;
+  let weeksIdx: number;
+  if (draftComplete) {
+    weeksIdx = 0; teamsIdx = 1; signupsIdx = 2;
+  } else {
+    teamsIdx = 0; signupsIdx = 1; weeksIdx = 2;
+  }
+  const tabLabels = ['', '', ''];
+  tabLabels[teamsIdx] = 'Teams';
+  tabLabels[signupsIdx] = `Signups (${league.signups.length})`;
+  tabLabels[weeksIdx] = `Weeks (${league.weeks?.length || 0})`;
 
   const handleSaveSettings = async () => {
     setError('');
     setSuccess('');
     try {
-      const updated = await updateLeague(league.id, {
-        name: editName,
-        description: editDescription,
-        fee_amount: editFee ? parseFloat(editFee) : null,
-        team_size: parseInt(editTeamSize, 10),
-        num_teams: parseInt(editNumTeams, 10),
-      });
+      const payload: Parameters<typeof updateLeague>[1] = {
+        week_bonus_points: parseInt(editBonusPoints, 10) || 0,
+      };
+      if (isSetup) {
+        payload.name = editName;
+        payload.description = editDescription;
+        payload.fee_amount = editFee ? parseFloat(editFee) : null;
+        payload.team_size = parseInt(editTeamSize, 10);
+        payload.num_teams = parseInt(editNumTeams, 10);
+      }
+      const updated = await updateLeague(league.id, payload);
       setLeague({ ...league, ...updated });
       setSuccess('Settings saved');
     } catch (e: any) {
@@ -359,6 +385,17 @@ export default function LeagueAdminPage() {
     }
   };
 
+  const handleRenameWeek = async (weekId: number) => {
+    setError('');
+    try {
+      await updateWeek(league.id, weekId, { name: weekNames[weekId] || null });
+      setSuccess('Week renamed');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const toggleWeekExpanded = (weekId: number) => {
     setExpandedWeeks((prev) => ({ ...prev, [weekId]: !prev[weekId] }));
   };
@@ -455,25 +492,28 @@ export default function LeagueAdminPage() {
         variant="scrollable"
         scrollButtons="auto"
       >
-        <Tab label="Teams" />
-        <Tab label={`Signups (${league.signups.length})`} />
-        <Tab label={`Weeks (${league.weeks?.length || 0})`} />
+        {tabLabels.map((label, i) => <Tab key={i} label={label} />)}
       </Tabs>
 
       {/* Teams tab */}
-      {activeTab === 0 && (
+      {activeTab === teamsIdx && (
         <>
           {/* League settings */}
-          {isSetup && (
+          {(isSetup || isActive) && (
             <Card sx={{ mb: 3 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>League Settings</Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <TextField label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-                  <TextField label="Description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} multiline rows={2} />
-                  <TextField label="Entry Fee" value={editFee} onChange={(e) => setEditFee(e.target.value)} type="number" inputProps={{ step: '0.01', min: '0' }} />
-                  <TextField label="Team Size" value={editTeamSize} onChange={(e) => setEditTeamSize(e.target.value)} type="number" inputProps={{ min: '2' }} />
-                  <TextField label="Number of Teams" value={editNumTeams} onChange={(e) => setEditNumTeams(e.target.value)} type="number" inputProps={{ min: '2' }} />
+                  {isSetup && (
+                    <>
+                      <TextField label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                      <TextField label="Description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} multiline rows={2} />
+                      <TextField label="Entry Fee" value={editFee} onChange={(e) => setEditFee(e.target.value)} type="number" inputProps={{ step: '0.01', min: '0' }} />
+                      <TextField label="Team Size" value={editTeamSize} onChange={(e) => setEditTeamSize(e.target.value)} type="number" inputProps={{ min: '2' }} />
+                      <TextField label="Number of Teams" value={editNumTeams} onChange={(e) => setEditNumTeams(e.target.value)} type="number" inputProps={{ min: '2' }} />
+                    </>
+                  )}
+                  <TextField label="Bonus Points Per Week Win" value={editBonusPoints} onChange={(e) => setEditBonusPoints(e.target.value)} type="number" inputProps={{ min: '0' }} helperText="Extra points awarded to the week winner (default: 2)" />
                   <Button variant="contained" onClick={handleSaveSettings}>Save Settings</Button>
                 </Box>
               </CardContent>
@@ -622,7 +662,7 @@ export default function LeagueAdminPage() {
       )}
 
       {/* Signups tab */}
-      {activeTab === 1 && (
+      {activeTab === signupsIdx && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>Signups ({league.signups.length})</Typography>
@@ -643,7 +683,7 @@ export default function LeagueAdminPage() {
       )}
 
       {/* Weeks tab */}
-      {activeTab === 2 && (
+      {activeTab === weeksIdx && (
         <Card sx={{ mb: 3 }}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -673,6 +713,20 @@ export default function LeagueAdminPage() {
                 </ListItemButton>
                 <Collapse in={expandedWeeks[week.id]}>
                   <Box sx={{ p: 2, pt: 0 }}>
+                    {/* Week rename */}
+                    <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
+                      <TextField
+                        label="Week Name"
+                        value={weekNames[week.id] ?? ''}
+                        onChange={(e) => setWeekNames((prev) => ({ ...prev, [week.id]: e.target.value }))}
+                        size="small"
+                        placeholder={`Week ${week.week_number}`}
+                      />
+                      <Button size="small" variant="outlined" onClick={() => handleRenameWeek(week.id)}>
+                        Rename
+                      </Button>
+                    </Box>
+
                     {/* Week actions */}
                     <Box sx={{ mb: 2 }}>
                       {renderWeekActions(week)}
