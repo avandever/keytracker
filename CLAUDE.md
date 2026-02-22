@@ -84,3 +84,9 @@ The app reads from `config.ini` (see `config_example.ini`). Key env vars:
 ## Database
 
 Supports MySQL (production) and SQLite (development) via configurable driver in config.ini. Connection pool: size 20, timeout 5s, READ COMMITTED isolation, pre-ping enabled.
+
+## Frontend/Backend Sync
+
+The TypeScript frontend manually mirrors certain Python enums from `keytracker/schema.py`. When modifying these enums, update both sides:
+
+- `WeekStatus` (`schema.py`) ↔ `WeekStatus` type in `frontend/src/types.ts`

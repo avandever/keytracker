@@ -203,13 +203,22 @@ export interface KeyforgeSetInfo {
   shortname: string;
 }
 
+// Must be kept in sync with WeekStatus enum in keytracker/schema.py
+export type WeekStatus =
+  | 'setup'
+  | 'deck_selection'
+  | 'team_paired'
+  | 'pairing'
+  | 'published'
+  | 'completed';
+
 export interface LeagueWeek {
   id: number;
   league_id: number;
   week_number: number;
   name: string | null;
   format_type: string;
-  status: string;
+  status: WeekStatus;
   best_of_n: number;
   allowed_sets: number[] | null;
   max_sas: number | null;
