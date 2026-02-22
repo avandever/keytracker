@@ -588,7 +588,13 @@ export default function MyTeamPage() {
     );
   };
 
-  const topTabs = ['Membership', ...weeks.map((w) => w.name || `Week ${w.week_number}`)];
+  const activeStatuses = new Set(['deck_selection', 'team_paired', 'pairing', 'published']);
+  const sortedWeeks = [...weeks].sort((a, b) => {
+    const aActive = activeStatuses.has(a.status) ? 0 : 1;
+    const bActive = activeStatuses.has(b.status) ? 0 : 1;
+    if (aActive !== bActive) return aActive - bActive;
+    return a.week_number - b.week_number;
+  });
 
   return (
     <Container maxWidth="sm" sx={{ mt: 3 }}>
@@ -604,8 +610,20 @@ export default function MyTeamPage() {
         variant="scrollable"
         scrollButtons="auto"
       >
-        {topTabs.map((label, i) => (
-          <Tab key={i} label={label} />
+        <Tab label="Membership" />
+        {sortedWeeks.map((w, i) => (
+          <Tab
+            key={w.id}
+            value={i + 1}
+            label={
+              w.name ? (
+                <Box sx={{ textAlign: 'center', lineHeight: 1.2 }}>
+                  <Box>{w.name}</Box>
+                  <Box sx={{ fontSize: '0.7rem', opacity: 0.7 }}>{`Week ${w.week_number}`}</Box>
+                </Box>
+              ) : `Week ${w.week_number}`
+            }
+          />
         ))}
       </Tabs>
 
@@ -671,7 +689,7 @@ export default function MyTeamPage() {
         </>
       )}
 
-      {weekTab > 0 && weeks[weekTab - 1] && renderWeekContent(weeks[weekTab - 1])}
+      {weekTab > 0 && sortedWeeks[weekTab - 1] && renderWeekContent(sortedWeeks[weekTab - 1])}
 
       <Dialog open={pendingDeckAction !== null} onClose={() => setPendingDeckAction(null)}>
         <DialogTitle>Override Deck Selection?</DialogTitle>
