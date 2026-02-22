@@ -1542,7 +1542,9 @@ def submit_deck_selection(league_id, week_id):
         try:
             allowed = json.loads(week.allowed_sets)
             if deck.expansion not in allowed:
-                return jsonify({"error": f"Deck set ({deck.expansion}) is not in the allowed sets for this week"}), 400
+                kf_set = db.session.get(KeyforgeSet, deck.expansion)
+                set_name = kf_set.name if kf_set else str(deck.expansion)
+                return jsonify({"error": f"Decks from {set_name} are not allowed this week"}), 400
         except (json.JSONDecodeError, TypeError):
             pass
 
