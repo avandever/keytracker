@@ -43,6 +43,7 @@ export async function updateLeague(
     fee_amount: number | null;
     team_size: number;
     num_teams: number;
+    week_bonus_points: number;
   }>,
 ): Promise<LeagueDetail> {
   const { data } = await apiClient.put(`/leagues/${leagueId}`, payload);

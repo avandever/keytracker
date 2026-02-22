@@ -155,6 +155,7 @@ def serialize_league_summary(league: League) -> dict:
         "team_size": league.team_size,
         "num_teams": league.num_teams,
         "status": league.status,
+        "week_bonus_points": league.week_bonus_points,
         "is_test": league.is_test,
         "created_by": serialize_user_brief(league.created_by),
         "signup_count": len(league.signups),

@@ -143,6 +143,7 @@ export interface LeagueSummary {
   team_size: number;
   num_teams: number;
   status: string;
+  week_bonus_points: number;
   is_test: boolean;
   created_by: UserBrief;
   signup_count: number;
