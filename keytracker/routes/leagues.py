@@ -1903,3 +1903,23 @@ def _check_week_completion(week):
             if p1_wins < wins_needed and p2_wins < wins_needed:
                 return  # Not all matches complete
     week.status = WeekStatus.COMPLETED.value
+
+
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>/check-completion", methods=["POST"])
+@login_required
+def check_week_completion(league_id, week_id):
+    """Manually trigger the week completion check. Admin-only."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week must be in published status"}), 400
+    _check_week_completion(week)
+    db.session.commit()
+    db.session.refresh(week)
+    return jsonify(serialize_league_week(week))

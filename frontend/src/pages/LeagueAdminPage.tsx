@@ -53,6 +53,7 @@ import {
   getSets,
   deleteLeague,
   deleteWeek,
+  checkWeekCompletion,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -298,6 +299,9 @@ export default function LeagueAdminPage() {
       } else if (action === 'publish') {
         await publishWeek(league.id, weekId);
         setSuccess('Week published');
+      } else if (action === 'check_completion') {
+        await checkWeekCompletion(league.id, weekId);
+        setSuccess('Completion check done');
       } else if (action === 'generate_sealed_pools') {
         await generateSealedPools(league.id, weekId);
         setSuccess('Sealed pools generated!');
@@ -414,6 +418,13 @@ export default function LeagueAdminPage() {
         actions.push(
           <Button key="publish" size="small" variant="contained" color="success" onClick={() => handleWeekAction(week.id, 'publish')}>
             Publish Pairings
+          </Button>
+        );
+        break;
+      case 'published':
+        actions.push(
+          <Button key="check-completion" size="small" variant="outlined" onClick={() => handleWeekAction(week.id, 'check_completion')}>
+            Check Completion
           </Button>
         );
         break;

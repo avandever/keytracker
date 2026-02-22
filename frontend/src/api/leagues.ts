@@ -259,6 +259,14 @@ export async function publishWeek(
   return data;
 }
 
+export async function checkWeekCompletion(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/check-completion`);
+  return data;
+}
+
 // --- Deck Selection ---
 
 export async function submitDeckSelection(
