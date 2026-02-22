@@ -299,34 +299,40 @@ export default function MyLeagueInfoPage() {
             {/* Current selections */}
             {mySelections.length > 0 && (
               <Box sx={{ mb: 2 }}>
-                {mySelections.map((sel) => (
-                  <Box key={sel.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    {maxSlots > 1 && (
-                      <Chip label={`Slot ${sel.slot_number}`} size="small" variant="outlined" />
-                    )}
-                    {sel.deck?.houses && <HouseIcons houses={sel.deck.houses} />}
-                    <Typography variant="body2">
-                      {sel.deck?.name || 'Unknown deck'}
-                    </Typography>
-                    {sel.deck?.sas_rating != null && (
-                      <Chip label={`SAS: ${sel.deck.sas_rating}`} size="small" variant="outlined" />
-                    )}
-                    {sel.deck?.expansion_name && (
-                      <Chip label={sel.deck.expansion_name} size="small" variant="outlined" />
-                    )}
-                    {sel.deck && (
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Link href={sel.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
-                        <Link href={sel.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
-                      </Box>
-                    )}
-                    {canSelectDeck && (
-                      <Button size="small" color="error" onClick={() => handleRemoveDeck(week.id, sel.slot_number)}>
-                        Remove
-                      </Button>
-                    )}
-                  </Box>
-                ))}
+                {mySelections.map((sel) => {
+                  const bothStruck = !!myMatchup && myMatchup.strikes.length >= 2;
+                  const strickenIds = myMatchup ? new Set(myMatchup.strikes.map((s) => s.struck_deck_selection_id)) : new Set<number>();
+                  const isStruck = bothStruck && strickenIds.has(sel.id);
+                  return (
+                    <Box key={sel.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, opacity: isStruck ? 0.5 : 1, textDecoration: isStruck ? 'line-through' : 'none' }}>
+                      {maxSlots > 1 && (
+                        <Chip label={`Slot ${sel.slot_number}`} size="small" variant="outlined" />
+                      )}
+                      {sel.deck?.houses && <HouseIcons houses={sel.deck.houses} />}
+                      <Typography variant="body2">
+                        {sel.deck?.name || 'Unknown deck'}
+                      </Typography>
+                      {sel.deck?.sas_rating != null && (
+                        <Chip label={`SAS: ${sel.deck.sas_rating}`} size="small" variant="outlined" />
+                      )}
+                      {sel.deck?.expansion_name && (
+                        <Chip label={sel.deck.expansion_name} size="small" variant="outlined" />
+                      )}
+                      {sel.deck && (
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Link href={sel.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                          <Link href={sel.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                        </Box>
+                      )}
+                      {isStruck && <Chip label="Struck" size="small" color="error" />}
+                      {canSelectDeck && (
+                        <Button size="small" color="error" onClick={() => handleRemoveDeck(week.id, sel.slot_number)}>
+                          Remove
+                        </Button>
+                      )}
+                    </Box>
+                  );
+                })}
                 {maxSlots > 1 && mySelections.length > 1 && (
                   <CombinedSas selections={mySelections} />
                 )}
