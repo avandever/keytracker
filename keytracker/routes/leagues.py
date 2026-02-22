@@ -1875,9 +1875,12 @@ def report_game(league_id, matchup_id):
     )
     db.session.add(game)
     db.session.flush()
+    # Expire pm so _check_week_completion reloads pm.games from the DB
+    # rather than the stale in-memory collection that predates this flush
+    db.session.expire(pm, ['games'])
 
     # Check if match is now complete - auto-complete week if all matches done
-    all_games = sorted(pm.games + [game], key=lambda g: g.game_number)
+    all_games = sorted(pm.games, key=lambda g: g.game_number)
     p1_total = sum(1 for g in all_games if g.winner_id == pm.player1_id)
     p2_total = sum(1 for g in all_games if g.winner_id == pm.player2_id)
 
