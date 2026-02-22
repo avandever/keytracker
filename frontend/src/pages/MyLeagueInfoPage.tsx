@@ -254,7 +254,7 @@ export default function MyLeagueInfoPage() {
   const renderWeekContent = (week: LeagueWeek) => {
     const mySelections = getMySelections(week);
     const myMatchup = getMyMatchup(week);
-    const canSelectDeck = week.status === 'deck_selection' || week.status === 'pairing';
+    const canSelectDeck = week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
     const maxSlots = week.format_type === 'triad' ? 3 : 1;
 
     return (

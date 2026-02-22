@@ -349,7 +349,7 @@ export default function MyTeamPage() {
   };
 
   const renderWeekContent = (week: LeagueWeek) => {
-    const isWeekEditable = week.status === 'deck_selection' || week.status === 'pairing';
+    const isWeekEditable = week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
     const maxSlots = week.format_type === 'triad' ? 3 : 1;
 
     return (
