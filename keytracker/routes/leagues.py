@@ -138,8 +138,9 @@ def get_league(league_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    data = serialize_league_detail(league)
     effective = get_effective_user()
+    viewer = effective if current_user.is_authenticated else None
+    data = serialize_league_detail(league, viewer=viewer)
     if current_user.is_authenticated:
         data["is_admin"] = _is_league_admin(league, effective)
         signup = LeagueSignup.query.filter_by(

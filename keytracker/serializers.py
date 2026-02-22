@@ -158,13 +158,13 @@ def serialize_league_summary(league: League) -> dict:
     }
 
 
-def serialize_league_detail(league: League) -> dict:
+def serialize_league_detail(league: League, viewer=None) -> dict:
     data = serialize_league_summary(league)
     data["teams"] = [serialize_team_detail(t) for t in sorted(league.teams, key=lambda t: t.order_number)]
     data["signups"] = [serialize_signup(s) for s in sorted(league.signups, key=lambda s: s.signup_order)]
     data["admins"] = [serialize_user_brief(a.user) for a in league.admins]
     data["weeks"] = [
-        serialize_league_week(w) for w in sorted(league.weeks, key=lambda w: w.week_number)
+        serialize_league_week(w, viewer=viewer) for w in sorted(league.weeks, key=lambda w: w.week_number)
     ]
     return data
 
@@ -176,6 +176,11 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             allowed_sets = json.loads(week.allowed_sets)
         except (json.JSONDecodeError, TypeError):
             allowed_sets = None
+
+    # Player matchups are hidden from non-admins until the week is published
+    viewer_is_admin = viewer and any(a.user_id == viewer.id for a in week.league.admins)
+    show_player_matchups = week.status != 'pairing' or viewer_is_admin
+
     data = {
         "id": week.id,
         "league_id": week.league_id,
@@ -191,13 +196,13 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "house_diversity": week.house_diversity,
         "decks_per_player": week.decks_per_player,
         "sealed_pools_generated": week.sealed_pools_generated,
-        "matchups": [serialize_week_matchup(m, viewer=viewer) for m in week.matchups],
+        "matchups": [serialize_week_matchup(m, viewer=viewer, show_player_matchups=show_player_matchups) for m in week.matchups],
         "deck_selections": [serialize_deck_selection(ds) for ds in week.deck_selections],
     }
     return data
 
 
-def serialize_week_matchup(matchup: WeekMatchup, viewer=None) -> dict:
+def serialize_week_matchup(matchup: WeekMatchup, viewer=None, show_player_matchups: bool = True) -> dict:
     return {
         "id": matchup.id,
         "week_id": matchup.week_id,
@@ -205,7 +210,7 @@ def serialize_week_matchup(matchup: WeekMatchup, viewer=None) -> dict:
         "team2": serialize_team_detail(matchup.team2),
         "player_matchups": [
             serialize_player_matchup(pm, viewer=viewer) for pm in matchup.player_matchups
-        ],
+        ] if show_player_matchups else [],
     }
 
 
