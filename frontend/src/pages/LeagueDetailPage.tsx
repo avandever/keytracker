@@ -25,7 +25,14 @@ import {
 import { getLeague, signup, withdraw } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
-import type { LeagueDetail, LeagueWeek } from '../types';
+import type { LeagueDetail, LeagueWeek, TeamDetail } from '../types';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@mui/material';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
@@ -87,12 +94,15 @@ export default function LeagueDetailPage() {
   const weeks = league.weeks || [];
   const showSignups = league.is_admin || league.is_captain;
   const tabs = [
+    'Standings',
     'Teams',
     ...(showSignups ? [`Signups (${league.signups.length})`] : []),
     ...weeks.map((w) => w.name || `Week ${w.week_number}`),
   ];
-  const signupsOffset = showSignups ? 1 : 0;
-  const weekStartIdx = 1 + signupsOffset;
+  // tab index offsets
+  const teamsIdx = 1;
+  const signupsIdx = showSignups ? 2 : null;
+  const weekStartIdx = 2 + (showSignups ? 1 : 0);
 
   const renderWeekTab = (week: LeagueWeek) => {
     return (
@@ -140,6 +150,7 @@ export default function LeagueDetailPage() {
                         >
                           {pm.player2.name}
                         </Typography>
+                        {pm.is_feature && <Chip label="Feature" size="small" color="warning" />}
                         {isComplete && <Chip label="Complete" size="small" color="success" />}
                         {!isComplete && pm.player1_started && pm.player2_started && (
                           <Chip label="In progress" size="small" color="info" />
@@ -178,6 +189,113 @@ export default function LeagueDetailPage() {
           </Typography>
         )}
       </Box>
+    );
+  };
+
+  interface StandingsRow {
+    team: TeamDetail;
+    week_points: Record<number, number>;
+    total: number;
+  }
+
+  const computeStandings = (): StandingsRow[] => {
+    const qualifyingWeeks = weeks.filter(
+      (w) => w.status === 'published' || w.status === 'completed',
+    );
+    const rows: Record<number, StandingsRow> = {};
+    for (const team of league.teams) {
+      rows[team.id] = { team, week_points: {}, total: 0 };
+    }
+    for (const week of qualifyingWeeks) {
+      const winsNeeded = Math.ceil(week.best_of_n / 2);
+      for (const wm of week.matchups) {
+        const team1MemberIds = new Set(wm.team1.members.map((m) => m.user.id));
+        let team1Wins = 0;
+        let team2Wins = 0;
+        let featureWinnerId: number | null = null;
+        for (const pm of wm.player_matchups) {
+          const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
+          const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
+          let winnerOfPm: number | null = null;
+          if (p1Wins >= winsNeeded) winnerOfPm = pm.player1.id;
+          else if (p2Wins >= winsNeeded) winnerOfPm = pm.player2.id;
+          if (winnerOfPm !== null) {
+            if (team1MemberIds.has(pm.player1.id)) {
+              if (winnerOfPm === pm.player1.id) team1Wins++;
+              else team2Wins++;
+            } else {
+              if (winnerOfPm === pm.player1.id) team2Wins++;
+              else team1Wins++;
+            }
+          }
+          if (pm.is_feature && winnerOfPm !== null) {
+            featureWinnerId = winnerOfPm;
+          }
+        }
+        let t1Bonus = 0;
+        let t2Bonus = 0;
+        if (team1Wins > team2Wins) {
+          t1Bonus = 2;
+        } else if (team2Wins > team1Wins) {
+          t2Bonus = 2;
+        } else if (featureWinnerId !== null) {
+          if (team1MemberIds.has(featureWinnerId)) t1Bonus = 2;
+          else t2Bonus = 2;
+        }
+        if (rows[wm.team1.id]) {
+          rows[wm.team1.id].week_points[week.week_number] =
+            (rows[wm.team1.id].week_points[week.week_number] || 0) + team1Wins + t1Bonus;
+          rows[wm.team1.id].total += team1Wins + t1Bonus;
+        }
+        if (rows[wm.team2.id]) {
+          rows[wm.team2.id].week_points[week.week_number] =
+            (rows[wm.team2.id].week_points[week.week_number] || 0) + team2Wins + t2Bonus;
+          rows[wm.team2.id].total += team2Wins + t2Bonus;
+        }
+      }
+    }
+    return Object.values(rows).sort((a, b) => b.total - a.total);
+  };
+
+  const renderStandingsTab = () => {
+    const qualifyingWeeks = weeks.filter(
+      (w) => w.status === 'published' || w.status === 'completed',
+    );
+    if (qualifyingWeeks.length === 0) {
+      return (
+        <Typography color="text.secondary">No results yet — standings will appear once weeks are published.</Typography>
+      );
+    }
+    const rows = computeStandings();
+    return (
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell><strong>Team</strong></TableCell>
+            {qualifyingWeeks.map((w) => (
+              <TableCell key={w.id} align="center">
+                <strong>{w.name || `Wk ${w.week_number}`}</strong>
+              </TableCell>
+            ))}
+            <TableCell align="center"><strong>Total</strong></TableCell>
+            <TableCell align="center"><strong>Playoff Pts</strong></TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map((row) => (
+            <TableRow key={row.team.id}>
+              <TableCell>{row.team.name}</TableCell>
+              {qualifyingWeeks.map((w) => (
+                <TableCell key={w.id} align="center">
+                  {row.week_points[w.week_number] ?? 0}
+                </TableCell>
+              ))}
+              <TableCell align="center"><strong>{row.total}</strong></TableCell>
+              <TableCell align="center" sx={{ color: 'text.secondary' }}>N/A</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     );
   };
 
@@ -314,8 +432,9 @@ export default function LeagueDetailPage() {
             ))}
           </Tabs>
 
-          {activeTab === 0 && renderTeamsTab()}
-          {showSignups && activeTab === 1 && renderSignupsTab()}
+          {activeTab === 0 && renderStandingsTab()}
+          {activeTab === teamsIdx && renderTeamsTab()}
+          {showSignups && activeTab === signupsIdx && renderSignupsTab()}
           {activeTab >= weekStartIdx && weeks[activeTab - weekStartIdx] && renderWeekTab(weeks[activeTab - weekStartIdx])}
         </>
       ) : (
@@ -324,6 +443,7 @@ export default function LeagueDetailPage() {
           {renderTeamsTab()}
         </>
       )}
+
 
       <Dialog open={signupDialogOpen} onClose={() => setSignupDialogOpen(false)}>
         <DialogTitle>Confirm Signup</DialogTitle>

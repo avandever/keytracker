@@ -5,12 +5,13 @@ from flask.cli import AppGroup
 from keytracker.schema import db, User, League, LeagueSignup
 import click_log
 
-test_user = AppGroup('test-user')
+test_user = AppGroup("test-user")
 click_log.basic_config()
 
 
 class EmailExists(Exception):
     pass
+
 
 @test_user.command("create")
 @click_log.simple_verbosity_option()
@@ -48,11 +49,12 @@ def signup_all(league_id):
         if not test_users:
             raise click.ClickException("No test users found")
         existing_user_ids = {
-            s.user_id
-            for s in LeagueSignup.query.filter_by(league_id=league_id).all()
+            s.user_id for s in LeagueSignup.query.filter_by(league_id=league_id).all()
         }
         next_order = (
-            db.session.query(db.func.coalesce(db.func.max(LeagueSignup.signup_order), 0))
+            db.session.query(
+                db.func.coalesce(db.func.max(LeagueSignup.signup_order), 0)
+            )
             .filter_by(league_id=league_id)
             .scalar()
         ) + 1

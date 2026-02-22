@@ -433,7 +433,12 @@ export default function MyLeagueInfoPage() {
         {myMatchup && week.status === 'published' && (
           <Card sx={{ mb: 2 }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>My Match</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant="h6">My Match</Typography>
+                {myMatchup.is_feature && (
+                  <Chip label="Feature Match" color="warning" size="small" />
+                )}
+              </Box>
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Avatar src={myMatchup.player1.avatar_url || undefined} sx={{ width: 32, height: 32 }}>

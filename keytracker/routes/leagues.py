@@ -16,6 +16,7 @@ from keytracker.schema import (
     MatchGame,
     StrikeSelection,
     SealedPoolDeck,
+    FeatureDesignation,
     SignupStatus,
     WeekFormat,
     WeekStatus,
@@ -76,9 +77,10 @@ def _is_league_admin(league, user=None):
         # Test users from get_effective_user() are plain User objects (not UserMixin login)
         # so check by id directly
         pass
-    return LeagueAdmin.query.filter_by(
-        league_id=league.id, user_id=user.id
-    ).first() is not None
+    return (
+        LeagueAdmin.query.filter_by(league_id=league.id, user_id=user.id).first()
+        is not None
+    )
 
 
 def _get_league_or_404(league_id):
@@ -148,10 +150,14 @@ def get_league(league_id):
         ).first()
         data["is_signed_up"] = signup is not None
         # Find user's team membership
-        member = TeamMember.query.join(Team).filter(
-            Team.league_id == league.id,
-            TeamMember.user_id == effective.id,
-        ).first()
+        member = (
+            TeamMember.query.join(Team)
+            .filter(
+                Team.league_id == league.id,
+                TeamMember.user_id == effective.id,
+            )
+            .first()
+        )
         data["my_team_id"] = member.team_id if member else None
         data["is_captain"] = member.is_captain if member else False
     else:
@@ -213,6 +219,7 @@ def delete_league(league_id):
             db.session.delete(matchup)
         PlayerDeckSelection.query.filter_by(week_id=week.id).delete()
         SealedPoolDeck.query.filter_by(week_id=week.id).delete()
+        FeatureDesignation.query.filter_by(week_id=week.id).delete()
         db.session.delete(week)
     for team in Team.query.filter_by(league_id=league.id).all():
         TeamMember.query.filter_by(team_id=team.id).delete()
@@ -226,6 +233,7 @@ def delete_league(league_id):
 
 
 # --- Signups ---
+
 
 @blueprint.route("/<int:league_id>/signup", methods=["POST"])
 @login_required
@@ -250,9 +258,12 @@ def signup(league_id):
     ).first()
     if existing:
         return jsonify({"error": "Already signed up"}), 409
-    max_order = db.session.query(db.func.max(LeagueSignup.signup_order)).filter_by(
-        league_id=league.id
-    ).scalar() or 0
+    max_order = (
+        db.session.query(db.func.max(LeagueSignup.signup_order))
+        .filter_by(league_id=league.id)
+        .scalar()
+        or 0
+    )
     signup_entry = LeagueSignup(
         league_id=league.id,
         user_id=effective.id,
@@ -284,6 +295,7 @@ def withdraw(league_id):
 
 
 # --- Teams ---
+
 
 @blueprint.route("/<int:league_id>/teams", methods=["GET"])
 def list_teams(league_id):
@@ -331,9 +343,12 @@ def update_team(league_id, team_id):
         return jsonify({"error": "Team not found"}), 404
     effective = get_effective_user()
     # Allow league admin or team captain
-    is_captain = TeamMember.query.filter_by(
-        team_id=team.id, user_id=effective.id, is_captain=True
-    ).first() is not None
+    is_captain = (
+        TeamMember.query.filter_by(
+            team_id=team.id, user_id=effective.id, is_captain=True
+        ).first()
+        is not None
+    )
     if not _is_league_admin(league, effective) and not is_captain:
         return jsonify({"error": "Admin or captain access required"}), 403
     data = request.get_json(silent=True) or {}
@@ -364,6 +379,7 @@ def delete_team(league_id, team_id):
 
 # --- Captain assignment ---
 
+
 @blueprint.route("/<int:league_id>/teams/<int:team_id>/captain", methods=["POST"])
 @login_required
 def assign_captain(league_id, team_id):
@@ -384,7 +400,10 @@ def assign_captain(league_id, team_id):
         league_id=league.id, user_id=user_id
     ).first()
     if not signup_entry:
-        return jsonify({"error": "User must be signed up to be assigned as captain"}), 400
+        return (
+            jsonify({"error": "User must be signed up to be assigned as captain"}),
+            400,
+        )
     # Remove existing captain
     TeamMember.query.filter_by(team_id=team.id, is_captain=True).update(
         {"is_captain": False}
@@ -399,9 +418,7 @@ def assign_captain(league_id, team_id):
             TeamMember.user_id == user_id,
             TeamMember.team_id.in_([t.id for t in league.teams]),
         ).delete(synchronize_session="fetch")
-        member = TeamMember(
-            team_id=team.id, user_id=user_id, is_captain=True
-        )
+        member = TeamMember(team_id=team.id, user_id=user_id, is_captain=True)
         db.session.add(member)
     db.session.commit()
     db.session.refresh(team)
@@ -410,7 +427,10 @@ def assign_captain(league_id, team_id):
 
 # --- Member reassignment ---
 
-@blueprint.route("/<int:league_id>/teams/<int:team_id>/members/<int:member_user_id>", methods=["PUT"])
+
+@blueprint.route(
+    "/<int:league_id>/teams/<int:team_id>/members/<int:member_user_id>", methods=["PUT"]
+)
 @login_required
 def reassign_member(league_id, team_id, member_user_id):
     """Replace a team member with a different signed-up user."""
@@ -466,7 +486,10 @@ def reassign_member(league_id, team_id, member_user_id):
 
 # --- Fee tracking ---
 
-@blueprint.route("/<int:league_id>/teams/<int:team_id>/fees/<int:user_id>", methods=["POST"])
+
+@blueprint.route(
+    "/<int:league_id>/teams/<int:team_id>/fees/<int:user_id>", methods=["POST"]
+)
 @login_required
 def toggle_fee_paid(league_id, team_id, user_id):
     league, err = _get_league_or_404(league_id)
@@ -476,9 +499,12 @@ def toggle_fee_paid(league_id, team_id, user_id):
     if not team or team.league_id != league.id:
         return jsonify({"error": "Team not found"}), 404
     effective = get_effective_user()
-    is_captain = TeamMember.query.filter_by(
-        team_id=team.id, user_id=effective.id, is_captain=True
-    ).first() is not None
+    is_captain = (
+        TeamMember.query.filter_by(
+            team_id=team.id, user_id=effective.id, is_captain=True
+        ).first()
+        is not None
+    )
     if not _is_league_admin(league, effective) and not is_captain:
         return jsonify({"error": "Admin or captain access required"}), 403
     member = TeamMember.query.filter_by(team_id=team.id, user_id=user_id).first()
@@ -492,6 +518,7 @@ def toggle_fee_paid(league_id, team_id, user_id):
 
 # --- League admins ---
 
+
 @blueprint.route("/<int:league_id>/admins", methods=["POST"])
 @login_required
 def add_admin(league_id):
@@ -504,9 +531,7 @@ def add_admin(league_id):
     user_id = data.get("user_id")
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
-    existing = LeagueAdmin.query.filter_by(
-        league_id=league.id, user_id=user_id
-    ).first()
+    existing = LeagueAdmin.query.filter_by(league_id=league.id, user_id=user_id).first()
     if existing:
         return jsonify({"error": "Already an admin"}), 409
     db.session.add(LeagueAdmin(league_id=league.id, user_id=user_id))
@@ -522,9 +547,7 @@ def remove_admin(league_id, user_id):
         return err
     if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
-    admin = LeagueAdmin.query.filter_by(
-        league_id=league.id, user_id=user_id
-    ).first()
+    admin = LeagueAdmin.query.filter_by(league_id=league.id, user_id=user_id).first()
     if not admin:
         return jsonify({"error": "Admin not found"}), 404
     # Don't allow removing the last admin
@@ -537,6 +560,7 @@ def remove_admin(league_id, user_id):
 
 
 # --- Draft system ---
+
 
 def compute_draft_state(league):
     """Pure function: compute draft state from DraftPick records + team order."""
@@ -557,14 +581,18 @@ def compute_draft_state(league):
     pick_history = []
     picked_user_ids = set()
     for p in picks:
-        pick_history.append({
-            "round_number": p.round_number,
-            "pick_number": p.pick_number,
-            "team_id": p.team_id,
-            "team_name": p.team.name if p.team else None,
-            "picked_user": serialize_user_brief(p.picked_user) if p.picked_user else None,
-            "picked_at": p.picked_at.isoformat() if p.picked_at else None,
-        })
+        pick_history.append(
+            {
+                "round_number": p.round_number,
+                "pick_number": p.pick_number,
+                "team_id": p.team_id,
+                "team_name": p.team.name if p.team else None,
+                "picked_user": (
+                    serialize_user_brief(p.picked_user) if p.picked_user else None
+                ),
+                "picked_at": p.picked_at.isoformat() if p.picked_at else None,
+            }
+        )
         picked_user_ids.add(p.picked_user_id)
 
     # Available players: signed_up status, not yet picked, not a captain
@@ -576,7 +604,11 @@ def compute_draft_state(league):
 
     available = []
     for s in league.signups:
-        if s.status == SignupStatus.DRAFTED.value and s.user_id not in picked_user_ids and s.user_id not in captain_user_ids:
+        if (
+            s.status == SignupStatus.DRAFTED.value
+            and s.user_id not in picked_user_ids
+            and s.user_id not in captain_user_ids
+        ):
             available.append(serialize_user_brief(s.user))
 
     # Compute current pick
@@ -603,14 +635,20 @@ def compute_draft_state(league):
         round_picks = []
         for t in teams:
             pick = next(
-                (p for p in pick_history if p["round_number"] == r and p["team_id"] == t.id),
+                (
+                    p
+                    for p in pick_history
+                    if p["round_number"] == r and p["team_id"] == t.id
+                ),
                 None,
             )
-            round_picks.append({
-                "team_id": t.id,
-                "team_name": t.name,
-                "pick": pick,
-            })
+            round_picks.append(
+                {
+                    "team_id": t.id,
+                    "team_name": t.name,
+                    "pick": pick,
+                }
+            )
         draft_board.append({"round": r, "picks": round_picks})
 
     return {
@@ -690,11 +728,16 @@ def get_draft(league_id):
     effective = get_effective_user()
     # Only captains and league admins can see draft board
     is_admin = _is_league_admin(league, effective)
-    is_captain = TeamMember.query.join(Team).filter(
-        Team.league_id == league.id,
-        TeamMember.user_id == effective.id,
-        TeamMember.is_captain == True,
-    ).first() is not None
+    is_captain = (
+        TeamMember.query.join(Team)
+        .filter(
+            Team.league_id == league.id,
+            TeamMember.user_id == effective.id,
+            TeamMember.is_captain == True,
+        )
+        .first()
+        is not None
+    )
     if not is_admin and not is_captain:
         return jsonify({"error": "Captains and admins only"}), 403
     return jsonify(compute_draft_state(league))
@@ -720,11 +763,14 @@ def make_pick(league_id):
     # Check permission: must be captain of current team or league admin
     effective = get_effective_user()
     is_admin = _is_league_admin(league, effective)
-    is_current_captain = TeamMember.query.filter_by(
-        team_id=current_team_data["id"],
-        user_id=effective.id,
-        is_captain=True,
-    ).first() is not None
+    is_current_captain = (
+        TeamMember.query.filter_by(
+            team_id=current_team_data["id"],
+            user_id=effective.id,
+            is_captain=True,
+        ).first()
+        is not None
+    )
     if not is_admin and not is_current_captain:
         return jsonify({"error": "Not your turn to pick"}), 403
 
@@ -768,6 +814,7 @@ def make_pick(league_id):
 
 # --- Test users ---
 
+
 @blueprint.route("/test-users", methods=["GET"])
 @login_required
 def list_test_users():
@@ -779,22 +826,28 @@ def list_test_users():
 
 # --- Sets reference ---
 
+
 @blueprint.route("/sets", methods=["GET"])
 def list_sets():
     sets = KeyforgeSet.query.order_by(KeyforgeSet.number).all()
     if sets:
-        return jsonify([
-            {"number": s.number, "name": s.name, "shortname": s.shortname}
-            for s in sets
-        ])
+        return jsonify(
+            [
+                {"number": s.number, "name": s.name, "shortname": s.shortname}
+                for s in sets
+            ]
+        )
     # Fallback to hardcoded EXPANSION_VALUES
-    return jsonify([
-        {"number": ev.number, "name": ev.name, "shortname": ev.shortname}
-        for ev in EXPANSION_VALUES
-    ])
+    return jsonify(
+        [
+            {"number": ev.number, "name": ev.name, "shortname": ev.shortname}
+            for ev in EXPANSION_VALUES
+        ]
+    )
 
 
 # --- Week management ---
+
 
 def _get_active_players(league):
     """Get all non-waitlisted players in the league (team members)."""
@@ -835,10 +888,7 @@ def _generate_round_robin(teams):
         # Rotate: move last element to front
         rotating = [rotating[-1]] + rotating[:-1]
     # Filter out byes
-    rounds = [
-        [(a, b) for a, b in r if a is not None and b is not None]
-        for r in rounds
-    ]
+    rounds = [[(a, b) for a, b in r if a is not None and b is not None] for r in rounds]
     return rounds
 
 
@@ -849,8 +899,7 @@ def _compute_player_strength(user_id, league_id):
     """
     # Find all completed player matchups for this user in this league
     completed_matchups = (
-        PlayerMatchup.query
-        .join(WeekMatchup)
+        PlayerMatchup.query.join(WeekMatchup)
         .join(LeagueWeek)
         .filter(
             LeagueWeek.league_id == league_id,
@@ -879,8 +928,7 @@ def _compute_player_strength(user_id, league_id):
     for opp_id in opponent_ids:
         opp_wins = 0
         opp_matchups = (
-            PlayerMatchup.query
-            .join(WeekMatchup)
+            PlayerMatchup.query.join(WeekMatchup)
             .join(LeagueWeek)
             .filter(
                 LeagueWeek.league_id == league_id,
@@ -902,13 +950,28 @@ def _compute_player_strength(user_id, league_id):
     return wins + sos_bonus
 
 
-def _generate_player_pairings(team1, team2, league, week_number):
+def _generate_player_pairings(team1, team2, league, week, week_number):
     """Generate player pairings within a team matchup.
 
     Week 1: random. Week 2+: strength-based.
+    Returns list of (player1_id, player2_id, is_feature) tuples.
+    Feature pair (if any) is always first.
     """
     members1 = list(team1.members)
     members2 = list(team2.members)
+
+    feature_pair = None
+    if league.team_size % 2 == 0:
+        fd1 = FeatureDesignation.query.filter_by(
+            week_id=week.id, team_id=team1.id
+        ).first()
+        fd2 = FeatureDesignation.query.filter_by(
+            week_id=week.id, team_id=team2.id
+        ).first()
+        if fd1 and fd2:
+            feature_pair = (fd1.user_id, fd2.user_id)
+            members1 = [m for m in members1 if m.user_id != fd1.user_id]
+            members2 = [m for m in members2 if m.user_id != fd2.user_id]
 
     if week_number == 1:
         random.shuffle(members1)
@@ -918,12 +981,15 @@ def _generate_player_pairings(team1, team2, league, week_number):
         def strength_key(m):
             s = _compute_player_strength(m.user_id, league.id)
             return (-s, random.random())
+
         members1.sort(key=strength_key)
         members2.sort(key=strength_key)
 
     pairings = []
+    if feature_pair:
+        pairings.append((feature_pair[0], feature_pair[1], True))
     for i in range(min(len(members1), len(members2))):
-        pairings.append((members1[i].user_id, members2[i].user_id))
+        pairings.append((members1[i].user_id, members2[i].user_id, False))
     return pairings
 
 
@@ -931,15 +997,17 @@ def _parse_deck_url(url_str):
     """Extract kf_id from a deck URL or raw ID."""
     url_str = url_str.strip()
     # Try keyforgegame.com/deck-details/{id}
-    m = re.search(r'keyforgegame\.com/deck-details/([a-f0-9-]+)', url_str)
+    m = re.search(r"keyforgegame\.com/deck-details/([a-f0-9-]+)", url_str)
     if m:
         return m.group(1)
     # Try decksofkeyforge.com/decks/{id}
-    m = re.search(r'decksofkeyforge\.com/decks/([a-f0-9-]+)', url_str)
+    m = re.search(r"decksofkeyforge\.com/decks/([a-f0-9-]+)", url_str)
     if m:
         return m.group(1)
     # Try raw UUID
-    m = re.match(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$', url_str)
+    m = re.match(
+        r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$", url_str
+    )
     if m:
         return url_str
     return None
@@ -970,9 +1038,12 @@ def create_week(league_id):
         best_of_n = 3
 
     # Determine next week number
-    max_week = db.session.query(db.func.max(LeagueWeek.week_number)).filter_by(
-        league_id=league.id
-    ).scalar() or 0
+    max_week = (
+        db.session.query(db.func.max(LeagueWeek.week_number))
+        .filter_by(league_id=league.id)
+        .scalar()
+        or 0
+    )
 
     allowed_sets = data.get("allowed_sets")
     allowed_sets_json = None
@@ -1023,6 +1094,7 @@ def delete_week(league_id, week_id):
         db.session.delete(matchup)
     PlayerDeckSelection.query.filter_by(week_id=week.id).delete()
     SealedPoolDeck.query.filter_by(week_id=week.id).delete()
+    FeatureDesignation.query.filter_by(week_id=week.id).delete()
     db.session.delete(week)
     db.session.commit()
     return jsonify({"success": True}), 200
@@ -1033,9 +1105,11 @@ def list_weeks(league_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    weeks = LeagueWeek.query.filter_by(league_id=league.id).order_by(
-        LeagueWeek.week_number
-    ).all()
+    weeks = (
+        LeagueWeek.query.filter_by(league_id=league.id)
+        .order_by(LeagueWeek.week_number)
+        .all()
+    )
     return jsonify([serialize_league_week(w) for w in weeks])
 
 
@@ -1099,7 +1173,10 @@ def update_week(league_id, week_id):
 
 # --- Week status transitions ---
 
-@blueprint.route("/<int:league_id>/weeks/<int:week_id>/open-deck-selection", methods=["POST"])
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/open-deck-selection", methods=["POST"]
+)
 @login_required
 def open_deck_selection(league_id, week_id):
     league, err = _get_league_or_404(league_id)
@@ -1118,7 +1195,9 @@ def open_deck_selection(league_id, week_id):
     return jsonify(serialize_league_week(week))
 
 
-@blueprint.route("/<int:league_id>/weeks/<int:week_id>/generate-matchups", methods=["POST"])
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/generate-matchups", methods=["POST"]
+)
 @login_required
 def generate_matchups(league_id, week_id):
     """Legacy endpoint: generates both team pairings and player matchups in one step."""
@@ -1151,7 +1230,14 @@ def generate_matchups(league_id, week_id):
         if selections < required_slots:
             user = db.session.get(User, member.user_id)
             name = user.name if user else f"User {member.user_id}"
-            return jsonify({"error": f"{name} has not submitted all deck selections ({selections}/{required_slots})"}), 400
+            return (
+                jsonify(
+                    {
+                        "error": f"{name} has not submitted all deck selections ({selections}/{required_slots})"
+                    }
+                ),
+                400,
+            )
 
     # Delete existing matchups for this week (in case of re-generation)
     WeekMatchup.query.filter_by(week_id=week.id).delete()
@@ -1164,7 +1250,12 @@ def generate_matchups(league_id, week_id):
     # Use the round corresponding to this week
     round_idx = week.week_number - 1
     if round_idx >= len(all_rounds):
-        return jsonify({"error": "No more round-robin pairings available for this week number"}), 400
+        return (
+            jsonify(
+                {"error": "No more round-robin pairings available for this week number"}
+            ),
+            400,
+        )
 
     round_pairings = all_rounds[round_idx]
 
@@ -1178,12 +1269,15 @@ def generate_matchups(league_id, week_id):
         db.session.flush()
 
         # Generate player pairings
-        player_pairs = _generate_player_pairings(team1, team2, league, week.week_number)
-        for p1_id, p2_id in player_pairs:
+        player_pairs = _generate_player_pairings(
+            team1, team2, league, week, week.week_number
+        )
+        for p1_id, p2_id, is_feature in player_pairs:
             pm = PlayerMatchup(
                 week_matchup_id=wm.id,
                 player1_id=p1_id,
                 player2_id=p2_id,
+                is_feature=is_feature,
             )
             db.session.add(pm)
 
@@ -1193,7 +1287,9 @@ def generate_matchups(league_id, week_id):
     return jsonify(serialize_league_week(week))
 
 
-@blueprint.route("/<int:league_id>/weeks/<int:week_id>/generate-team-pairings", methods=["POST"])
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/generate-team-pairings", methods=["POST"]
+)
 @login_required
 def generate_team_pairings(league_id, week_id):
     """Generate team pairings only (no player matchups yet)."""
@@ -1217,7 +1313,12 @@ def generate_team_pairings(league_id, week_id):
     all_rounds = _generate_round_robin(teams)
     round_idx = week.week_number - 1
     if round_idx >= len(all_rounds):
-        return jsonify({"error": "No more round-robin pairings available for this week number"}), 400
+        return (
+            jsonify(
+                {"error": "No more round-robin pairings available for this week number"}
+            ),
+            400,
+        )
 
     for team1, team2 in all_rounds[round_idx]:
         wm = WeekMatchup(
@@ -1233,7 +1334,9 @@ def generate_team_pairings(league_id, week_id):
     return jsonify(serialize_league_week(week))
 
 
-@blueprint.route("/<int:league_id>/weeks/<int:week_id>/generate-player-matchups", methods=["POST"])
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/generate-player-matchups", methods=["POST"]
+)
 @login_required
 def generate_player_matchups(league_id, week_id):
     """Generate player matchups within existing team pairings."""
@@ -1263,22 +1366,59 @@ def generate_player_matchups(league_id, week_id):
                 name = u.name if u else f"User {member.user_id}"
                 missing.append(f"{name} ({selections}/{required_slots})")
         if missing:
-            return jsonify({
-                "error": f"Some players have not submitted all deck selections: {', '.join(missing)}",
-                "incomplete_decks": True,
-                "missing": missing,
-            }), 400
+            return (
+                jsonify(
+                    {
+                        "error": f"Some players have not submitted all deck selections: {', '.join(missing)}",
+                        "incomplete_decks": True,
+                        "missing": missing,
+                    }
+                ),
+                400,
+            )
 
     if week.week_number > 1:
         prev_week = LeagueWeek.query.filter_by(
             league_id=league.id, week_number=week.week_number - 1
         ).first()
         if prev_week and prev_week.status != WeekStatus.COMPLETED.value:
-            return jsonify({"error": "Previous week must be completed before generating player matchups"}), 400
+            return (
+                jsonify(
+                    {
+                        "error": "Previous week must be completed before generating player matchups"
+                    }
+                ),
+                400,
+            )
 
     matchups = WeekMatchup.query.filter_by(week_id=week.id).all()
     if not matchups:
         return jsonify({"error": "No team pairings found"}), 400
+
+    # Pre-flight check: for even team_size leagues, all teams must have a feature designation
+    if league.team_size % 2 == 0:
+        missing_teams = []
+        seen_team_ids = set()
+        for wm in matchups:
+            for team_id in [wm.team1_id, wm.team2_id]:
+                if team_id in seen_team_ids:
+                    continue
+                seen_team_ids.add(team_id)
+                fd = FeatureDesignation.query.filter_by(
+                    week_id=week.id, team_id=team_id
+                ).first()
+                if not fd:
+                    missing_teams.append(team_id)
+        if missing_teams:
+            return (
+                jsonify(
+                    {
+                        "error": "missing_feature_designations",
+                        "missing_teams": missing_teams,
+                    }
+                ),
+                400,
+            )
 
     # Clear any existing player matchups
     for wm in matchups:
@@ -1289,12 +1429,15 @@ def generate_player_matchups(league_id, week_id):
     for wm in matchups:
         team1 = db.session.get(Team, wm.team1_id)
         team2 = db.session.get(Team, wm.team2_id)
-        player_pairs = _generate_player_pairings(team1, team2, league, week.week_number)
-        for p1_id, p2_id in player_pairs:
+        player_pairs = _generate_player_pairings(
+            team1, team2, league, week, week.week_number
+        )
+        for p1_id, p2_id, is_feature in player_pairs:
             pm = PlayerMatchup(
                 week_matchup_id=wm.id,
                 player1_id=p1_id,
                 player2_id=p2_id,
+                is_feature=is_feature,
             )
             db.session.add(pm)
 
@@ -1304,7 +1447,9 @@ def generate_player_matchups(league_id, week_id):
     return jsonify(serialize_league_week(week))
 
 
-@blueprint.route("/<int:league_id>/weeks/<int:week_id>/matchups/<int:matchup_id>", methods=["PUT"])
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/matchups/<int:matchup_id>", methods=["PUT"]
+)
 @login_required
 def edit_matchup(league_id, week_id, matchup_id):
     """Admin endpoint to edit player pairings during PAIRING status."""
@@ -1356,7 +1501,10 @@ def publish_week(league_id, week_id):
         if selections < required_slots:
             user = db.session.get(User, member.user_id)
             name = user.name if user else f"User {member.user_id}"
-            return jsonify({"error": f"{name} has not submitted all deck selections"}), 400
+            return (
+                jsonify({"error": f"{name} has not submitted all deck selections"}),
+                400,
+            )
 
     week.status = WeekStatus.PUBLISHED.value
     db.session.commit()
@@ -1365,7 +1513,10 @@ def publish_week(league_id, week_id):
 
 # --- Sealed pool generation ---
 
-@blueprint.route("/<int:league_id>/weeks/<int:week_id>/generate-sealed-pools", methods=["POST"])
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/generate-sealed-pools", methods=["POST"]
+)
 @login_required
 def generate_sealed_pools(league_id, week_id):
     from sqlalchemy.sql.expression import func
@@ -1399,14 +1550,19 @@ def generate_sealed_pools(league_id, week_id):
 
     decks = query.order_by(func.rand()).limit(total_decks_needed).all()
     if len(decks) < total_decks_needed:
-        return jsonify({
-            "error": f"Not enough decks in database ({len(decks)} available, {total_decks_needed} needed)"
-        }), 400
+        return (
+            jsonify(
+                {
+                    "error": f"Not enough decks in database ({len(decks)} available, {total_decks_needed} needed)"
+                }
+            ),
+            400,
+        )
 
     # Assign decks to players
     random.shuffle(decks)
     for i, member in enumerate(active_members):
-        player_decks = decks[i * decks_per_player:(i + 1) * decks_per_player]
+        player_decks = decks[i * decks_per_player : (i + 1) * decks_per_player]
         for d in player_decks:
             spd = SealedPoolDeck(
                 week_id=week.id,
@@ -1440,27 +1596,32 @@ def get_sealed_pool(league_id, week_id):
         for team in league.teams:
             team_user_ids = {m.user_id for m in team.members}
             if target_user_id in team_user_ids:
-                if any(m.user_id == effective.id and m.is_captain for m in team.members):
+                if any(
+                    m.user_id == effective.id and m.is_captain for m in team.members
+                ):
                     is_captain_of_team = True
                 break
         if not is_admin and not is_captain_of_team:
             return jsonify({"error": "Cannot view sealed pool for this user"}), 403
 
-    pool = SealedPoolDeck.query.filter_by(
-        week_id=week.id, user_id=target_user_id
-    ).all()
-    return jsonify([
-        {
-            "id": spd.id,
-            "deck": serialize_deck_summary(spd.deck) if spd.deck else None,
-        }
-        for spd in pool
-    ])
+    pool = SealedPoolDeck.query.filter_by(week_id=week.id, user_id=target_user_id).all()
+    return jsonify(
+        [
+            {
+                "id": spd.id,
+                "deck": serialize_deck_summary(spd.deck) if spd.deck else None,
+            }
+            for spd in pool
+        ]
+    )
 
 
 # --- Deck selection ---
 
-@blueprint.route("/<int:league_id>/weeks/<int:week_id>/deck-selection", methods=["POST"])
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/deck-selection", methods=["POST"]
+)
 @login_required
 def submit_deck_selection(league_id, week_id):
     from keytracker.utils import get_deck_by_id_with_zeal
@@ -1472,7 +1633,11 @@ def submit_deck_selection(league_id, week_id):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
 
-    if week.status not in (WeekStatus.DECK_SELECTION.value, WeekStatus.TEAM_PAIRED.value, WeekStatus.PAIRING.value):
+    if week.status not in (
+        WeekStatus.DECK_SELECTION.value,
+        WeekStatus.TEAM_PAIRED.value,
+        WeekStatus.PAIRING.value,
+    ):
         return jsonify({"error": "Deck selection is not open"}), 400
 
     effective = get_effective_user()
@@ -1488,17 +1653,23 @@ def submit_deck_selection(league_id, week_id):
         for team in league.teams:
             team_user_ids = {m.user_id for m in team.members}
             if target_user_id in team_user_ids:
-                if any(m.user_id == effective.id and m.is_captain for m in team.members):
+                if any(
+                    m.user_id == effective.id and m.is_captain for m in team.members
+                ):
                     is_captain_of_team = True
                 break
         if not is_admin and not is_captain_of_team:
             return jsonify({"error": "Cannot submit deck selection for this user"}), 403
 
     # Verify target user is in the league
-    member = TeamMember.query.join(Team).filter(
-        Team.league_id == league.id,
-        TeamMember.user_id == target_user_id,
-    ).first()
+    member = (
+        TeamMember.query.join(Team)
+        .filter(
+            Team.league_id == league.id,
+            TeamMember.user_id == target_user_id,
+        )
+        .first()
+    )
     if not member:
         return jsonify({"error": "User is not a member of this league"}), 400
 
@@ -1545,7 +1716,12 @@ def submit_deck_selection(league_id, week_id):
             if deck.expansion not in allowed:
                 kf_set = db.session.get(KeyforgeSet, deck.expansion)
                 set_name = kf_set.name if kf_set else str(deck.expansion)
-                return jsonify({"error": f"Decks from {set_name} are not allowed this week"}), 400
+                return (
+                    jsonify(
+                        {"error": f"Decks from {set_name} are not allowed this week"}
+                    ),
+                    400,
+                )
         except (json.JSONDecodeError, TypeError):
             pass
 
@@ -1553,7 +1729,12 @@ def submit_deck_selection(league_id, week_id):
     if week.max_sas is not None:
         sas = deck.sas_rating
         if sas and sas > week.max_sas:
-            return jsonify({"error": f"Deck SAS ({sas}) exceeds max SAS ({week.max_sas})"}), 400
+            return (
+                jsonify(
+                    {"error": f"Deck SAS ({sas}) exceeds max SAS ({week.max_sas})"}
+                ),
+                400,
+            )
 
     # Upsert the selection
     existing = PlayerDeckSelection.query.filter_by(
@@ -1586,38 +1767,65 @@ def submit_deck_selection(league_id, week_id):
                 total_sas = sum(d.sas_rating or 0 for d in selected_decks)
                 if total_sas > week.combined_max_sas:
                     db.session.rollback()
-                    return jsonify({"error": f"Combined SAS ({total_sas}) exceeds limit ({week.combined_max_sas})"}), 400
+                    return (
+                        jsonify(
+                            {
+                                "error": f"Combined SAS ({total_sas}) exceeds limit ({week.combined_max_sas})"
+                            }
+                        ),
+                        400,
+                    )
 
             # Set diversity: no two decks share an expansion
             if week.set_diversity:
                 expansions = [d.expansion for d in selected_decks]
                 if len(set(expansions)) != len(expansions):
                     db.session.rollback()
-                    return jsonify({"error": "Set diversity required: no two decks can share an expansion"}), 400
+                    return (
+                        jsonify(
+                            {
+                                "error": "Set diversity required: no two decks can share an expansion"
+                            }
+                        ),
+                        400,
+                    )
 
             # House diversity: no two decks share any house
             if week.house_diversity:
                 all_houses = []
                 for d in selected_decks:
-                    houses = {ps.house for ps in d.pod_stats if ps.house != "Archon Power"}
+                    houses = {
+                        ps.house for ps in d.pod_stats if ps.house != "Archon Power"
+                    }
                     all_houses.append(houses)
                 for i in range(len(all_houses)):
                     for j in range(i + 1, len(all_houses)):
                         shared = all_houses[i] & all_houses[j]
                         if shared:
                             db.session.rollback()
-                            return jsonify({"error": f"House diversity required: decks share house(s): {', '.join(shared)}"}), 400
+                            return (
+                                jsonify(
+                                    {
+                                        "error": f"House diversity required: decks share house(s): {', '.join(shared)}"
+                                    }
+                                ),
+                                400,
+                            )
 
     db.session.commit()
 
     # Return all selections for this user/week
-    selections = PlayerDeckSelection.query.filter_by(
-        week_id=week.id, user_id=target_user_id
-    ).order_by(PlayerDeckSelection.slot_number).all()
+    selections = (
+        PlayerDeckSelection.query.filter_by(week_id=week.id, user_id=target_user_id)
+        .order_by(PlayerDeckSelection.slot_number)
+        .all()
+    )
     return jsonify([serialize_deck_selection(s) for s in selections])
 
 
-@blueprint.route("/<int:league_id>/weeks/<int:week_id>/deck-selection/<int:slot>", methods=["DELETE"])
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/deck-selection/<int:slot>", methods=["DELETE"]
+)
 @login_required
 def remove_deck_selection(league_id, week_id, slot):
     league, err = _get_league_or_404(league_id)
@@ -1627,7 +1835,11 @@ def remove_deck_selection(league_id, week_id, slot):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
 
-    if week.status not in (WeekStatus.DECK_SELECTION.value, WeekStatus.TEAM_PAIRED.value, WeekStatus.PAIRING.value):
+    if week.status not in (
+        WeekStatus.DECK_SELECTION.value,
+        WeekStatus.TEAM_PAIRED.value,
+        WeekStatus.PAIRING.value,
+    ):
         return jsonify({"error": "Deck selection is not open"}), 400
 
     effective = get_effective_user()
@@ -1641,7 +1853,9 @@ def remove_deck_selection(league_id, week_id, slot):
         for team in league.teams:
             team_user_ids = {m.user_id for m in team.members}
             if target_user_id in team_user_ids:
-                if any(m.user_id == effective.id and m.is_captain for m in team.members):
+                if any(
+                    m.user_id == effective.id and m.is_captain for m in team.members
+                ):
                     is_captain_of_team = True
                 break
         if not is_admin and not is_captain_of_team:
@@ -1658,7 +1872,134 @@ def remove_deck_selection(league_id, week_id, slot):
     return jsonify({"success": True})
 
 
+# --- Feature designation ---
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/feature-designation", methods=["POST"]
+)
+@login_required
+def set_feature_designation(league_id, week_id):
+    """Set the feature player for the requesting captain's team for this week."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.status not in (
+        WeekStatus.DECK_SELECTION.value,
+        WeekStatus.TEAM_PAIRED.value,
+    ):
+        return (
+            jsonify(
+                {
+                    "error": "Feature designation only allowed during deck_selection or team_paired status"
+                }
+            ),
+            400,
+        )
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
+
+    # Find the team that user_id belongs to
+    target_team = None
+    for team in league.teams:
+        if any(m.user_id == user_id for m in team.members):
+            target_team = team
+            break
+    if not target_team:
+        return (
+            jsonify({"error": "User is not a member of any team in this league"}),
+            404,
+        )
+
+    # Auth: must be captain of that team or league admin
+    is_captain = (
+        TeamMember.query.filter_by(
+            team_id=target_team.id, user_id=effective.id, is_captain=True
+        ).first()
+        is not None
+    )
+    if not is_admin and not is_captain:
+        return jsonify({"error": "Must be captain of the team or league admin"}), 403
+
+    # Upsert: delete existing designation for this team+week, then insert new one
+    FeatureDesignation.query.filter_by(week_id=week.id, team_id=target_team.id).delete()
+    fd = FeatureDesignation(week_id=week.id, team_id=target_team.id, user_id=user_id)
+    db.session.add(fd)
+    db.session.commit()
+    db.session.refresh(week)
+    viewer = effective if current_user.is_authenticated else None
+    return jsonify(serialize_league_week(week, viewer=viewer))
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/feature-designation", methods=["DELETE"]
+)
+@login_required
+def clear_feature_designation(league_id, week_id):
+    """Clear the feature player designation for the requesting captain's team."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.status not in (
+        WeekStatus.DECK_SELECTION.value,
+        WeekStatus.TEAM_PAIRED.value,
+    ):
+        return (
+            jsonify(
+                {
+                    "error": "Feature designation only allowed during deck_selection or team_paired status"
+                }
+            ),
+            400,
+        )
+
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
+
+    # Find the team the effective user captains
+    captain_team = None
+    for team in league.teams:
+        if TeamMember.query.filter_by(
+            team_id=team.id, user_id=effective.id, is_captain=True
+        ).first():
+            captain_team = team
+            break
+
+    if not captain_team and not is_admin:
+        return jsonify({"error": "Must be a team captain or league admin"}), 403
+
+    if is_admin and not captain_team:
+        # Admin: require team_id in body
+        data = request.get_json(silent=True) or {}
+        team_id = data.get("team_id")
+        if not team_id:
+            return jsonify({"error": "team_id required for admin"}), 400
+        FeatureDesignation.query.filter_by(week_id=week.id, team_id=team_id).delete()
+    else:
+        FeatureDesignation.query.filter_by(
+            week_id=week.id, team_id=captain_team.id
+        ).delete()
+
+    db.session.commit()
+    db.session.refresh(week)
+    viewer = effective if current_user.is_authenticated else None
+    return jsonify(serialize_league_week(week, viewer=viewer))
+
+
 # --- Strike phase (Triad) ---
+
 
 @blueprint.route("/<int:league_id>/matches/<int:matchup_id>/strike", methods=["POST"])
 @login_required
@@ -1701,7 +2042,11 @@ def submit_strike(league_id, matchup_id):
     # Validate: struck deck must belong to the opponent
     opponent_id = pm.player2_id if effective.id == pm.player1_id else pm.player1_id
     struck_sel = db.session.get(PlayerDeckSelection, struck_selection_id)
-    if not struck_sel or struck_sel.user_id != opponent_id or struck_sel.week_id != week.id:
+    if (
+        not struck_sel
+        or struck_sel.user_id != opponent_id
+        or struck_sel.week_id != week.id
+    ):
         return jsonify({"error": "Invalid deck selection to strike"}), 400
 
     strike = StrikeSelection(
@@ -1716,6 +2061,7 @@ def submit_strike(league_id, matchup_id):
 
 
 # --- Match flow ---
+
 
 @blueprint.route("/<int:league_id>/matches/<int:matchup_id>/start", methods=["POST"])
 @login_required
@@ -1776,6 +2122,7 @@ def get_match(league_id, matchup_id):
 
 
 # --- Game reporting ---
+
 
 @blueprint.route("/<int:league_id>/matches/<int:matchup_id>/games", methods=["POST"])
 @login_required
@@ -1838,7 +2185,12 @@ def report_game(league_id, matchup_id):
     # Triad-specific validation
     if week.format_type == WeekFormat.TRIAD.value:
         if not p1_deck_id or not p2_deck_id:
-            return jsonify({"error": "player1_deck_id and player2_deck_id required for Triad"}), 400
+            return (
+                jsonify(
+                    {"error": "player1_deck_id and player2_deck_id required for Triad"}
+                ),
+                400,
+            )
 
         # Get stricken deck selection IDs
         stricken_sel_ids = {s.struck_deck_selection_id for s in pm.strikes}
@@ -1857,9 +2209,23 @@ def report_game(league_id, matchup_id):
         # Validate decks that already won can't be reused
         for g in existing_games:
             if g.winner_id == pm.player1_id and g.player1_deck_id == p1_deck_id:
-                return jsonify({"error": "Player 1's deck already won a game and cannot be reused"}), 400
+                return (
+                    jsonify(
+                        {
+                            "error": "Player 1's deck already won a game and cannot be reused"
+                        }
+                    ),
+                    400,
+                )
             if g.winner_id == pm.player2_id and g.player2_deck_id == p2_deck_id:
-                return jsonify({"error": "Player 2's deck already won a game and cannot be reused"}), 400
+                return (
+                    jsonify(
+                        {
+                            "error": "Player 2's deck already won a game and cannot be reused"
+                        }
+                    ),
+                    400,
+                )
 
     game = MatchGame(
         player_matchup_id=pm.id,
@@ -1877,7 +2243,7 @@ def report_game(league_id, matchup_id):
     db.session.flush()
     # Expire pm so _check_week_completion reloads pm.games from the DB
     # rather than the stale in-memory collection that predates this flush
-    db.session.expire(pm, ['games'])
+    db.session.expire(pm, ["games"])
 
     # Check if match is now complete - auto-complete week if all matches done
     all_games = sorted(pm.games, key=lambda g: g.game_number)
@@ -1905,7 +2271,9 @@ def _check_week_completion(week):
     week.status = WeekStatus.COMPLETED.value
 
 
-@blueprint.route("/<int:league_id>/weeks/<int:week_id>/check-completion", methods=["POST"])
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/check-completion", methods=["POST"]
+)
 @login_required
 def check_week_completion(league_id, week_id):
     """Manually trigger the week completion check. Admin-only."""

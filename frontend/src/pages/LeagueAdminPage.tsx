@@ -294,6 +294,15 @@ export default function LeagueAdminPage() {
             setForceMatchupWeekId(weekId);
             return;
           }
+          if (matchupErr.response?.data?.error === 'missing_feature_designations') {
+            const missingTeamIds: number[] = matchupErr.response.data.missing_teams || [];
+            const teamNames = missingTeamIds.map((id) => {
+              const t = league.teams.find((team) => team.id === id);
+              return t ? t.name : `Team ${id}`;
+            });
+            setError(`Feature player not designated for: ${teamNames.join(', ')}. Captains must set a feature player before matchups can be generated.`);
+            return;
+          }
           throw matchupErr;
         }
       } else if (action === 'publish') {

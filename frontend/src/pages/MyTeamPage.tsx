@@ -37,6 +37,8 @@ import {
   removeDeckSelection,
   getSealedPool,
   getSets,
+  setFeatureDesignation,
+  clearFeatureDesignation,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
@@ -68,6 +70,9 @@ export default function MyTeamPage() {
     | { type: 'submit'; weekId: number; userId: number; slotNumber: number; playerName: string }
     | { type: 'remove'; weekId: number; slot: number; userId: number; playerName: string };
   const [pendingDeckAction, setPendingDeckAction] = useState<PendingDeckAction | null>(null);
+
+  // Feature designation state: keyed by weekId
+  const [featureSelectUserId, setFeatureSelectUserId] = useState<Record<number, number>>({});
 
   // Deck submission state
   const [teammateDeckUrls, setTeammateDeckUrls] = useState<Record<string, string>>({});
@@ -348,9 +353,35 @@ export default function MyTeamPage() {
     );
   };
 
+  const handleSetFeature = async (weekId: number, userId: number) => {
+    setError('');
+    try {
+      await setFeatureDesignation(league.id, weekId, userId);
+      setFeatureSelectUserId((prev) => ({ ...prev, [weekId]: 0 }));
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleClearFeature = async (weekId: number) => {
+    setError('');
+    try {
+      await clearFeatureDesignation(league.id, weekId);
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const renderWeekContent = (week: LeagueWeek) => {
     const isWeekEditable = week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
     const maxSlots = week.format_type === 'triad' ? 3 : 1;
+    const showFeature = league.team_size % 2 === 0 &&
+      (week.status === 'deck_selection' || week.status === 'team_paired');
+    const currentFeature = showFeature
+      ? week.feature_designations?.find((fd) => fd.team_id === myTeam.id)
+      : null;
 
     return (
       <Card sx={{ mb: 2 }}>
@@ -361,6 +392,53 @@ export default function MyTeamPage() {
             <Chip label={week.status.replace('_', ' ')} size="small" color="info" />
             <WeekConstraints week={week} sets={sets} />
           </Box>
+
+          {/* Feature player designation (even team_size leagues only) */}
+          {showFeature && (
+            <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'warning.main', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom>Feature Player</Typography>
+              {currentFeature ? (
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Typography variant="body2">
+                    {myTeam.members.find((m) => m.user.id === currentFeature.user_id)?.user.name || `User ${currentFeature.user_id}`}
+                  </Typography>
+                  <Chip label="Feature" size="small" color="warning" />
+                  {isCaptain && (
+                    <Button size="small" color="error" onClick={() => handleClearFeature(week.id)}>
+                      Clear
+                    </Button>
+                  )}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary">Not yet designated</Typography>
+              )}
+              {isCaptain && (
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1 }}>
+                  <FormControl size="small" sx={{ minWidth: 180 }}>
+                    <InputLabel>Set Feature Player</InputLabel>
+                    <Select
+                      value={featureSelectUserId[week.id] || ''}
+                      label="Set Feature Player"
+                      onChange={(e) => setFeatureSelectUserId((prev) => ({ ...prev, [week.id]: e.target.value as number }))}
+                    >
+                      {myTeam.members.map((m) => (
+                        <MenuItem key={m.user.id} value={m.user.id}>{m.user.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="warning"
+                    disabled={!featureSelectUserId[week.id]}
+                    onClick={() => handleSetFeature(week.id, featureSelectUserId[week.id])}
+                  >
+                    Set
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          )}
 
           {myTeam.members.map((m) => {
             const isMe = m.user.id === user.id;

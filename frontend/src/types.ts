@@ -229,6 +229,7 @@ export interface LeagueWeek {
   sealed_pools_generated: boolean;
   matchups: WeekMatchup[];
   deck_selections: DeckSelectionInfo[];
+  feature_designations: { team_id: number; user_id: number }[];
 }
 
 export interface WeekMatchup {
@@ -246,6 +247,7 @@ export interface PlayerMatchupInfo {
   player2: UserBrief;
   player1_started: boolean;
   player2_started: boolean;
+  is_feature: boolean;
   games: MatchGameInfo[];
   strikes: StrikeInfo[];
 }

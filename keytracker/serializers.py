@@ -138,7 +138,9 @@ def serialize_signup(signup: LeagueSignup) -> dict:
         "user": serialize_user_brief(signup.user),
         "signup_order": signup.signup_order,
         "status": signup.status,
-        "signed_up_at": signup.signed_up_at.isoformat() if signup.signed_up_at else None,
+        "signed_up_at": (
+            signup.signed_up_at.isoformat() if signup.signed_up_at else None
+        ),
     }
 
 
@@ -147,7 +149,9 @@ def serialize_league_summary(league: League) -> dict:
         "id": league.id,
         "name": league.name,
         "description": league.description,
-        "fee_amount": float(league.fee_amount) if league.fee_amount is not None else None,
+        "fee_amount": (
+            float(league.fee_amount) if league.fee_amount is not None else None
+        ),
         "team_size": league.team_size,
         "num_teams": league.num_teams,
         "status": league.status,
@@ -160,11 +164,18 @@ def serialize_league_summary(league: League) -> dict:
 
 def serialize_league_detail(league: League, viewer=None) -> dict:
     data = serialize_league_summary(league)
-    data["teams"] = [serialize_team_detail(t) for t in sorted(league.teams, key=lambda t: t.order_number)]
-    data["signups"] = [serialize_signup(s) for s in sorted(league.signups, key=lambda s: s.signup_order)]
+    data["teams"] = [
+        serialize_team_detail(t)
+        for t in sorted(league.teams, key=lambda t: t.order_number)
+    ]
+    data["signups"] = [
+        serialize_signup(s)
+        for s in sorted(league.signups, key=lambda s: s.signup_order)
+    ]
     data["admins"] = [serialize_user_brief(a.user) for a in league.admins]
     data["weeks"] = [
-        serialize_league_week(w, viewer=viewer) for w in sorted(league.weeks, key=lambda w: w.week_number)
+        serialize_league_week(w, viewer=viewer)
+        for w in sorted(league.weeks, key=lambda w: w.week_number)
     ]
     return data
 
@@ -179,7 +190,7 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
 
     # Player matchups are hidden from non-admins until the week is published
     viewer_is_admin = viewer and any(a.user_id == viewer.id for a in week.league.admins)
-    show_player_matchups = week.status != 'pairing' or viewer_is_admin
+    show_player_matchups = week.status != "pairing" or viewer_is_admin
 
     data = {
         "id": week.id,
@@ -196,21 +207,39 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "house_diversity": week.house_diversity,
         "decks_per_player": week.decks_per_player,
         "sealed_pools_generated": week.sealed_pools_generated,
-        "matchups": [serialize_week_matchup(m, viewer=viewer, show_player_matchups=show_player_matchups) for m in week.matchups],
-        "deck_selections": [serialize_deck_selection(ds) for ds in week.deck_selections],
+        "matchups": [
+            serialize_week_matchup(
+                m, viewer=viewer, show_player_matchups=show_player_matchups
+            )
+            for m in week.matchups
+        ],
+        "deck_selections": [
+            serialize_deck_selection(ds) for ds in week.deck_selections
+        ],
+        "feature_designations": [
+            {"team_id": fd.team_id, "user_id": fd.user_id}
+            for fd in week.feature_designations
+        ],
     }
     return data
 
 
-def serialize_week_matchup(matchup: WeekMatchup, viewer=None, show_player_matchups: bool = True) -> dict:
+def serialize_week_matchup(
+    matchup: WeekMatchup, viewer=None, show_player_matchups: bool = True
+) -> dict:
     return {
         "id": matchup.id,
         "week_id": matchup.week_id,
         "team1": serialize_team_detail(matchup.team1),
         "team2": serialize_team_detail(matchup.team2),
-        "player_matchups": [
-            serialize_player_matchup(pm, viewer=viewer) for pm in matchup.player_matchups
-        ] if show_player_matchups else [],
+        "player_matchups": (
+            [
+                serialize_player_matchup(pm, viewer=viewer)
+                for pm in matchup.player_matchups
+            ]
+            if show_player_matchups
+            else []
+        ),
     }
 
 
@@ -222,7 +251,11 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
         "player2": serialize_user_brief(pm.player2),
         "player1_started": pm.player1_started,
         "player2_started": pm.player2_started,
-        "games": [serialize_match_game(g) for g in sorted(pm.games, key=lambda g: g.game_number)],
+        "is_feature": pm.is_feature,
+        "games": [
+            serialize_match_game(g)
+            for g in sorted(pm.games, key=lambda g: g.game_number)
+        ],
     }
     # Include strike info
     data["strikes"] = [

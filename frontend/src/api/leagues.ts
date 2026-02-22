@@ -316,6 +316,30 @@ export async function getSealedPool(
   return data;
 }
 
+// --- Feature Designation ---
+
+export async function setFeatureDesignation(
+  leagueId: number,
+  weekId: number,
+  userId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/feature-designation`,
+    { user_id: userId },
+  );
+  return data;
+}
+
+export async function clearFeatureDesignation(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.delete(
+    `/leagues/${leagueId}/weeks/${weekId}/feature-designation`,
+  );
+  return data;
+}
+
 // --- Strikes (Triad) ---
 
 export async function submitStrike(

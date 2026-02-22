@@ -43,6 +43,7 @@ import time
 
 blueprint = Blueprint("api_v2", __name__, url_prefix="/api/v2")
 
+
 @blueprint.route("/auth/me")
 def auth_me():
     if current_user.is_authenticated:
@@ -84,7 +85,10 @@ def auth_settings():
         elif UUID4_RE.match(val):
             current_user.dok_api_key = val
         else:
-            return jsonify({"error": "Invalid DoK API key format (expected UUID v4)"}), 400
+            return (
+                jsonify({"error": "Invalid DoK API key format (expected UUID v4)"}),
+                400,
+            )
     if "dok_profile_url" in data:
         val = (data["dok_profile_url"] or "").strip()
         if val == "":
@@ -121,22 +125,24 @@ def auth_settings():
         for name in cleaned:
             db.session.add(TcoUsername(user_id=current_user.id, username=name))
     db.session.commit()
-    return jsonify({
-        "id": current_user.id,
-        "email": current_user.email,
-        "name": current_user.name,
-        "avatar_url": current_user.avatar_url,
-        "is_patron": current_user.is_patron,
-        "is_member": current_user.is_member,
-        "patreon_tier_title": current_user.patreon_tier_title,
-        "patreon_linked": current_user.patreon_id is not None,
-        "dok_api_key": current_user.dok_api_key,
-        "tco_usernames": [t.username for t in current_user.tco_usernames],
-        "is_league_admin": current_user.is_league_admin,
-        "dok_profile_url": current_user.dok_profile_url,
-        "country": current_user.country,
-        "timezone": current_user.timezone,
-    })
+    return jsonify(
+        {
+            "id": current_user.id,
+            "email": current_user.email,
+            "name": current_user.name,
+            "avatar_url": current_user.avatar_url,
+            "is_patron": current_user.is_patron,
+            "is_member": current_user.is_member,
+            "patreon_tier_title": current_user.patreon_tier_title,
+            "patreon_linked": current_user.patreon_id is not None,
+            "dok_api_key": current_user.dok_api_key,
+            "tco_usernames": [t.username for t in current_user.tco_usernames],
+            "is_league_admin": current_user.is_league_admin,
+            "dok_profile_url": current_user.dok_profile_url,
+            "country": current_user.country,
+            "timezone": current_user.timezone,
+        }
+    )
 
 
 SORT_ALLOWLIST = {
@@ -156,33 +162,35 @@ SORT_ALLOWLIST = {
 def games_mine():
     usernames = [t.username for t in current_user.tco_usernames]
     if not usernames:
-        return jsonify({
-            "error": "No TCO usernames configured",
-            "tco_usernames": [],
-            "games_won": 0,
-            "games_lost": 0,
-            "games": [],
-        })
+        return jsonify(
+            {
+                "error": "No TCO usernames configured",
+                "tco_usernames": [],
+                "games_won": 0,
+                "games_lost": 0,
+                "games": [],
+            }
+        )
     games_won = Game.query.filter(Game.winner.in_(usernames)).count()
     games_lost = Game.query.filter(Game.loser.in_(usernames)).count()
     page = request.args.get("page", 1, type=int)
     per_page = min(request.args.get("per_page", 50, type=int), 200)
     offset = (page - 1) * per_page
     user_games = (
-        Game.query.filter(
-            or_(Game.winner.in_(usernames), Game.loser.in_(usernames))
-        )
+        Game.query.filter(or_(Game.winner.in_(usernames), Game.loser.in_(usernames)))
         .order_by(Game.date.desc())
         .limit(per_page)
         .offset(offset)
         .all()
     )
-    return jsonify({
-        "tco_usernames": usernames,
-        "games_won": games_won,
-        "games_lost": games_lost,
-        "games": [serialize_game_summary(g) for g in user_games],
-    })
+    return jsonify(
+        {
+            "tco_usernames": usernames,
+            "games_won": games_won,
+            "games_lost": games_lost,
+            "games": [serialize_game_summary(g) for g in user_games],
+        }
+    )
 
 
 @blueprint.route("/games/recent")

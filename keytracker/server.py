@@ -13,6 +13,7 @@ from keytracker.routes import (
     auth,
     leagues,
 )
+
 # from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
 from keytracker.scripts.test_user import test_user
@@ -188,6 +189,7 @@ def serve_react(path=""):
     if path and os.path.isfile(full_path):
         return send_from_directory(FRONTEND_DIST, path)
     return send_from_directory(FRONTEND_DIST, "index.html")
+
 
 # app.cli.add_command(collector)
 app.cli.add_command(sealed)

@@ -50,6 +50,7 @@ import logging
 import json
 import time
 import threading
+
 # from lingua import LanguageDetectorBuilder
 
 
@@ -471,17 +472,13 @@ def load_config() -> Dict[str, str]:
         config["SECRET_KEY"] = cparser["app"]["secret_key"]
         if "google" in cparser:
             config["GOOGLE_CLIENT_ID"] = cparser["google"].get("client_id", "")
-            config["GOOGLE_CLIENT_SECRET"] = cparser["google"].get(
-                "client_secret", ""
-            )
+            config["GOOGLE_CLIENT_SECRET"] = cparser["google"].get("client_secret", "")
         if "patreon" in cparser:
             config["PATREON_CLIENT_ID"] = cparser["patreon"].get("client_id", "")
             config["PATREON_CLIENT_SECRET"] = cparser["patreon"].get(
                 "client_secret", ""
             )
-            config["PATREON_CAMPAIGN_ID"] = cparser["patreon"].get(
-                "campaign_id", ""
-            )
+            config["PATREON_CAMPAIGN_ID"] = cparser["patreon"].get("campaign_id", "")
     assert config["SQLALCHEMY_DATABASE_URI"] is not None
     assert config["SECRET_KEY"] != "placeholder"
     return config
