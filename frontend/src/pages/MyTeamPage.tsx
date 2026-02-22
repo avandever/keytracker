@@ -84,6 +84,7 @@ export default function MyTeamPage() {
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
+    setSealedPools({});
     getLeague(parseInt(leagueId, 10))
       .then((l) => {
         setLeague(l);

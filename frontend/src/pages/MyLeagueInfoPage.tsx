@@ -83,6 +83,7 @@ export default function MyLeagueInfoPage() {
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
+    setSealedPools({});
     getLeague(parseInt(leagueId, 10))
       .then((l) => {
         setLeague(l);
@@ -429,6 +430,60 @@ export default function MyLeagueInfoPage() {
           </CardContent>
         </Card>
 
+        {/* Opponent's decks (triad, after match starts) */}
+        {week.format_type === 'triad' && myMatchup && myMatchup.player1_started && myMatchup.player2_started && (() => {
+          const opponentId = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.id : myMatchup.player1.id;
+          const opponentName = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.name : myMatchup.player1.name;
+          const opponentSelections = week.deck_selections.filter((ds) => ds.user_id === opponentId);
+          const strickenIds = new Set(myMatchup.strikes.map((s) => s.struck_deck_selection_id));
+          const bothStruck = myMatchup.strikes.length >= 2;
+          if (opponentSelections.length === 0) return null;
+          return (
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  {opponentName}'s Decks
+                </Typography>
+                {opponentSelections.map((ds) => {
+                  const isStruck = bothStruck && strickenIds.has(ds.id);
+                  return (
+                    <Box
+                      key={ds.id}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        mb: 1,
+                        opacity: isStruck ? 0.5 : 1,
+                        textDecoration: isStruck ? 'line-through' : 'none',
+                      }}
+                    >
+                      {maxSlots > 1 && (
+                        <Chip label={`Slot ${ds.slot_number}`} size="small" variant="outlined" />
+                      )}
+                      {ds.deck?.houses && <HouseIcons houses={ds.deck.houses} />}
+                      <Typography variant="body2">{ds.deck?.name || 'Unknown deck'}</Typography>
+                      {ds.deck?.sas_rating != null && (
+                        <Chip label={`SAS: ${ds.deck.sas_rating}`} size="small" variant="outlined" />
+                      )}
+                      {ds.deck?.expansion_name && (
+                        <Chip label={ds.deck.expansion_name} size="small" variant="outlined" />
+                      )}
+                      {ds.deck && (
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Link href={ds.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                          <Link href={ds.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                        </Box>
+                      )}
+                      {isStruck && <Chip label="Struck" size="small" color="error" />}
+                    </Box>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          );
+        })()}
+
         {/* Match section */}
         {myMatchup && week.status === 'published' && (
           <Card sx={{ mb: 2 }}>
@@ -583,7 +638,8 @@ export default function MyLeagueInfoPage() {
 
               {/* Game reporting */}
               {myMatchup.player1_started && myMatchup.player2_started &&
-                !isMatchDecided(myMatchup, week.best_of_n) && (
+                !isMatchDecided(myMatchup, week.best_of_n) &&
+                (week.format_type !== 'triad' || myMatchup.strikes.length >= 2) && (
                 <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>Report Game {myMatchup.games.length + 1}</Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
