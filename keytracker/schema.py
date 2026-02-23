@@ -812,15 +812,24 @@ class WeekFormat(PyEnum):
     ARCHON_STANDARD = "archon_standard"
     TRIAD = "triad"
     SEALED_ARCHON = "sealed_archon"
+    SEALED_ALLIANCE = "sealed_alliance"
+    THIEF = "thief"
 
 
 class WeekStatus(PyEnum):
     SETUP = "setup"
+    CURATION = "curation"
+    THIEF_STEP = "thief"
     DECK_SELECTION = "deck_selection"
     TEAM_PAIRED = "team_paired"
     PAIRING = "pairing"
     PUBLISHED = "published"
     COMPLETED = "completed"
+
+
+# Set IDs that require token selection in Sealed Alliance
+TOKEN_EXPANSION_IDS = {855, 600}   # ToC, WoE
+PROPHECY_EXPANSION_ID = 886        # PV
 
 
 class League(db.Model):
@@ -960,6 +969,8 @@ class LeagueWeek(db.Model):
     # Sealed-specific
     decks_per_player = db.Column(db.Integer, nullable=True)
     sealed_pools_generated = db.Column(db.Boolean, default=False, nullable=False)
+    # Thief-specific
+    thief_floor_team_id = db.Column(db.Integer, nullable=True)  # team that steals floor(N/2)
 
     league = db.relationship("League", backref="weeks")
     matchups = db.relationship(
@@ -982,6 +993,7 @@ class WeekMatchup(db.Model):
     )
     team1_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
     team2_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
+    thief_stolen_team_id = db.Column(db.Integer, nullable=True)  # team required to feature stolen-deck player
     week = db.relationship("LeagueWeek", back_populates="matchups")
     team1 = db.relationship("Team", foreign_keys=[team1_id])
     team2 = db.relationship("Team", foreign_keys=[team2_id])
@@ -1114,3 +1126,38 @@ class SealedPoolDeck(db.Model):
     week = db.relationship("LeagueWeek")
     user = db.relationship("User")
     deck = db.relationship("Deck")
+
+
+class AlliancePodSelection(db.Model):
+    __tablename__ = "tracker_alliance_pod_selection"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False)
+    house_name = db.Column(db.String(50), nullable=True)  # null for token/prophecy types
+    slot_type = db.Column(db.String(20), nullable=False)  # 'pod', 'token', 'prophecy'
+    slot_number = db.Column(db.Integer, nullable=False)   # 1-3 for pods, 1 for token/prophecy
+
+    deck = db.relationship("Deck")
+
+
+class ThiefCurationDeck(db.Model):
+    __tablename__ = "tracker_thief_curation_deck"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
+    deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False)
+    slot_number = db.Column(db.Integer, nullable=False)
+
+    deck = db.relationship("Deck")
+    team = db.relationship("Team")
+
+
+class ThiefSteal(db.Model):
+    __tablename__ = "tracker_thief_steal"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False)
+    stealing_team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
+    curation_deck_id = db.Column(db.Integer, db.ForeignKey("tracker_thief_curation_deck.id"), nullable=False)
+
+    curation_deck = db.relationship("ThiefCurationDeck")

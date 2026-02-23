@@ -28,6 +28,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Checkbox,
 } from '@mui/material';
 import {
   getLeague,
@@ -39,6 +40,11 @@ import {
   getSets,
   setFeatureDesignation,
   clearFeatureDesignation,
+  submitAllianceSelection,
+  clearAllianceSelection,
+  submitCurationDeck,
+  removeCurationDeck,
+  submitSteals,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
@@ -50,7 +56,12 @@ const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
   triad: 'Triad',
   sealed_archon: 'Sealed Archon',
+  sealed_alliance: 'Sealed Alliance',
+  thief: 'Thief',
 };
+
+const TOKEN_SETS = new Set([855, 600]);
+const PROPHECY_EXPANSION_ID = 886;
 
 export default function MyTeamPage() {
   const { leagueId } = useParams<{ leagueId: string }>();
@@ -82,6 +93,16 @@ export default function MyTeamPage() {
   // Sealed selection state: keyed by `${weekId}-${userId}-${slotNumber}`
   const [sealedSelections, setSealedSelections] = useState<Record<string, number>>({});
 
+  // Thief: curation deck submission URLs, keyed by `${weekId}-${slot}`
+  const [curationDeckUrls, setCurationDeckUrls] = useState<Record<string, string>>({});
+  // Thief: steal selections, keyed by weekId -> curation_deck_id[]
+  const [thiefStealSelections, setThiefStealSelections] = useState<Record<number, number[]>>({});
+
+  // Sealed Alliance: pod selections keyed by `${weekId}-${userId}` -> 3 "deckId:house" strings
+  const [alliancePods, setAlliancePods] = useState<Record<string, string[]>>({});
+  const [allianceTokenIds, setAllianceTokenIds] = useState<Record<string, number>>({});
+  const [allianceProphecyIds, setAllianceProphecyIds] = useState<Record<string, number>>({});
+
   const refresh = useCallback(() => {
     if (!leagueId) return;
     setSealedPools({});
@@ -99,7 +120,7 @@ export default function MyTeamPage() {
 
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
-  // Fetch sealed pools for sealed_archon weeks
+  // Fetch sealed pools for sealed_archon and sealed_alliance weeks
   useEffect(() => {
     if (!league || !user) return;
     const myTeam = league.teams.find((t) => t.id === league.my_team_id);
@@ -107,7 +128,7 @@ export default function MyTeamPage() {
     const isCaptain = league.is_captain;
 
     const sealedWeeks = (league.weeks || []).filter(
-      (w) => w.format_type === 'sealed_archon' && w.sealed_pools_generated,
+      (w) => ['sealed_archon', 'sealed_alliance'].includes(w.format_type) && w.sealed_pools_generated,
     );
     if (sealedWeeks.length === 0) return;
 
@@ -280,7 +301,61 @@ export default function MyTeamPage() {
   };
 
   const renderDeckInput = (week: LeagueWeek, userId: number, slotNumber: number) => {
-    if (week.format_type === 'sealed_archon') {
+    if (week.format_type === 'thief' && week.status === 'deck_selection') {
+      // Build thief pool for this team
+      const stolenByMyTeam = new Set(
+        (week.thief_steals || [])
+          .filter((s) => s.stealing_team_id === myTeam.id)
+          .map((s) => s.curation_deck_id)
+      );
+      const stolenFromMyTeamIds = new Set(
+        (week.thief_steals || [])
+          .filter((s) => {
+            const cd = (week.thief_curation_decks || []).find((c) => c.id === s.curation_deck_id);
+            return cd?.team_id === myTeam.id;
+          })
+          .map((s) => s.curation_deck_id)
+      );
+      const stolenDecks = (week.thief_curation_decks || []).filter((cd) => stolenByMyTeam.has(cd.id));
+      const leftDecks = (week.thief_curation_decks || [])
+        .filter((cd) => cd.team_id === myTeam.id && !stolenFromMyTeamIds.has(cd.id));
+      const assignedDeckIds = new Set(
+        week.deck_selections.filter((ds) => ds.user_id !== userId).map((ds) => ds.deck?.db_id).filter(Boolean)
+      );
+      const allPoolDecks = [...stolenDecks, ...leftDecks].filter(
+        (cd) => cd.deck && !assignedDeckIds.has(cd.deck.db_id)
+      );
+
+      const selKey = `${week.id}-${userId}-${slotNumber}`;
+      return (
+        <Box sx={{ display: 'flex', gap: 1, ml: 4, mt: 0.5, alignItems: 'center' }}>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Select deck from pool</InputLabel>
+            <Select
+              value={sealedSelections[selKey] || ''}
+              onChange={(e) => setSealedSelections((prev) => ({ ...prev, [selKey]: e.target.value as number }))}
+              label="Select deck from pool"
+            >
+              {allPoolDecks.map((cd) => (
+                <MenuItem key={cd.id} value={cd.deck!.db_id!}>
+                  {cd.deck!.name}{cd.deck!.sas_rating != null ? ` (SAS: ${cd.deck!.sas_rating})` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => handleSubmitSealed(week.id, userId, slotNumber)}
+            disabled={!sealedSelections[selKey]}
+          >
+            Submit
+          </Button>
+        </Box>
+      );
+    }
+
+    if (week.format_type === 'sealed_archon' || week.format_type === 'sealed_alliance') {
       const poolKey = `${week.id}-${userId}`;
       const pool = sealedPools[poolKey];
       if (!pool) {
@@ -375,8 +450,87 @@ export default function MyTeamPage() {
     }
   };
 
+  const handleSubmitCurationDeck = async (weekId: number, slot: number, key: string) => {
+    const url = curationDeckUrls[key];
+    if (!url?.trim()) return;
+    setError('');
+    setSuccess('');
+    try {
+      await submitCurationDeck(league.id, weekId, { deck_url: url.trim(), slot_number: slot });
+      setCurationDeckUrls((prev) => ({ ...prev, [key]: '' }));
+      setSuccess('Curation deck submitted');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleRemoveCurationDeck = async (weekId: number, slot: number) => {
+    setError('');
+    try {
+      await removeCurationDeck(league.id, weekId, slot);
+      setSuccess('Curation deck removed');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleSubmitSteals = async (weekId: number) => {
+    const selected = thiefStealSelections[weekId] || [];
+    setError('');
+    setSuccess('');
+    try {
+      await submitSteals(league.id, weekId, selected);
+      setSuccess('Steals submitted!');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleSubmitAlliance = async (weekId: number, userId: number) => {
+    const key = `${weekId}-${userId}`;
+    const pods = (alliancePods[key] || ['', '', ''])
+      .filter(Boolean)
+      .map((s) => {
+        const colonIdx = s.indexOf(':');
+        return { deck_id: parseInt(s.slice(0, colonIdx), 10), house: s.slice(colonIdx + 1) };
+      });
+    setError('');
+    setSuccess('');
+    try {
+      const payload: Parameters<typeof submitAllianceSelection>[2] = { pods };
+      if (allianceTokenIds[key]) payload.token_deck_id = allianceTokenIds[key];
+      if (allianceProphecyIds[key]) payload.prophecy_deck_id = allianceProphecyIds[key];
+      if (userId !== user!.id) payload.user_id = userId;
+      await submitAllianceSelection(league.id, weekId, payload);
+      setAlliancePods((prev) => ({ ...prev, [key]: ['', '', ''] }));
+      setAllianceTokenIds((prev) => ({ ...prev, [key]: 0 }));
+      setAllianceProphecyIds((prev) => ({ ...prev, [key]: 0 }));
+      setSuccess('Alliance selection submitted!');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleClearAllianceTeam = async (weekId: number, userId: number) => {
+    setError('');
+    try {
+      await clearAllianceSelection(league.id, weekId, userId !== user!.id ? userId : undefined);
+      setSuccess('Alliance selection cleared');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const renderWeekContent = (week: LeagueWeek) => {
-    const isWeekEditable = week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
+    const thiefEditableStatuses = new Set(['curation', 'thief', 'deck_selection', 'team_paired', 'pairing']);
+    const isWeekEditable = week.format_type === 'thief'
+      ? thiefEditableStatuses.has(week.status)
+      : week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
     const maxSlots = week.format_type === 'triad' ? 3 : 1;
     const showFeature = league.team_size % 2 === 0 &&
       (week.status === 'deck_selection' || week.status === 'team_paired');
@@ -441,6 +595,133 @@ export default function MyTeamPage() {
             </Box>
           )}
 
+          {/* Thief: Curation phase (captain submits decks) */}
+          {week.format_type === 'thief' && week.status === 'curation' && (
+            <Box sx={{ mb: 2 }}>
+              {isCaptain ? (
+                <Box sx={{ p: 1.5, border: 1, borderColor: 'info.main', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Curation Phase — Submit {league.team_size} deck{league.team_size !== 1 ? 's' : ''}
+                  </Typography>
+                  {Array.from({ length: league.team_size }, (_, i) => i + 1).map((slot) => {
+                    const existingDeck = (week.thief_curation_decks || []).find(
+                      (cd) => cd.team_id === myTeam.id && cd.slot_number === slot
+                    );
+                    const key = `${week.id}-${slot}`;
+                    return (
+                      <Box key={slot} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+                        <Typography variant="body2" sx={{ minWidth: 55 }}>Slot {slot}:</Typography>
+                        {existingDeck ? (
+                          <>
+                            {existingDeck.deck?.houses && <HouseIcons houses={existingDeck.deck.houses} />}
+                            <Typography variant="body2">{existingDeck.deck?.name || 'Unknown'}</Typography>
+                            {existingDeck.deck?.sas_rating != null && (
+                              <Chip label={`SAS: ${existingDeck.deck.sas_rating}`} size="small" variant="outlined" />
+                            )}
+                            <Button size="small" color="error" onClick={() => handleRemoveCurationDeck(week.id, slot)}>
+                              Remove
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <TextField
+                              label="Deck URL"
+                              value={curationDeckUrls[key] || ''}
+                              onChange={(e) => setCurationDeckUrls((prev) => ({ ...prev, [key]: e.target.value }))}
+                              size="small"
+                              fullWidth
+                              placeholder="https://decksofkeyforge.com/decks/..."
+                            />
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleSubmitCurationDeck(week.id, slot, key)}
+                              disabled={!curationDeckUrls[key]?.trim()}
+                            >
+                              Submit
+                            </Button>
+                          </>
+                        )}
+                      </Box>
+                    );
+                  })}
+                </Box>
+              ) : (
+                <Typography color="text.secondary">
+                  Curation phase: captain is submitting decks.
+                </Typography>
+              )}
+              {(week.thief_curation_decks || []).filter((cd) => cd.team_id === myTeam.id).length > 0 && (
+                <Box sx={{ mt: 1 }}>
+                  <Typography variant="caption" color="text.secondary">
+                    Submitted: {(week.thief_curation_decks || []).filter((cd) => cd.team_id === myTeam.id).length} / {league.team_size}
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          )}
+
+          {/* Thief: Steal phase */}
+          {week.format_type === 'thief' && week.status === 'thief' && (() => {
+            const opponentTeam = league.teams.find((t) => t.id !== myTeam.id);
+            if (!opponentTeam) return null;
+            const opponentDecks = (week.thief_curation_decks || [])
+              .filter((cd) => cd.team_id === opponentTeam.id)
+              .sort((a, b) => a.slot_number - b.slot_number);
+            const isFloor = myTeam.id === week.thief_floor_team_id;
+            const stealCount = isFloor ? Math.floor(league.team_size / 2) : Math.ceil(league.team_size / 2);
+            const currentSteals = (week.thief_steals || []).filter((s) => s.stealing_team_id === myTeam.id);
+            const selected = thiefStealSelections[week.id] || [];
+            return (
+              <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'warning.main', borderRadius: 1 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Thief Phase — Steal {stealCount} deck{stealCount !== 1 ? 's' : ''} from {opponentTeam.name}
+                </Typography>
+                {opponentDecks.map((cd) => (
+                  <Box key={cd.id} sx={{ display: 'flex', gap: 1, mb: 0.5, alignItems: 'center' }}>
+                    <Checkbox
+                      size="small"
+                      checked={selected.includes(cd.id)}
+                      onChange={(e) => {
+                        setThiefStealSelections((prev) => {
+                          const cur = prev[week.id] || [];
+                          return {
+                            ...prev,
+                            [week.id]: e.target.checked
+                              ? [...cur, cd.id]
+                              : cur.filter((id) => id !== cd.id),
+                          };
+                        });
+                      }}
+                    />
+                    <Chip label={`Slot ${cd.slot_number}`} size="small" variant="outlined" />
+                    {cd.deck?.houses && <HouseIcons houses={cd.deck.houses} />}
+                    <Typography variant="body2">{cd.deck?.name || 'Unknown'}</Typography>
+                    {cd.deck?.sas_rating != null && (
+                      <Chip label={`SAS: ${cd.deck.sas_rating}`} size="small" variant="outlined" />
+                    )}
+                  </Box>
+                ))}
+                <Box sx={{ mt: 1, display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Typography variant="body2">Selected: {selected.length} / {stealCount}</Typography>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => handleSubmitSteals(week.id)}
+                    disabled={selected.length !== stealCount}
+                  >
+                    Submit Steals
+                  </Button>
+                </Box>
+                {currentSteals.length > 0 && (
+                  <Typography variant="body2" color="success.main" sx={{ mt: 0.5 }}>
+                    Current: {currentSteals.length} steal{currentSteals.length !== 1 ? 's' : ''} submitted
+                  </Typography>
+                )}
+              </Box>
+            );
+          })()}
+
           {myTeam.members.map((m) => {
             const isMe = m.user.id === user.id;
             const canEditMember = isWeekEditable && (isMe || isCaptain);
@@ -458,8 +739,8 @@ export default function MyTeamPage() {
                   {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
                 </Box>
 
-                {/* Sealed pool display */}
-                {week.format_type === 'sealed_archon' && (() => {
+                {/* Sealed pool display (sealed_archon and sealed_alliance) */}
+                {(week.format_type === 'sealed_archon' || week.format_type === 'sealed_alliance') && (() => {
                   const poolKey = `${week.id}-${m.user.id}`;
                   const pool = sealedPools[poolKey];
                   if (!pool || pool.length === 0) return null;
@@ -476,6 +757,9 @@ export default function MyTeamPage() {
                           {entry.deck?.expansion_name && (
                             <Chip label={entry.deck.expansion_name} size="small" variant="outlined" />
                           )}
+                          {entry.deck?.token_name && (
+                            <Chip label={`Token: ${entry.deck.token_name}`} size="small" color="secondary" variant="outlined" />
+                          )}
                           {entry.deck && (
                             <Box sx={{ display: 'flex', gap: 0.5 }}>
                               <Link href={entry.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
@@ -488,8 +772,108 @@ export default function MyTeamPage() {
                   );
                 })()}
 
-                {/* Render all slots */}
-                {Array.from({ length: maxSlots }, (_, i) => i + 1).map((slotNum) => {
+                {/* Sealed Alliance: pod selection UI */}
+                {week.format_type === 'sealed_alliance' && canEditMember && (() => {
+                  const poolKey = `${week.id}-${m.user.id}`;
+                  const pool = sealedPools[poolKey] || [];
+                  if (pool.length === 0) return null;
+                  const podKey = `${week.id}-${m.user.id}`;
+                  const memberPods = alliancePods[podKey] || ['', '', ''];
+                  const needsToken = (week.allowed_sets || []).some((s) => TOKEN_SETS.has(s));
+                  const needsProphecy = (week.allowed_sets || []).includes(PROPHECY_EXPANSION_ID);
+
+                  const allPairs = pool.flatMap((entry) =>
+                    (entry.deck?.houses || []).map((house) => ({
+                      value: `${entry.deck!.db_id}:${house}`,
+                      label: `${entry.deck!.name} — ${house}`,
+                      house,
+                    }))
+                  );
+                  const selectedHouses = memberPods.filter(Boolean).map((p) => p.split(':').slice(1).join(':'));
+                  const getPodOptions = (podIndex: number) => {
+                    const othersSelected = selectedHouses.filter((_, i) => i !== podIndex);
+                    return allPairs.filter((p) => !othersSelected.includes(p.house));
+                  };
+                  const selectedPodDeckIds = memberPods.filter(Boolean).map((p) => parseInt(p.split(':')[0], 10)).filter(Boolean);
+                  const podPoolEntries = pool.filter((e) => e.deck?.db_id && selectedPodDeckIds.includes(e.deck.db_id));
+
+                  return (
+                    <Box sx={{ ml: 4, mb: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography variant="caption" color="text.secondary">Alliance Pod Selection:</Typography>
+                      {[0, 1, 2].map((podIndex) => (
+                        <FormControl key={podIndex} size="small" fullWidth>
+                          <InputLabel>Pod {podIndex + 1}</InputLabel>
+                          <Select
+                            value={memberPods[podIndex]}
+                            label={`Pod ${podIndex + 1}`}
+                            onChange={(e) => {
+                              const updated = [...memberPods];
+                              updated[podIndex] = e.target.value;
+                              setAlliancePods((prev) => ({ ...prev, [podKey]: updated }));
+                            }}
+                          >
+                            <MenuItem value=""><em>None</em></MenuItem>
+                            {getPodOptions(podIndex).map((opt) => (
+                              <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      ))}
+                      {needsToken && podPoolEntries.length > 0 && (
+                        <FormControl size="small" fullWidth>
+                          <InputLabel>Token Deck</InputLabel>
+                          <Select
+                            value={allianceTokenIds[podKey] || ''}
+                            label="Token Deck"
+                            onChange={(e) => setAllianceTokenIds((prev) => ({ ...prev, [podKey]: e.target.value as number }))}
+                          >
+                            <MenuItem value=""><em>None</em></MenuItem>
+                            {podPoolEntries.map((e) => (
+                              <MenuItem key={e.deck!.db_id} value={e.deck!.db_id!}>
+                                {e.deck!.name}{e.deck!.token_name ? ` (${e.deck!.token_name})` : ''}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                      {needsProphecy && podPoolEntries.length > 0 && (
+                        <FormControl size="small" fullWidth>
+                          <InputLabel>Prophecy Deck</InputLabel>
+                          <Select
+                            value={allianceProphecyIds[podKey] || ''}
+                            label="Prophecy Deck"
+                            onChange={(e) => setAllianceProphecyIds((prev) => ({ ...prev, [podKey]: e.target.value as number }))}
+                          >
+                            <MenuItem value=""><em>None</em></MenuItem>
+                            {podPoolEntries.map((e) => (
+                              <MenuItem key={e.deck!.db_id} value={e.deck!.db_id!}>
+                                {e.deck!.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleSubmitAlliance(week.id, m.user.id)}
+                        disabled={memberPods.filter(Boolean).length < 3}
+                      >
+                        Submit Alliance
+                      </Button>
+                      {isMe && (week.alliance_selections || []).filter((s) => s.slot_type === 'pod').length > 0 && (
+                        <Button size="small" color="error" onClick={() => handleClearAllianceTeam(week.id, m.user.id)}>
+                          Clear My Selection
+                        </Button>
+                      )}
+                    </Box>
+                  );
+                })()}
+
+                {/* Render all slots (not for sealed_alliance or thief curation/steal phases) */}
+                {week.format_type !== 'sealed_alliance' &&
+                  !(week.format_type === 'thief' && (week.status === 'curation' || week.status === 'thief')) &&
+                  Array.from({ length: maxSlots }, (_, i) => i + 1).map((slotNum) => {
                   const sel = selections.find((s) => s.slot_number === slotNum);
                   if (sel) {
                     return (

@@ -12,6 +12,10 @@ from keytracker.schema import (
     MatchGame,
     Team,
     TeamMember,
+    SealedPoolDeck,
+    AlliancePodSelection,
+    ThiefCurationDeck,
+    ThiefSteal,
     EXPANSION_ID_TO_ABBR,
 )
 import json
@@ -193,6 +197,22 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
     viewer_is_admin = viewer and any(a.user_id == viewer.id for a in week.league.admins)
     show_player_matchups = week.status != "pairing" or viewer_is_admin
 
+    # Alliance pod selections (only for the viewing user)
+    alliance_selections = []
+    if viewer and week.format_type == "sealed_alliance":
+        alliance_selections = AlliancePodSelection.query.filter_by(
+            week_id=week.id, user_id=viewer.id
+        ).all()
+
+    # Thief curation and steals data
+    thief_curation_decks = []
+    thief_steals = []
+    thief_floor_team_id = None
+    if week.format_type == "thief":
+        thief_curation_decks = ThiefCurationDeck.query.filter_by(week_id=week.id).all()
+        thief_steals = ThiefSteal.query.filter_by(week_id=week.id).all()
+        thief_floor_team_id = week.thief_floor_team_id
+
     data = {
         "id": week.id,
         "league_id": week.league_id,
@@ -208,6 +228,7 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "house_diversity": week.house_diversity,
         "decks_per_player": week.decks_per_player,
         "sealed_pools_generated": week.sealed_pools_generated,
+        "thief_floor_team_id": thief_floor_team_id,
         "matchups": [
             serialize_week_matchup(
                 m, viewer=viewer, show_player_matchups=show_player_matchups
@@ -221,6 +242,26 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             {"team_id": fd.team_id, "user_id": fd.user_id}
             for fd in week.feature_designations
         ],
+        "alliance_selections": [
+            serialize_alliance_selection(s) for s in alliance_selections
+        ],
+        "thief_curation_decks": [
+            {
+                "id": cd.id,
+                "team_id": cd.team_id,
+                "slot_number": cd.slot_number,
+                "deck": serialize_deck_summary(cd.deck) if cd.deck else None,
+            }
+            for cd in thief_curation_decks
+        ],
+        "thief_steals": [
+            {
+                "id": s.id,
+                "stealing_team_id": s.stealing_team_id,
+                "curation_deck_id": s.curation_deck_id,
+            }
+            for s in thief_steals
+        ],
     }
     return data
 
@@ -233,6 +274,7 @@ def serialize_week_matchup(
         "week_id": matchup.week_id,
         "team1": serialize_team_detail(matchup.team1),
         "team2": serialize_team_detail(matchup.team2),
+        "thief_stolen_team_id": matchup.thief_stolen_team_id,
         "player_matchups": (
             [
                 serialize_player_matchup(pm, viewer=viewer)
@@ -267,6 +309,24 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
         for s in pm.strikes
     ]
     return data
+
+
+def serialize_sealed_pool_entry(spd: SealedPoolDeck) -> dict:
+    d = serialize_deck_summary(spd.deck) if spd.deck else None
+    if d is not None:
+        tokens = [c for c in spd.deck.cards_from_assoc if c.card_type == "Token Creature"]
+        d["token_name"] = tokens[0].card_title if tokens else None
+    return {"id": spd.id, "deck": d}
+
+
+def serialize_alliance_selection(sel: AlliancePodSelection) -> dict:
+    return {
+        "id": sel.id,
+        "deck_id": sel.deck_id,
+        "house_name": sel.house_name,
+        "slot_type": sel.slot_type,
+        "slot_number": sel.slot_number,
+    }
 
 
 def serialize_deck_selection(sel: PlayerDeckSelection) -> dict:

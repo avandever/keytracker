@@ -55,6 +55,8 @@ import {
   deleteLeague,
   deleteWeek,
   checkWeekCompletion,
+  advanceToThief,
+  endThief,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -64,10 +66,14 @@ const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
   triad: 'Triad',
   sealed_archon: 'Sealed Archon',
+  sealed_alliance: 'Sealed Alliance',
+  thief: 'Thief',
 };
 
 const STATUS_COLORS: Record<string, 'default' | 'info' | 'warning' | 'success'> = {
   setup: 'default',
+  curation: 'info',
+  thief: 'warning',
   deck_selection: 'info',
   team_paired: 'info',
   pairing: 'warning',
@@ -279,7 +285,7 @@ export default function LeagueAdminPage() {
         combined_max_sas: weekCombinedMaxSas ? parseInt(weekCombinedMaxSas, 10) : null,
         set_diversity: weekSetDiversity || undefined,
         house_diversity: weekHouseDiversity || undefined,
-        decks_per_player: weekFormat === 'sealed_archon' ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
+        decks_per_player: (weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance') ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
       });
       setSuccess('Week created!');
       setWeekName('');
@@ -340,6 +346,12 @@ export default function LeagueAdminPage() {
       } else if (action === 'generate_sealed_pools') {
         await generateSealedPools(league.id, weekId);
         setSuccess('Sealed pools generated!');
+      } else if (action === 'advance_to_thief') {
+        await advanceToThief(league.id, weekId);
+        setSuccess('Advanced to thief phase!');
+      } else if (action === 'end_thief') {
+        await endThief(league.id, weekId);
+        setSuccess('Thief phase ended, deck selection open!');
       }
       refresh();
     } catch (e: any) {
@@ -422,8 +434,8 @@ export default function LeagueAdminPage() {
   const renderWeekActions = (week: LeagueWeek) => {
     const actions: React.ReactNode[] = [];
 
-    // Sealed pool generation
-    if (week.format_type === 'sealed_archon' && !week.sealed_pools_generated &&
+    // Sealed pool generation (Sealed Archon + Sealed Alliance)
+    if (['sealed_archon', 'sealed_alliance'].includes(week.format_type) && !week.sealed_pools_generated &&
         (week.status === 'setup' || week.status === 'deck_selection')) {
       actions.push(
         <Button key="sealed" size="small" variant="contained" color="secondary"
@@ -437,12 +449,26 @@ export default function LeagueAdminPage() {
       case 'setup':
         actions.push(
           <Button key="open" size="small" variant="contained" onClick={() => handleWeekAction(week.id, 'open_deck_selection')}>
-            Open Deck Selection
+            {week.format_type === 'thief' ? 'Open Curation' : 'Open Deck Selection'}
           </Button>
         );
         actions.push(
           <Button key="delete" size="small" variant="outlined" color="error" onClick={() => setDeleteWeekId(week.id)}>
             Delete Week
+          </Button>
+        );
+        break;
+      case 'curation':
+        actions.push(
+          <Button key="advance-thief" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'advance_to_thief')}>
+            Advance to Thief Phase
+          </Button>
+        );
+        break;
+      case 'thief':
+        actions.push(
+          <Button key="end-thief" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'end_thief')}>
+            End Thief Phase
           </Button>
         );
         break;
@@ -807,6 +833,8 @@ export default function LeagueAdminPage() {
                 <MenuItem value="archon_standard">Archon Standard</MenuItem>
                 <MenuItem value="triad">Triad</MenuItem>
                 <MenuItem value="sealed_archon">Sealed Archon</MenuItem>
+                <MenuItem value="sealed_alliance">Sealed Alliance</MenuItem>
+                <MenuItem value="thief">Thief</MenuItem>
               </Select>
             </FormControl>
             <FormControl fullWidth>
@@ -862,7 +890,7 @@ export default function LeagueAdminPage() {
                 />
               </>
             )}
-            {weekFormat === 'sealed_archon' && (
+            {(weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance') && (
               <TextField
                 label="Decks per Player"
                 value={weekDecksPerPlayer}

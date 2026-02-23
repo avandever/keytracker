@@ -11,6 +11,7 @@ import type {
   PlayerMatchupInfo,
   MatchGameInfo,
   KeyforgeSetInfo,
+  AlliancePodSelectionInfo,
 } from '../types';
 
 export async function listLeagues(): Promise<LeagueSummary[]> {
@@ -314,6 +315,85 @@ export async function getSealedPool(
 ): Promise<SealedPoolEntry[]> {
   const params = userId ? `?user_id=${userId}` : '';
   const { data } = await apiClient.get(`/leagues/${leagueId}/weeks/${weekId}/sealed-pool${params}`);
+  return data;
+}
+
+// --- Alliance Pod Selection (Sealed Alliance) ---
+
+export async function submitAllianceSelection(
+  leagueId: number,
+  weekId: number,
+  payload: {
+    pods: { deck_id: number; house: string }[];
+    token_deck_id?: number;
+    prophecy_deck_id?: number;
+    user_id?: number;
+  },
+): Promise<AlliancePodSelectionInfo[]> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/alliance-selection`,
+    payload,
+  );
+  return data;
+}
+
+export async function clearAllianceSelection(
+  leagueId: number,
+  weekId: number,
+  userId?: number,
+): Promise<void> {
+  const params = userId ? `?user_id=${userId}` : '';
+  await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}/alliance-selection${params}`);
+}
+
+// --- Thief Format ---
+
+export async function submitCurationDeck(
+  leagueId: number,
+  weekId: number,
+  payload: { deck_url: string; slot_number: number; team_id?: number },
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/curation-deck`,
+    payload,
+  );
+  return data;
+}
+
+export async function removeCurationDeck(
+  leagueId: number,
+  weekId: number,
+  slot: number,
+  teamId?: number,
+): Promise<void> {
+  const params = teamId ? `?team_id=${teamId}` : '';
+  await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}/curation-deck/${slot}${params}`);
+}
+
+export async function advanceToThief(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/advance-to-thief`);
+  return data;
+}
+
+export async function submitSteals(
+  leagueId: number,
+  weekId: number,
+  curationDeckIds: number[],
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/steal`, {
+    curation_deck_ids: curationDeckIds,
+  });
+  return data;
+}
+
+export async function endThief(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/end-thief`);
   return data;
 }
 

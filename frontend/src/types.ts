@@ -62,6 +62,7 @@ export interface DeckSummary {
   dok_url: string;
   db_id?: number;
   houses?: string[];
+  token_name?: string | null;
 }
 
 export interface PodStat {
@@ -207,11 +208,34 @@ export interface KeyforgeSetInfo {
 // Must be kept in sync with WeekStatus enum in keytracker/schema.py
 export type WeekStatus =
   | 'setup'
+  | 'curation'
+  | 'thief'
   | 'deck_selection'
   | 'team_paired'
   | 'pairing'
   | 'published'
   | 'completed';
+
+export interface AlliancePodSelectionInfo {
+  id: number;
+  deck_id: number;
+  house_name: string | null;
+  slot_type: 'pod' | 'token' | 'prophecy';
+  slot_number: number;
+}
+
+export interface ThiefCurationDeckInfo {
+  id: number;
+  team_id: number;
+  slot_number: number;
+  deck: DeckSummary | null;
+}
+
+export interface ThiefStealInfo {
+  id: number;
+  stealing_team_id: number;
+  curation_deck_id: number;
+}
 
 export interface LeagueWeek {
   id: number;
@@ -228,9 +252,13 @@ export interface LeagueWeek {
   house_diversity: boolean | null;
   decks_per_player: number | null;
   sealed_pools_generated: boolean;
+  thief_floor_team_id?: number | null;
   matchups: WeekMatchup[];
   deck_selections: DeckSelectionInfo[];
   feature_designations: { team_id: number; user_id: number }[];
+  alliance_selections?: AlliancePodSelectionInfo[];
+  thief_curation_decks?: ThiefCurationDeckInfo[];
+  thief_steals?: ThiefStealInfo[];
 }
 
 export interface WeekMatchup {
@@ -238,6 +266,7 @@ export interface WeekMatchup {
   week_id: number;
   team1: TeamDetail;
   team2: TeamDetail;
+  thief_stolen_team_id?: number | null;
   player_matchups: PlayerMatchupInfo[];
 }
 
