@@ -2486,7 +2486,7 @@ def submit_curation_deck(league_id, week_id):
         return jsonify({"error": "Week not found"}), 404
     if week.format_type != WeekFormat.THIEF.value:
         return jsonify({"error": "Only for Thief format"}), 400
-    if week.status != WeekStatus.CURATION.value:
+    if week.status not in (WeekStatus.CURATION.value, WeekStatus.TEAM_PAIRED.value):
         return jsonify({"error": "Curation is not open"}), 400
 
     effective = get_effective_user()
@@ -2563,7 +2563,7 @@ def remove_curation_deck(league_id, week_id, slot):
         return jsonify({"error": "Week not found"}), 404
     if week.format_type != WeekFormat.THIEF.value:
         return jsonify({"error": "Only for Thief format"}), 400
-    if week.status != WeekStatus.CURATION.value:
+    if week.status not in (WeekStatus.CURATION.value, WeekStatus.TEAM_PAIRED.value):
         return jsonify({"error": "Curation is not open"}), 400
 
     effective = get_effective_user()

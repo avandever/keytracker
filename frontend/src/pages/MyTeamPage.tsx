@@ -596,7 +596,7 @@ export default function MyTeamPage() {
           )}
 
           {/* Thief: Curation phase (captain submits decks) */}
-          {week.format_type === 'thief' && week.status === 'curation' && (
+          {week.format_type === 'thief' && (week.status === 'curation' || week.status === 'team_paired') && (
             <Box sx={{ mb: 2 }}>
               {isCaptain ? (
                 <Box sx={{ p: 1.5, border: 1, borderColor: 'info.main', borderRadius: 1 }}>
@@ -872,7 +872,7 @@ export default function MyTeamPage() {
 
                 {/* Render all slots (not for sealed_alliance or thief curation/steal phases) */}
                 {week.format_type !== 'sealed_alliance' &&
-                  !(week.format_type === 'thief' && (week.status === 'curation' || week.status === 'thief')) &&
+                  !(week.format_type === 'thief' && (week.status === 'curation' || week.status === 'team_paired' || week.status === 'thief')) &&
                   Array.from({ length: maxSlots }, (_, i) => i + 1).map((slotNum) => {
                   const sel = selections.find((s) => s.slot_number === slotNum);
                   if (sel) {

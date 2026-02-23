@@ -699,7 +699,7 @@ export default function MyLeagueInfoPage() {
             })()}
 
             {/* Thief: curation phase */}
-            {week.format_type === 'thief' && week.status === 'curation' && (
+            {week.format_type === 'thief' && (week.status === 'curation' || week.status === 'team_paired') && (
               <Typography color="text.secondary">
                 Curation phase: your captain is submitting decks for the week.
               </Typography>
