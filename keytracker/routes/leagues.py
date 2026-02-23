@@ -1538,6 +1538,53 @@ def generate_player_matchups(league_id, week_id):
                 400,
             )
 
+    # Pre-flight: verify no selected deck has been used in a prior week
+    SEALED_FORMATS = (WeekFormat.SEALED_ARCHON.value, WeekFormat.SEALED_ALLIANCE.value)
+    if week.format_type not in SEALED_FORMATS:
+        pairing_conflicts = (
+            db.session.query(PlayerDeckSelection, LeagueWeek, User, Deck)
+            .join(LeagueWeek, PlayerDeckSelection.week_id == LeagueWeek.id)
+            .join(User, PlayerDeckSelection.user_id == User.id)
+            .join(Deck, PlayerDeckSelection.deck_id == Deck.id)
+            .filter(
+                PlayerDeckSelection.week_id == week.id  # selections for THIS week
+            )
+            .all()
+        )
+        # For each selection in this week, check if the deck appears in an earlier week
+        conflict_messages = []
+        for sel, _, submitter, sel_deck in pairing_conflicts:
+            prior = (
+                db.session.query(PlayerDeckSelection, LeagueWeek, User)
+                .join(LeagueWeek, PlayerDeckSelection.week_id == LeagueWeek.id)
+                .join(User, PlayerDeckSelection.user_id == User.id)
+                .filter(
+                    PlayerDeckSelection.deck_id == sel_deck.id,
+                    LeagueWeek.league_id == league.id,
+                    LeagueWeek.id != week.id,
+                    LeagueWeek.week_number < week.week_number,
+                    ~LeagueWeek.format_type.in_(SEALED_FORMATS),
+                )
+                .first()
+            )
+            if prior:
+                prior_sel, prior_week, prior_user = prior
+                conflict_messages.append(
+                    f"{submitter.name}'s deck ({sel_deck.name}) for this week "
+                    f"was already used in {prior_week.name} (Week {prior_week.week_number}) "
+                    f"by {prior_user.name}."
+                )
+        if conflict_messages:
+            return (
+                jsonify(
+                    {
+                        "error": "Deck conflicts detected: " + " ".join(conflict_messages),
+                        "deck_conflicts": True,
+                    }
+                ),
+                409,
+            )
+
     # Clear any existing player matchups
     for wm in matchups:
         PlayerMatchup.query.filter_by(week_matchup_id=wm.id).delete()
@@ -1920,6 +1967,66 @@ def clear_alliance_selection(league_id, week_id):
 # --- Deck selection ---
 
 
+def _check_deck_cross_week_conflicts(league, week, deck, target_team):
+    """
+    Returns a list of human-readable conflict error strings, or an empty list if clean.
+
+    Error 1: Deck was selected in any earlier non-sealed week (any team/user).
+    Error 2: Deck is selected in any other non-sealed week by any member of target_team.
+    """
+    SEALED_FORMATS = (WeekFormat.SEALED_ARCHON.value, WeekFormat.SEALED_ALLIANCE.value)
+
+    # Skip check entirely if the current week is sealed
+    if week.format_type in SEALED_FORMATS:
+        return []
+
+    errors = []
+
+    # --- Error 1: used by anyone in a previous (lower week_number) non-sealed week ---
+    prior_conflicts = (
+        db.session.query(PlayerDeckSelection, LeagueWeek, User)
+        .join(LeagueWeek, PlayerDeckSelection.week_id == LeagueWeek.id)
+        .join(User, PlayerDeckSelection.user_id == User.id)
+        .filter(
+            PlayerDeckSelection.deck_id == deck.id,
+            LeagueWeek.league_id == league.id,
+            LeagueWeek.id != week.id,
+            LeagueWeek.week_number < week.week_number,
+            ~LeagueWeek.format_type.in_(SEALED_FORMATS),
+        )
+        .all()
+    )
+    for sel, prior_week, user in prior_conflicts:
+        errors.append(
+            f"This deck ({deck.name}) was already used in "
+            f"{prior_week.name} (Week {prior_week.week_number}) by {user.name}."
+        )
+
+    # --- Error 2: selected for any other week by a teammate ---
+    if target_team:
+        team_member_ids = [m.user_id for m in target_team.members]
+        team_conflicts = (
+            db.session.query(PlayerDeckSelection, LeagueWeek, User)
+            .join(LeagueWeek, PlayerDeckSelection.week_id == LeagueWeek.id)
+            .join(User, PlayerDeckSelection.user_id == User.id)
+            .filter(
+                PlayerDeckSelection.deck_id == deck.id,
+                LeagueWeek.league_id == league.id,
+                LeagueWeek.id != week.id,
+                PlayerDeckSelection.user_id.in_(team_member_ids),
+                ~LeagueWeek.format_type.in_(SEALED_FORMATS),
+            )
+            .all()
+        )
+        for sel, other_week, user in team_conflicts:
+            errors.append(
+                f"This deck ({deck.name}) is already selected for "
+                f"{other_week.name} (Week {other_week.week_number}) by your teammate {user.name}."
+            )
+
+    return errors
+
+
 @blueprint.route(
     "/<int:league_id>/weeks/<int:week_id>/deck-selection", methods=["POST"]
 )
@@ -1977,6 +2084,9 @@ def submit_deck_selection(league_id, week_id):
     )
     if not member:
         return jsonify({"error": "User is not a member of this league"}), 400
+
+    # Resolve the player's team for cross-week conflict checking
+    target_team = db.session.get(Team, member.team_id)
 
     slot_number = data.get("slot_number", 1)
     max_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
@@ -2088,6 +2198,12 @@ def submit_deck_selection(league_id, week_id):
                 ),
                 400,
             )
+
+    # Cross-week deck uniqueness check (skip for sealed formats)
+    if week.format_type not in (WeekFormat.SEALED_ARCHON.value, WeekFormat.SEALED_ALLIANCE.value):
+        conflicts = _check_deck_cross_week_conflicts(league, week, deck, target_team)
+        if conflicts:
+            return jsonify({"error": " ".join(conflicts)}), 409
 
     # Upsert the selection
     existing = PlayerDeckSelection.query.filter_by(
