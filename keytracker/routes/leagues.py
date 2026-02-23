@@ -237,7 +237,7 @@ def delete_league(league_id):
         FeatureDesignation.query.filter_by(week_id=week.id).delete()
         for cd in ThiefCurationDeck.query.filter_by(week_id=week.id).all():
             ThiefSteal.query.filter_by(curation_deck_id=cd.id).delete()
-            db.session.delete(cd)
+        ThiefCurationDeck.query.filter_by(week_id=week.id).delete()
         db.session.delete(week)
     for team in Team.query.filter_by(league_id=league.id).all():
         TeamMember.query.filter_by(team_id=team.id).delete()
@@ -1190,7 +1190,7 @@ def delete_week(league_id, week_id):
     # Delete thief data
     for cd in ThiefCurationDeck.query.filter_by(week_id=week.id).all():
         ThiefSteal.query.filter_by(curation_deck_id=cd.id).delete()
-        db.session.delete(cd)
+    ThiefCurationDeck.query.filter_by(week_id=week.id).delete()
     db.session.delete(week)
     db.session.commit()
     return jsonify({"success": True}), 200
