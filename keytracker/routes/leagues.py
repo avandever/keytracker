@@ -1405,7 +1405,11 @@ def generate_team_pairings(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.status != WeekStatus.DECK_SELECTION.value:
+    # Thief format runs team pairings from curation (before the thief phase)
+    if week.format_type == WeekFormat.THIEF.value:
+        if week.status != WeekStatus.CURATION.value:
+            return jsonify({"error": "Week must be in curation status"}), 400
+    elif week.status != WeekStatus.DECK_SELECTION.value:
         return jsonify({"error": "Week must be in deck_selection status"}), 400
 
     # Delete existing matchups
@@ -1457,7 +1461,11 @@ def generate_player_matchups(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.status != WeekStatus.TEAM_PAIRED.value:
+    # Thief format runs player matchups from deck_selection (team pairings already exist)
+    if week.format_type == WeekFormat.THIEF.value:
+        if week.status != WeekStatus.DECK_SELECTION.value:
+            return jsonify({"error": "Week must be in deck_selection status"}), 400
+    elif week.status != WeekStatus.TEAM_PAIRED.value:
         return jsonify({"error": "Week must be in team_paired status"}), 400
 
     # Check all players have submitted deck selections (warn but allow force)
@@ -2485,8 +2493,8 @@ def advance_to_thief(league_id, week_id):
         return jsonify({"error": "Week not found"}), 404
     if week.format_type != WeekFormat.THIEF.value:
         return jsonify({"error": "Only for Thief format"}), 400
-    if week.status != WeekStatus.CURATION.value:
-        return jsonify({"error": "Week must be in curation status"}), 400
+    if week.status != WeekStatus.TEAM_PAIRED.value:
+        return jsonify({"error": "Week must be in team_paired status"}), 400
 
     # Validate each team has exactly team_size curation decks
     teams = league.teams

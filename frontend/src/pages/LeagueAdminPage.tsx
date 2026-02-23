@@ -460,9 +460,10 @@ export default function LeagueAdminPage() {
         );
         break;
       case 'curation':
+        // Only Thief weeks reach curation; team pairings come before the thief phase
         actions.push(
-          <Button key="advance-thief" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'advance_to_thief')}>
-            Advance to Thief Phase
+          <Button key="team-pairings" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_team_pairings')}>
+            Generate Team Pairings
           </Button>
         );
         break;
@@ -474,18 +475,36 @@ export default function LeagueAdminPage() {
         );
         break;
       case 'deck_selection':
-        actions.push(
-          <Button key="team-pairings" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_team_pairings')}>
-            Generate Team Pairings
-          </Button>
-        );
+        if (week.format_type === 'thief') {
+          // Team pairings already exist; go straight to player matchups
+          actions.push(
+            <Button key="player-matchups" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_player_matchups')}>
+              Generate Player Matchups
+            </Button>
+          );
+        } else {
+          actions.push(
+            <Button key="team-pairings" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_team_pairings')}>
+              Generate Team Pairings
+            </Button>
+          );
+        }
         break;
       case 'team_paired':
-        actions.push(
-          <Button key="player-matchups" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_player_matchups')}>
-            Generate Player Matchups
-          </Button>
-        );
+        if (week.format_type === 'thief') {
+          // Team pairings are done; now advance to the thief stealing phase
+          actions.push(
+            <Button key="advance-thief" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'advance_to_thief')}>
+              Advance to Thief Phase
+            </Button>
+          );
+        } else {
+          actions.push(
+            <Button key="player-matchups" size="small" variant="contained" color="warning" onClick={() => handleWeekAction(week.id, 'generate_player_matchups')}>
+              Generate Player Matchups
+            </Button>
+          );
+        }
         break;
       case 'pairing':
         actions.push(
