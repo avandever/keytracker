@@ -172,7 +172,8 @@ export default function LeagueAdminPage() {
 
   const isSetup = league.status === 'setup';
   const isActive = league.status === 'active';
-  const draftComplete = isActive;
+  const isPlayoffs = league.status === 'playoffs';
+  const draftComplete = isActive || isPlayoffs;
 
   // Tab order depends on draft stage
   let teamsIdx: number;

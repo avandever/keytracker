@@ -20,6 +20,7 @@ const STATUS_COLORS: Record<string, 'default' | 'info' | 'success' | 'warning'> 
   setup: 'info',
   drafting: 'warning',
   active: 'success',
+  playoffs: 'warning',
   completed: 'default',
 };
 

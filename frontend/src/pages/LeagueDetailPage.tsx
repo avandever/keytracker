@@ -603,7 +603,7 @@ export default function LeagueDetailPage() {
             <Typography color="text.secondary" sx={{ mt: 1 }}>{league.description}</Typography>
           )}
         </Box>
-        <Chip label={league.status} color={league.status === 'active' ? 'success' : league.status === 'drafting' ? 'warning' : 'info'} />
+        <Chip label={league.status} color={league.status === 'active' ? 'success' : league.status === 'drafting' || league.status === 'playoffs' ? 'warning' : 'info'} />
       </Box>
 
       <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>

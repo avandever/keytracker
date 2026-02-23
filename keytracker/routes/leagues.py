@@ -1112,7 +1112,7 @@ def create_week(league_id):
         return err
     if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
-    if league.status != LeagueStatus.ACTIVE.value:
+    if league.status not in (LeagueStatus.ACTIVE.value, LeagueStatus.PLAYOFFS.value):
         return jsonify({"error": "League must be active"}), 400
 
     data = request.get_json(silent=True) or {}
@@ -2881,7 +2881,10 @@ def report_game(league_id, matchup_id):
 
 
 def _check_week_completion(week):
-    """Check if all matches in a week are complete, and if so mark week as COMPLETED."""
+    """Check if all matches in a week are complete, and if so mark week as COMPLETED.
+
+    Also transitions the league to PLAYOFFS if all weeks are now complete.
+    """
     wins_needed = math.ceil(week.best_of_n / 2)
     for wm in week.matchups:
         for pm in wm.player_matchups:
@@ -2891,6 +2894,13 @@ def _check_week_completion(week):
             if p1_wins < wins_needed and p2_wins < wins_needed:
                 return  # Not all matches complete
     week.status = WeekStatus.COMPLETED.value
+
+    # Check if all weeks in the league are now complete
+    league = week.league
+    if league.status == LeagueStatus.ACTIVE.value:
+        all_weeks = league.weeks
+        if all_weeks and all(w.status == WeekStatus.COMPLETED.value for w in all_weeks):
+            league.status = LeagueStatus.PLAYOFFS.value
 
 
 @blueprint.route(

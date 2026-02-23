@@ -799,6 +799,7 @@ class LeagueStatus(PyEnum):
     SETUP = "setup"
     DRAFTING = "drafting"
     ACTIVE = "active"
+    PLAYOFFS = "playoffs"
     COMPLETED = "completed"
 
 
