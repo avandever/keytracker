@@ -2688,7 +2688,11 @@ def submit_steals(league_id, week_id):
     # Validate all selected curation decks belong to opponent teams
     for cd_id in curation_deck_ids:
         cd = db.session.get(ThiefCurationDeck, cd_id)
-        if not cd or cd.week_id != week.id or cd.team_id not in opponent_team_ids:
+        if not cd:
+            return jsonify({"error": f"Curation deck {cd_id} not found"}), 400
+        if cd.week_id != week.id:
+            return jsonify({"error": f"Curation deck {cd_id} belongs to a different week"}), 400
+        if cd.team_id not in opponent_team_ids:
             return jsonify({"error": f"Curation deck {cd_id} is not from an opponent team"}), 400
 
     # Replace steals for this team

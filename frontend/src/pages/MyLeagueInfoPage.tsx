@@ -707,7 +707,13 @@ export default function MyLeagueInfoPage() {
 
             {/* Thief: steal phase */}
             {week.format_type === 'thief' && week.status === 'thief' && (() => {
-              const opponentTeam = league.teams.find((t) => t.id !== myTeam.id);
+              // Use matchup data to find the actual paired opponent (matches backend validation)
+              const myMatchup = week.matchups.find(
+                (wm) => wm.team1.id === myTeam.id || wm.team2.id === myTeam.id,
+              );
+              const opponentTeam = myMatchup
+                ? (myMatchup.team1.id === myTeam.id ? myMatchup.team2 : myMatchup.team1)
+                : league.teams.find((t) => t.id !== myTeam.id);
               if (!opponentTeam) return null;
               const opponentDecks = (week.thief_curation_decks || [])
                 .filter((cd) => cd.team_id === opponentTeam.id)
