@@ -197,11 +197,18 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
     viewer_is_admin = viewer and any(a.user_id == viewer.id for a in week.league.admins)
     show_player_matchups = week.status != "pairing" or viewer_is_admin
 
-    # Alliance pod selections (only for the viewing user)
+    # Alliance pod selections for the viewer's team (so teammates are visible)
     alliance_selections = []
     if viewer and week.format_type == "sealed_alliance":
-        alliance_selections = AlliancePodSelection.query.filter_by(
-            week_id=week.id, user_id=viewer.id
+        viewer_team_member_ids = {viewer.id}
+        for team in week.league.teams:
+            member_ids = {m.user_id for m in team.members}
+            if viewer.id in member_ids:
+                viewer_team_member_ids = member_ids
+                break
+        alliance_selections = AlliancePodSelection.query.filter(
+            AlliancePodSelection.week_id == week.id,
+            AlliancePodSelection.user_id.in_(viewer_team_member_ids),
         ).all()
 
     # Thief curation and steals data
@@ -322,7 +329,9 @@ def serialize_sealed_pool_entry(spd: SealedPoolDeck) -> dict:
 def serialize_alliance_selection(sel: AlliancePodSelection) -> dict:
     return {
         "id": sel.id,
+        "user_id": sel.user_id,
         "deck_id": sel.deck_id,
+        "deck_name": sel.deck.name if sel.deck else None,
         "house_name": sel.house_name,
         "slot_type": sel.slot_type,
         "slot_number": sel.slot_number,

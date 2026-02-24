@@ -218,7 +218,9 @@ export type WeekStatus =
 
 export interface AlliancePodSelectionInfo {
   id: number;
+  user_id: number;
   deck_id: number;
+  deck_name: string | null;
   house_name: string | null;
   slot_type: 'pod' | 'token' | 'prophecy';
   slot_number: number;

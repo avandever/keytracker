@@ -852,6 +852,40 @@ export default function MyTeamPage() {
                   );
                 })()}
 
+                {/* Sealed Alliance: show existing selection for this member */}
+                {week.format_type === 'sealed_alliance' && (() => {
+                  const memberSelections = (week.alliance_selections || []).filter((s) => s.user_id === m.user.id);
+                  const podSelections = memberSelections
+                    .filter((s) => s.slot_type === 'pod')
+                    .sort((a, b) => a.slot_number - b.slot_number);
+                  if (podSelections.length === 0) return null;
+                  const tokenSel = memberSelections.find((s) => s.slot_type === 'token');
+                  const prophecySel = memberSelections.find((s) => s.slot_type === 'prophecy');
+                  return (
+                    <Box sx={{ ml: 4, mb: 1 }}>
+                      <Typography variant="caption" color="text.secondary">Current Alliance:</Typography>
+                      {podSelections.map((s) => (
+                        <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                          <Chip label={`Pod ${s.slot_number}`} size="small" variant="outlined" />
+                          <HouseIcons houses={[s.house_name || '']} />
+                          <Typography variant="body2">{s.deck_name || `Deck ${s.deck_id}`} — {s.house_name}</Typography>
+                        </Box>
+                      ))}
+                      {tokenSel && (
+                        <Typography variant="body2" color="text.secondary">Token: {tokenSel.deck_name}</Typography>
+                      )}
+                      {prophecySel && (
+                        <Typography variant="body2" color="text.secondary">Prophecy: {prophecySel.deck_name}</Typography>
+                      )}
+                      {canEditMember && (
+                        <Button size="small" color="error" onClick={() => handleClearAllianceTeam(week.id, m.user.id)}>
+                          Clear Selection
+                        </Button>
+                      )}
+                    </Box>
+                  );
+                })()}
+
                 {/* Sealed Alliance: pod selection UI */}
                 {week.format_type === 'sealed_alliance' && canEditMember && (() => {
                   const poolKey = `${week.id}-${m.user.id}`;
@@ -941,11 +975,6 @@ export default function MyTeamPage() {
                       >
                         Forge Alliance
                       </Button>
-                      {isMe && (week.alliance_selections || []).filter((s) => s.slot_type === 'pod').length > 0 && (
-                        <Button size="small" color="error" onClick={() => handleClearAllianceTeam(week.id, m.user.id)}>
-                          Clear My Selection
-                        </Button>
-                      )}
                     </Box>
                   );
                 })()}

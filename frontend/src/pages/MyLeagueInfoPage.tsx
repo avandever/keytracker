@@ -548,7 +548,8 @@ export default function MyLeagueInfoPage() {
                 loadSealedPool(week.id);
               }
               const pool = sealedPools[week.id] || [];
-              const alreadySubmitted = (week.alliance_selections || []).filter((s) => s.slot_type === 'pod').length === 3;
+              const mySelections = (week.alliance_selections || []).filter((s) => s.user_id === user?.id);
+              const alreadySubmitted = mySelections.filter((s) => s.slot_type === 'pod').length === 3;
               const needsToken = (week.allowed_sets || []).some((s) => TOKEN_SETS.has(s));
               const needsProphecy = (week.allowed_sets || []).includes(PROPHECY_EXPANSION_ID);
 
@@ -607,29 +608,26 @@ export default function MyLeagueInfoPage() {
                       {alreadySubmitted ? (
                         <Box>
                           <Typography variant="subtitle2" gutterBottom>Current Alliance Selection</Typography>
-                          {(week.alliance_selections || [])
+                          {mySelections
                             .filter((s) => s.slot_type === 'pod')
                             .sort((a, b) => a.slot_number - b.slot_number)
-                            .map((s) => {
-                              const poolEntry = pool.find((e) => e.deck?.db_id === s.deck_id);
-                              return (
-                                <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
-                                  <Chip label={`Pod ${s.slot_number}`} size="small" variant="outlined" />
-                                  {poolEntry?.deck?.houses && <HouseIcons houses={[s.house_name || '']} />}
-                                  <Typography variant="body2">
-                                    {poolEntry?.deck?.name || `Deck ${s.deck_id}`} — {s.house_name}
-                                  </Typography>
-                                </Box>
-                              );
-                            })}
-                          {(week.alliance_selections || []).find((s) => s.slot_type === 'token') && (
+                            .map((s) => (
+                              <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                                <Chip label={`Pod ${s.slot_number}`} size="small" variant="outlined" />
+                                <HouseIcons houses={[s.house_name || '']} />
+                                <Typography variant="body2">
+                                  {s.deck_name || `Deck ${s.deck_id}`} — {s.house_name}
+                                </Typography>
+                              </Box>
+                            ))}
+                          {mySelections.find((s) => s.slot_type === 'token') && (
                             <Typography variant="body2" color="text.secondary">
-                              Token: {pool.find((e) => e.deck?.db_id === (week.alliance_selections || []).find((s) => s.slot_type === 'token')?.deck_id)?.deck?.name}
+                              Token: {mySelections.find((s) => s.slot_type === 'token')?.deck_name}
                             </Typography>
                           )}
-                          {(week.alliance_selections || []).find((s) => s.slot_type === 'prophecy') && (
+                          {mySelections.find((s) => s.slot_type === 'prophecy') && (
                             <Typography variant="body2" color="text.secondary">
-                              Prophecy: {pool.find((e) => e.deck?.db_id === (week.alliance_selections || []).find((s) => s.slot_type === 'prophecy')?.deck_id)?.deck?.name}
+                              Prophecy: {mySelections.find((s) => s.slot_type === 'prophecy')?.deck_name}
                             </Typography>
                           )}
                           {canSelectDeck && (
