@@ -972,7 +972,7 @@ export default function MyTeamPage() {
     );
   };
 
-  const activeStatuses = new Set(['deck_selection', 'team_paired', 'pairing', 'published']);
+  const activeStatuses = new Set(['curation', 'thief', 'deck_selection', 'team_paired', 'pairing', 'published']);
   const sortedWeeks = [...weeks].sort((a, b) => {
     const aActive = activeStatuses.has(a.status) ? 0 : 1;
     const bActive = activeStatuses.has(b.status) ? 0 : 1;
