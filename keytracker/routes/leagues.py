@@ -1325,23 +1325,39 @@ def generate_matchups(league_id, week_id):
             return jsonify({"error": "Previous week must be completed first"}), 400
 
     # Check all players have submitted deck selections
-    required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
     active_members = _get_active_players(league)
     for member in active_members:
-        selections = PlayerDeckSelection.query.filter_by(
-            week_id=week.id, user_id=member.user_id
-        ).count()
-        if selections < required_slots:
-            user = db.session.get(User, member.user_id)
-            name = user.name if user else f"User {member.user_id}"
-            return (
-                jsonify(
-                    {
-                        "error": f"{name} has not submitted all deck selections ({selections}/{required_slots})"
-                    }
-                ),
-                400,
-            )
+        if week.format_type == WeekFormat.SEALED_ALLIANCE.value:
+            pod_count = AlliancePodSelection.query.filter_by(
+                week_id=week.id, user_id=member.user_id, slot_type="pod"
+            ).count()
+            if pod_count < 3:
+                user = db.session.get(User, member.user_id)
+                name = user.name if user else f"User {member.user_id}"
+                return (
+                    jsonify(
+                        {
+                            "error": f"{name} has not forged their alliance ({pod_count}/3 pods)"
+                        }
+                    ),
+                    400,
+                )
+        else:
+            required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
+            selections = PlayerDeckSelection.query.filter_by(
+                week_id=week.id, user_id=member.user_id
+            ).count()
+            if selections < required_slots:
+                user = db.session.get(User, member.user_id)
+                name = user.name if user else f"User {member.user_id}"
+                return (
+                    jsonify(
+                        {
+                            "error": f"{name} has not submitted all deck selections ({selections}/{required_slots})"
+                        }
+                    ),
+                    400,
+                )
 
     # Delete existing matchups for this week (in case of re-generation)
     WeekMatchup.query.filter_by(week_id=week.id).delete()
@@ -1471,17 +1487,27 @@ def generate_player_matchups(league_id, week_id):
     # Check all players have submitted deck selections (warn but allow force)
     data = request.get_json(silent=True) or {}
     if not data.get("force"):
-        required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
         active_members = _get_active_players(league)
         missing = []
-        for member in active_members:
-            selections = PlayerDeckSelection.query.filter_by(
-                week_id=week.id, user_id=member.user_id
-            ).count()
-            if selections < required_slots:
-                u = db.session.get(User, member.user_id)
-                name = u.name if u else f"User {member.user_id}"
-                missing.append(f"{name} ({selections}/{required_slots})")
+        if week.format_type == WeekFormat.SEALED_ALLIANCE.value:
+            for member in active_members:
+                pod_count = AlliancePodSelection.query.filter_by(
+                    week_id=week.id, user_id=member.user_id, slot_type="pod"
+                ).count()
+                if pod_count < 3:
+                    u = db.session.get(User, member.user_id)
+                    name = u.name if u else f"User {member.user_id}"
+                    missing.append(f"{name} ({pod_count}/3 pods)")
+        else:
+            required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
+            for member in active_members:
+                selections = PlayerDeckSelection.query.filter_by(
+                    week_id=week.id, user_id=member.user_id
+                ).count()
+                if selections < required_slots:
+                    u = db.session.get(User, member.user_id)
+                    name = u.name if u else f"User {member.user_id}"
+                    missing.append(f"{name} ({selections}/{required_slots})")
         if missing:
             return (
                 jsonify(
@@ -1663,19 +1689,31 @@ def publish_week(league_id, week_id):
         return jsonify({"error": "Week must be in pairing status"}), 400
 
     # Verify all deck selections are in
-    required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
     active_members = _get_active_players(league)
     for member in active_members:
-        selections = PlayerDeckSelection.query.filter_by(
-            week_id=week.id, user_id=member.user_id
-        ).count()
-        if selections < required_slots:
-            user = db.session.get(User, member.user_id)
-            name = user.name if user else f"User {member.user_id}"
-            return (
-                jsonify({"error": f"{name} has not submitted all deck selections"}),
-                400,
-            )
+        if week.format_type == WeekFormat.SEALED_ALLIANCE.value:
+            pod_count = AlliancePodSelection.query.filter_by(
+                week_id=week.id, user_id=member.user_id, slot_type="pod"
+            ).count()
+            if pod_count < 3:
+                user = db.session.get(User, member.user_id)
+                name = user.name if user else f"User {member.user_id}"
+                return (
+                    jsonify({"error": f"{name} has not forged their alliance"}),
+                    400,
+                )
+        else:
+            required_slots = 3 if week.format_type == WeekFormat.TRIAD.value else 1
+            selections = PlayerDeckSelection.query.filter_by(
+                week_id=week.id, user_id=member.user_id
+            ).count()
+            if selections < required_slots:
+                user = db.session.get(User, member.user_id)
+                name = user.name if user else f"User {member.user_id}"
+                return (
+                    jsonify({"error": f"{name} has not submitted all deck selections"}),
+                    400,
+                )
 
     week.status = WeekStatus.PUBLISHED.value
     db.session.commit()
