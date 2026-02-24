@@ -14,7 +14,7 @@ from keytracker.routes import (
     leagues,
 )
 
-# from keytracker.scripts.collector import collector
+from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
 from keytracker.scripts.test_user import test_user
 import sqlalchemy
@@ -191,7 +191,7 @@ def serve_react(path=""):
     return send_from_directory(FRONTEND_DIST, "index.html")
 
 
-# app.cli.add_command(collector)
+app.cli.add_command(collector)
 app.cli.add_command(sealed)
 app.cli.add_command(test_user)
 

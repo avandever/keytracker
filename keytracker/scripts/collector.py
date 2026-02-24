@@ -17,6 +17,7 @@ from asyncio import create_task, Lock, Queue, Task
 from typing import Iterable, List, Set
 from keytracker.utils import (
     add_one_deck_v2,
+    calculate_pod_stats,
     get_decks_from_page_v2,
     get_deck_by_id_with_zeal,
     dump_page_json_to_file,
@@ -653,6 +654,19 @@ class PageOneTailer:
             else:
                 current_app.logger.debug(f"{name}:Page One Getter not sleeping")
         os.remove(self.stopper)
+
+
+@collector.command("populate-pod-stats")
+def populate_pod_stats_cmd():
+    """Find decks with no pod_stats and calculate them."""
+    decks = Deck.query.filter(~Deck.pod_stats.any()).all()
+    click.echo(f"Found {len(decks)} decks without pod stats")
+    for i, deck in enumerate(decks):
+        calculate_pod_stats(deck)
+        db.session.commit()
+        if (i + 1) % 100 == 0:
+            click.echo(f"Processed {i + 1}/{len(decks)}")
+    click.echo("Done")
 
 
 if __name__ == "__main__":
