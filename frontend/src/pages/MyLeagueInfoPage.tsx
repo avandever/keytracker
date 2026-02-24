@@ -699,7 +699,7 @@ export default function MyLeagueInfoPage() {
                             onClick={() => handleSubmitAlliance(week.id)}
                             disabled={submitting || alliancePods.filter(Boolean).length < 3}
                           >
-                            Submit Alliance
+                            Forge Alliance
                           </Button>
                         </Box>
                       ) : null}

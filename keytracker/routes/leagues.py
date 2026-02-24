@@ -1796,7 +1796,7 @@ def submit_alliance_selection(league_id, week_id):
 
     if week.format_type != WeekFormat.SEALED_ALLIANCE.value:
         return jsonify({"error": "Only for Sealed Alliance format"}), 400
-    if week.status != WeekStatus.DECK_SELECTION.value:
+    if week.status not in (WeekStatus.DECK_SELECTION.value, WeekStatus.TEAM_PAIRED.value):
         return jsonify({"error": "Alliance selection is not open"}), 400
 
     effective = get_effective_user()

@@ -939,7 +939,7 @@ export default function MyTeamPage() {
                         onClick={() => handleSubmitAlliance(week.id, m.user.id)}
                         disabled={memberPods.filter(Boolean).length < 3}
                       >
-                        Submit Alliance
+                        Forge Alliance
                       </Button>
                       {isMe && (week.alliance_selections || []).filter((s) => s.slot_type === 'pod').length > 0 && (
                         <Button size="small" color="error" onClick={() => handleClearAllianceTeam(week.id, m.user.id)}>
