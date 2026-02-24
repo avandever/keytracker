@@ -1167,9 +1167,8 @@ def dump_page_json_to_file(
         params["ordering"] = "date"
     else:
         params["ordering"] = "-date"
-    api_base = os.path.join(MV_API_BASE, "v2/")
     response = mv_api.callMVSync(
-        api_base,
+        MV_API_BASE,
         params=params,
     )
     finished = False
@@ -1224,9 +1223,8 @@ def get_decks_from_page_v2(
         params["ordering"] = "date"
     else:
         params["ordering"] = "-date"
-    api_base = os.path.join(MV_API_BASE, "v2/")
     response = mv_api.callMVSync(
-        api_base,
+        MV_API_BASE,
         params=params,
     )
     finished = False
