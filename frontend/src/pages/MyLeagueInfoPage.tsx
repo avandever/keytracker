@@ -125,6 +125,21 @@ export default function MyLeagueInfoPage() {
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
+  // Pre-populate thief steal selections from server data on first load
+  useEffect(() => {
+    if (!league || thiefSteals.length > 0) return;
+    const myTeamId = league.my_team_id;
+    if (!myTeamId) return;
+    const thiefWeek = (league.weeks || []).find(
+      (w) => w.format_type === 'thief' && w.status === 'thief',
+    );
+    if (!thiefWeek) return;
+    const existingIds = (thiefWeek.thief_steals || [])
+      .filter((s) => s.stealing_team_id === myTeamId)
+      .map((s) => s.curation_deck_id);
+    if (existingIds.length > 0) setThiefSteals(existingIds);
+  }, [league]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Keep a ref to the latest league so the polling interval can check it
   // without needing to be in the dependency array (which would reset the interval
   // on every data update, causing unstable timing).

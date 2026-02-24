@@ -677,7 +677,8 @@ export default function MyTeamPage() {
             const isFloor = myTeam.id === week.thief_floor_team_id;
             const stealCount = isFloor ? Math.floor(league.team_size / 2) : Math.ceil(league.team_size / 2);
             const currentSteals = (week.thief_steals || []).filter((s) => s.stealing_team_id === myTeam.id);
-            const selected = thiefStealSelections[week.id] || [];
+            const existingStealIds = currentSteals.map((s) => s.curation_deck_id);
+            const selected = thiefStealSelections[week.id] ?? existingStealIds;
             return (
               <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'warning.main', borderRadius: 1 }}>
                 <Typography variant="subtitle2" gutterBottom>
@@ -690,7 +691,7 @@ export default function MyTeamPage() {
                       checked={selected.includes(cd.id)}
                       onChange={(e) => {
                         setThiefStealSelections((prev) => {
-                          const cur = prev[week.id] || [];
+                          const cur = prev[week.id] ?? existingStealIds;
                           return {
                             ...prev,
                             [week.id]: e.target.checked
