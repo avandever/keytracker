@@ -250,5 +250,19 @@ if os.getenv("ENABLE_COLLECTOR", "").lower() in ("1", "true", "yes"):
     logging.getLogger("collector").info("Background collector thread launched")
 
 
+if os.getenv("ENABLE_CARD_REFRESHER", "").lower() in ("1", "true", "yes"):
+    import threading
+
+    card_refresher_thread = threading.Thread(
+        target=utils.run_background_card_refresher,
+        args=(app,),
+        daemon=True,
+    )
+    card_refresher_thread.start()
+    logging.getLogger("card_refresher").info(
+        "Background card refresher thread launched"
+    )
+
+
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=True)

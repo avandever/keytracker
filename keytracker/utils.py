@@ -1740,3 +1740,41 @@ def run_background_collector(app, stop_event=None):
         except Exception:
             logger.exception("Background collector error, sleeping 60s")
             time.sleep(60)
+
+
+def run_background_card_refresher(app, stop_event=None):
+    """Background thread that finds decks with no cards, fetches them from MV,
+    and calculates pod stats."""
+    import logging
+    import socket
+
+    logger = logging.getLogger("card_refresher")
+    NO_WORK_SLEEP = 300  # 5 minutes when no empty decks remain
+
+    lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    try:
+        lock_socket.bind("\0keytracker_card_refresher_lock")
+    except OSError:
+        logger.info("Another process already running the card refresher, skipping")
+        return
+
+    logger.info("Background card refresher started")
+
+    while stop_event is None or not stop_event.is_set():
+        try:
+            with app.app_context():
+                deck = Deck.query.filter(~Deck.cards_from_assoc.any()).first()
+                if deck is None:
+                    logger.info(
+                        f"No decks without cards, sleeping {NO_WORK_SLEEP}s"
+                    )
+                    time.sleep(NO_WORK_SLEEP)
+                    continue
+                logger.info(f"Refreshing deck {deck.kf_id} ({deck.name})")
+                refresh_deck_from_mv(deck)
+                calculate_pod_stats(deck)
+                db.session.commit()
+                logger.info(f"Refreshed deck {deck.kf_id}")
+        except Exception:
+            logger.exception("Background card refresher error, sleeping 60s")
+            time.sleep(60)
