@@ -2356,14 +2356,16 @@ def set_feature_designation(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.status not in (
-        WeekStatus.DECK_SELECTION.value,
-        WeekStatus.TEAM_PAIRED.value,
+    if week.status in (
+        WeekStatus.SETUP.value,
+        WeekStatus.PAIRING.value,
+        WeekStatus.PUBLISHED.value,
+        WeekStatus.COMPLETED.value,
     ):
         return (
             jsonify(
                 {
-                    "error": "Feature designation only allowed during deck_selection or team_paired status"
+                    "error": "Feature designation is not allowed after player pairings are generated"
                 }
             ),
             400,
@@ -2421,14 +2423,16 @@ def clear_feature_designation(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.status not in (
-        WeekStatus.DECK_SELECTION.value,
-        WeekStatus.TEAM_PAIRED.value,
+    if week.status in (
+        WeekStatus.SETUP.value,
+        WeekStatus.PAIRING.value,
+        WeekStatus.PUBLISHED.value,
+        WeekStatus.COMPLETED.value,
     ):
         return (
             jsonify(
                 {
-                    "error": "Feature designation only allowed during deck_selection or team_paired status"
+                    "error": "Feature designation is not allowed after player pairings are generated"
                 }
             ),
             400,

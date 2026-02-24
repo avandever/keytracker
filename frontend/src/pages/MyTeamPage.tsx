@@ -533,7 +533,7 @@ export default function MyTeamPage() {
       : week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
     const maxSlots = week.format_type === 'triad' ? 3 : 1;
     const showFeature = league.team_size % 2 === 0 &&
-      (week.status === 'deck_selection' || week.status === 'team_paired');
+      !['setup', 'pairing', 'published', 'completed'].includes(week.status);
     const currentFeature = showFeature
       ? week.feature_designations?.find((fd) => fd.team_id === myTeam.id)
       : null;
