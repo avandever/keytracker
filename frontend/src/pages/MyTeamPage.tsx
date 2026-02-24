@@ -749,6 +749,59 @@ export default function MyTeamPage() {
             );
           })()}
 
+          {/* Thief: pool summary during deck selection */}
+          {week.format_type === 'thief' && week.status === 'deck_selection' && (() => {
+            const stolenByMyTeam = new Set(
+              (week.thief_steals || [])
+                .filter((s) => s.stealing_team_id === myTeam.id)
+                .map((s) => s.curation_deck_id),
+            );
+            const stolenFromMyTeamIds = new Set(
+              (week.thief_steals || [])
+                .filter((s) => {
+                  const cd = (week.thief_curation_decks || []).find((c) => c.id === s.curation_deck_id);
+                  return cd?.team_id === myTeam.id;
+                })
+                .map((s) => s.curation_deck_id),
+            );
+            const stolenDecks = (week.thief_curation_decks || []).filter((cd) => stolenByMyTeam.has(cd.id));
+            const leftDecks = (week.thief_curation_decks || []).filter(
+              (cd) => cd.team_id === myTeam.id && !stolenFromMyTeamIds.has(cd.id),
+            );
+            if (stolenDecks.length === 0 && leftDecks.length === 0) return null;
+            const renderDeckRow = (cd: (typeof stolenDecks)[0]) => (
+              <Box key={cd.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, ml: 1 }}>
+                {cd.deck?.houses && <HouseIcons houses={cd.deck.houses} />}
+                <Typography variant="body2">{cd.deck?.name || 'Unknown'}</Typography>
+                {cd.deck?.sas_rating != null && (
+                  <Chip label={`SAS: ${cd.deck.sas_rating}`} size="small" variant="outlined" />
+                )}
+                {cd.deck && (
+                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    <Link href={cd.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                    <Link href={cd.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                  </Box>
+                )}
+              </Box>
+            );
+            return (
+              <Box sx={{ mb: 2 }}>
+                {stolenDecks.length > 0 && (
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="caption" color="text.secondary">Stolen from opponent:</Typography>
+                    {stolenDecks.map(renderDeckRow)}
+                  </Box>
+                )}
+                {leftDecks.length > 0 && (
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="caption" color="text.secondary">Your remaining decks:</Typography>
+                    {leftDecks.map(renderDeckRow)}
+                  </Box>
+                )}
+              </Box>
+            );
+          })()}
+
           {myTeam.members.map((m) => {
             const isMe = m.user.id === user.id;
             const canEditMember = isWeekEditable && (isMe || isCaptain);

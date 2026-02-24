@@ -805,11 +805,39 @@ export default function MyLeagueInfoPage() {
               const assignedDeckIds = new Set(
                 mySelections.map((s) => s.deck?.db_id).filter(Boolean)
               );
+              // Feature player deck constraint (even team size only)
+              const weekMatchupForThief = week.matchups.find(
+                (wm) => wm.team1.id === myTeam.id || wm.team2.id === myTeam.id,
+              );
+              const thiefFeatureDesignation = week.feature_designations?.find(
+                (fd) => fd.team_id === myTeam.id,
+              );
+              const isThiefFeaturePlayer = league.team_size % 2 === 0 &&
+                thiefFeatureDesignation?.user_id === effectiveUserId;
+              const thiefFavorThieving = weekMatchupForThief?.thief_stolen_team_id === myTeam.id;
               const allPoolDecks = [...stolenDecks, ...leftDecks];
-              const availableDecks = allPoolDecks.filter((cd) => cd.deck && !assignedDeckIds.has(cd.deck.db_id));
+              let availableDecks = allPoolDecks.filter((cd) => cd.deck && !assignedDeckIds.has(cd.deck.db_id));
+              let selectLabel = 'Select deck from pool';
+              if (isThiefFeaturePlayer && weekMatchupForThief?.thief_stolen_team_id) {
+                if (thiefFavorThieving) {
+                  availableDecks = stolenDecks.filter((cd) => cd.deck && !assignedDeckIds.has(cd.deck.db_id));
+                  selectLabel = 'Select stolen deck (feature player)';
+                } else {
+                  availableDecks = leftDecks.filter((cd) => cd.deck && !assignedDeckIds.has(cd.deck.db_id));
+                  selectLabel = 'Select own deck (feature player)';
+                }
+              }
 
               return (
                 <Box>
+                  {isThiefFeaturePlayer && weekMatchupForThief?.thief_stolen_team_id && (
+                    <Chip
+                      label={thiefFavorThieving ? 'Feature: must use stolen deck' : 'Feature: must use own deck'}
+                      size="small"
+                      color="warning"
+                      sx={{ mb: 1 }}
+                    />
+                  )}
                   {mySelections.length > 0 ? null : (
                     <>
                       {stolenDecks.length > 0 && (
@@ -821,6 +849,12 @@ export default function MyLeagueInfoPage() {
                               <Typography variant="body2">{cd.deck?.name || 'Unknown'}</Typography>
                               {cd.deck?.sas_rating != null && (
                                 <Chip label={`SAS: ${cd.deck.sas_rating}`} size="small" variant="outlined" />
+                              )}
+                              {cd.deck && (
+                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                  <Link href={cd.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                                  <Link href={cd.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                                </Box>
                               )}
                             </Box>
                           ))}
@@ -836,6 +870,12 @@ export default function MyLeagueInfoPage() {
                               {cd.deck?.sas_rating != null && (
                                 <Chip label={`SAS: ${cd.deck.sas_rating}`} size="small" variant="outlined" />
                               )}
+                              {cd.deck && (
+                                <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                  <Link href={cd.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                                  <Link href={cd.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                                </Box>
+                              )}
                             </Box>
                           ))}
                         </Box>
@@ -843,10 +883,10 @@ export default function MyLeagueInfoPage() {
                       {availableDecks.length > 0 && (
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                           <FormControl size="small" sx={{ minWidth: 300 }}>
-                            <InputLabel>Select deck from pool</InputLabel>
+                            <InputLabel>{selectLabel}</InputLabel>
                             <Select
                               value={thiefDeckId}
-                              label="Select deck from pool"
+                              label={selectLabel}
                               onChange={(e) => setThiefDeckId(e.target.value as number)}
                             >
                               {availableDecks.map((cd) => (
@@ -1206,7 +1246,6 @@ export default function MyLeagueInfoPage() {
     );
   };
 
-  const topTabs = ['Team', ...(league.fee_amount != null ? ['Fee Status'] : []), ...weeks.map((w) => w.name || `Week ${w.week_number}`)];
   const feeOffset = league.fee_amount != null ? 1 : 0;
   const weekStartIdx = 1 + feeOffset;
 
@@ -1224,9 +1263,29 @@ export default function MyLeagueInfoPage() {
         variant="scrollable"
         scrollButtons="auto"
       >
-        {topTabs.map((label, i) => (
-          <Tab key={i} label={label} />
-        ))}
+        <Tab label="Team" />
+        {league.fee_amount != null && <Tab label="Fee Status" />}
+        {weeks.map((w) => {
+          const isFeaturePlayer = w.feature_designations?.some(
+            (fd) => fd.team_id === myTeam.id && fd.user_id === effectiveUserId,
+          );
+          const weekLabel = w.name || `Week ${w.week_number}`;
+          return (
+            <Tab
+              key={w.id}
+              label={
+                isFeaturePlayer ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
+                    <span>{weekLabel}</span>
+                    <Chip label="Feature" size="small" color="warning" sx={{ height: 16, fontSize: '0.6rem', mt: 0.25 }} />
+                  </Box>
+                ) : (
+                  weekLabel
+                )
+              }
+            />
+          );
+        })}
       </Tabs>
 
       {activeTab === 0 && (
