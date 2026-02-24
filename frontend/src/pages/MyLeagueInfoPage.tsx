@@ -73,8 +73,8 @@ export default function MyLeagueInfoPage() {
 
   // Game reporting
   const [reportWinnerId, setReportWinnerId] = useState<number | ''>('');
-  const [reportP1Keys, setReportP1Keys] = useState('3');
-  const [reportP2Keys, setReportP2Keys] = useState('0');
+  const [reportWinnerKeys, setReportWinnerKeys] = useState('3');
+  const [reportLoserKeys, setReportLoserKeys] = useState('0');
   const [reportWentToTime, setReportWentToTime] = useState(false);
   const [reportLoserConceded, setReportLoserConceded] = useState(false);
 
@@ -269,11 +269,13 @@ export default function MyLeagueInfoPage() {
     setSuccess('');
     try {
       const nextGameNumber = pm.games.length + 1;
+      const winnerKeys = parseInt(reportWinnerKeys, 10) || 0;
+      const loserKeys = parseInt(reportLoserKeys, 10) || 0;
       await reportGame(league.id, matchupId, {
         game_number: nextGameNumber,
         winner_id: reportWinnerId as number,
-        player1_keys: parseInt(reportP1Keys, 10) || 0,
-        player2_keys: parseInt(reportP2Keys, 10) || 0,
+        player1_keys: reportWinnerId === pm.player1.id ? winnerKeys : loserKeys,
+        player2_keys: reportWinnerId === pm.player2.id ? winnerKeys : loserKeys,
         went_to_time: reportWentToTime,
         loser_conceded: reportLoserConceded,
         player1_deck_id: reportP1DeckId || undefined,
@@ -281,8 +283,8 @@ export default function MyLeagueInfoPage() {
       });
       setSuccess('Game reported!');
       setReportWinnerId('');
-      setReportP1Keys('3');
-      setReportP2Keys('0');
+      setReportWinnerKeys('3');
+      setReportLoserKeys('0');
       setReportWentToTime(false);
       setReportLoserConceded(false);
       setReportP1DeckId('');
@@ -1197,14 +1199,14 @@ export default function MyLeagueInfoPage() {
                     })()}
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       <FormControl size="small" sx={{ flex: 1 }}>
-                        <InputLabel>{myMatchup.player1.name} Keys</InputLabel>
-                        <Select value={reportP1Keys} label={`${myMatchup.player1.name} Keys`} onChange={(e) => setReportP1Keys(e.target.value)}>
+                        <InputLabel>Winner Keys</InputLabel>
+                        <Select value={reportWinnerKeys} label="Winner Keys" onChange={(e) => setReportWinnerKeys(e.target.value)}>
                           {[0, 1, 2, 3].map((k) => <MenuItem key={k} value={String(k)}>{k}</MenuItem>)}
                         </Select>
                       </FormControl>
                       <FormControl size="small" sx={{ flex: 1 }}>
-                        <InputLabel>{myMatchup.player2.name} Keys</InputLabel>
-                        <Select value={reportP2Keys} label={`${myMatchup.player2.name} Keys`} onChange={(e) => setReportP2Keys(e.target.value)}>
+                        <InputLabel>Loser Keys</InputLabel>
+                        <Select value={reportLoserKeys} label="Loser Keys" onChange={(e) => setReportLoserKeys(e.target.value)}>
                           {[0, 1, 2, 3].map((k) => <MenuItem key={k} value={String(k)}>{k}</MenuItem>)}
                         </Select>
                       </FormControl>
