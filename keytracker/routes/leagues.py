@@ -2145,6 +2145,24 @@ def submit_deck_selection(league_id, week_id):
         valid_pool = stolen_by_team | own_left
         if deck_db_id not in valid_pool:
             return jsonify({"error": "Deck is not in your thief pool"}), 400
+        # Enforce feature player deck-type constraint (even team size only)
+        if league.team_size % 2 == 0:
+            fd = FeatureDesignation.query.filter_by(week_id=week.id, team_id=player_team.id).first()
+            if fd and fd.user_id == target_user_id:
+                wm_for_sel = WeekMatchup.query.filter(
+                    WeekMatchup.week_id == week.id,
+                    db.or_(
+                        WeekMatchup.team1_id == player_team.id,
+                        WeekMatchup.team2_id == player_team.id,
+                    ),
+                ).first()
+                if wm_for_sel and wm_for_sel.thief_stolen_team_id:
+                    if wm_for_sel.thief_stolen_team_id == player_team.id:
+                        if deck_db_id not in stolen_by_team:
+                            return jsonify({"error": "Feature player on the thieving-favored team must use a stolen deck"}), 400
+                    else:
+                        if deck_db_id not in own_left:
+                            return jsonify({"error": "Feature player on the non-thieving-favored team must use one of their own decks"}), 400
         # Validate deck not already assigned to another player on this team
         other_selections = PlayerDeckSelection.query.filter_by(
             week_id=week.id, deck_id=deck_db_id
@@ -2623,9 +2641,8 @@ def advance_to_thief(league_id, week_id):
         if count != league.team_size:
             return jsonify({"error": f"Team '{team.name}' has {count}/{league.team_size} curation decks"}), 400
 
-    # Randomly pick floor team
-    floor_team = random.choice(teams)
-    week.thief_floor_team_id = floor_team.id
+    # The per-matchup coin toss (thief_stolen_team_id) was already set during
+    # generate_team_pairings — no additional week-level randomization needed.
     week.status = WeekStatus.THIEF_STEP.value
     db.session.commit()
     db.session.refresh(week)
@@ -2665,12 +2682,22 @@ def submit_steals(league_id, week_id):
     if not isinstance(curation_deck_ids, list):
         return jsonify({"error": "curation_deck_ids must be a list"}), 400
 
-    # Determine how many this team should steal
+    # Determine how many this team should steal using the per-matchup coin toss.
+    # The team with thief_stolen_team_id == their team favors thieving (ceil steals);
+    # their opponent steals floor.
     n = league.team_size
-    if week.thief_floor_team_id == player_team.id:
-        required_count = math.floor(n / 2)
+    wm_for_steal = WeekMatchup.query.filter(
+        WeekMatchup.week_id == week.id,
+        db.or_(WeekMatchup.team1_id == player_team.id, WeekMatchup.team2_id == player_team.id),
+    ).first()
+    if wm_for_steal and wm_for_steal.thief_stolen_team_id:
+        if wm_for_steal.thief_stolen_team_id == player_team.id:
+            required_count = math.ceil(n / 2)
+        else:
+            required_count = math.floor(n / 2)
     else:
-        required_count = math.ceil(n / 2)
+        # Fallback for legacy weeks that used thief_floor_team_id on the week
+        required_count = math.floor(n / 2) if week.thief_floor_team_id == player_team.id else math.ceil(n / 2)
 
     if len(curation_deck_ids) != required_count:
         return jsonify({"error": f"Must steal exactly {required_count} decks"}), 400

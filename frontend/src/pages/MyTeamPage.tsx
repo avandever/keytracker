@@ -322,21 +322,41 @@ export default function MyTeamPage() {
       const assignedDeckIds = new Set(
         week.deck_selections.filter((ds) => ds.user_id !== userId).map((ds) => ds.deck?.db_id).filter(Boolean)
       );
-      const allPoolDecks = [...stolenDecks, ...leftDecks].filter(
-        (cd) => cd.deck && !assignedDeckIds.has(cd.deck.db_id)
+      // Determine allowed deck type for the feature player (even team size only)
+      const weekMatchup = week.matchups.find(
+        (wm) => wm.team1.id === myTeam.id || wm.team2.id === myTeam.id,
       );
+      const featureDesignation = week.feature_designations?.find((fd) => fd.team_id === myTeam.id);
+      const isFeaturePlayer = league.team_size % 2 === 0 && featureDesignation?.user_id === userId;
+      const favorThieving = weekMatchup?.thief_stolen_team_id === myTeam.id;
+
+      let displayDecks: typeof stolenDecks;
+      let deckTypeLabel = 'Select deck from pool';
+      if (isFeaturePlayer && weekMatchup?.thief_stolen_team_id) {
+        if (favorThieving) {
+          displayDecks = stolenDecks.filter((cd) => cd.deck && !assignedDeckIds.has(cd.deck.db_id));
+          deckTypeLabel = 'Select stolen deck (feature player)';
+        } else {
+          displayDecks = leftDecks.filter((cd) => cd.deck && !assignedDeckIds.has(cd.deck.db_id));
+          deckTypeLabel = 'Select own deck (feature player)';
+        }
+      } else {
+        displayDecks = [...stolenDecks, ...leftDecks].filter(
+          (cd) => cd.deck && !assignedDeckIds.has(cd.deck.db_id),
+        );
+      }
 
       const selKey = `${week.id}-${userId}-${slotNumber}`;
       return (
         <Box sx={{ display: 'flex', gap: 1, ml: 4, mt: 0.5, alignItems: 'center' }}>
           <FormControl size="small" fullWidth>
-            <InputLabel>Select deck from pool</InputLabel>
+            <InputLabel>{deckTypeLabel}</InputLabel>
             <Select
               value={sealedSelections[selKey] || ''}
               onChange={(e) => setSealedSelections((prev) => ({ ...prev, [selKey]: e.target.value as number }))}
-              label="Select deck from pool"
+              label={deckTypeLabel}
             >
-              {allPoolDecks.map((cd) => (
+              {displayDecks.map((cd) => (
                 <MenuItem key={cd.id} value={cd.deck!.db_id!}>
                   {cd.deck!.name}{cd.deck!.sas_rating != null ? ` (SAS: ${cd.deck!.sas_rating})` : ''}
                 </MenuItem>
@@ -674,8 +694,8 @@ export default function MyTeamPage() {
             const opponentDecks = (week.thief_curation_decks || [])
               .filter((cd) => cd.team_id === opponentTeam.id)
               .sort((a, b) => a.slot_number - b.slot_number);
-            const isFloor = myTeam.id === week.thief_floor_team_id;
-            const stealCount = isFloor ? Math.floor(league.team_size / 2) : Math.ceil(league.team_size / 2);
+            const favorThieving = myMatchup?.thief_stolen_team_id === myTeam.id;
+            const stealCount = favorThieving ? Math.ceil(league.team_size / 2) : Math.floor(league.team_size / 2);
             const currentSteals = (week.thief_steals || []).filter((s) => s.stealing_team_id === myTeam.id);
             const existingStealIds = currentSteals.map((s) => s.curation_deck_id);
             const selected = thiefStealSelections[week.id] ?? existingStealIds;

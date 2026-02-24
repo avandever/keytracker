@@ -733,8 +733,8 @@ export default function MyLeagueInfoPage() {
               const opponentDecks = (week.thief_curation_decks || [])
                 .filter((cd) => cd.team_id === opponentTeam.id)
                 .sort((a, b) => a.slot_number - b.slot_number);
-              const isFloor = myTeam.id === week.thief_floor_team_id;
-              const stealCount = isFloor ? Math.floor(league.team_size / 2) : Math.ceil(league.team_size / 2);
+              const favorThieving = myMatchup?.thief_stolen_team_id === myTeam.id;
+              const stealCount = favorThieving ? Math.ceil(league.team_size / 2) : Math.floor(league.team_size / 2);
               const currentSteals = (week.thief_steals || []).filter((s) => s.stealing_team_id === myTeam.id);
               return (
                 <Box>
