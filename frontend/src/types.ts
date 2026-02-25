@@ -312,6 +312,34 @@ export interface StrikeInfo {
   struck_deck_selection_id: number;
 }
 
+// --- Standalone Match types ---
+
+export type StandaloneMatchStatus = 'setup' | 'deck_selection' | 'published' | 'completed';
+
+export interface StandaloneMatch {
+  id: number;
+  uuid: string;
+  creator: UserBrief;
+  opponent: UserBrief | null;
+  format_type: string;
+  status: StandaloneMatchStatus;
+  best_of_n: number;
+  is_public: boolean;
+  max_sas: number | null;
+  combined_max_sas: number | null;
+  set_diversity: boolean;
+  house_diversity: boolean;
+  decks_per_player: number;
+  sealed_pools_generated: boolean;
+  allowed_sets: number[] | null;
+  created_at: string | null;
+  matchup: PlayerMatchupInfo | null;
+  creator_selections: DeckSelectionInfo[];
+  opponent_selections: DeckSelectionInfo[];
+  creator_pods: AlliancePodSelectionInfo[];
+  opponent_pods: AlliancePodSelectionInfo[];
+}
+
 export interface CsvPod {
   name: string;
   sas: number;

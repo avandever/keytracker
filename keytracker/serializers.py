@@ -18,6 +18,7 @@ from keytracker.schema import (
     ThiefSteal,
     EXPANSION_ID_TO_ABBR,
 )
+from keytracker.schema import StandaloneMatch, db
 import json
 
 
@@ -321,7 +322,9 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
 def serialize_sealed_pool_entry(spd: SealedPoolDeck) -> dict:
     d = serialize_deck_summary(spd.deck) if spd.deck else None
     if d is not None:
-        tokens = [c for c in spd.deck.cards_from_assoc if c.card_type == "Token Creature"]
+        tokens = [
+            c for c in spd.deck.cards_from_assoc if c.card_type == "Token Creature"
+        ]
         d["token_name"] = tokens[0].card_title if tokens else None
     return {"id": spd.id, "deck": d}
 
@@ -349,6 +352,61 @@ def serialize_deck_selection(sel: PlayerDeckSelection) -> dict:
         "user_id": sel.user_id,
         "slot_number": sel.slot_number,
         "deck": deck_data,
+    }
+
+
+def serialize_standalone_match(match: StandaloneMatch, current_user_id=None) -> dict:
+    creator_selections = (
+        PlayerDeckSelection.query.filter_by(
+            standalone_match_id=match.id, user_id=match.creator_id
+        )
+        .order_by(PlayerDeckSelection.slot_number)
+        .all()
+    )
+
+    opponent_selections = []
+    creator_pods = []
+    opponent_pods = []
+    if match.opponent_id:
+        opponent_selections = (
+            PlayerDeckSelection.query.filter_by(
+                standalone_match_id=match.id, user_id=match.opponent_id
+            )
+            .order_by(PlayerDeckSelection.slot_number)
+            .all()
+        )
+
+        creator_pods = AlliancePodSelection.query.filter_by(
+            standalone_match_id=match.id, user_id=match.creator_id
+        ).all()
+        opponent_pods = AlliancePodSelection.query.filter_by(
+            standalone_match_id=match.id, user_id=match.opponent_id
+        ).all()
+
+    return {
+        "id": match.id,
+        "uuid": match.uuid,
+        "creator": serialize_user_brief(match.creator),
+        "opponent": serialize_user_brief(match.opponent) if match.opponent else None,
+        "format_type": match.format_type.value,
+        "status": match.status.value,
+        "best_of_n": match.best_of_n,
+        "is_public": match.is_public,
+        "max_sas": match.max_sas,
+        "combined_max_sas": match.combined_max_sas,
+        "set_diversity": match.set_diversity,
+        "house_diversity": match.house_diversity,
+        "decks_per_player": match.decks_per_player,
+        "sealed_pools_generated": match.sealed_pools_generated,
+        "allowed_sets": match.allowed_sets,
+        "created_at": match.created_at.isoformat() if match.created_at else None,
+        "matchup": serialize_player_matchup(match.matchup) if match.matchup else None,
+        "creator_selections": [serialize_deck_selection(s) for s in creator_selections],
+        "opponent_selections": [
+            serialize_deck_selection(s) for s in opponent_selections
+        ],
+        "creator_pods": [serialize_alliance_selection(p) for p in creator_pods],
+        "opponent_pods": [serialize_alliance_selection(p) for p in opponent_pods],
     }
 
 

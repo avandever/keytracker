@@ -828,9 +828,16 @@ class WeekStatus(PyEnum):
     COMPLETED = "completed"
 
 
+class StandaloneMatchStatus(PyEnum):
+    SETUP = "setup"
+    DECK_SELECTION = "deck_selection"
+    PUBLISHED = "published"
+    COMPLETED = "completed"
+
+
 # Set IDs that require token selection in Sealed Alliance
-TOKEN_EXPANSION_IDS = {855, 600}   # ToC, WoE
-PROPHECY_EXPANSION_ID = 886        # PV
+TOKEN_EXPANSION_IDS = {855, 600}  # ToC, WoE
+PROPHECY_EXPANSION_ID = 886  # PV
 
 
 class League(db.Model):
@@ -971,7 +978,9 @@ class LeagueWeek(db.Model):
     decks_per_player = db.Column(db.Integer, nullable=True)
     sealed_pools_generated = db.Column(db.Boolean, default=False, nullable=False)
     # Thief-specific
-    thief_floor_team_id = db.Column(db.Integer, nullable=True)  # team that steals floor(N/2)
+    thief_floor_team_id = db.Column(
+        db.Integer, nullable=True
+    )  # team that steals floor(N/2)
 
     league = db.relationship("League", backref="weeks")
     matchups = db.relationship(
@@ -994,7 +1003,9 @@ class WeekMatchup(db.Model):
     )
     team1_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
     team2_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
-    thief_stolen_team_id = db.Column(db.Integer, nullable=True)  # team required to feature stolen-deck player
+    thief_stolen_team_id = db.Column(
+        db.Integer, nullable=True
+    )  # team required to feature stolen-deck player
     week = db.relationship("LeagueWeek", back_populates="matchups")
     team1 = db.relationship("Team", foreign_keys=[team1_id])
     team2 = db.relationship("Team", foreign_keys=[team2_id])
@@ -1003,11 +1014,53 @@ class WeekMatchup(db.Model):
     )
 
 
+class StandaloneMatch(db.Model):
+    __tablename__ = "standalone_match"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    uuid = db.Column(db.String(36), unique=True, nullable=False)
+    creator_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    opponent_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=True)
+    format_type = db.Column(db.Enum(WeekFormat), nullable=False)
+    status = db.Column(
+        db.Enum(StandaloneMatchStatus),
+        nullable=False,
+        default=StandaloneMatchStatus.SETUP,
+    )
+    best_of_n = db.Column(db.Integer, nullable=False, default=3)
+    is_public = db.Column(db.Boolean, nullable=False, default=False)
+    max_sas = db.Column(db.Integer, nullable=True)
+    combined_max_sas = db.Column(db.Integer, nullable=True)
+    set_diversity = db.Column(db.Boolean, nullable=False, default=False)
+    house_diversity = db.Column(db.Boolean, nullable=False, default=False)
+    decks_per_player = db.Column(db.Integer, nullable=False, default=4)
+    sealed_pools_generated = db.Column(db.Boolean, nullable=False, default=False)
+    allowed_sets = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+    creator = db.relationship("User", foreign_keys=[creator_id])
+    opponent = db.relationship("User", foreign_keys=[opponent_id])
+    matchup = db.relationship(
+        "PlayerMatchup", back_populates="standalone_match", uselist=False
+    )
+    deck_selections = db.relationship(
+        "PlayerDeckSelection", back_populates="standalone_match"
+    )
+    alliance_selections = db.relationship(
+        "AlliancePodSelection", back_populates="standalone_match"
+    )
+    sealed_pool_decks = db.relationship(
+        "SealedPoolDeck", back_populates="standalone_match"
+    )
+
+
 class PlayerMatchup(db.Model):
     __tablename__ = "tracker_player_matchup"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     week_matchup_id = db.Column(
-        db.Integer, db.ForeignKey("tracker_week_matchup.id"), nullable=False
+        db.Integer, db.ForeignKey("tracker_week_matchup.id"), nullable=True
+    )
+    standalone_match_id = db.Column(
+        db.Integer, db.ForeignKey("standalone_match.id"), nullable=True
     )
     player1_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
     player2_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
@@ -1016,6 +1069,7 @@ class PlayerMatchup(db.Model):
     is_feature = db.Column(db.Boolean, default=False, nullable=False)
 
     week_matchup = db.relationship("WeekMatchup", back_populates="player_matchups")
+    standalone_match = db.relationship("StandaloneMatch", back_populates="matchup")
     player1 = db.relationship("User", foreign_keys=[player1_id])
     player2 = db.relationship("User", foreign_keys=[player2_id])
     games = db.relationship(
@@ -1046,19 +1100,31 @@ class PlayerDeckSelection(db.Model):
     __tablename__ = "tracker_player_deck_selection"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     week_id = db.Column(
-        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=True
+    )
+    standalone_match_id = db.Column(
+        db.Integer, db.ForeignKey("standalone_match.id"), nullable=True
     )
     user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
     deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False)
     slot_number = db.Column(db.Integer, nullable=False, default=1)
 
     week = db.relationship("LeagueWeek", back_populates="deck_selections")
+    standalone_match = db.relationship(
+        "StandaloneMatch", back_populates="deck_selections"
+    )
     user = db.relationship("User")
     deck = db.relationship("Deck")
 
     __table_args__ = (
         db.UniqueConstraint(
             "week_id", "user_id", "slot_number", name="uq_deck_selection"
+        ),
+        db.UniqueConstraint(
+            "standalone_match_id",
+            "user_id",
+            "slot_number",
+            name="uq_deck_selection_standalone",
         ),
     )
 
@@ -1119,12 +1185,18 @@ class SealedPoolDeck(db.Model):
     __tablename__ = "tracker_sealed_pool_deck"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     week_id = db.Column(
-        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=True
+    )
+    standalone_match_id = db.Column(
+        db.Integer, db.ForeignKey("standalone_match.id"), nullable=True
     )
     user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
     deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False)
 
     week = db.relationship("LeagueWeek")
+    standalone_match = db.relationship(
+        "StandaloneMatch", back_populates="sealed_pool_decks"
+    )
     user = db.relationship("User")
     deck = db.relationship("Deck")
 
@@ -1132,20 +1204,34 @@ class SealedPoolDeck(db.Model):
 class AlliancePodSelection(db.Model):
     __tablename__ = "tracker_alliance_pod_selection"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    week_id = db.Column(db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=True
+    )
+    standalone_match_id = db.Column(
+        db.Integer, db.ForeignKey("standalone_match.id"), nullable=True
+    )
     user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
     deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False)
-    house_name = db.Column(db.String(50), nullable=True)  # null for token/prophecy types
+    house_name = db.Column(
+        db.String(50), nullable=True
+    )  # null for token/prophecy types
     slot_type = db.Column(db.String(20), nullable=False)  # 'pod', 'token', 'prophecy'
-    slot_number = db.Column(db.Integer, nullable=False)   # 1-3 for pods, 1 for token/prophecy
+    slot_number = db.Column(
+        db.Integer, nullable=False
+    )  # 1-3 for pods, 1 for token/prophecy
 
     deck = db.relationship("Deck")
+    standalone_match = db.relationship(
+        "StandaloneMatch", back_populates="alliance_selections"
+    )
 
 
 class ThiefCurationDeck(db.Model):
     __tablename__ = "tracker_thief_curation_deck"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    week_id = db.Column(db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+    )
     team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
     deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False)
     slot_number = db.Column(db.Integer, nullable=False)
@@ -1157,8 +1243,14 @@ class ThiefCurationDeck(db.Model):
 class ThiefSteal(db.Model):
     __tablename__ = "tracker_thief_steal"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    week_id = db.Column(db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False)
-    stealing_team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
-    curation_deck_id = db.Column(db.Integer, db.ForeignKey("tracker_thief_curation_deck.id"), nullable=False)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+    )
+    stealing_team_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_team.id"), nullable=False
+    )
+    curation_deck_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_thief_curation_deck.id"), nullable=False
+    )
 
     curation_deck = db.relationship("ThiefCurationDeck")

@@ -42,6 +42,9 @@ export default function AppBar() {
           <Button color="inherit" component={RouterLink} to="/leagues">
             Leagues
           </Button>
+          <Button color="inherit" component={RouterLink} to="/matches">
+            Matches
+          </Button>
           <Button color="inherit" component={RouterLink} to="/upload">
             Upload
           </Button>

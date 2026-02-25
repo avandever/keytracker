@@ -27,6 +27,8 @@ import DraftBoardPage from './pages/DraftBoardPage';
 import MyLeagueInfoPage from './pages/MyLeagueInfoPage';
 import MyTeamPage from './pages/MyTeamPage';
 import UserAdminPage from './pages/UserAdminPage';
+import StandaloneMatchesPage from './pages/StandaloneMatchesPage';
+import StandaloneMatchPage from './pages/StandaloneMatchPage';
 
 function Layout() {
   return (
@@ -64,6 +66,8 @@ export default function App() {
               <Route path="/league/:leagueId/my-info" element={<RequireAuth><MyLeagueInfoPage /></RequireAuth>} />
               <Route path="/league/:leagueId/my-team" element={<RequireAuth><MyTeamPage /></RequireAuth>} />
               <Route path="/admin/users" element={<RequireAuth><UserAdminPage /></RequireAuth>} />
+              <Route path="/matches" element={<StandaloneMatchesPage />} />
+              <Route path="/matches/:matchId" element={<StandaloneMatchPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/fame" element={<ComingSoonPage title="Hall of Fame" />} />
               <Route path="/leaderboard" element={<ComingSoonPage title="Leaderboard" />} />

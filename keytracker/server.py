@@ -13,6 +13,7 @@ from keytracker.routes import (
     auth,
     leagues,
 )
+from keytracker.routes.standalone import standalone_bp
 
 from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
@@ -169,6 +170,7 @@ app.register_blueprint(auth.blueprint)
 app.register_blueprint(api.blueprint)
 app.register_blueprint(api_v2.blueprint)
 app.register_blueprint(leagues.blueprint)
+app.register_blueprint(standalone_bp)
 
 # Serve React frontend at /
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
@@ -194,6 +196,38 @@ def serve_react(path=""):
 app.cli.add_command(collector)
 app.cli.add_command(sealed)
 app.cli.add_command(test_user)
+
+
+def _ensure_nobody_user():
+    """Create the nobody@example.com guest user if it doesn't exist."""
+    from keytracker.schema import User
+
+    try:
+        if not User.query.filter_by(email="nobody@example.com").first():
+            guest = User(email="nobody@example.com", name="Guest Player")
+            db.session.add(guest)
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+with app.app_context():
+    _ensure_nobody_user()
+
+
+@app.cli.command("cleanup-standalone-matches")
+def cleanup_standalone_matches():
+    """Delete unfinished standalone matches older than 24 hours."""
+    import datetime as dt
+    from keytracker.schema import StandaloneMatch, StandaloneMatchStatus
+
+    cutoff = dt.datetime.utcnow() - dt.timedelta(hours=24)
+    deleted = StandaloneMatch.query.filter(
+        StandaloneMatch.status != StandaloneMatchStatus.COMPLETED,
+        StandaloneMatch.created_at < cutoff,
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    print(f"Deleted {deleted} stale standalone matches.")
 
 
 @app.errorhandler(OperationalError)
