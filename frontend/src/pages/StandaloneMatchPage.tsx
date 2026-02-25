@@ -117,7 +117,7 @@ export default function StandaloneMatchPage() {
         try {
           const m = await getStandaloneMatch(id, urlUuid);
           setMatch(m);
-          if (m.status === 'setup' && user && m.creator.id !== user.id) {
+          if (m.status === 'setup' && (!user || m.creator.id !== user.id)) {
             setJoining(true);
             try {
               const joined = await joinStandaloneMatch(id, urlUuid);
