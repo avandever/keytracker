@@ -98,6 +98,7 @@ def google_callback():
             user.avatar_url = avatar_url
             db.session.commit()
 
+    session.permanent = True
     login_user(user, remember=True)
     next_url = session.pop("auth_next", "/")
     return redirect(next_url)
