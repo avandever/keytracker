@@ -128,7 +128,7 @@ def generate_sealed_pools_for_standalone(match, player1_id, player2_id):
     """
     from sqlalchemy.sql.expression import func
 
-    decks_per_player = match.decks_per_player or 4
+    decks_per_player = match.decks_per_player or 3
     total_needed = decks_per_player * 2
 
     query = Deck.query

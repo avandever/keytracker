@@ -129,7 +129,8 @@ def create_match():
     set_diversity = bool(data.get("set_diversity", False))
     house_diversity = bool(data.get("house_diversity", False))
     allowed_sets = data.get("allowed_sets")
-    decks_per_player = data.get("decks_per_player", 4)
+    is_sealed = format_type in (WeekFormat.SEALED_ARCHON, WeekFormat.SEALED_ALLIANCE)
+    decks_per_player = data.get("decks_per_player", 3 if is_sealed else 1)
 
     if allowed_sets is not None and not isinstance(allowed_sets, list):
         return jsonify({"error": "allowed_sets must be a list of set numbers"}), 400

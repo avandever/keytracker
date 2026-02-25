@@ -55,7 +55,7 @@ export default function StandaloneMatchesPage() {
   const [setDiversity, setSetDiversity] = useState(false);
   const [houseDiversity, setHouseDiversity] = useState(false);
   const [allowedSets, setAllowedSets] = useState<number[]>([]);
-  const [decksPerPlayer, setDecksPerPlayer] = useState(4);
+  const [decksPerPlayer, setDecksPerPlayer] = useState(3);
 
   const isSealed = formatType === 'sealed_archon' || formatType === 'sealed_alliance';
   const isTriad = formatType === 'triad';
@@ -167,7 +167,7 @@ export default function StandaloneMatchesPage() {
               label="Decks per player"
               type="number"
               value={decksPerPlayer}
-              onChange={(e) => setDecksPerPlayer(parseInt(e.target.value) || 4)}
+              onChange={(e) => setDecksPerPlayer(parseInt(e.target.value) || 3)}
               inputProps={{ min: 1, max: 10 }}
               size="small"
             />
