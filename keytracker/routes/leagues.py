@@ -2253,6 +2253,20 @@ def submit_deck_selection(league_id, week_id):
                 400,
             )
 
+    # Within-week same-team deck uniqueness check (all formats)
+    if target_team:
+        team_user_ids = {m.user_id for m in target_team.members} - {target_user_id}
+        if team_user_ids:
+            teammate_sel = PlayerDeckSelection.query.filter(
+                PlayerDeckSelection.week_id == week.id,
+                PlayerDeckSelection.deck_id == deck.id,
+                PlayerDeckSelection.user_id.in_(team_user_ids),
+            ).first()
+            if teammate_sel:
+                u = db.session.get(User, teammate_sel.user_id)
+                name = u.name if u else "a teammate"
+                return jsonify({"error": f"Deck already selected by teammate {name} this week"}), 409
+
     # Cross-week deck uniqueness check (skip for sealed formats)
     if week.format_type not in (WeekFormat.SEALED_ARCHON.value, WeekFormat.SEALED_ALLIANCE.value):
         conflicts = _check_deck_cross_week_conflicts(league, week, deck, target_team)
