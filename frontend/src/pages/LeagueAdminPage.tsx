@@ -111,8 +111,9 @@ export default function LeagueAdminPage() {
   // Start draft dialog
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
 
-  // Week creation
+  // Week creation / editing
   const [weekDialogOpen, setWeekDialogOpen] = useState(false);
+  const [editingWeekId, setEditingWeekId] = useState<number | null>(null);
   const [weekName, setWeekName] = useState('');
   const [weekFormat, setWeekFormat] = useState('archon_standard');
   const [weekBestOf, setWeekBestOf] = useState('1');
@@ -273,31 +274,55 @@ export default function LeagueAdminPage() {
     }
   };
 
-  const handleCreateWeek = async () => {
+  const resetWeekDialog = () => {
+    setWeekName('');
+    setWeekFormat('archon_standard');
+    setWeekBestOf('1');
+    setWeekMaxSas('');
+    setWeekAllowedSets([]);
+    setWeekCombinedMaxSas('');
+    setWeekSetDiversity(false);
+    setWeekHouseDiversity(false);
+    setWeekDecksPerPlayer('4');
+    setEditingWeekId(null);
+  };
+
+  const openEditWeekDialog = (week: LeagueWeek) => {
+    setWeekName(week.name || '');
+    setWeekFormat(week.format_type);
+    setWeekBestOf(String(week.best_of_n));
+    setWeekMaxSas(week.max_sas != null ? String(week.max_sas) : '');
+    setWeekAllowedSets(week.allowed_sets || []);
+    setWeekCombinedMaxSas(week.combined_max_sas != null ? String(week.combined_max_sas) : '');
+    setWeekSetDiversity(week.set_diversity || false);
+    setWeekHouseDiversity(week.house_diversity || false);
+    setWeekDecksPerPlayer(week.decks_per_player != null ? String(week.decks_per_player) : '4');
+    setEditingWeekId(week.id);
+    setWeekDialogOpen(true);
+  };
+
+  const handleSaveWeek = async () => {
     setError('');
     setWeekDialogOpen(false);
+    const payload = {
+      name: weekName.trim() || null,
+      best_of_n: parseInt(weekBestOf, 10) || 1,
+      max_sas: weekMaxSas ? parseInt(weekMaxSas, 10) : null,
+      allowed_sets: weekAllowedSets.length > 0 ? weekAllowedSets : null,
+      combined_max_sas: weekCombinedMaxSas ? parseInt(weekCombinedMaxSas, 10) : null,
+      set_diversity: weekSetDiversity || false,
+      house_diversity: weekHouseDiversity || false,
+      decks_per_player: (weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance') ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
+    };
     try {
-      await createWeek(league.id, {
-        name: weekName.trim() || undefined,
-        format_type: weekFormat,
-        best_of_n: parseInt(weekBestOf, 10) || 1,
-        max_sas: weekMaxSas ? parseInt(weekMaxSas, 10) : null,
-        allowed_sets: weekAllowedSets.length > 0 ? weekAllowedSets : null,
-        combined_max_sas: weekCombinedMaxSas ? parseInt(weekCombinedMaxSas, 10) : null,
-        set_diversity: weekSetDiversity || undefined,
-        house_diversity: weekHouseDiversity || undefined,
-        decks_per_player: (weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance') ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
-      });
-      setSuccess('Week created!');
-      setWeekName('');
-      setWeekFormat('archon_standard');
-      setWeekBestOf('1');
-      setWeekMaxSas('');
-      setWeekAllowedSets([]);
-      setWeekCombinedMaxSas('');
-      setWeekSetDiversity(false);
-      setWeekHouseDiversity(false);
-      setWeekDecksPerPlayer('4');
+      if (editingWeekId !== null) {
+        await updateWeek(league.id, editingWeekId, payload);
+        setSuccess('Week updated!');
+      } else {
+        await createWeek(league.id, { ...payload, name: weekName.trim() || undefined, format_type: weekFormat });
+        setSuccess('Week created!');
+      }
+      resetWeekDialog();
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -771,6 +796,9 @@ export default function LeagueAdminPage() {
                       <Button size="small" variant="outlined" onClick={() => handleRenameWeek(week.id)}>
                         Rename
                       </Button>
+                      <Button size="small" variant="outlined" onClick={() => openEditWeekDialog(week)}>
+                        Edit Settings
+                      </Button>
                     </Box>
 
                     {/* Week actions */}
@@ -832,9 +860,9 @@ export default function LeagueAdminPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Add Week dialog */}
-      <Dialog open={weekDialogOpen} onClose={() => setWeekDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Add Week</DialogTitle>
+      {/* Add / Edit Week dialog */}
+      <Dialog open={weekDialogOpen} onClose={() => { setWeekDialogOpen(false); resetWeekDialog(); }} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingWeekId !== null ? 'Edit Week Settings' : 'Add Week'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
             <TextField
@@ -845,7 +873,7 @@ export default function LeagueAdminPage() {
             />
             <FormControl fullWidth>
               <InputLabel>Format</InputLabel>
-              <Select value={weekFormat} label="Format" onChange={(e) => {
+              <Select value={weekFormat} label="Format" disabled={editingWeekId !== null} onChange={(e) => {
                 const fmt = e.target.value;
                 setWeekFormat(fmt);
                 if (fmt === 'triad') setWeekBestOf('3');
@@ -856,6 +884,11 @@ export default function LeagueAdminPage() {
                 <MenuItem value="sealed_alliance">Sealed Alliance</MenuItem>
                 <MenuItem value="thief">Thief</MenuItem>
               </Select>
+              {editingWeekId !== null && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                  Format cannot be changed after creation
+                </Typography>
+              )}
             </FormControl>
             <FormControl fullWidth>
               <InputLabel>Best of</InputLabel>
@@ -942,8 +975,8 @@ export default function LeagueAdminPage() {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setWeekDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleCreateWeek} variant="contained">Create Week</Button>
+          <Button onClick={() => { setWeekDialogOpen(false); resetWeekDialog(); }}>Cancel</Button>
+          <Button onClick={handleSaveWeek} variant="contained">{editingWeekId !== null ? 'Save Changes' : 'Create Week'}</Button>
         </DialogActions>
       </Dialog>
 

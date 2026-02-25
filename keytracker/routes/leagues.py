@@ -1237,15 +1237,13 @@ def update_week(league_id, week_id):
     if "name" in data:
         week.name = (data["name"] or "").strip() or None
 
-    if week.status != WeekStatus.SETUP.value:
-        db.session.commit()
-        db.session.refresh(week)
-        return jsonify(serialize_league_week(week))
-
-    if "format_type" in data:
+    # format_type is only changeable while in setup
+    if week.status == WeekStatus.SETUP.value and "format_type" in data:
         valid_formats = [f.value for f in WeekFormat]
         if data["format_type"] in valid_formats:
             week.format_type = data["format_type"]
+
+    # All other settings are editable at any status
     if "best_of_n" in data:
         bon = data["best_of_n"]
         if isinstance(bon, int) and bon >= 1 and bon % 2 == 1:
