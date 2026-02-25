@@ -163,7 +163,8 @@ with app.app_context():
 def unauthorized():
     if request.path.startswith("/api/"):
         return jsonify({"error": "Authentication required"}), 401
-    return redirect("/auth/google/login?next=" + request.path)
+    from flask import send_from_directory
+    return send_from_directory(FRONTEND_DIST, "index.html")
 
 
 app.register_blueprint(auth.blueprint)

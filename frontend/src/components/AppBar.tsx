@@ -11,11 +11,12 @@ import {
   MenuItem,
   IconButton,
 } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function AppBar() {
   const { user, loading } = useAuth();
+  const location = useLocation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   return (
@@ -105,7 +106,7 @@ export default function AppBar() {
               </Menu>
             </>
           ) : (
-            <Button color="inherit" href="/auth/google/login?next=/">
+            <Button color="inherit" href={`/auth/google/login?next=${encodeURIComponent(location.pathname)}`}>
               Sign in with Google
             </Button>
           )

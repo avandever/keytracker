@@ -1,8 +1,10 @@
 import { Box, Button, CircularProgress, Container, Typography } from '@mui/material';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -23,7 +25,7 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
         </Typography>
         <Button
           variant="contained"
-          href="/auth/google/login?next=/"
+          href={`/auth/google/login?next=${encodeURIComponent(location.pathname)}`}
         >
           Sign in with Google
         </Button>
