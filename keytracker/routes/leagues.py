@@ -2469,6 +2469,26 @@ def set_feature_designation(league_id, week_id):
     if not is_admin and not is_captain:
         return jsonify({"error": "Must be captain of the team or league admin"}), 403
 
+    # Ensure this player hasn't been the feature player in any other week of this league
+    other_fd = (
+        FeatureDesignation.query.join(LeagueWeek, FeatureDesignation.week_id == LeagueWeek.id)
+        .filter(
+            LeagueWeek.league_id == league.id,
+            FeatureDesignation.week_id != week.id,
+            FeatureDesignation.user_id == user_id,
+        )
+        .first()
+    )
+    if other_fd:
+        other_week = db.session.get(LeagueWeek, other_fd.week_id)
+        week_label = (
+            (other_week.name or f"Week {other_week.week_number}") if other_week else "another week"
+        )
+        return (
+            jsonify({"error": f"This player is already the feature player for {week_label}"}),
+            400,
+        )
+
     # Upsert: delete existing designation for this team+week, then insert new one
     FeatureDesignation.query.filter_by(week_id=week.id, team_id=target_team.id).delete()
     fd = FeatureDesignation(week_id=week.id, team_id=target_team.id, user_id=user_id)

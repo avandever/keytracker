@@ -557,6 +557,13 @@ export default function MyTeamPage() {
     const currentFeature = showFeature
       ? week.feature_designations?.find((fd) => fd.team_id === myTeam.id)
       : null;
+    // Users already featured in other weeks (for this team)
+    const alreadyFeaturedUserIds = new Set(
+      league.weeks
+        .filter((w) => w.id !== week.id)
+        .flatMap((w) => w.feature_designations?.filter((fd) => fd.team_id === myTeam.id) ?? [])
+        .map((fd) => fd.user_id)
+    );
 
     return (
       <Card sx={{ mb: 2 }}>
@@ -597,7 +604,9 @@ export default function MyTeamPage() {
                       onChange={(e) => setFeatureSelectUserId((prev) => ({ ...prev, [week.id]: e.target.value as number }))}
                     >
                       {myTeam.members.map((m) => (
-                        <MenuItem key={m.user.id} value={m.user.id}>{m.user.name}</MenuItem>
+                        <MenuItem key={m.user.id} value={m.user.id} disabled={alreadyFeaturedUserIds.has(m.user.id)}>
+                          {m.user.name}{alreadyFeaturedUserIds.has(m.user.id) ? ' (already featured)' : ''}
+                        </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
