@@ -173,14 +173,23 @@ def unauthorized():
 
 
 @app.after_request
-def prevent_api_caching(response):
-    """Prevent CDN/proxy caching of API responses.
+def prevent_caching_for_user_responses(response):
+    """Prevent CDN/proxy caching of any user-specific response.
 
-    Without this, DO App Platform's CDN caches authenticated responses
-    (e.g. /api/v2/auth/me) and serves them to other users who hit the
-    same endpoint without a session cookie.
+    Without this, CDNs can cache authenticated API responses or auth
+    redirects (which carry Set-Cookie headers) and serve them to other
+    users — leaking session cookies across clients.
+
+    Covers:
+    - /api/* — authenticated API endpoints
+    - /auth/* — OAuth callbacks that set session cookies
+    - Any response that sets a cookie — belt-and-suspenders
     """
-    if request.path.startswith("/api/"):
+    if (
+        request.path.startswith("/api/")
+        or request.path.startswith("/auth/")
+        or "Set-Cookie" in response.headers
+    ):
         response.headers["Cache-Control"] = "no-store, private"
         response.headers["Vary"] = "Cookie"
     return response
