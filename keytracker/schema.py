@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import (
     or_,
     select,
@@ -758,7 +759,14 @@ class User(UserMixin, db.Model):
     __tablename__ = "tracker_user"
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True)
+    # Legacy plaintext field — unused; kept for backward compat
     password = db.Column(db.String(200), nullable=True)
+    password_hash = db.Column(db.String(256), nullable=True)
+    email_verified = db.Column(db.Boolean, default=False, nullable=False)
+    email_verification_token = db.Column(db.String(100), nullable=True, unique=True)
+    verification_token_expires_at = db.Column(db.DateTime, nullable=True)
+    password_reset_token = db.Column(db.String(100), nullable=True, unique=True)
+    password_reset_token_expires_at = db.Column(db.DateTime, nullable=True)
     name = db.Column(db.String(100))
     google_id = db.Column(db.String(200), unique=True, nullable=True)
     avatar_url = db.Column(db.String(500), nullable=True)
@@ -783,6 +791,14 @@ class User(UserMixin, db.Model):
     @property
     def is_member(self):
         return bool(self.is_patron) or bool(self.free_membership)
+
+    def set_password(self, password: str) -> None:
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password: str) -> bool:
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, password)
 
 
 class TcoUsername(db.Model):

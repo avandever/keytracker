@@ -475,6 +475,17 @@ def load_config() -> Dict[str, str]:
         config["PATREON_CLIENT_ID"] = os.environ.get("PATREON_CLIENT_ID", "")
         config["PATREON_CLIENT_SECRET"] = os.environ.get("PATREON_CLIENT_SECRET", "")
         config["PATREON_CAMPAIGN_ID"] = os.environ.get("PATREON_CAMPAIGN_ID", "")
+        config["MAIL_SERVER"] = os.environ.get("MAIL_SERVER", "")
+        config["MAIL_PORT"] = int(os.environ.get("MAIL_PORT", "587"))
+        config["MAIL_USE_TLS"] = os.environ.get("MAIL_USE_TLS", "true").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "")
+        config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "")
+        config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER", "")
+        config["APP_BASE_URL"] = os.environ.get("APP_BASE_URL", "")
     else:
         cparser = configparser.ConfigParser()
         cparser.read(config_path)
@@ -489,6 +500,18 @@ def load_config() -> Dict[str, str]:
                 "client_secret", ""
             )
             config["PATREON_CAMPAIGN_ID"] = cparser["patreon"].get("campaign_id", "")
+        if "email" in cparser:
+            config["MAIL_SERVER"] = cparser["email"].get("mail_server", "")
+            config["MAIL_PORT"] = int(cparser["email"].get("mail_port", "587"))
+            config["MAIL_USE_TLS"] = cparser["email"].get(
+                "mail_use_tls", "true"
+            ).lower() in ("1", "true", "yes")
+            config["MAIL_USERNAME"] = cparser["email"].get("mail_username", "")
+            config["MAIL_PASSWORD"] = cparser["email"].get("mail_password", "")
+            config["MAIL_DEFAULT_SENDER"] = cparser["email"].get(
+                "mail_default_sender", ""
+            )
+            config["APP_BASE_URL"] = cparser["email"].get("app_base_url", "")
     assert config["SQLALCHEMY_DATABASE_URI"] is not None
     assert config["SECRET_KEY"] != "placeholder"
     return config
@@ -1773,9 +1796,7 @@ def run_background_card_refresher(app, stop_event=None):
             with app.app_context():
                 deck = Deck.query.filter(~Deck.cards_from_assoc.any()).first()
                 if deck is None:
-                    logger.info(
-                        f"No decks without cards, sleeping {NO_WORK_SLEEP}s"
-                    )
+                    logger.info(f"No decks without cards, sleeping {NO_WORK_SLEEP}s")
                     time.sleep(NO_WORK_SLEEP)
                     continue
                 logger.info(f"Refreshing deck {deck.kf_id} ({deck.name})")
@@ -1786,3 +1807,51 @@ def run_background_card_refresher(app, stop_event=None):
         except Exception:
             logger.exception("Background card refresher error, sleeping 60s")
             time.sleep(60)
+
+
+def send_verification_email(user, app_base_url: str) -> None:
+    """Send email verification link to user. Token must already be set on user."""
+    from flask_mail import Message
+    from flask import current_app
+
+    mail = current_app.extensions["mail"]
+    verify_url = (
+        f"{app_base_url.rstrip('/')}/auth/verify-email/{user.email_verification_token}"
+    )
+    msg = Message(
+        subject="Verify your Bear Tracks email",
+        recipients=[user.email],
+        body=(
+            f"Hi {user.name or 'there'},\n\n"
+            f"Please verify your email address by clicking the link below:\n\n"
+            f"{verify_url}\n\n"
+            f"This link expires in 24 hours.\n\n"
+            f"If you didn't create an account, you can ignore this email.\n\n"
+            f"— Bear Tracks"
+        ),
+    )
+    mail.send(msg)
+
+
+def send_password_reset_email(user, app_base_url: str) -> None:
+    """Send password reset link to user. Token must already be set on user."""
+    from flask_mail import Message
+    from flask import current_app
+
+    mail = current_app.extensions["mail"]
+    reset_url = (
+        f"{app_base_url.rstrip('/')}/reset-password?token={user.password_reset_token}"
+    )
+    msg = Message(
+        subject="Reset your Bear Tracks password",
+        recipients=[user.email],
+        body=(
+            f"Hi {user.name or 'there'},\n\n"
+            f"Click the link below to reset your password:\n\n"
+            f"{reset_url}\n\n"
+            f"This link expires in 1 hour.\n\n"
+            f"If you didn't request a password reset, you can ignore this email.\n\n"
+            f"— Bear Tracks"
+        ),
+    )
+    mail.send(msg)

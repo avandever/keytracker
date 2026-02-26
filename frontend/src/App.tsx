@@ -29,6 +29,11 @@ import MyTeamPage from './pages/MyTeamPage';
 import UserAdminPage from './pages/UserAdminPage';
 import StandaloneMatchesPage from './pages/StandaloneMatchesPage';
 import StandaloneMatchPage from './pages/StandaloneMatchPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function Layout() {
   return (
@@ -68,6 +73,11 @@ export default function App() {
               <Route path="/admin/users" element={<RequireAuth><UserAdminPage /></RequireAuth>} />
               <Route path="/matches" element={<StandaloneMatchesPage />} />
               <Route path="/matches/:matchId" element={<StandaloneMatchPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/fame" element={<ComingSoonPage title="Hall of Fame" />} />
               <Route path="/leaderboard" element={<ComingSoonPage title="Leaderboard" />} />

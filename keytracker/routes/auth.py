@@ -1,10 +1,20 @@
 import datetime
 import functools
 import logging
+import secrets
 
 import requests as http_requests
 from authlib.integrations.flask_client import OAuth
-from flask import Blueprint, redirect, session, request, url_for, jsonify, flash
+from flask import (
+    Blueprint,
+    redirect,
+    session,
+    request,
+    url_for,
+    jsonify,
+    flash,
+    current_app,
+)
 from flask_login import login_user, logout_user, login_required, current_user
 from keytracker.schema import db, User
 
@@ -295,3 +305,206 @@ def patreon_refresh():
     db.session.commit()
 
     return redirect("/account?patreon_refreshed=true")
+
+
+# --- Email/password authentication ---
+
+_MIN_PASSWORD_LENGTH = 8
+
+
+def _app_base_url() -> str:
+    return current_app.config.get("APP_BASE_URL", request.host_url.rstrip("/"))
+
+
+@blueprint.route("/register", methods=["POST"])
+def register():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    name = (data.get("name") or "").strip()
+    password = data.get("password") or ""
+
+    if not email or not password or not name:
+        return jsonify({"error": "Email, name, and password are required."}), 400
+
+    if len(password) < _MIN_PASSWORD_LENGTH:
+        return (
+            jsonify(
+                {
+                    "error": f"Password must be at least {_MIN_PASSWORD_LENGTH} characters."
+                }
+            ),
+            400,
+        )
+
+    if User.query.filter_by(email=email).first():
+        return jsonify({"error": "An account with this email already exists."}), 409
+
+    user = User(email=email, name=name, email_verified=False)
+    user.set_password(password)
+    user.email_verification_token = secrets.token_urlsafe(32)
+    user.verification_token_expires_at = (
+        datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+    )
+    db.session.add(user)
+    db.session.commit()
+
+    try:
+        from keytracker.utils import send_verification_email
+
+        send_verification_email(user, _app_base_url())
+    except Exception:
+        logger.exception("Failed to send verification email to %s", email)
+
+    session.clear()
+    session.permanent = True
+    login_user(user)
+    return jsonify({"redirect": "/verify-email"}), 201
+
+
+@blueprint.route("/login", methods=["POST"])
+def login():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
+    next_url = data.get("next") or "/"
+
+    user = User.query.filter_by(email=email).first()
+    if user is None or not user.check_password(password):
+        return jsonify({"error": "Invalid email or password."}), 401
+
+    if not user.email_verified:
+        session.clear()
+        session.permanent = True
+        login_user(user)
+        return jsonify({"redirect": "/verify-email"}), 200
+
+    session.clear()
+    session.permanent = True
+    login_user(user)
+    return jsonify({"redirect": next_url}), 200
+
+
+@blueprint.route("/verify-email/<token>")
+def verify_email(token):
+    user = User.query.filter_by(email_verification_token=token).first()
+    if user is None:
+        return redirect("/login?error=invalid_token")
+    if (
+        user.verification_token_expires_at
+        and datetime.datetime.utcnow() > user.verification_token_expires_at
+    ):
+        return redirect("/verify-email?expired=1")
+
+    user.email_verified = True
+    user.email_verification_token = None
+    user.verification_token_expires_at = None
+    db.session.commit()
+
+    if not current_user.is_authenticated:
+        session.clear()
+        session.permanent = True
+        login_user(user)
+
+    return redirect("/?verified=1")
+
+
+@blueprint.route("/resend-verification", methods=["POST"])
+@login_required
+def resend_verification():
+    if current_user.email_verified:
+        return jsonify({"message": "Email already verified."}), 200
+
+    current_user.email_verification_token = secrets.token_urlsafe(32)
+    current_user.verification_token_expires_at = (
+        datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+    )
+    db.session.commit()
+
+    try:
+        from keytracker.utils import send_verification_email
+
+        send_verification_email(current_user, _app_base_url())
+    except Exception:
+        logger.exception(
+            "Failed to resend verification email to %s", current_user.email
+        )
+        return jsonify({"error": "Failed to send email. Please try again later."}), 500
+
+    return jsonify({"message": "Verification email sent."}), 200
+
+
+@blueprint.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+
+    user = User.query.filter_by(email=email).first()
+    if user and user.password_hash:
+        user.password_reset_token = secrets.token_urlsafe(32)
+        user.password_reset_token_expires_at = (
+            datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+        )
+        db.session.commit()
+        try:
+            from keytracker.utils import send_password_reset_email
+
+            send_password_reset_email(user, _app_base_url())
+        except Exception:
+            logger.exception("Failed to send password reset email to %s", email)
+
+    # Always succeed — don't reveal whether email exists
+    return (
+        jsonify({"message": "If that email exists, a reset link has been sent."}),
+        200,
+    )
+
+
+@blueprint.route("/reset-password/<token>", methods=["GET"])
+def reset_password_get(token):
+    user = User.query.filter_by(password_reset_token=token).first()
+    if user is None or (
+        user.password_reset_token_expires_at
+        and datetime.datetime.utcnow() > user.password_reset_token_expires_at
+    ):
+        return redirect("/forgot-password?expired=1")
+    return redirect(f"/reset-password?token={token}")
+
+
+@blueprint.route("/reset-password/<token>", methods=["POST"])
+def reset_password_post(token):
+    user = User.query.filter_by(password_reset_token=token).first()
+    if user is None:
+        return jsonify({"error": "Invalid or expired reset link."}), 400
+    if (
+        user.password_reset_token_expires_at
+        and datetime.datetime.utcnow() > user.password_reset_token_expires_at
+    ):
+        return (
+            jsonify(
+                {"error": "This reset link has expired. Please request a new one."}
+            ),
+            400,
+        )
+
+    data = request.get_json(silent=True) or {}
+    password = data.get("password") or ""
+    if len(password) < _MIN_PASSWORD_LENGTH:
+        return (
+            jsonify(
+                {
+                    "error": f"Password must be at least {_MIN_PASSWORD_LENGTH} characters."
+                }
+            ),
+            400,
+        )
+
+    user.set_password(password)
+    user.password_reset_token = None
+    user.password_reset_token_expires_at = None
+    user.email_verified = True  # Verifying via reset link also confirms email ownership
+    db.session.commit()
+
+    session.clear()
+    session.permanent = True
+    login_user(user)
+    return jsonify({"redirect": "/?reset=1"}), 200

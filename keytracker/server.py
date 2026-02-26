@@ -48,6 +48,10 @@ app.app_context().push()
 db.app = app
 db.init_app(app)
 
+from flask_mail import Mail  # noqa: E402
+
+mail = Mail(app)
+
 login_manager = LoginManager()
 login_manager.session_protection = "strong"
 login_manager.init_app(app)
@@ -149,6 +153,42 @@ with app.app_context():
                     conn.execute(
                         text(
                             "ALTER TABLE tracker_user ADD COLUMN is_test_user BOOLEAN NOT NULL DEFAULT FALSE"
+                        )
+                    )
+                if "password_hash" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN password_hash VARCHAR(256)"
+                        )
+                    )
+                if "email_verified" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE"
+                        )
+                    )
+                if "email_verification_token" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN email_verification_token VARCHAR(100) UNIQUE"
+                        )
+                    )
+                if "verification_token_expires_at" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN verification_token_expires_at DATETIME"
+                        )
+                    )
+                if "password_reset_token" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN password_reset_token VARCHAR(100) UNIQUE"
+                        )
+                    )
+                if "password_reset_token_expires_at" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN password_reset_token_expires_at DATETIME"
                         )
                     )
         if inspector.has_table("tracker_league"):

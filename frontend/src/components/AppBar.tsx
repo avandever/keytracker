@@ -106,9 +106,14 @@ export default function AppBar() {
               </Menu>
             </>
           ) : (
-            <Button color="inherit" href={`/auth/google/login?next=${encodeURIComponent(location.pathname)}`}>
-              Sign in with Google
-            </Button>
+            <>
+              <Button color="inherit" component={RouterLink} to={`/login?next=${encodeURIComponent(location.pathname)}`}>
+                Sign In
+              </Button>
+              <Button color="inherit" component={RouterLink} to="/register">
+                Register
+              </Button>
+            </>
           )
         )}
       </Toolbar>
