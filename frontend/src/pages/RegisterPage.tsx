@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { registerWithPassword } from '../api/auth';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -18,6 +19,7 @@ export default function RegisterPage() {
   const [searchParams] = useSearchParams();
   const next = searchParams.get('next') || '/';
   const { refresh } = useAuth();
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -35,7 +37,8 @@ export default function RegisterPage() {
     }
     setLoading(true);
     try {
-      const { redirect } = await registerWithPassword(email, name, password);
+      const recaptchaToken = executeRecaptcha ? await executeRecaptcha('register') : undefined;
+      const { redirect } = await registerWithPassword(email, name, password, recaptchaToken);
       await refresh();
       navigate(redirect, { replace: true });
     } catch (err: unknown) {

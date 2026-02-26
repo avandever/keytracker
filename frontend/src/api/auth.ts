@@ -19,8 +19,8 @@ export async function updateSettings(settings: Record<string, unknown>): Promise
 // Direct calls to /auth/* (not /api/v2/auth/*)
 const authDirect = axios.create({ baseURL: '/auth', withCredentials: true, headers: { 'Content-Type': 'application/json' } });
 
-export async function registerWithPassword(email: string, name: string, password: string): Promise<{ redirect: string }> {
-  const { data } = await authDirect.post<{ redirect: string }>('/register', { email, name, password });
+export async function registerWithPassword(email: string, name: string, password: string, recaptchaToken?: string): Promise<{ redirect: string }> {
+  const { data } = await authDirect.post<{ redirect: string }>('/register', { email, name, password, recaptcha_token: recaptchaToken });
   return data;
 }
 

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 import { Box } from '@mui/material';
+import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import { AuthProvider } from './contexts/AuthContext';
 import { TestUserProvider } from './contexts/TestUserContext';
 import AppBar from './components/AppBar';
@@ -44,8 +45,10 @@ function Layout() {
   );
 }
 
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY as string | undefined;
+
 export default function App() {
-  return (
+  const inner = (
     <AuthProvider>
       <TestUserProvider>
         <BrowserRouter basename="/">
@@ -88,4 +91,13 @@ export default function App() {
       </TestUserProvider>
     </AuthProvider>
   );
+
+  if (RECAPTCHA_SITE_KEY) {
+    return (
+      <GoogleReCaptchaProvider reCaptchaKey={RECAPTCHA_SITE_KEY}>
+        {inner}
+      </GoogleReCaptchaProvider>
+    );
+  }
+  return inner;
 }

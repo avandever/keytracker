@@ -486,6 +486,7 @@ def load_config() -> Dict[str, str]:
         config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "")
         config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER", "")
         config["APP_BASE_URL"] = os.environ.get("APP_BASE_URL", "")
+        config["RECAPTCHA_SECRET_KEY"] = os.environ.get("RECAPTCHA_SECRET_KEY", "")
     else:
         cparser = configparser.ConfigParser()
         cparser.read(config_path)
@@ -512,6 +513,8 @@ def load_config() -> Dict[str, str]:
                 "mail_default_sender", ""
             )
             config["APP_BASE_URL"] = cparser["email"].get("app_base_url", "")
+        if "recaptcha" in cparser:
+            config["RECAPTCHA_SECRET_KEY"] = cparser["recaptcha"].get("secret_key", "")
     assert config["SQLALCHEMY_DATABASE_URI"] is not None
     assert config["SECRET_KEY"] != "placeholder"
     return config

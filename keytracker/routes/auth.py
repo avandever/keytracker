@@ -310,10 +310,33 @@ def patreon_refresh():
 # --- Email/password authentication ---
 
 _MIN_PASSWORD_LENGTH = 8
+_RECAPTCHA_VERIFY_URL = "https://www.google.com/recaptcha/api/siteverify"
+_RECAPTCHA_SCORE_THRESHOLD = 0.5
 
 
 def _app_base_url() -> str:
     return current_app.config.get("APP_BASE_URL", request.host_url.rstrip("/"))
+
+
+def _verify_recaptcha(token: str) -> bool:
+    secret = current_app.config.get("RECAPTCHA_SECRET_KEY", "")
+    if not secret:
+        return True  # Not configured — skip in dev
+    try:
+        resp = http_requests.post(
+            _RECAPTCHA_VERIFY_URL,
+            data={"secret": secret, "response": token},
+            timeout=5,
+        )
+        result = resp.json()
+        logger.debug("reCAPTCHA response: %s", result)
+        return (
+            bool(result.get("success"))
+            and result.get("score", 0) >= _RECAPTCHA_SCORE_THRESHOLD
+        )
+    except Exception:
+        logger.exception("reCAPTCHA verification request failed")
+        return False
 
 
 @blueprint.route("/register", methods=["POST"])
@@ -322,6 +345,16 @@ def register():
     email = (data.get("email") or "").strip().lower()
     name = (data.get("name") or "").strip()
     password = data.get("password") or ""
+    recaptcha_token = data.get("recaptcha_token") or ""
+
+    secret_key = current_app.config.get("RECAPTCHA_SECRET_KEY", "")
+    if secret_key and not recaptcha_token:
+        return jsonify({"error": "reCAPTCHA verification required."}), 400
+    if recaptcha_token and not _verify_recaptcha(recaptcha_token):
+        return (
+            jsonify({"error": "reCAPTCHA verification failed. Please try again."}),
+            400,
+        )
 
     if not email or not password or not name:
         return jsonify({"error": "Email, name, and password are required."}), 400
