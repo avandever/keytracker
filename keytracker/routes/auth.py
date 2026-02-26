@@ -439,12 +439,13 @@ def forgot_password():
     email = (data.get("email") or "").strip().lower()
 
     user = User.query.filter_by(email=email).first()
-    if user and user.password_hash:
+    if user:
         user.password_reset_token = secrets.token_urlsafe(32)
         user.password_reset_token_expires_at = (
             datetime.datetime.utcnow() + datetime.timedelta(hours=1)
         )
         db.session.commit()
+        logger.info(f"Sending mail to {email}")
         try:
             from keytracker.utils import send_password_reset_email
 
@@ -452,6 +453,8 @@ def forgot_password():
         except Exception:
             logger.exception("Failed to send password reset email to %s", email)
 
+    else:
+        logger.error(f"No user found with email {email}")
     # Always succeed — don't reveal whether email exists
     return (
         jsonify({"message": "If that email exists, a reset link has been sent."}),
