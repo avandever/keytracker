@@ -172,6 +172,20 @@ def unauthorized():
     return send_from_directory(FRONTEND_DIST, "index.html")
 
 
+@app.after_request
+def prevent_api_caching(response):
+    """Prevent CDN/proxy caching of API responses.
+
+    Without this, DO App Platform's CDN caches authenticated responses
+    (e.g. /api/v2/auth/me) and serves them to other users who hit the
+    same endpoint without a session cookie.
+    """
+    if request.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, private"
+        response.headers["Vary"] = "Cookie"
+    return response
+
+
 app.register_blueprint(auth.blueprint)
 app.register_blueprint(api.blueprint)
 app.register_blueprint(api_v2.blueprint)
