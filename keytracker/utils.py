@@ -1809,15 +1809,35 @@ def run_background_card_refresher(app, stop_event=None):
             time.sleep(60)
 
 
+_mail_logger = logging.getLogger("keytracker.mail")
+
+
+def _log_mail_config() -> None:
+    """Log the active Flask-Mail config (password redacted)."""
+    from flask import current_app
+
+    cfg = current_app.config
+    _mail_logger.info(
+        "SMTP config — server=%s port=%s use_tls=%s username=%s sender=%s",
+        cfg.get("MAIL_SERVER"),
+        cfg.get("MAIL_PORT"),
+        cfg.get("MAIL_USE_TLS"),
+        cfg.get("MAIL_USERNAME"),
+        cfg.get("MAIL_DEFAULT_SENDER"),
+    )
+
+
 def send_verification_email(user, app_base_url: str) -> None:
     """Send email verification link to user. Token must already be set on user."""
     from flask_mail import Message
     from flask import current_app
 
+    _log_mail_config()
     mail = current_app.extensions["mail"]
     verify_url = (
         f"{app_base_url.rstrip('/')}/auth/verify-email/{user.email_verification_token}"
     )
+    _mail_logger.info("Sending verification email to %s", user.email)
     msg = Message(
         subject="Verify your Bear Tracks email",
         recipients=[user.email],
@@ -1831,6 +1851,7 @@ def send_verification_email(user, app_base_url: str) -> None:
         ),
     )
     mail.send(msg)
+    _mail_logger.info("Verification email sent to %s", user.email)
 
 
 def send_password_reset_email(user, app_base_url: str) -> None:
@@ -1838,10 +1859,12 @@ def send_password_reset_email(user, app_base_url: str) -> None:
     from flask_mail import Message
     from flask import current_app
 
+    _log_mail_config()
     mail = current_app.extensions["mail"]
     reset_url = (
         f"{app_base_url.rstrip('/')}/reset-password?token={user.password_reset_token}"
     )
+    _mail_logger.info("Sending password reset email to %s", user.email)
     msg = Message(
         subject="Reset your Bear Tracks password",
         recipients=[user.email],
@@ -1855,3 +1878,4 @@ def send_password_reset_email(user, app_base_url: str) -> None:
         ),
     )
     mail.send(msg)
+    _mail_logger.info("Password reset email sent to %s", user.email)
