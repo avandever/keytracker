@@ -456,6 +456,16 @@ class InternalServerError(Exception):
 
 def load_config() -> Dict[str, str]:
     config = {"DEBUG": True}
+    # Session cookie settings. Secure=False so localhost:3001 dev still works;
+    # the production path (HTTPS via Gunicorn 3443) sets the secure flag
+    # correctly on its own because Werkzeug sees an HTTPS connection.
+    config["SESSION_COOKIE_HTTPONLY"] = True
+    config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    config["REMEMBER_COOKIE_HTTPONLY"] = True
+    config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
+    # 30-day session lifetime prevents sessions from accumulating indefinitely
+    # across browsers/devices. Users re-authenticate after 30 days of inactivity.
+    config["PERMANENT_SESSION_LIFETIME"] = datetime.timedelta(days=30)
     config_path = os.environ.get("TRACKER_CONFIG_PATH", "config.ini")
     if config_path == "ENV":
         config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")

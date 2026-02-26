@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from flask import current_app, Flask, jsonify, redirect, request
 from flask_login import LoginManager
+from werkzeug.middleware.proxy_fix import ProxyFix
 from keytracker.schema import (
     db,
     Log,
@@ -30,6 +31,9 @@ import time
 
 app = Flask(__name__)
 app.config.update(utils.load_config())
+# Trust one proxy hop (Caddy → Gunicorn) so url_for generates correct
+# scheme/host and request.remote_addr reflects the real client IP.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "isolation_level": "READ COMMITTED",
     "pool_size": 20,
@@ -45,6 +49,7 @@ db.app = app
 db.init_app(app)
 
 login_manager = LoginManager()
+login_manager.session_protection = "strong"
 login_manager.init_app(app)
 
 from keytracker.schema import User

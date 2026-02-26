@@ -98,15 +98,23 @@ def google_callback():
             user.avatar_url = avatar_url
             db.session.commit()
 
-    session.permanent = True
-    login_user(user, remember=True)
+    # Save redirect target before clearing session state.
     next_url = session.pop("auth_next", "/")
+    # Clear the entire session (removes OAuth state keys left by authlib and
+    # any pre-login session data) to prevent session fixation attacks.
+    session.clear()
+    session.permanent = True
+    # No remember=True: sessions are scoped to this browser and expire after
+    # PERMANENT_SESSION_LIFETIME (30 days). Each browser gets its own
+    # independent session; there is no cross-device persistent token.
+    login_user(user)
     return redirect(next_url)
 
 
 @blueprint.route("/logout")
 def logout():
     logout_user()
+    session.clear()
     next_url = request.args.get("next", "/")
     return redirect(next_url)
 
