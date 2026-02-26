@@ -25,6 +25,7 @@ from keytracker.utils import (
     loop_loading_missed_sas,
     MV_API_BASE,
     randip,
+    refresh_deck_from_mv,
     RequestThrottled,
     SEARCH_PARAMS,
 )
@@ -662,6 +663,8 @@ def populate_pod_stats_cmd():
     decks = Deck.query.filter(~Deck.pod_stats.any()).all()
     click.echo(f"Found {len(decks)} decks without pod stats")
     for i, deck in enumerate(decks):
+        if len(deck.cards_from_assoc) < 36:
+            refresh_deck_from_mv(deck)
         calculate_pod_stats(deck)
         db.session.commit()
         if (i + 1) % 100 == 0:
