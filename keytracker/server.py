@@ -211,6 +211,7 @@ def unauthorized():
     if request.path.startswith("/api/"):
         return jsonify({"error": "Authentication required"}), 401
     from flask import send_from_directory
+
     return send_from_directory(FRONTEND_DIST, "index.html")
 
 

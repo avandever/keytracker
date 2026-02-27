@@ -730,7 +730,9 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     )
     all_data = response.json()
     if "data" not in all_data:
-        current_app.logger.error(f"No data in response from mv on {deck_url}: {response.json()}")
+        current_app.logger.error(
+            f"No data in response from mv on {deck_url}: {response.json()}"
+        )
     data = all_data["data"]
     card_json = all_data["_linked"]["cards"]
     card_details = {c["id"]: c for c in card_json}
