@@ -44,7 +44,6 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 }
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1000 * 1000  # 16 MB
-app.app_context().push()
 db.app = app
 db.init_app(app)
 
@@ -53,7 +52,7 @@ from flask_mail import Mail  # noqa: E402
 mail = Mail(app)
 
 login_manager = LoginManager()
-login_manager.session_protection = "strong"
+login_manager.session_protection = "basic"
 login_manager.init_app(app)
 
 from keytracker.schema import User
@@ -61,15 +60,18 @@ from keytracker.schema import User
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    try:
+        return User.query.get(int(user_id))
+    except (OperationalError, PendingRollbackError):
+        db.session.rollback()
+        return User.query.get(int(user_id))
 
 
 auth.init_oauth(app)
 
-db.create_all()
-
 # Add google_id and avatar_url columns if they don't exist (migration)
 with app.app_context():
+    db.create_all()
     try:
         from sqlalchemy import inspect as sa_inspect, text
 
