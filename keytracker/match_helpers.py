@@ -18,6 +18,8 @@ import random
 from keytracker.schema import (
     db,
     Deck,
+    CardInDeck,
+    PlatonicCard,
     MatchGame,
     PlayerDeckSelection,
     SealedPoolDeck,
@@ -27,8 +29,30 @@ from keytracker.schema import (
     TOKEN_EXPANSION_IDS,
     PROPHECY_EXPANSION_ID,
 )
+from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
+
+KEYCHEAT_PHRASES = ["Forge a key", "Take another turn after this one"]
+
+
+def deck_has_keycheat(deck_id: int) -> bool:
+    """Return True if the deck contains any card with keycheat text."""
+    result = (
+        db.session.query(CardInDeck)
+        .join(PlatonicCard, CardInDeck.platonic_card_id == PlatonicCard.id)
+        .filter(
+            CardInDeck.deck_id == deck_id,
+            or_(
+                *[
+                    PlatonicCard.card_text.ilike(f"%{phrase}%")
+                    for phrase in KEYCHEAT_PHRASES
+                ]
+            ),
+        )
+        .first()
+    )
+    return result is not None
 
 
 def validate_deck_for_standalone(
@@ -58,6 +82,12 @@ def validate_deck_for_standalone(
             set_name = kf_set.name if kf_set else str(deck.expansion)
             errors.append(f"Decks from {set_name} are not allowed in this match")
             return errors  # Stop early
+
+    # Validate no_keycheat
+    if getattr(match, "no_keycheat", False):
+        if deck_has_keycheat(deck.id):
+            errors.append("Deck contains a keycheat card (prohibited in this match)")
+            return errors
 
     # Validate max SAS
     if match.max_sas is not None:

@@ -255,6 +255,7 @@ export interface LeagueWeek {
   house_diversity: boolean | null;
   decks_per_player: number | null;
   sealed_pools_generated: boolean;
+  no_keycheat: boolean | null;
   thief_floor_team_id?: number | null;
   matchups: WeekMatchup[];
   deck_selections: DeckSelectionInfo[];
@@ -332,6 +333,7 @@ export interface StandaloneMatch {
   house_diversity: boolean;
   decks_per_player: number;
   sealed_pools_generated: boolean;
+  no_keycheat: boolean;
   allowed_sets: number[] | null;
   created_at: string | null;
   matchup: PlayerMatchupInfo | null;
@@ -340,6 +342,29 @@ export interface StandaloneMatch {
   creator_pods: AlliancePodSelectionInfo[];
   opponent_pods: AlliancePodSelectionInfo[];
 }
+
+export interface AdminLogEntry {
+  id: number;
+  league_id: number;
+  week_id: number | null;
+  user: UserBrief;
+  action_type: string;
+  details: string | null;
+  created_at: string | null;
+}
+
+export interface DeckBrief {
+  db_id: number;
+  kf_id: string;
+  name: string;
+  expansion: number;
+  expansion_name: string;
+  sas_rating: number | null;
+  dok_url: string | null;
+  houses: string[];
+}
+
+export type CompletedMatchDecks = Record<string, { player1_decks: DeckBrief[]; player2_decks: DeckBrief[] }>;
 
 export interface CsvPod {
   name: string;

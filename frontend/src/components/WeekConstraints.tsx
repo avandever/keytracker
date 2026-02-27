@@ -29,6 +29,9 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
   if (week.house_diversity) {
     chips.push(<Chip key="house-div" label="House Diversity" size={size} variant="outlined" color="info" />);
   }
+  if (week.no_keycheat) {
+    chips.push(<Chip key="no-keycheat" label="No Keycheat" size={size} variant="outlined" color="error" />);
+  }
 
   if (chips.length === 0) return null;
 

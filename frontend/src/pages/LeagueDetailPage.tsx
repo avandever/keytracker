@@ -22,10 +22,10 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
-import { getLeague, signup, withdraw, getSets } from '../api/leagues';
+import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
-import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
+import type { AdminLogEntry, CompletedMatchDecks, KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
 import {
   Table,
   TableBody,
@@ -51,6 +51,9 @@ export default function LeagueDetailPage() {
   const [activeTab, setActiveTab] = useState(0);
   const [signupDialogOpen, setSignupDialogOpen] = useState(false);
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
+  const [adminLog, setAdminLog] = useState<AdminLogEntry[] | null>(null);
+  const [adminLogLoading, setAdminLogLoading] = useState(false);
+  const [completedDecks, setCompletedDecks] = useState<Record<number, CompletedMatchDecks>>({});
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -102,12 +105,14 @@ export default function LeagueDetailPage() {
     'Teams',
     ...(showSignups ? [`Signups (${league.signups.length})`] : []),
     ...weeks.map((w) => w.name || `Week ${w.week_number}`),
+    'Admin Log',
   ];
   // tab index offsets
   const playerStandingsIdx = 1;
   const teamsIdx = 2;
   const signupsIdx = showSignups ? 3 : null;
   const weekStartIdx = 3 + (showSignups ? 1 : 0);
+  const adminLogIdx = tabs.length - 1;
 
   const computeMatchWins = (playerId: number, targetWeeks: LeagueWeek[]): number => {
     let wins = 0;
@@ -228,6 +233,39 @@ export default function LeagueDetailPage() {
                           })}
                         </Box>
                       )}
+
+                      {/* Show deck info for completed matchups */}
+                      {isComplete && completedDecks[week.id]?.[String(pm.id)] && (() => {
+                        const deckData = completedDecks[week.id][String(pm.id)];
+                        return (
+                          <Box sx={{ ml: 2, mt: 0.5, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                            {deckData.player1_decks.map((d) => (
+                              <Chip
+                                key={d.db_id}
+                                label={`${pm.player1.name}: ${d.name}${d.sas_rating ? ` (${d.sas_rating})` : ''}`}
+                                size="small"
+                                variant="outlined"
+                                component={d.dok_url ? 'a' : 'div'}
+                                href={d.dok_url || undefined}
+                                target="_blank"
+                                clickable={!!d.dok_url}
+                              />
+                            ))}
+                            {deckData.player2_decks.map((d) => (
+                              <Chip
+                                key={d.db_id}
+                                label={`${pm.player2.name}: ${d.name}${d.sas_rating ? ` (${d.sas_rating})` : ''}`}
+                                size="small"
+                                variant="outlined"
+                                component={d.dok_url ? 'a' : 'div'}
+                                href={d.dok_url || undefined}
+                                target="_blank"
+                                clickable={!!d.dok_url}
+                              />
+                            ))}
+                          </Box>
+                        );
+                      })()}
                     </Box>
                   );
                 })}
@@ -333,6 +371,10 @@ export default function LeagueDetailPage() {
     }
     const rows = computeStandings();
     return (
+      <>
+        <Box sx={{ mb: 1, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button size="small" variant="outlined" onClick={handleDownloadTeamStandings}>Download CSV</Button>
+        </Box>
       <Table size="small">
         <TableHead>
           <TableRow>
@@ -361,6 +403,7 @@ export default function LeagueDetailPage() {
           ))}
         </TableBody>
       </Table>
+      </>
     );
   };
 
@@ -385,6 +428,9 @@ export default function LeagueDetailPage() {
 
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button size="small" variant="outlined" onClick={handleDownloadPlayerStandings}>Download CSV</Button>
+        </Box>
         {sortedTeams.map((team) => {
           const teamStandings = standingsMap[team.id];
 
@@ -531,6 +577,96 @@ export default function LeagueDetailPage() {
     );
   };
 
+  const downloadCsv = (filename: string, rows: string[][]) => {
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const csv = rows.map((r) => r.map(escape).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadTeamStandings = () => {
+    const qualifyingWeeks = weeks.filter((w) => w.status === 'published' || w.status === 'completed');
+    const rows = computeStandings();
+    const header = ['Team', ...qualifyingWeeks.map((w) => w.name || `Week ${w.week_number}`), 'Total'];
+    const dataRows = rows.map((row) => [
+      row.team.name,
+      ...qualifyingWeeks.map((w) => String(row.week_points[w.week_number] ?? 0)),
+      String(row.total),
+    ]);
+    downloadCsv('team-standings.csv', [header, ...dataRows]);
+  };
+
+  const computePlayerWeekResult = (playerId: number, teamId: number, week: LeagueWeek): 'W' | 'L' | '-' => {
+    const wm = week.matchups.find((m) => m.team1.id === teamId || m.team2.id === teamId);
+    if (!wm) return '-';
+    const teamIsTeam1 = wm.team1.id === teamId;
+    const winsNeeded = Math.ceil(week.best_of_n / 2);
+    for (const pm of wm.player_matchups) {
+      const ourPlayer = teamIsTeam1 ? pm.player1 : pm.player2;
+      if (ourPlayer.id !== playerId) continue;
+      const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
+      const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
+      const ourWins = teamIsTeam1 ? p1Wins : p2Wins;
+      const ourLosses = teamIsTeam1 ? p2Wins : p1Wins;
+      if (ourWins >= winsNeeded) return 'W';
+      if (ourLosses >= winsNeeded) return 'L';
+    }
+    return '-';
+  };
+
+  const handleDownloadPlayerStandings = () => {
+    const qualifyingWeeks = weeks.filter((w) => w.status === 'published' || w.status === 'completed');
+    const header = ['Team', 'Player', 'Captain', 'W-L', ...qualifyingWeeks.map((w) => w.name || `Week ${w.week_number}`)];
+    const dataRows: string[][] = [];
+    for (const team of league.teams) {
+      for (const m of team.members) {
+        const wins = qualifyingWeeks.filter((w) => computePlayerWeekResult(m.user.id, team.id, w) === 'W').length;
+        const losses = qualifyingWeeks.filter((w) => computePlayerWeekResult(m.user.id, team.id, w) === 'L').length;
+        dataRows.push([
+          team.name,
+          m.user.name,
+          m.is_captain ? 'Yes' : 'No',
+          `${wins}-${losses}`,
+          ...qualifyingWeeks.map((w) => computePlayerWeekResult(m.user.id, team.id, w)),
+        ]);
+      }
+    }
+    downloadCsv('player-standings.csv', [header, ...dataRows]);
+  };
+
+  const renderAdminLogTab = () => {
+    if (adminLogLoading) return <CircularProgress />;
+    if (!adminLog) return <Typography color="text.secondary">Loading admin log...</Typography>;
+    if (adminLog.length === 0) return <Typography color="text.secondary">No admin actions logged yet.</Typography>;
+    return (
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell><strong>Time</strong></TableCell>
+            <TableCell><strong>Actor</strong></TableCell>
+            <TableCell><strong>Action</strong></TableCell>
+            <TableCell><strong>Details</strong></TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {adminLog.map((entry) => (
+            <TableRow key={entry.id}>
+              <TableCell sx={{ whiteSpace: 'nowrap' }}>{entry.created_at ? new Date(entry.created_at).toLocaleString() : '-'}</TableCell>
+              <TableCell>{entry.user.name}</TableCell>
+              <TableCell>{entry.action_type.replace(/_/g, ' ')}</TableCell>
+              <TableCell>{entry.details || ''}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
+  };
+
   const renderTeamsTab = () => (
     <>
       {league.teams.length === 0 && (
@@ -654,7 +790,23 @@ export default function LeagueDetailPage() {
         <>
           <Tabs
             value={activeTab}
-            onChange={(_, v) => setActiveTab(v)}
+            onChange={(_, v) => {
+              setActiveTab(v);
+              // Lazy-load admin log on first activation
+              if (v === adminLogIdx && adminLog === null && !adminLogLoading) {
+                setAdminLogLoading(true);
+                getAdminLog(league.id).then(setAdminLog).catch(() => setAdminLog([])).finally(() => setAdminLogLoading(false));
+              }
+              // Lazy-load completed match decks for published/completed weeks
+              if (v >= weekStartIdx) {
+                const week = weeks[v - weekStartIdx];
+                if (week && (week.status === 'published' || week.status === 'completed') && !completedDecks[week.id]) {
+                  getCompletedMatchDecks(league.id, week.id).then((data) => {
+                    setCompletedDecks((prev) => ({ ...prev, [week.id]: data }));
+                  }).catch(() => {});
+                }
+              }
+            }}
             sx={{ mb: 2 }}
             variant="scrollable"
             scrollButtons="auto"
@@ -668,7 +820,8 @@ export default function LeagueDetailPage() {
           {activeTab === playerStandingsIdx && renderPlayerStandingsTab()}
           {activeTab === teamsIdx && renderTeamsTab()}
           {showSignups && activeTab === signupsIdx && renderSignupsTab()}
-          {activeTab >= weekStartIdx && weeks[activeTab - weekStartIdx] && renderWeekTab(weeks[activeTab - weekStartIdx])}
+          {activeTab >= weekStartIdx && activeTab < adminLogIdx && weeks[activeTab - weekStartIdx] && renderWeekTab(weeks[activeTab - weekStartIdx])}
+          {activeTab === adminLogIdx && renderAdminLogTab()}
         </>
       ) : (
         <>

@@ -16,6 +16,7 @@ from keytracker.schema import (
     AlliancePodSelection,
     ThiefCurationDeck,
     ThiefSteal,
+    LeagueAdminLog,
     EXPANSION_ID_TO_ABBR,
 )
 from keytracker.schema import StandaloneMatch, db
@@ -66,6 +67,21 @@ def serialize_game_detail(game: Game) -> dict:
         serialize_house_turn_count(htc) for htc in game.house_turn_counts
     ]
     return data
+
+
+def serialize_deck_brief(deck: Deck) -> dict:
+    return {
+        "db_id": deck.id,
+        "kf_id": deck.kf_id,
+        "name": deck.name,
+        "expansion": deck.expansion,
+        "expansion_name": EXPANSION_ID_TO_ABBR.get(deck.expansion, "Unknown"),
+        "sas_rating": deck.sas_rating,
+        "dok_url": deck.dok_url,
+        "houses": sorted(
+            [ps.house for ps in deck.pod_stats if ps.house != "Archon Power"]
+        ),
+    }
 
 
 def serialize_deck_summary(deck: Deck) -> dict:
@@ -236,6 +252,7 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "house_diversity": week.house_diversity,
         "decks_per_player": week.decks_per_player,
         "sealed_pools_generated": week.sealed_pools_generated,
+        "no_keycheat": week.no_keycheat,
         "thief_floor_team_id": thief_floor_team_id,
         "matchups": [
             serialize_week_matchup(
@@ -398,6 +415,7 @@ def serialize_standalone_match(match: StandaloneMatch, current_user_id=None) -> 
         "house_diversity": match.house_diversity,
         "decks_per_player": match.decks_per_player,
         "sealed_pools_generated": match.sealed_pools_generated,
+        "no_keycheat": match.no_keycheat,
         "allowed_sets": match.allowed_sets,
         "created_at": match.created_at.isoformat() if match.created_at else None,
         "matchup": serialize_player_matchup(match.matchup) if match.matchup else None,
@@ -407,6 +425,18 @@ def serialize_standalone_match(match: StandaloneMatch, current_user_id=None) -> 
         ],
         "creator_pods": [serialize_alliance_selection(p) for p in creator_pods],
         "opponent_pods": [serialize_alliance_selection(p) for p in opponent_pods],
+    }
+
+
+def serialize_admin_log_entry(entry: LeagueAdminLog) -> dict:
+    return {
+        "id": entry.id,
+        "league_id": entry.league_id,
+        "week_id": entry.week_id,
+        "user": serialize_user_brief(entry.user),
+        "action_type": entry.action_type,
+        "details": entry.details,
+        "created_at": entry.created_at.isoformat() if entry.created_at else None,
     }
 
 

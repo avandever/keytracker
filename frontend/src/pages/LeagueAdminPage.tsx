@@ -57,6 +57,9 @@ import {
   checkWeekCompletion,
   advanceToThief,
   endThief,
+  regeneratePlayerMatchups,
+  editMatchup,
+  regenerateSealedPools,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -125,6 +128,7 @@ export default function LeagueAdminPage() {
   const [weekHouseDiversity, setWeekHouseDiversity] = useState(false);
   // Sealed-specific
   const [weekDecksPerPlayer, setWeekDecksPerPlayer] = useState('4');
+  const [weekNoKeycheat, setWeekNoKeycheat] = useState(false);
   const [availableSets, setAvailableSets] = useState<KeyforgeSetInfo[]>([]);
 
   // Week expanded
@@ -143,6 +147,14 @@ export default function LeagueAdminPage() {
   // Force-matchup confirmation (when some players haven't submitted decks)
   const [forceMatchupWeekId, setForceMatchupWeekId] = useState<number | null>(null);
   const [forceMatchupMissing, setForceMatchupMissing] = useState<string[]>([]);
+
+  // Regenerate sealed pools dialog
+  const [regenPoolsWeekId, setRegenPoolsWeekId] = useState<number | null>(null);
+  const [regenPoolsSelectedUsers, setRegenPoolsSelectedUsers] = useState<number[]>([]);
+
+  // Edit pairings state: weekId -> { [matchupId]: { player1_id, player2_id } }
+  const [editingPairingsWeekId, setEditingPairingsWeekId] = useState<number | null>(null);
+  const [pairingEdits, setPairingEdits] = useState<Record<number, { player1_id: number; player2_id: number }>>({});
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -284,6 +296,7 @@ export default function LeagueAdminPage() {
     setWeekSetDiversity(false);
     setWeekHouseDiversity(false);
     setWeekDecksPerPlayer('4');
+    setWeekNoKeycheat(false);
     setEditingWeekId(null);
   };
 
@@ -297,6 +310,7 @@ export default function LeagueAdminPage() {
     setWeekSetDiversity(week.set_diversity || false);
     setWeekHouseDiversity(week.house_diversity || false);
     setWeekDecksPerPlayer(week.decks_per_player != null ? String(week.decks_per_player) : '4');
+    setWeekNoKeycheat(week.no_keycheat || false);
     setEditingWeekId(week.id);
     setWeekDialogOpen(true);
   };
@@ -313,6 +327,7 @@ export default function LeagueAdminPage() {
       set_diversity: weekSetDiversity || false,
       house_diversity: weekHouseDiversity || false,
       decks_per_player: (weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance') ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
+      no_keycheat: weekNoKeycheat,
     };
     try {
       if (editingWeekId !== null) {
@@ -434,6 +449,72 @@ export default function LeagueAdminPage() {
     }
   };
 
+  const handleRegeneratePlayerMatchups = async (weekId: number) => {
+    setError('');
+    try {
+      await regeneratePlayerMatchups(league.id, weekId);
+      setSuccess('Player pairings regenerated');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleOpenRegenPools = (week: LeagueWeek) => {
+    const allPlayerIds = league.teams.flatMap((t) => t.members.map((m) => m.user.id));
+    setRegenPoolsSelectedUsers(allPlayerIds);
+    setRegenPoolsWeekId(week.id);
+  };
+
+  const handleRegenSealedPools = async () => {
+    if (regenPoolsWeekId === null) return;
+    const weekId = regenPoolsWeekId;
+    setRegenPoolsWeekId(null);
+    setError('');
+    try {
+      await regenerateSealedPools(league.id, weekId, regenPoolsSelectedUsers);
+      setSuccess('Sealed pools regenerated');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const startEditPairings = (week: LeagueWeek) => {
+    const edits: Record<number, { player1_id: number; player2_id: number }> = {};
+    for (const wm of week.matchups) {
+      for (const pm of wm.player_matchups) {
+        edits[pm.id] = { player1_id: pm.player1.id, player2_id: pm.player2.id };
+      }
+    }
+    setPairingEdits(edits);
+    setEditingPairingsWeekId(week.id);
+  };
+
+  const handleSavePairingEdits = async (week: LeagueWeek) => {
+    setError('');
+    try {
+      for (const wm of week.matchups) {
+        for (const pm of wm.player_matchups) {
+          const edit = pairingEdits[pm.id];
+          if (!edit) continue;
+          if (edit.player1_id !== pm.player1.id || edit.player2_id !== pm.player2.id) {
+            await editMatchup(league.id, week.id, pm.id, {
+              player1_id: edit.player1_id,
+              player2_id: edit.player2_id,
+            });
+          }
+        }
+      }
+      setEditingPairingsWeekId(null);
+      setPairingEdits({});
+      setSuccess('Pairings updated');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const toggleWeekExpanded = (weekId: number) => {
     setExpandedWeeks((prev) => ({ ...prev, [weekId]: !prev[weekId] }));
   };
@@ -467,6 +548,17 @@ export default function LeagueAdminPage() {
         <Button key="sealed" size="small" variant="contained" color="secondary"
           onClick={() => handleWeekAction(week.id, 'generate_sealed_pools')}>
           Generate Sealed Pools
+        </Button>
+      );
+    }
+
+    // Regenerate sealed pools (when already generated and in deck_selection/team_paired)
+    if (['sealed_archon', 'sealed_alliance'].includes(week.format_type) && week.sealed_pools_generated &&
+        (week.status === 'deck_selection' || week.status === 'team_paired')) {
+      actions.push(
+        <Button key="regen-sealed" size="small" variant="outlined" color="secondary"
+          onClick={() => handleOpenRegenPools(week)}>
+          Regenerate Pools
         </Button>
       );
     }
@@ -537,6 +629,29 @@ export default function LeagueAdminPage() {
             Publish Pairings
           </Button>
         );
+        actions.push(
+          <Button key="regen-pairings" size="small" variant="outlined" color="warning" onClick={() => handleRegeneratePlayerMatchups(week.id)}>
+            Regenerate Pairings
+          </Button>
+        );
+        if (editingPairingsWeekId !== week.id) {
+          actions.push(
+            <Button key="edit-pairings" size="small" variant="outlined" onClick={() => startEditPairings(week)}>
+              Edit Pairings
+            </Button>
+          );
+        } else {
+          actions.push(
+            <Button key="save-pairings" size="small" variant="contained" onClick={() => handleSavePairingEdits(week)}>
+              Save Changes
+            </Button>
+          );
+          actions.push(
+            <Button key="cancel-pairings" size="small" variant="outlined" onClick={() => { setEditingPairingsWeekId(null); setPairingEdits({}); }}>
+              Cancel
+            </Button>
+          );
+        }
         break;
       case 'published':
         actions.push(
@@ -828,12 +943,43 @@ export default function LeagueAdminPage() {
                             <Typography variant="body2" fontWeight="bold">
                               {m.team1.name} vs {m.team2.name}
                             </Typography>
-                            {m.player_matchups.map((pm) => (
-                              <Typography key={pm.id} variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                                {pm.player1.name} vs {pm.player2.name}
-                                {pm.games.length > 0 && ` (${pm.games.length} game${pm.games.length !== 1 ? 's' : ''} played)`}
-                              </Typography>
-                            ))}
+                            {m.player_matchups.map((pm) => {
+                              const isEditing = editingPairingsWeekId === week.id;
+                              if (isEditing) {
+                                const edit = pairingEdits[pm.id] || { player1_id: pm.player1.id, player2_id: pm.player2.id };
+                                return (
+                                  <Box key={pm.id} sx={{ ml: 2, display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
+                                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                                      <Select
+                                        value={edit.player1_id}
+                                        onChange={(e) => setPairingEdits((prev) => ({ ...prev, [pm.id]: { ...edit, player1_id: e.target.value as number } }))}
+                                      >
+                                        {m.team1.members.map((mem) => (
+                                          <MenuItem key={mem.user.id} value={mem.user.id}>{mem.user.name}</MenuItem>
+                                        ))}
+                                      </Select>
+                                    </FormControl>
+                                    <Typography variant="body2">vs</Typography>
+                                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                                      <Select
+                                        value={edit.player2_id}
+                                        onChange={(e) => setPairingEdits((prev) => ({ ...prev, [pm.id]: { ...edit, player2_id: e.target.value as number } }))}
+                                      >
+                                        {m.team2.members.map((mem) => (
+                                          <MenuItem key={mem.user.id} value={mem.user.id}>{mem.user.name}</MenuItem>
+                                        ))}
+                                      </Select>
+                                    </FormControl>
+                                  </Box>
+                                );
+                              }
+                              return (
+                                <Typography key={pm.id} variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                                  {pm.player1.name} vs {pm.player2.name}
+                                  {pm.games.length > 0 && ` (${pm.games.length} game${pm.games.length !== 1 ? 's' : ''} played)`}
+                                </Typography>
+                              );
+                            })}
                           </Box>
                         ))}
                       </Box>
@@ -972,6 +1118,15 @@ export default function LeagueAdminPage() {
                 </Box>
               </Box>
             )}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={weekNoKeycheat}
+                  onChange={(e) => setWeekNoKeycheat(e.target.checked)}
+                />
+              }
+              label="No Keycheat (disallow decks with 'Forge a key' or 'Take another turn' cards)"
+            />
           </Box>
         </DialogContent>
         <DialogActions>
@@ -1022,6 +1177,55 @@ export default function LeagueAdminPage() {
         <DialogActions>
           <Button onClick={() => setDeleteWeekId(null)}>Cancel</Button>
           <Button onClick={() => deleteWeekId && handleDeleteWeek(deleteWeekId)} variant="contained" color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Regenerate Sealed Pools dialog */}
+      <Dialog open={regenPoolsWeekId !== null} onClose={() => setRegenPoolsWeekId(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Regenerate Sealed Pools</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>Select players to regenerate pools for:</Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={regenPoolsSelectedUsers.length === league.teams.flatMap((t) => t.members).length}
+                indeterminate={regenPoolsSelectedUsers.length > 0 && regenPoolsSelectedUsers.length < league.teams.flatMap((t) => t.members).length}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setRegenPoolsSelectedUsers(league.teams.flatMap((t) => t.members.map((m) => m.user.id)));
+                  } else {
+                    setRegenPoolsSelectedUsers([]);
+                  }
+                }}
+              />
+            }
+            label="All Players"
+          />
+          {league.teams.flatMap((t) => t.members).map((m) => (
+            <FormControlLabel
+              key={m.user.id}
+              control={
+                <Checkbox
+                  checked={regenPoolsSelectedUsers.includes(m.user.id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setRegenPoolsSelectedUsers((prev) => [...prev, m.user.id]);
+                    } else {
+                      setRegenPoolsSelectedUsers((prev) => prev.filter((id) => id !== m.user.id));
+                    }
+                  }}
+                />
+              }
+              label={m.user.name}
+              sx={{ display: 'block', ml: 2 }}
+            />
+          ))}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRegenPoolsWeekId(null)}>Cancel</Button>
+          <Button onClick={handleRegenSealedPools} variant="contained" color="warning" disabled={regenPoolsSelectedUsers.length === 0}>
+            Regenerate
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>

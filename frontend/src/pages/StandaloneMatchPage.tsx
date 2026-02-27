@@ -209,6 +209,7 @@ export default function StandaloneMatchPage() {
     house_diversity: match.house_diversity,
     decks_per_player: match.decks_per_player,
     sealed_pools_generated: match.sealed_pools_generated,
+    no_keycheat: match.no_keycheat,
     matchups: [],
     deck_selections: [],
     feature_designations: [],

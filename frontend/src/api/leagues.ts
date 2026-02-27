@@ -12,6 +12,8 @@ import type {
   MatchGameInfo,
   KeyforgeSetInfo,
   AlliancePodSelectionInfo,
+  AdminLogEntry,
+  CompletedMatchDecks,
 } from '../types';
 
 export async function listLeagues(): Promise<LeagueSummary[]> {
@@ -470,6 +472,58 @@ export async function reportGame(
   const { data } = await apiClient.post(
     `/leagues/${leagueId}/matches/${matchupId}/games`,
     payload,
+  );
+  return data;
+}
+
+// --- Admin ---
+
+export async function getAdminLog(leagueId: number): Promise<AdminLogEntry[]> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/admin-log`);
+  return data;
+}
+
+export async function regeneratePlayerMatchups(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/regenerate-player-matchups`,
+  );
+  return data;
+}
+
+export async function editMatchup(
+  leagueId: number,
+  weekId: number,
+  matchupId: number,
+  payload: { player1_id?: number; player2_id?: number },
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.put(
+    `/leagues/${leagueId}/weeks/${weekId}/matchups/${matchupId}`,
+    payload,
+  );
+  return data;
+}
+
+export async function regenerateSealedPools(
+  leagueId: number,
+  weekId: number,
+  userIds?: number[],
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/regenerate-sealed-pools`,
+    userIds ? { user_ids: userIds } : {},
+  );
+  return data;
+}
+
+export async function getCompletedMatchDecks(
+  leagueId: number,
+  weekId: number,
+): Promise<CompletedMatchDecks> {
+  const { data } = await apiClient.get(
+    `/leagues/${leagueId}/weeks/${weekId}/completed-match-decks`,
   );
   return data;
 }

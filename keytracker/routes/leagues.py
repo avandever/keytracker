@@ -7,6 +7,7 @@ from keytracker.schema import (
     KeyforgeSet,
     League,
     LeagueAdmin,
+    LeagueAdminLog,
     LeagueSignup,
     LeagueStatus,
     LeagueWeek,
@@ -39,11 +40,13 @@ from keytracker.serializers import (
     serialize_player_matchup,
     serialize_deck_selection,
     serialize_deck_summary,
+    serialize_deck_brief,
     serialize_sealed_pool_entry,
     serialize_alliance_selection,
     serialize_match_game,
     serialize_team_detail,
     serialize_user_brief,
+    serialize_admin_log_entry,
 )
 import datetime
 import json
@@ -96,6 +99,21 @@ def _get_league_or_404(league_id):
     if league is None:
         return None, (jsonify({"error": "League not found"}), 404)
     return league, None
+
+
+def _log_admin_action(league_id, week_id, user_id, action_type, details=None):
+    """Record an admin action in the league admin log."""
+    import datetime
+
+    entry = LeagueAdminLog(
+        league_id=league_id,
+        week_id=week_id,
+        user_id=user_id,
+        action_type=action_type,
+        details=details,
+        created_at=datetime.datetime.utcnow(),
+    )
+    db.session.add(entry)
 
 
 @blueprint.route("/", methods=["GET"])
@@ -187,7 +205,10 @@ def update_league(league_id):
     data = request.get_json(silent=True) or {}
     # week_bonus_points can be edited at any status
     if "week_bonus_points" in data:
-        if isinstance(data["week_bonus_points"], int) and data["week_bonus_points"] >= 0:
+        if (
+            isinstance(data["week_bonus_points"], int)
+            and data["week_bonus_points"] >= 0
+        ):
             league.week_bonus_points = data["week_bonus_points"]
     if league.status != LeagueStatus.SETUP.value:
         db.session.commit()
@@ -992,7 +1013,9 @@ def _generate_thief_player_pairings(team1, team2, week_matchup, league, week):
     members2 = list(team2.members)
 
     def get_deck_id(user_id):
-        sel = PlayerDeckSelection.query.filter_by(week_id=week.id, user_id=user_id).first()
+        sel = PlayerDeckSelection.query.filter_by(
+            week_id=week.id, user_id=user_id
+        ).first()
         return sel.deck_id if sel else None
 
     def is_stolen_player(team, user_id):
@@ -1156,6 +1179,7 @@ def create_week(league_id):
         set_diversity=data.get("set_diversity"),
         house_diversity=data.get("house_diversity"),
         decks_per_player=data.get("decks_per_player"),
+        no_keycheat=bool(data.get("no_keycheat", False)),
     )
     db.session.add(week)
     db.session.commit()
@@ -1263,6 +1287,8 @@ def update_week(league_id, week_id):
         week.house_diversity = data["house_diversity"]
     if "decks_per_player" in data:
         week.decks_per_player = data["decks_per_player"]
+    if "no_keycheat" in data:
+        week.no_keycheat = bool(data["no_keycheat"])
 
     db.session.commit()
     db.session.refresh(week)
@@ -1293,6 +1319,13 @@ def open_deck_selection(league_id, week_id):
         week.status = WeekStatus.CURATION.value
     else:
         week.status = WeekStatus.DECK_SELECTION.value
+    _log_admin_action(
+        league.id,
+        week.id,
+        get_effective_user().id,
+        "week_status_changed",
+        f"status -> {week.status}",
+    )
     db.session.commit()
     return jsonify(serialize_league_week(week))
 
@@ -1456,6 +1489,9 @@ def generate_team_pairings(league_id, week_id):
         db.session.add(wm)
 
     week.status = WeekStatus.TEAM_PAIRED.value
+    _log_admin_action(
+        league.id, week.id, get_effective_user().id, "team_pairings_generated"
+    )
     db.session.commit()
     db.session.refresh(week)
     return jsonify(serialize_league_week(week))
@@ -1570,9 +1606,7 @@ def generate_player_matchups(league_id, week_id):
             .join(LeagueWeek, PlayerDeckSelection.week_id == LeagueWeek.id)
             .join(User, PlayerDeckSelection.user_id == User.id)
             .join(Deck, PlayerDeckSelection.deck_id == Deck.id)
-            .filter(
-                PlayerDeckSelection.week_id == week.id  # selections for THIS week
-            )
+            .filter(PlayerDeckSelection.week_id == week.id)  # selections for THIS week
             .all()
         )
         # For each selection in this week, check if the deck appears in an earlier week
@@ -1602,7 +1636,8 @@ def generate_player_matchups(league_id, week_id):
             return (
                 jsonify(
                     {
-                        "error": "Deck conflicts detected: " + " ".join(conflict_messages),
+                        "error": "Deck conflicts detected: "
+                        + " ".join(conflict_messages),
                         "deck_conflicts": True,
                     }
                 ),
@@ -1637,6 +1672,9 @@ def generate_player_matchups(league_id, week_id):
             db.session.add(pm)
 
     week.status = WeekStatus.PAIRING.value
+    _log_admin_action(
+        league.id, week.id, get_effective_user().id, "player_matchups_generated"
+    )
     db.session.commit()
     db.session.refresh(week)
     return jsonify(serialize_league_week(week))
@@ -1663,11 +1701,29 @@ def edit_matchup(league_id, week_id, matchup_id):
     if not pm or pm.week_matchup.week_id != week.id:
         return jsonify({"error": "Matchup not found"}), 404
 
+    wm = pm.week_matchup
+    team1_member_ids = {m.user_id for m in wm.team1.members}
+    team2_member_ids = {m.user_id for m in wm.team2.members}
+
     data = request.get_json(silent=True) or {}
     if "player1_id" in data:
-        pm.player1_id = data["player1_id"]
+        new_p1 = data["player1_id"]
+        if new_p1 not in team1_member_ids:
+            return jsonify({"error": "player1_id must be a member of team1"}), 400
+        pm.player1_id = new_p1
     if "player2_id" in data:
-        pm.player2_id = data["player2_id"]
+        new_p2 = data["player2_id"]
+        if new_p2 not in team2_member_ids:
+            return jsonify({"error": "player2_id must be a member of team2"}), 400
+        pm.player2_id = new_p2
+
+    _log_admin_action(
+        league.id,
+        week.id,
+        get_effective_user().id,
+        "player_matchup_edited",
+        f"matchup_id={matchup_id}",
+    )
     db.session.commit()
     return jsonify(serialize_player_matchup(pm))
 
@@ -1714,6 +1770,7 @@ def publish_week(league_id, week_id):
                 )
 
     week.status = WeekStatus.PUBLISHED.value
+    _log_admin_action(league.id, week.id, get_effective_user().id, "week_published")
     db.session.commit()
     return jsonify(serialize_league_week(week))
 
@@ -1736,8 +1793,18 @@ def generate_sealed_pools(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.format_type not in (WeekFormat.SEALED_ARCHON.value, WeekFormat.SEALED_ALLIANCE.value):
-        return jsonify({"error": "Sealed pools only for Sealed Archon or Sealed Alliance format"}), 400
+    if week.format_type not in (
+        WeekFormat.SEALED_ARCHON.value,
+        WeekFormat.SEALED_ALLIANCE.value,
+    ):
+        return (
+            jsonify(
+                {
+                    "error": "Sealed pools only for Sealed Archon or Sealed Alliance format"
+                }
+            ),
+            400,
+        )
     if week.sealed_pools_generated:
         return jsonify({"error": "Sealed pools already generated"}), 400
 
@@ -1779,6 +1846,9 @@ def generate_sealed_pools(league_id, week_id):
             db.session.add(spd)
 
     week.sealed_pools_generated = True
+    _log_admin_action(
+        league.id, week.id, get_effective_user().id, "sealed_pools_generated"
+    )
     db.session.commit()
     return jsonify(serialize_league_week(week))
 
@@ -1832,7 +1902,10 @@ def submit_alliance_selection(league_id, week_id):
 
     if week.format_type != WeekFormat.SEALED_ALLIANCE.value:
         return jsonify({"error": "Only for Sealed Alliance format"}), 400
-    if week.status not in (WeekStatus.DECK_SELECTION.value, WeekStatus.TEAM_PAIRED.value):
+    if week.status not in (
+        WeekStatus.DECK_SELECTION.value,
+        WeekStatus.TEAM_PAIRED.value,
+    ):
         return jsonify({"error": "Alliance selection is not open"}), 400
 
     effective = get_effective_user()
@@ -1846,11 +1919,16 @@ def submit_alliance_selection(league_id, week_id):
         for team in league.teams:
             team_user_ids = {m.user_id for m in team.members}
             if target_user_id in team_user_ids:
-                if any(m.user_id == effective.id and m.is_captain for m in team.members):
+                if any(
+                    m.user_id == effective.id and m.is_captain for m in team.members
+                ):
                     is_captain_of_team = True
                 break
         if not is_admin and not is_captain_of_team:
-            return jsonify({"error": "Cannot submit alliance selection for this user"}), 403
+            return (
+                jsonify({"error": "Cannot submit alliance selection for this user"}),
+                403,
+            )
 
     # Verify target is a league member
     member = (
@@ -1885,11 +1963,18 @@ def submit_alliance_selection(league_id, week_id):
             return jsonify({"error": f"Pod {i+1}: deck not in your sealed pool"}), 400
 
         # House must be a valid house for this deck
-        valid_house = PodStats.query.filter_by(deck_id=deck_id).filter(
-            PodStats.house == house
-        ).first()
+        valid_house = (
+            PodStats.query.filter_by(deck_id=deck_id)
+            .filter(PodStats.house == house)
+            .first()
+        )
         if not valid_house:
-            return jsonify({"error": f"Pod {i+1}: {house} is not a house of the selected deck"}), 400
+            return (
+                jsonify(
+                    {"error": f"Pod {i+1}: {house} is not a house of the selected deck"}
+                ),
+                400,
+            )
 
         pod_deck_ids.append(deck_id)
         houses.append(house)
@@ -1911,18 +1996,34 @@ def submit_alliance_selection(league_id, week_id):
 
     if needs_token:
         if not token_deck_id:
-            return jsonify({"error": "token_deck_id is required for this week's sets"}), 400
+            return (
+                jsonify({"error": "token_deck_id is required for this week's sets"}),
+                400,
+            )
         if token_deck_id not in pod_deck_ids:
-            return jsonify({"error": "token_deck_id must be one of the 3 pod decks"}), 400
+            return (
+                jsonify({"error": "token_deck_id must be one of the 3 pod decks"}),
+                400,
+            )
 
     if needs_prophecy:
         if not prophecy_deck_id:
-            return jsonify({"error": "prophecy_deck_id is required for Prophetic Visions"}), 400
+            return (
+                jsonify(
+                    {"error": "prophecy_deck_id is required for Prophetic Visions"}
+                ),
+                400,
+            )
         if prophecy_deck_id not in pod_deck_ids:
-            return jsonify({"error": "prophecy_deck_id must be one of the 3 pod decks"}), 400
+            return (
+                jsonify({"error": "prophecy_deck_id must be one of the 3 pod decks"}),
+                400,
+            )
 
     # Replace existing alliance selections
-    AlliancePodSelection.query.filter_by(week_id=week.id, user_id=target_user_id).delete()
+    AlliancePodSelection.query.filter_by(
+        week_id=week.id, user_id=target_user_id
+    ).delete()
 
     for i, pod in enumerate(pods):
         sel = AlliancePodSelection(
@@ -1989,13 +2090,20 @@ def clear_alliance_selection(league_id, week_id):
         for team in league.teams:
             team_user_ids = {m.user_id for m in team.members}
             if target_user_id in team_user_ids:
-                if any(m.user_id == effective.id and m.is_captain for m in team.members):
+                if any(
+                    m.user_id == effective.id and m.is_captain for m in team.members
+                ):
                     is_captain_of_team = True
                 break
         if not is_admin and not is_captain_of_team:
-            return jsonify({"error": "Cannot clear alliance selection for this user"}), 403
+            return (
+                jsonify({"error": "Cannot clear alliance selection for this user"}),
+                403,
+            )
 
-    AlliancePodSelection.query.filter_by(week_id=week.id, user_id=target_user_id).delete()
+    AlliancePodSelection.query.filter_by(
+        week_id=week.id, user_id=target_user_id
+    ).delete()
     db.session.commit()
     return "", 204
 
@@ -2086,7 +2194,12 @@ def submit_deck_selection(league_id, week_id):
 
     # Sealed Alliance uses a different endpoint for pod selection
     if week.format_type == WeekFormat.SEALED_ALLIANCE.value:
-        return jsonify({"error": "Sealed Alliance format uses /alliance-selection endpoint"}), 400
+        return (
+            jsonify(
+                {"error": "Sealed Alliance format uses /alliance-selection endpoint"}
+            ),
+            400,
+        )
 
     effective = get_effective_user()
 
@@ -2183,7 +2296,9 @@ def submit_deck_selection(league_id, week_id):
             return jsonify({"error": "Deck is not in your thief pool"}), 400
         # Enforce feature player deck-type constraint (even team size only)
         if league.team_size % 2 == 0:
-            fd = FeatureDesignation.query.filter_by(week_id=week.id, team_id=player_team.id).first()
+            fd = FeatureDesignation.query.filter_by(
+                week_id=week.id, team_id=player_team.id
+            ).first()
             if fd and fd.user_id == target_user_id:
                 wm_for_sel = WeekMatchup.query.filter(
                     WeekMatchup.week_id == week.id,
@@ -2195,14 +2310,30 @@ def submit_deck_selection(league_id, week_id):
                 if wm_for_sel and wm_for_sel.thief_stolen_team_id:
                     if wm_for_sel.thief_stolen_team_id == player_team.id:
                         if deck_db_id not in stolen_by_team:
-                            return jsonify({"error": "Feature player on the thieving-favored team must use a stolen deck"}), 400
+                            return (
+                                jsonify(
+                                    {
+                                        "error": "Feature player on the thieving-favored team must use a stolen deck"
+                                    }
+                                ),
+                                400,
+                            )
                     else:
                         if deck_db_id not in own_left:
-                            return jsonify({"error": "Feature player on the non-thieving-favored team must use one of their own decks"}), 400
+                            return (
+                                jsonify(
+                                    {
+                                        "error": "Feature player on the non-thieving-favored team must use one of their own decks"
+                                    }
+                                ),
+                                400,
+                            )
         # Validate deck not already assigned to another player on this team
-        other_selections = PlayerDeckSelection.query.filter_by(
-            week_id=week.id, deck_id=deck_db_id
-        ).filter(PlayerDeckSelection.user_id != target_user_id).all()
+        other_selections = (
+            PlayerDeckSelection.query.filter_by(week_id=week.id, deck_id=deck_db_id)
+            .filter(PlayerDeckSelection.user_id != target_user_id)
+            .all()
+        )
         for other_sel in other_selections:
             if any(m.user_id == other_sel.user_id for m in player_team.members):
                 return jsonify({"error": "Deck is already assigned to a teammate"}), 400
@@ -2253,6 +2384,18 @@ def submit_deck_selection(league_id, week_id):
                 400,
             )
 
+    # Validate no_keycheat
+    if week.no_keycheat:
+        from keytracker.match_helpers import deck_has_keycheat
+
+        if deck_has_keycheat(deck.id):
+            return (
+                jsonify(
+                    {"error": "Deck contains a keycheat card (prohibited this week)"}
+                ),
+                400,
+            )
+
     # Within-week same-team deck uniqueness check (all formats)
     if target_team:
         team_user_ids = {m.user_id for m in target_team.members} - {target_user_id}
@@ -2265,10 +2408,18 @@ def submit_deck_selection(league_id, week_id):
             if teammate_sel:
                 u = db.session.get(User, teammate_sel.user_id)
                 name = u.name if u else "a teammate"
-                return jsonify({"error": f"Deck already selected by teammate {name} this week"}), 409
+                return (
+                    jsonify(
+                        {"error": f"Deck already selected by teammate {name} this week"}
+                    ),
+                    409,
+                )
 
     # Cross-week deck uniqueness check (skip for sealed formats)
-    if week.format_type not in (WeekFormat.SEALED_ARCHON.value, WeekFormat.SEALED_ALLIANCE.value):
+    if week.format_type not in (
+        WeekFormat.SEALED_ARCHON.value,
+        WeekFormat.SEALED_ALLIANCE.value,
+    ):
         conflicts = _check_deck_cross_week_conflicts(league, week, deck, target_team)
         if conflicts:
             return jsonify({"error": " ".join(conflicts)}), 409
@@ -2471,7 +2622,9 @@ def set_feature_designation(league_id, week_id):
 
     # Ensure this player hasn't been the feature player in any other week of this league
     other_fd = (
-        FeatureDesignation.query.join(LeagueWeek, FeatureDesignation.week_id == LeagueWeek.id)
+        FeatureDesignation.query.join(
+            LeagueWeek, FeatureDesignation.week_id == LeagueWeek.id
+        )
         .filter(
             LeagueWeek.league_id == league.id,
             FeatureDesignation.week_id != week.id,
@@ -2482,10 +2635,14 @@ def set_feature_designation(league_id, week_id):
     if other_fd:
         other_week = db.session.get(LeagueWeek, other_fd.week_id)
         week_label = (
-            (other_week.name or f"Week {other_week.week_number}") if other_week else "another week"
+            (other_week.name or f"Week {other_week.week_number}")
+            if other_week
+            else "another week"
         )
         return (
-            jsonify({"error": f"This player is already the feature player for {week_label}"}),
+            jsonify(
+                {"error": f"This player is already the feature player for {week_label}"}
+            ),
             400,
         )
 
@@ -2562,9 +2719,7 @@ def clear_feature_designation(league_id, week_id):
 # --- Thief format routes ---
 
 
-@blueprint.route(
-    "/<int:league_id>/weeks/<int:week_id>/curation-deck", methods=["POST"]
-)
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>/curation-deck", methods=["POST"])
 @login_required
 def submit_curation_deck(league_id, week_id):
     """Captain submits a deck URL for the team's curation pool."""
@@ -2585,7 +2740,9 @@ def submit_curation_deck(league_id, week_id):
     # Must be captain of their team
     captain_team = None
     for team in league.teams:
-        m = TeamMember.query.filter_by(team_id=team.id, user_id=effective.id, is_captain=True).first()
+        m = TeamMember.query.filter_by(
+            team_id=team.id, user_id=effective.id, is_captain=True
+        ).first()
         if m:
             captain_team = team
             break
@@ -2608,8 +2765,15 @@ def submit_curation_deck(league_id, week_id):
 
     if not deck_url:
         return jsonify({"error": "deck_url is required"}), 400
-    if not isinstance(slot_number, int) or slot_number < 1 or slot_number > league.team_size:
-        return jsonify({"error": f"slot_number must be between 1 and {league.team_size}"}), 400
+    if (
+        not isinstance(slot_number, int)
+        or slot_number < 1
+        or slot_number > league.team_size
+    ):
+        return (
+            jsonify({"error": f"slot_number must be between 1 and {league.team_size}"}),
+            400,
+        )
 
     # Check slot not already occupied
     existing = ThiefCurationDeck.query.filter_by(
@@ -2661,7 +2825,9 @@ def remove_curation_deck(league_id, week_id, slot):
     effective = get_effective_user()
     captain_team = None
     for team in league.teams:
-        m = TeamMember.query.filter_by(team_id=team.id, user_id=effective.id, is_captain=True).first()
+        m = TeamMember.query.filter_by(
+            team_id=team.id, user_id=effective.id, is_captain=True
+        ).first()
         if m:
             captain_team = team
             break
@@ -2707,9 +2873,18 @@ def advance_to_thief(league_id, week_id):
     # Validate each team has exactly team_size curation decks
     teams = league.teams
     for team in teams:
-        count = ThiefCurationDeck.query.filter_by(week_id=week.id, team_id=team.id).count()
+        count = ThiefCurationDeck.query.filter_by(
+            week_id=week.id, team_id=team.id
+        ).count()
         if count != league.team_size:
-            return jsonify({"error": f"Team '{team.name}' has {count}/{league.team_size} curation decks"}), 400
+            return (
+                jsonify(
+                    {
+                        "error": f"Team '{team.name}' has {count}/{league.team_size} curation decks"
+                    }
+                ),
+                400,
+            )
 
     # The per-matchup coin toss (thief_stolen_team_id) was already set during
     # generate_team_pairings — no additional week-level randomization needed.
@@ -2720,9 +2895,7 @@ def advance_to_thief(league_id, week_id):
     return jsonify(serialize_league_week(week, viewer=viewer))
 
 
-@blueprint.route(
-    "/<int:league_id>/weeks/<int:week_id>/steal", methods=["POST"]
-)
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>/steal", methods=["POST"])
 @login_required
 def submit_steals(league_id, week_id):
     """Team member submits steal selections for opponent's curation decks."""
@@ -2758,7 +2931,10 @@ def submit_steals(league_id, week_id):
     n = league.team_size
     wm_for_steal = WeekMatchup.query.filter(
         WeekMatchup.week_id == week.id,
-        db.or_(WeekMatchup.team1_id == player_team.id, WeekMatchup.team2_id == player_team.id),
+        db.or_(
+            WeekMatchup.team1_id == player_team.id,
+            WeekMatchup.team2_id == player_team.id,
+        ),
     ).first()
     if wm_for_steal and wm_for_steal.thief_stolen_team_id:
         if wm_for_steal.thief_stolen_team_id == player_team.id:
@@ -2767,7 +2943,11 @@ def submit_steals(league_id, week_id):
             required_count = math.floor(n / 2)
     else:
         # Fallback for legacy weeks that used thief_floor_team_id on the week
-        required_count = math.floor(n / 2) if week.thief_floor_team_id == player_team.id else math.ceil(n / 2)
+        required_count = (
+            math.floor(n / 2)
+            if week.thief_floor_team_id == player_team.id
+            else math.ceil(n / 2)
+        )
 
     if len(curation_deck_ids) != required_count:
         return jsonify({"error": f"Must steal exactly {required_count} decks"}), 400
@@ -2792,12 +2972,24 @@ def submit_steals(league_id, week_id):
         if not cd:
             return jsonify({"error": f"Curation deck {cd_id} not found"}), 400
         if cd.week_id != week.id:
-            return jsonify({"error": f"Curation deck {cd_id} belongs to a different week"}), 400
+            return (
+                jsonify(
+                    {"error": f"Curation deck {cd_id} belongs to a different week"}
+                ),
+                400,
+            )
         if cd.team_id not in opponent_team_ids:
-            return jsonify({"error": f"Curation deck {cd_id} is not from an opponent team"}), 400
+            return (
+                jsonify(
+                    {"error": f"Curation deck {cd_id} is not from an opponent team"}
+                ),
+                400,
+            )
 
     # Replace steals for this team
-    ThiefSteal.query.filter_by(week_id=week.id, stealing_team_id=player_team.id).delete()
+    ThiefSteal.query.filter_by(
+        week_id=week.id, stealing_team_id=player_team.id
+    ).delete()
     for cd_id in curation_deck_ids:
         steal = ThiefSteal(
             week_id=week.id,
@@ -2812,9 +3004,7 @@ def submit_steals(league_id, week_id):
     return jsonify(serialize_league_week(week, viewer=viewer))
 
 
-@blueprint.route(
-    "/<int:league_id>/weeks/<int:week_id>/end-thief", methods=["POST"]
-)
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>/end-thief", methods=["POST"])
 @login_required
 def end_thief(league_id, week_id):
     """Admin ends thief phase and advances to deck_selection."""
@@ -2838,9 +3028,16 @@ def end_thief(league_id, week_id):
             required = math.floor(n / 2)
         else:
             required = math.ceil(n / 2)
-        count = ThiefSteal.query.filter_by(week_id=week.id, stealing_team_id=team.id).count()
+        count = ThiefSteal.query.filter_by(
+            week_id=week.id, stealing_team_id=team.id
+        ).count()
         if count != required:
-            return jsonify({"error": f"Team '{team.name}' has stolen {count}/{required} decks"}), 400
+            return (
+                jsonify(
+                    {"error": f"Team '{team.name}' has stolen {count}/{required} decks"}
+                ),
+                400,
+            )
 
     week.status = WeekStatus.DECK_SELECTION.value
     db.session.commit()
@@ -3152,3 +3349,243 @@ def check_week_completion(league_id, week_id):
     db.session.commit()
     db.session.refresh(week)
     return jsonify(serialize_league_week(week))
+
+
+# --- Admin Log ---
+
+
+@blueprint.route("/<int:league_id>/admin-log", methods=["GET"])
+def get_admin_log(league_id):
+    """Return last 200 admin log entries for the league (public)."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    entries = (
+        LeagueAdminLog.query.filter_by(league_id=league.id)
+        .order_by(LeagueAdminLog.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    return jsonify([serialize_admin_log_entry(e) for e in entries])
+
+
+# --- Regenerate Player Matchups ---
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/regenerate-player-matchups", methods=["POST"]
+)
+@login_required
+def regenerate_player_matchups(league_id, week_id):
+    """Delete all PlayerMatchup rows and re-run pairing generation. Admin-only, pairing status only."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    user = get_effective_user()
+    if not _is_league_admin(league, user):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.status != WeekStatus.PAIRING.value:
+        return jsonify({"error": "Week must be in pairing status"}), 400
+
+    matchups = WeekMatchup.query.filter_by(week_id=week.id).all()
+    if not matchups:
+        return jsonify({"error": "No team pairings found"}), 400
+
+    # Delete all existing player matchups
+    for wm in matchups:
+        PlayerMatchup.query.filter_by(week_matchup_id=wm.id).delete()
+    db.session.flush()
+
+    # Re-run pairing generation
+    for wm in matchups:
+        team1 = db.session.get(Team, wm.team1_id)
+        team2 = db.session.get(Team, wm.team2_id)
+        if week.format_type == WeekFormat.THIEF.value:
+            player_pairs = _generate_thief_player_pairings(
+                team1, team2, wm, league, week
+            )
+        else:
+            player_pairs = _generate_player_pairings(
+                team1, team2, league, week, week.week_number
+            )
+        for p1_id, p2_id, is_feature in player_pairs:
+            pm = PlayerMatchup(
+                week_matchup_id=wm.id,
+                player1_id=p1_id,
+                player2_id=p2_id,
+                is_feature=is_feature,
+            )
+            db.session.add(pm)
+
+    _log_admin_action(league.id, week.id, user.id, "player_matchups_regenerated")
+    db.session.commit()
+    db.session.refresh(week)
+    return jsonify(serialize_league_week(week))
+
+
+# --- Regenerate Sealed Pools ---
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/regenerate-sealed-pools", methods=["POST"]
+)
+@login_required
+def regenerate_sealed_pools(league_id, week_id):
+    """Regenerate sealed pools for all or specific players. Admin-only."""
+    from sqlalchemy.sql.expression import func as sql_func
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    user = get_effective_user()
+    if not _is_league_admin(league, user):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.format_type not in (
+        WeekFormat.SEALED_ARCHON.value,
+        WeekFormat.SEALED_ALLIANCE.value,
+    ):
+        return (
+            jsonify(
+                {
+                    "error": "Sealed pools only for Sealed Archon or Sealed Alliance format"
+                }
+            ),
+            400,
+        )
+    if week.status not in (
+        WeekStatus.DECK_SELECTION.value,
+        WeekStatus.TEAM_PAIRED.value,
+    ):
+        return (
+            jsonify({"error": "Week must be in deck_selection or team_paired status"}),
+            400,
+        )
+    if not week.sealed_pools_generated:
+        return jsonify({"error": "Sealed pools have not been generated yet"}), 400
+
+    data = request.get_json(silent=True) or {}
+    target_user_ids = data.get("user_ids")  # optional list of int
+
+    active_members = _get_active_players(league)
+    if target_user_ids is not None:
+        active_members = [m for m in active_members if m.user_id in target_user_ids]
+
+    if not active_members:
+        return jsonify({"error": "No target players found"}), 400
+
+    decks_per_player = week.decks_per_player or 4
+
+    # Collect already-assigned deck ids for players NOT being regenerated
+    all_member_ids = {m.user_id for m in _get_active_players(league)}
+    regen_ids = {m.user_id for m in active_members}
+    kept_ids = all_member_ids - regen_ids
+    excluded_deck_ids = set()
+    if kept_ids:
+        kept_pools = SealedPoolDeck.query.filter(
+            SealedPoolDeck.week_id == week.id,
+            SealedPoolDeck.user_id.in_(kept_ids),
+        ).all()
+        excluded_deck_ids = {spd.deck_id for spd in kept_pools}
+
+    # For each target player: delete their pool, selections, and pod selections
+    for member in active_members:
+        uid = member.user_id
+        SealedPoolDeck.query.filter_by(week_id=week.id, user_id=uid).delete()
+        PlayerDeckSelection.query.filter_by(week_id=week.id, user_id=uid).delete()
+        AlliancePodSelection.query.filter_by(week_id=week.id, user_id=uid).delete()
+
+    db.session.flush()
+
+    total_needed = decks_per_player * len(active_members)
+    query = Deck.query
+    if week.allowed_sets:
+        try:
+            allowed = json.loads(week.allowed_sets)
+            query = query.filter(Deck.expansion.in_(allowed))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    if excluded_deck_ids:
+        query = query.filter(~Deck.id.in_(excluded_deck_ids))
+
+    decks = query.order_by(sql_func.rand()).limit(total_needed).all()
+    if len(decks) < total_needed:
+        db.session.rollback()
+        return (
+            jsonify(
+                {
+                    "error": f"Not enough decks in database ({len(decks)} available, {total_needed} needed)"
+                }
+            ),
+            400,
+        )
+
+    random.shuffle(decks)
+    for i, member in enumerate(active_members):
+        player_decks = decks[i * decks_per_player : (i + 1) * decks_per_player]
+        for d in player_decks:
+            spd = SealedPoolDeck(week_id=week.id, user_id=member.user_id, deck_id=d.id)
+            db.session.add(spd)
+
+    details = f"Regenerated for {len(active_members)} player(s)"
+    _log_admin_action(league.id, week.id, user.id, "sealed_pools_regenerated", details)
+    db.session.commit()
+    db.session.refresh(week)
+    return jsonify(serialize_league_week(week))
+
+
+# --- Completed Match Decks ---
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/completed-match-decks", methods=["GET"]
+)
+def completed_match_decks(league_id, week_id):
+    """Return deck info for completed player matchups in the week. Public endpoint."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+
+    wins_needed = math.ceil(week.best_of_n / 2)
+    result = {}
+
+    for wm in week.matchups:
+        for pm in wm.player_matchups:
+            p1_wins = sum(1 for g in pm.games if g.winner_id == pm.player1_id)
+            p2_wins = sum(1 for g in pm.games if g.winner_id == pm.player2_id)
+            if p1_wins < wins_needed and p2_wins < wins_needed:
+                continue  # not complete
+
+            p1_sels = (
+                PlayerDeckSelection.query.filter_by(
+                    week_id=week.id, user_id=pm.player1_id
+                )
+                .order_by(PlayerDeckSelection.slot_number)
+                .all()
+            )
+            p2_sels = (
+                PlayerDeckSelection.query.filter_by(
+                    week_id=week.id, user_id=pm.player2_id
+                )
+                .order_by(PlayerDeckSelection.slot_number)
+                .all()
+            )
+
+            result[str(pm.id)] = {
+                "player1_decks": [
+                    serialize_deck_brief(s.deck) for s in p1_sels if s.deck
+                ],
+                "player2_decks": [
+                    serialize_deck_brief(s.deck) for s in p2_sels if s.deck
+                ],
+            }
+
+    return jsonify(result)

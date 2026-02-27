@@ -997,6 +997,7 @@ class LeagueWeek(db.Model):
     thief_floor_team_id = db.Column(
         db.Integer, nullable=True
     )  # team that steals floor(N/2)
+    no_keycheat = db.Column(db.Boolean, nullable=False, default=False)
 
     league = db.relationship("League", backref="weeks")
     matchups = db.relationship(
@@ -1051,6 +1052,7 @@ class StandaloneMatch(db.Model):
     decks_per_player = db.Column(db.Integer, nullable=False, default=4)
     sealed_pools_generated = db.Column(db.Boolean, nullable=False, default=False)
     allowed_sets = db.Column(db.JSON, nullable=True)
+    no_keycheat = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     creator = db.relationship("User", foreign_keys=[creator_id])
@@ -1270,3 +1272,30 @@ class ThiefSteal(db.Model):
     )
 
     curation_deck = db.relationship("ThiefCurationDeck")
+
+
+class LeagueAdminLog(db.Model):
+    __tablename__ = "league_admin_log"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    league_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_league.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    week_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_league_week.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    action_type = db.Column(db.String(64), nullable=False)
+    details = db.Column(db.Text, nullable=True)
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+
+    league = db.relationship("League")
+    week = db.relationship("LeagueWeek")
+    user = db.relationship("User")
