@@ -1,3 +1,4 @@
+.env
 keytracker/venv/
 keytracker.egg-info/
 keytracker/__pycache__/

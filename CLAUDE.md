@@ -31,9 +31,20 @@ bash lint.sh
 This runs Black on Python files, css-beautify on CSS, and djlint reformat+lint on Jinja2 templates.
 
 ### Docker
+
+Build (the `VITE_RECAPTCHA_SITE_KEY` build arg is required for the frontend):
 ```bash
-docker build -t keytracker .
-docker run -p 3001:3001 keytracker
+docker build -t keytracker --build-arg VITE_RECAPTCHA_SITE_KEY=6LfZAXksAAAAAOycX9ZMlksKsKKyyMTAXZnZxJo9 .
+```
+
+Run (env vars are stored in `.env`; `--add-host` is required on Linux for `host.docker.internal` to resolve to the host):
+```bash
+docker stop keytracker && docker rm keytracker
+docker run -d --name keytracker \
+  --env-file .env \
+  --add-host=host.docker.internal:host-gateway \
+  -p 3001:3001 -p 3443:3443 \
+  keytracker
 ```
 
 ### No test suite exists in this project.
