@@ -118,6 +118,49 @@ def google_callback():
     return redirect(next_url)
 
 
+@blueprint.route("/google/link")
+@login_required
+def google_link():
+    redirect_uri = url_for("auth.google_link_callback", _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@blueprint.route("/google/link_callback")
+@login_required
+def google_link_callback():
+    try:
+        token = oauth.google.authorize_access_token()
+    except Exception:
+        logger.exception("Failed to exchange Google OAuth code during link")
+        return redirect("/account?google_error=oauth_failed")
+
+    userinfo = token.get("userinfo") or oauth.google.userinfo()
+    google_id = userinfo["sub"]
+    avatar_url = userinfo.get("picture")
+
+    # Check if already linked to another account
+    existing = User.query.filter_by(google_id=google_id).first()
+    if existing and existing.id != current_user.id:
+        return redirect("/account?google_error=already_linked")
+
+    current_user.google_id = google_id
+    current_user.avatar_url = avatar_url
+    db.session.commit()
+    return redirect("/account?google_linked=true")
+
+
+@blueprint.route("/google/unlink")
+@login_required
+def google_unlink():
+    # Safety: don't allow unlink if user has no password fallback
+    if not current_user.password_hash:
+        return redirect("/account?google_error=cannot_unlink_no_password")
+    current_user.google_id = None
+    current_user.avatar_url = None
+    db.session.commit()
+    return redirect("/account")
+
+
 @blueprint.route("/logout")
 def logout():
     logout_user()

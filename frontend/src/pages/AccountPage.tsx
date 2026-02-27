@@ -65,6 +65,21 @@ export default function AccountPage() {
       setAlert({ severity: 'error', message: errorMap[code] || 'An unknown error occurred.' });
       searchParams.delete('patreon_error');
       setSearchParams(searchParams, { replace: true });
+    } else if (searchParams.get('google_linked') === 'true') {
+      setAlert({ severity: 'success', message: 'Google account linked successfully!' });
+      refresh();
+      searchParams.delete('google_linked');
+      setSearchParams(searchParams, { replace: true });
+    } else if (searchParams.get('google_error')) {
+      const googleErrorMap: Record<string, string> = {
+        oauth_failed: 'Failed to connect to Google. Please try again.',
+        already_linked: 'This Google account is already linked to another user.',
+        cannot_unlink_no_password: 'Cannot unlink Google — no password set on this account.',
+      };
+      const code = searchParams.get('google_error') || '';
+      setAlert({ severity: 'error', message: googleErrorMap[code] || 'An unknown error occurred.' });
+      searchParams.delete('google_error');
+      setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams, refresh]);
 
@@ -160,6 +175,32 @@ export default function AccountPage() {
                 Refresh Status
               </Button>
               <Button variant="outlined" size="small" color="error" href="/auth/patreon/unlink">
+                Unlink
+              </Button>
+            </Box>
+          </>
+        )}
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="h6" gutterBottom>
+          Google
+        </Typography>
+
+        {!user.google_linked ? (
+          <>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              Link your Google account to enable Google sign-in.
+            </Typography>
+            <Button variant="contained" href="/auth/google/link">
+              Link Google Account
+            </Button>
+          </>
+        ) : (
+          <>
+            <Chip label="Google Linked" color="success" sx={{ mb: 1 }} />
+            <Box sx={{ mt: 1 }}>
+              <Button variant="outlined" size="small" color="error" href="/auth/google/unlink">
                 Unlink
               </Button>
             </Box>
