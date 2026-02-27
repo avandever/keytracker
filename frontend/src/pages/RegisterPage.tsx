@@ -42,6 +42,7 @@ export default function RegisterPage() {
       await refresh();
       navigate(redirect, { replace: true });
     } catch (err: unknown) {
+      console.error('Registration error:', err);
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
         'Registration failed. Please try again.';

@@ -1,9 +1,13 @@
+#check=skip=SecretsUsedInArgOrEnv
 # Stage 1: Build React frontend
 FROM node:20-slim AS frontend-build
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+ARG VITE_RECAPTCHA_SITE_KEY
+# Write to .env file before building
+RUN echo "VITE_RECAPTCHA_SITE_KEY=$VITE_RECAPTCHA_SITE_KEY" > .env
 RUN npm run build
 
 # Stage 2: Python app
