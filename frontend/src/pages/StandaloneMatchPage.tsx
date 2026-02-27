@@ -84,8 +84,8 @@ export default function StandaloneMatchPage() {
 
   // Game report state
   const [reportWinnerId, setReportWinnerId] = useState<number | ''>('');
-  const [reportP1Keys, setReportP1Keys] = useState('3');
-  const [reportP2Keys, setReportP2Keys] = useState('0');
+  const [reportWinnerKeys, setReportWinnerKeys] = useState('3');
+  const [reportLoserKeys, setReportLoserKeys] = useState('0');
   const [reportWentToTime, setReportWentToTime] = useState(false);
   const [reportLoserConceded, setReportLoserConceded] = useState(false);
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
@@ -324,8 +324,8 @@ export default function StandaloneMatchPage() {
       const payload: Parameters<typeof reportStandaloneGame>[1] = {
         game_number: nextGame,
         winner_id: reportWinnerId as number,
-        player1_keys: winnerIsP1 ? parseInt(reportP1Keys) : parseInt(reportP2Keys),
-        player2_keys: winnerIsP1 ? parseInt(reportP2Keys) : parseInt(reportP1Keys),
+        player1_keys: winnerIsP1 ? parseInt(reportWinnerKeys) : parseInt(reportLoserKeys),
+        player2_keys: winnerIsP1 ? parseInt(reportLoserKeys) : parseInt(reportWinnerKeys),
         went_to_time: reportWentToTime,
         loser_conceded: reportLoserConceded,
       };
@@ -335,8 +335,8 @@ export default function StandaloneMatchPage() {
       await refresh();
       setSuccess('Game reported!');
       setReportWinnerId('');
-      setReportP1Keys('3');
-      setReportP2Keys('0');
+      setReportWinnerKeys('3');
+      setReportLoserKeys('0');
       setReportWentToTime(false);
       setReportLoserConceded(false);
       setReportP1DeckId('');
@@ -745,20 +745,20 @@ export default function StandaloneMatchPage() {
 
                   <Box sx={{ display: 'flex', gap: 2 }}>
                     <TextField
-                      label={`${match.creator.name} Keys`}
+                      label="Winner Keys"
                       type="number"
                       size="small"
-                      value={reportP1Keys}
-                      onChange={(e) => setReportP1Keys(e.target.value)}
+                      value={reportWinnerKeys}
+                      onChange={(e) => setReportWinnerKeys(e.target.value)}
                       inputProps={{ min: 0, max: 3 }}
                       sx={{ width: 150 }}
                     />
                     <TextField
-                      label={`${match.opponent?.name || 'Opponent'} Keys`}
+                      label="Loser Keys"
                       type="number"
                       size="small"
-                      value={reportP2Keys}
-                      onChange={(e) => setReportP2Keys(e.target.value)}
+                      value={reportLoserKeys}
+                      onChange={(e) => setReportLoserKeys(e.target.value)}
                       inputProps={{ min: 0, max: 3 }}
                       sx={{ width: 150 }}
                     />
