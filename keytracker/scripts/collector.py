@@ -664,7 +664,7 @@ def populate_pod_stats_cmd():
     click.echo(f"Found {len(decks)} decks without pod stats")
     for i, deck in enumerate(decks):
         if len(deck.cards_from_assoc) < 36:
-            refresh_deck_from_mv(deck)
+            continue
         calculate_pod_stats(deck)
         db.session.commit()
         if (i + 1) % 100 == 0:
