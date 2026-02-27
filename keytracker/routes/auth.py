@@ -113,6 +113,7 @@ def google_callback():
     # Clear the entire session (removes OAuth state keys left by authlib and
     # any pre-login session data) to prevent session fixation attacks.
     session.clear()
+    session.permanent = True
     login_user(user)
     return redirect(next_url)
 
@@ -385,6 +386,7 @@ def register():
         logger.exception("Failed to send verification email to %s", email)
 
     session.clear()
+    session.permanent = True
     login_user(user)
     return jsonify({"redirect": "/verify-email"}), 201
 
@@ -402,10 +404,12 @@ def login():
 
     if not user.email_verified:
         session.clear()
+        session.permanent = True
         login_user(user)
         return jsonify({"redirect": "/verify-email"}), 200
 
     session.clear()
+    session.permanent = True
     login_user(user)
     return jsonify({"redirect": next_url}), 200
 
@@ -428,6 +432,7 @@ def verify_email(token):
 
     if not current_user.is_authenticated:
         session.clear()
+        session.permanent = True
         login_user(user)
 
     return redirect("/?verified=1")
@@ -533,5 +538,6 @@ def reset_password_post(token):
     db.session.commit()
 
     session.clear()
+    session.permanent = True
     login_user(user)
     return jsonify({"redirect": "/?reset=1"}), 200
