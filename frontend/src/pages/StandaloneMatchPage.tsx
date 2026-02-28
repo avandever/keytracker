@@ -745,13 +745,14 @@ export default function StandaloneMatchPage() {
                 {pm.adaptive_bidding_complete && pm.adaptive_bidder_id !== null && (() => {
                   const bidderIsP1 = pm.adaptive_bidder_id === pm.player1.id;
                   const winDeckOwnerIsP1 = pm.adaptive_winning_deck_player_id === pm.player1.id;
-                  // The bidder conceded, so the other player plays the winning deck
-                  // (The bidder agreed to play the losing deck with N chains)
-                  const winningDeckPlayer = winDeckOwnerIsP1 ? match.creator : match.opponent;
-                  const losingDeckPlayer = bidderIsP1 ? match.creator : match.opponent;
+                  // The bid winner (bidder) plays the winning deck with N chains
+                  const winningDeckPlayer = bidderIsP1 ? match.creator : match.opponent;
+                  const losingDeckPlayer = bidderIsP1 ? match.opponent : match.creator;
+                  const winningDeckName = winDeckOwnerIsP1 ? match.creator_selections[0]?.deck?.name : match.opponent_selections[0]?.deck?.name;
+                  const losingDeckName = winDeckOwnerIsP1 ? match.opponent_selections[0]?.deck?.name : match.creator_selections[0]?.deck?.name;
                   return (
                     <Typography variant="body2">
-                      <strong>Game 3:</strong> {winningDeckPlayer?.name} plays the winning deck / {losingDeckPlayer?.name} plays the losing deck with {pm.adaptive_bid_chains} chains
+                      <strong>Game 3:</strong> {winningDeckPlayer?.name} plays {winningDeckName ?? 'the winning deck'} with {pm.adaptive_bid_chains} chains / {losingDeckPlayer?.name} plays {losingDeckName ?? 'the losing deck'}
                     </Typography>
                   );
                 })()}
@@ -778,7 +779,7 @@ export default function StandaloneMatchPage() {
                   <Typography variant="body2" color="text.secondary" gutterBottom>
                     The match is tied 1-1. {winningDeckOwnerName}&apos;s deck won both games.
                     Players bid chains to play the opponent&apos;s (winning) deck in game 3.
-                    The current bid holder must play the <em>losing</em> deck with that many chains.
+                    The current bid holder must play the <em>winning</em> deck with that many chains.
                   </Typography>
                   <Typography variant="body2" sx={{ mb: 1 }}>
                     Current bid: <strong>{pm.adaptive_bid_chains} chains</strong> held by <strong>{currentBidderName}</strong>
@@ -830,7 +831,7 @@ export default function StandaloneMatchPage() {
             <Alert severity="success" sx={{ mb: 2 }}>
               {(() => {
                 const bidderName = pm.adaptive_bidder_id === pm.player1.id ? match.creator.name : match.opponent?.name;
-                return `Bidding complete — ${bidderName} plays the losing deck with ${pm.adaptive_bid_chains} chains in Game 3.`;
+                return `Bidding complete — ${bidderName} plays the winning deck with ${pm.adaptive_bid_chains} chains in Game 3.`;
               })()}
             </Alert>
           )}
