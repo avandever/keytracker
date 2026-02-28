@@ -14,6 +14,7 @@ from keytracker.schema import (
     TeamMember,
     SealedPoolDeck,
     AlliancePodSelection,
+    AllianceRestrictedListVersion,
     ThiefCurationDeck,
     ThiefSteal,
     LeagueAdminLog,
@@ -21,6 +22,10 @@ from keytracker.schema import (
 )
 from keytracker.schema import StandaloneMatch, db
 import json
+
+
+def serialize_restricted_list_version(v: AllianceRestrictedListVersion) -> dict:
+    return {"id": v.id, "version": v.version}
 
 
 def serialize_game_summary(game: Game) -> dict:
@@ -217,7 +222,7 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
 
     # Alliance pod selections for the viewer's team (so teammates are visible)
     alliance_selections = []
-    if viewer and week.format_type == "sealed_alliance":
+    if viewer and week.format_type in ("sealed_alliance", "alliance"):
         viewer_team_member_ids = {viewer.id}
         for team in week.league.teams:
             member_ids = {m.user_id for m in team.members}
@@ -255,6 +260,12 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "sealed_pools_generated": week.sealed_pools_generated,
         "no_keycheat": week.no_keycheat,
         "thief_floor_team_id": thief_floor_team_id,
+        "alliance_restricted_list_version": (
+            serialize_restricted_list_version(week.alliance_restricted_list_version)
+            if getattr(week, "alliance_restricted_list_version_id", None)
+            and week.alliance_restricted_list_version
+            else None
+        ),
         "matchups": [
             serialize_week_matchup(
                 m, viewer=viewer, show_player_matchups=show_player_matchups
@@ -433,6 +444,12 @@ def serialize_standalone_match(match: StandaloneMatch, current_user_id=None) -> 
         ],
         "creator_pods": [serialize_alliance_selection(p) for p in creator_pods],
         "opponent_pods": [serialize_alliance_selection(p) for p in opponent_pods],
+        "alliance_restricted_list_version": (
+            serialize_restricted_list_version(match.alliance_restricted_list_version)
+            if getattr(match, "alliance_restricted_list_version_id", None)
+            and match.alliance_restricted_list_version
+            else None
+        ),
     }
 
 

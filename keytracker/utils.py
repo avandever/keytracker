@@ -143,6 +143,7 @@ MV_API_BASE = "https://www.keyforgegame.com/api/decks"
 
 DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 DOK_DECK_BASE = "https://decksofkeyforge.com/public-api/v3/decks"
+DOK_ALLIANCE_BASE = "https://decksofkeyforge.com/api/alliance-decks/with-synergies"
 LATEST_SAS_VERSION = 43
 SAS_MAX_AGE_DAYS = 60
 SAS_TD = datetime.timedelta(days=SAS_MAX_AGE_DAYS)
@@ -662,6 +663,82 @@ def add_card_to_deck(card_dict: Dict, deck: Deck):
         db.session.commit()
         db.session.refresh(card)
     deck.card_id_list.append(card.id)
+
+
+def parse_deck_url(url: str):
+    """
+    Extract deck UUID from a Master Vault or DoK URL, or accept a raw UUID.
+    Returns the UUID string, or None if not recognized.
+    """
+    import re
+
+    url = url.strip()
+    # keyforgegame.com deck-details or deck URL variants
+    m = re.search(r"keyforgegame\.com/(?:en-us/)?deck(?:-details)?/([a-f0-9-]+)", url)
+    if m:
+        return m.group(1)
+    m = re.search(r"decksofkeyforge\.com/decks/([a-f0-9-]+)", url)
+    if m:
+        return m.group(1)
+    m = re.match(
+        r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$", url
+    )
+    if m:
+        return url
+    return None
+
+
+def fetch_dok_alliance(uuid: str) -> dict:
+    """
+    Fetch a DoK alliance deck by UUID.  Returns structured pod data.
+
+    Returns dict:
+      {
+        "pods": [{"deck_id": int, "deck_name": str, "house": str}, ...],
+        "token_deck_id": int | None,
+        "prophecy_deck_id": int | None,
+        "valid_alliance": bool,
+      }
+    """
+    url = f"{DOK_ALLIANCE_BASE}/{uuid}"
+    response = requests.get(url, headers=DOK_HEADERS)
+    response.raise_for_status()
+    data = response.json()
+    deck_data = data.get("deck", {})
+    alliance_houses = deck_data.get("allianceHouses", [])
+    token_info = deck_data.get("tokenInfo") or {}
+    prophecies = deck_data.get("prophecies") or []
+    valid_alliance = bool(deck_data.get("validAlliance", False))
+
+    pods = []
+    for house_entry in alliance_houses:
+        kf_id = house_entry.get("keyforgeId")
+        house_name = house_entry.get("house")
+        if not kf_id or not house_name:
+            continue
+        deck = get_deck_by_id_with_zeal(kf_id)
+        pods.append(
+            {"deck_id": deck.id, "deck_name": deck.name, "house": house_name}
+        )
+
+    token_deck_id = None
+    if token_info and token_info.get("house"):
+        token_house = token_info["house"]
+        for pod in pods:
+            if pod["house"] == token_house:
+                token_deck_id = pod["deck_id"]
+                break
+
+    prophecy_deck_id = None
+    if prophecies and pods:
+        prophecy_deck_id = pods[0]["deck_id"]
+
+    return {
+        "pods": pods,
+        "token_deck_id": token_deck_id,
+        "prophecy_deck_id": prophecy_deck_id,
+        "valid_alliance": valid_alliance,
+    }
 
 
 def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> Deck:

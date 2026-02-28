@@ -1,6 +1,6 @@
 """
 Standalone (one-off) match routes.
-Supports: archon_standard, triad, sealed_archon, sealed_alliance.
+Supports: archon_standard, triad, sealed_archon, sealed_alliance, alliance.
 Thief format is NOT supported here and should remain so until explicitly requested
 (thief has team-based mechanics incompatible with 1v1 standalone play).
 
@@ -41,6 +41,7 @@ from keytracker.match_helpers import (
     validate_deck_for_standalone,
     generate_sealed_pools_for_standalone,
     validate_alliance_for_standalone,
+    validate_alliance_open,
     validate_strike_standalone,
     validate_and_record_game,
     validate_adaptive_bid,
@@ -53,6 +54,7 @@ standalone_bp = Blueprint(
 )
 
 SEALED_FORMATS = (WeekFormat.SEALED_ARCHON, WeekFormat.SEALED_ALLIANCE)
+ALLIANCE_FORMATS = (WeekFormat.SEALED_ALLIANCE, WeekFormat.ALLIANCE)
 
 
 def _parse_deck_url(url_str):
@@ -138,6 +140,28 @@ def create_match():
     if not isinstance(decks_per_player, int) or decks_per_player < 1:
         return jsonify({"error": "decks_per_player must be a positive integer"}), 400
 
+    # Alliance format: accept optional restricted list version
+    alliance_restricted_list_version_id = None
+    if format_type == WeekFormat.ALLIANCE:
+        from keytracker.schema import AllianceRestrictedListVersion
+
+        rl_id = data.get("alliance_restricted_list_version_id")
+        if rl_id is not None:
+            rl_version = db.session.get(AllianceRestrictedListVersion, rl_id)
+            if not rl_version:
+                return (
+                    jsonify({"error": "Alliance restricted list version not found"}),
+                    400,
+                )
+            alliance_restricted_list_version_id = rl_id
+        else:
+            # Default to latest version if any exist
+            latest = AllianceRestrictedListVersion.query.order_by(
+                AllianceRestrictedListVersion.version.desc()
+            ).first()
+            if latest:
+                alliance_restricted_list_version_id = latest.id
+
     match = StandaloneMatch(
         uuid=str(uuid_module.uuid4()),
         creator_id=current_user.id,
@@ -153,6 +177,7 @@ def create_match():
         decks_per_player=decks_per_player,
         sealed_pools_generated=False,
         allowed_sets=allowed_sets,
+        alliance_restricted_list_version_id=alliance_restricted_list_version_id,
     )
     db.session.add(match)
     db.session.commit()
@@ -228,7 +253,7 @@ def join_match(match_id):
     match.opponent_id = user.id
     match.status = StandaloneMatchStatus.DECK_SELECTION
 
-    # For sealed formats, auto-generate sealed pools
+    # For sealed formats, auto-generate sealed pools (Alliance does not use sealed pools)
     if match.format_type in SEALED_FORMATS:
         errors = generate_sealed_pools_for_standalone(match, match.creator_id, user.id)
         if errors:
@@ -289,9 +314,11 @@ def submit_deck_selection(match_id):
     if match.status != StandaloneMatchStatus.DECK_SELECTION:
         return jsonify({"error": "Deck selection is not open"}), 400
 
-    if match.format_type == WeekFormat.SEALED_ALLIANCE:
+    if match.format_type in ALLIANCE_FORMATS:
         return (
-            jsonify({"error": "Sealed Alliance uses /alliance-selection endpoint"}),
+            jsonify(
+                {"error": "Alliance formats use /alliance-selection endpoint"}
+            ),
             400,
         )
 
@@ -405,13 +432,13 @@ def remove_deck_selection(match_id):
 
 @standalone_bp.route("/<int:match_id>/alliance-selection", methods=["POST"])
 def submit_alliance_selection(match_id):
-    """Submit alliance pod selection (Sealed Alliance only)."""
+    """Submit alliance pod selection (Sealed Alliance or Alliance format)."""
     match, err = _get_match_or_404(match_id)
     if err:
         return err
 
-    if match.format_type != WeekFormat.SEALED_ALLIANCE:
-        return jsonify({"error": "Only for Sealed Alliance format"}), 400
+    if match.format_type not in ALLIANCE_FORMATS:
+        return jsonify({"error": "Only for Alliance formats"}), 400
     if match.status != StandaloneMatchStatus.DECK_SELECTION:
         return jsonify({"error": "Alliance selection is not open"}), 400
 
@@ -424,17 +451,34 @@ def submit_alliance_selection(match_id):
     token_deck_id = data.get("token_deck_id")
     prophecy_deck_id = data.get("prophecy_deck_id")
 
-    errors = validate_alliance_for_standalone(
-        match, user.id, pods, token_deck_id, prophecy_deck_id
-    )
+    if match.format_type == WeekFormat.ALLIANCE:
+        errors = validate_alliance_open(
+            match, user.id, pods, token_deck_id, prophecy_deck_id
+        )
+    else:
+        errors = validate_alliance_for_standalone(
+            match, user.id, pods, token_deck_id, prophecy_deck_id
+        )
     if errors:
         return jsonify({"error": errors[0]}), 400
 
-    allowed_sets = set(match.allowed_sets) if match.allowed_sets else set()
     from keytracker.schema import TOKEN_EXPANSION_IDS, PROPHECY_EXPANSION_ID
 
-    needs_token = bool(allowed_sets & TOKEN_EXPANSION_IDS)
-    needs_prophecy = PROPHECY_EXPANSION_ID in allowed_sets
+    if match.format_type == WeekFormat.ALLIANCE:
+        # For open Alliance, derive token/prophecy needs from actual pod expansions
+        from keytracker.schema import Deck as _Deck
+
+        pod_expansions = set()
+        for pod in pods:
+            d = db.session.get(_Deck, pod.get("deck_id"))
+            if d:
+                pod_expansions.add(d.expansion)
+        needs_token = bool(pod_expansions & TOKEN_EXPANSION_IDS)
+        needs_prophecy = PROPHECY_EXPANSION_ID in pod_expansions
+    else:
+        allowed_sets = set(match.allowed_sets) if match.allowed_sets else set()
+        needs_token = bool(allowed_sets & TOKEN_EXPANSION_IDS)
+        needs_prophecy = PROPHECY_EXPANSION_ID in allowed_sets
 
     # Replace existing selections
     AlliancePodSelection.query.filter_by(
@@ -491,8 +535,8 @@ def clear_alliance_selection(match_id):
     if err:
         return err
 
-    if match.format_type != WeekFormat.SEALED_ALLIANCE:
-        return jsonify({"error": "Only for Sealed Alliance format"}), 400
+    if match.format_type not in ALLIANCE_FORMATS:
+        return jsonify({"error": "Only for Alliance formats"}), 400
 
     user = _current_user_or_guest()
     if user is None or user.id not in (match.creator_id, match.opponent_id):

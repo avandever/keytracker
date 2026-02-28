@@ -24,6 +24,8 @@ from keytracker.schema import (
     PlayerDeckSelection,
     SealedPoolDeck,
     AlliancePodSelection,
+    AllianceRestrictedListVersion,
+    AllianceRestrictedEntry,
     PodStats,
     WeekFormat,
     TOKEN_EXPANSION_IDS,
@@ -251,6 +253,143 @@ def validate_alliance_for_standalone(
             return ["prophecy_deck_id is required for Prophetic Visions"]
         if prophecy_deck_id not in pod_deck_ids:
             return ["prophecy_deck_id must be one of the 3 pod decks"]
+
+    return []
+
+
+def get_deck_platonic_card_ids(deck) -> list:
+    """Return a list of platonic_card_id values (with duplicates) from a deck's cards."""
+    return [cid.platonic_card_id for cid in deck.cards_from_assoc if cid.platonic_card_id]
+
+
+def validate_alliance_open(match_or_week, user_id, pods, token_deck_id, prophecy_deck_id):
+    """
+    Validate open Alliance pod selection (not sealed — players choose any decks).
+
+    match_or_week: StandaloneMatch or LeagueWeek instance
+    user_id: int
+    pods: list of {"deck_id": int, "house": str}
+    token_deck_id: int or None
+    prophecy_deck_id: int or None
+
+    Returns list of error strings (empty = valid).
+    """
+    if not isinstance(pods, list) or len(pods) != 3:
+        return ["Exactly 3 pods are required"]
+
+    pod_deck_ids = []
+    pod_expansions = []
+    houses = []
+    for i, pod in enumerate(pods):
+        deck_id = pod.get("deck_id")
+        house = pod.get("house", "")
+        if not deck_id or not house:
+            return [f"Pod {i + 1} requires deck_id and house"]
+
+        deck = db.session.get(Deck, deck_id)
+        if not deck:
+            return [f"Pod {i + 1}: deck not found"]
+
+        valid_house = (
+            PodStats.query.filter_by(deck_id=deck_id)
+            .filter(PodStats.house == house)
+            .first()
+        )
+        if not valid_house:
+            return [f"Pod {i + 1}: {house} is not a house of the selected deck"]
+
+        pod_deck_ids.append(deck_id)
+        pod_expansions.append(deck.expansion)
+        houses.append(house)
+
+    if len(set(houses)) != 3:
+        return ["All 3 pods must have unique houses"]
+
+    # All 3 pods must be from the same set
+    if len(set(pod_expansions)) != 1:
+        return ["All 3 pods must be from the same set"]
+
+    common_expansion = pod_expansions[0]
+
+    # If allowed_sets is set on match/week, common expansion must be in it
+    allowed_sets = getattr(match_or_week, "allowed_sets", None)
+    if allowed_sets:
+        if isinstance(allowed_sets, str):
+            import json as _json
+
+            try:
+                allowed_sets = _json.loads(allowed_sets)
+            except Exception:
+                allowed_sets = []
+        if common_expansion not in allowed_sets:
+            from keytracker.schema import KeyforgeSet
+
+            kf_set = db.session.get(KeyforgeSet, common_expansion)
+            set_name = kf_set.name if kf_set else str(common_expansion)
+            return [f"Pods from {set_name} are not allowed in this match/week"]
+
+    # Token/prophecy: derive from actual deck expansions
+    pod_expansion_set = set(pod_expansions)
+    needs_token = bool(pod_expansion_set & TOKEN_EXPANSION_IDS)
+    needs_prophecy = PROPHECY_EXPANSION_ID in pod_expansion_set
+
+    if needs_token:
+        if not token_deck_id:
+            return ["token_deck_id is required for the selected pod sets"]
+        if token_deck_id not in pod_deck_ids:
+            return ["token_deck_id must be one of the 3 pod decks"]
+
+    if needs_prophecy:
+        if not prophecy_deck_id:
+            return ["prophecy_deck_id is required for Prophetic Visions pods"]
+        if prophecy_deck_id not in pod_deck_ids:
+            return ["prophecy_deck_id must be one of the 3 pod decks"]
+
+    # Restricted list check — skip if all 3 pod decks are the same physical deck
+    if len(set(pod_deck_ids)) > 1:
+        rl_version_id = getattr(match_or_week, "alliance_restricted_list_version_id", None)
+        if rl_version_id:
+            rl_version = db.session.get(AllianceRestrictedListVersion, rl_version_id)
+        else:
+            rl_version = (
+                AllianceRestrictedListVersion.query.order_by(
+                    AllianceRestrictedListVersion.version.desc()
+                ).first()
+            )
+
+        if rl_version and rl_version.entries:
+            # Collect all platonic card ids from all pod decks (with duplicates)
+            all_card_ids = []
+            for deck_id in pod_deck_ids:
+                deck = db.session.get(Deck, deck_id)
+                if deck:
+                    all_card_ids.extend(get_deck_platonic_card_ids(deck))
+
+            # Count restricted entries present
+            restricted_entries_found = 0
+            for entry in rl_version.entries:
+                count = all_card_ids.count(entry.platonic_card_id)
+                if count > 0:
+                    restricted_entries_found += 1
+                    if (
+                        entry.max_copies_per_alliance is not None
+                        and count > entry.max_copies_per_alliance
+                    ):
+                        card_name = (
+                            entry.platonic_card.card_title
+                            if entry.platonic_card
+                            else f"card #{entry.platonic_card_id}"
+                        )
+                        return [
+                            f"Alliance Restricted List: {card_name} appears {count} times "
+                            f"(max {entry.max_copies_per_alliance})"
+                        ]
+
+            if restricted_entries_found > 1:
+                return [
+                    "Alliance Restricted List: alliance may only contain cards from at most "
+                    "1 restricted list entry"
+                ]
 
     return []
 

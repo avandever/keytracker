@@ -832,6 +832,7 @@ class WeekFormat(PyEnum):
     SEALED_ALLIANCE = "sealed_alliance"
     THIEF = "thief"
     ADAPTIVE = "adaptive"
+    ALLIANCE = "alliance"
 
 
 class WeekStatus(PyEnum):
@@ -999,8 +1000,14 @@ class LeagueWeek(db.Model):
         db.Integer, nullable=True
     )  # team that steals floor(N/2)
     no_keycheat = db.Column(db.Boolean, nullable=False, default=False)
+    alliance_restricted_list_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey("alliance_restricted_list_version.id"),
+        nullable=True,
+    )
 
     league = db.relationship("League", backref="weeks")
+    alliance_restricted_list_version = db.relationship("AllianceRestrictedListVersion", foreign_keys=[alliance_restricted_list_version_id])
     matchups = db.relationship(
         "WeekMatchup", back_populates="week", cascade="all, delete-orphan"
     )
@@ -1054,6 +1061,15 @@ class StandaloneMatch(db.Model):
     sealed_pools_generated = db.Column(db.Boolean, nullable=False, default=False)
     allowed_sets = db.Column(db.JSON, nullable=True)
     no_keycheat = db.Column(db.Boolean, nullable=False, default=False)
+    alliance_restricted_list_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey("alliance_restricted_list_version.id"),
+        nullable=True,
+    )
+    alliance_restricted_list_version = db.relationship(
+        "AllianceRestrictedListVersion",
+        foreign_keys=[alliance_restricted_list_version_id],
+    )
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     creator = db.relationship("User", foreign_keys=[creator_id])
@@ -1250,6 +1266,31 @@ class AlliancePodSelection(db.Model):
     standalone_match = db.relationship(
         "StandaloneMatch", back_populates="alliance_selections"
     )
+
+
+class AllianceRestrictedListVersion(db.Model):
+    __tablename__ = "alliance_restricted_list_version"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    version = db.Column(db.Float, nullable=False, unique=True)
+    entries = db.relationship("AllianceRestrictedEntry", back_populates="list_version")
+
+
+class AllianceRestrictedEntry(db.Model):
+    __tablename__ = "alliance_restricted_entry"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    list_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey("alliance_restricted_list_version.id"),
+        nullable=False,
+    )
+    platonic_card_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_platonic_card.id"), nullable=False
+    )
+    max_copies_per_alliance = db.Column(db.Integer, nullable=True)
+    list_version = db.relationship(
+        "AllianceRestrictedListVersion", back_populates="entries"
+    )
+    platonic_card = db.relationship("PlatonicCard")
 
 
 class ThiefCurationDeck(db.Model):

@@ -35,6 +35,7 @@ const FORMAT_LABELS: Record<string, string> = {
   sealed_archon: 'Sealed Archon',
   sealed_alliance: 'Sealed Alliance',
   adaptive: 'Adaptive',
+  alliance: 'Alliance',
 };
 
 export default function StandaloneMatchesPage() {
@@ -163,6 +164,7 @@ export default function StandaloneMatchesPage() {
               <MenuItem value="sealed_archon">Sealed Archon</MenuItem>
               <MenuItem value="sealed_alliance">Sealed Alliance</MenuItem>
               <MenuItem value="adaptive">Adaptive</MenuItem>
+              <MenuItem value="alliance">Alliance</MenuItem>
             </Select>
           </FormControl>
 

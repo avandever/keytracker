@@ -12,6 +12,7 @@ import type {
   MatchGameInfo,
   KeyforgeSetInfo,
   AlliancePodSelectionInfo,
+  AllianceRestrictedListVersion,
   AdminLogEntry,
   CompletedMatchDecks,
 } from '../types';
@@ -317,6 +318,13 @@ export async function getSealedPool(
 ): Promise<SealedPoolEntry[]> {
   const params = userId ? `?user_id=${userId}` : '';
   const { data } = await apiClient.get(`/leagues/${leagueId}/weeks/${weekId}/sealed-pool${params}`);
+  return data;
+}
+
+// --- Alliance Restricted List ---
+
+export async function getRestrictedListVersions(): Promise<AllianceRestrictedListVersion[]> {
+  const { data } = await apiClient.get('/alliance-restricted-list-versions');
   return data;
 }
 

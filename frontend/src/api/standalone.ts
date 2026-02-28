@@ -1,6 +1,37 @@
 import apiClient from './client';
-import type { StandaloneMatch, MatchGameInfo, DeckSelectionInfo, AlliancePodSelectionInfo } from '../types';
+import type { StandaloneMatch, MatchGameInfo, DeckSelectionInfo, AlliancePodSelectionInfo, AllianceRestrictedListVersion } from '../types';
 import type { SealedPoolEntry } from './leagues';
+
+export interface DeckImportResult {
+  id: number;
+  kf_id: string;
+  name: string;
+  expansion: number;
+  houses: string[];
+  sas_rating: number | null;
+}
+
+export interface DokAllianceImportResult {
+  pods: { deck_id: number; deck_name: string; house: string }[];
+  token_deck_id: number | null;
+  prophecy_deck_id: number | null;
+  valid_alliance: boolean;
+}
+
+export async function importDeckByUrl(url: string): Promise<DeckImportResult> {
+  const { data } = await apiClient.post('/decks/import', { url });
+  return data;
+}
+
+export async function importDokAlliance(url: string): Promise<DokAllianceImportResult> {
+  const { data } = await apiClient.post('/dok-alliance/import', { url });
+  return data;
+}
+
+export async function getRestrictedListVersions(): Promise<AllianceRestrictedListVersion[]> {
+  const { data } = await apiClient.get('/alliance-restricted-list-versions');
+  return data;
+}
 
 export async function createStandaloneMatch(payload: {
   format_type: string;

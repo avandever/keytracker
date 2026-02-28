@@ -48,6 +48,7 @@ import {
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
+import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
 import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
 import type { SealedPoolEntry } from '../api/leagues';
@@ -58,6 +59,7 @@ const FORMAT_LABELS: Record<string, string> = {
   sealed_archon: 'Sealed Archon',
   sealed_alliance: 'Sealed Alliance',
   thief: 'Thief',
+  alliance: 'Alliance',
 };
 
 const TOKEN_SETS = new Set([855, 600]);
@@ -102,6 +104,11 @@ export default function MyTeamPage() {
   const [alliancePods, setAlliancePods] = useState<Record<string, string[]>>({});
   const [allianceTokenIds, setAllianceTokenIds] = useState<Record<string, number>>({});
   const [allianceProphecyIds, setAllianceProphecyIds] = useState<Record<string, number>>({});
+
+  // Open Alliance: pod selections keyed by `${weekId}-${userId}` -> PodEntry[]
+  const [openAlliancePods, setOpenAlliancePods] = useState<Record<string, PodEntry[]>>({});
+  const [openAllianceTokenIds, setOpenAllianceTokenIds] = useState<Record<string, number | null>>({});
+  const [openAllianceProphecyIds, setOpenAllianceProphecyIds] = useState<Record<string, number | null>>({});
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -528,6 +535,31 @@ export default function MyTeamPage() {
       setAlliancePods((prev) => ({ ...prev, [key]: ['', '', ''] }));
       setAllianceTokenIds((prev) => ({ ...prev, [key]: 0 }));
       setAllianceProphecyIds((prev) => ({ ...prev, [key]: 0 }));
+      setSuccess('Alliance selection submitted!');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleSubmitOpenAlliance = async (weekId: number, userId: number) => {
+    const key = `${weekId}-${userId}`;
+    const pods = openAlliancePods[key] || [];
+    if (pods.length < 3) {
+      setError('All 3 pods must be filled before submitting');
+      return;
+    }
+    setError('');
+    setSuccess('');
+    try {
+      const payload: Parameters<typeof submitAllianceSelection>[2] = { pods };
+      const tok = openAllianceTokenIds[key];
+      if (tok) payload.token_deck_id = tok;
+      const proph = openAllianceProphecyIds[key];
+      if (proph) payload.prophecy_deck_id = proph;
+      if (userId !== user!.id) payload.user_id = userId;
+      await submitAllianceSelection(league.id, weekId, payload);
+      setOpenAlliancePods((prev) => ({ ...prev, [key]: [] }));
       setSuccess('Alliance selection submitted!');
       refresh();
     } catch (e: any) {
@@ -990,8 +1022,67 @@ export default function MyTeamPage() {
                   );
                 })()}
 
-                {/* Render all slots (not for sealed_alliance or thief curation/steal phases) */}
-                {week.format_type !== 'sealed_alliance' &&
+                {/* Open Alliance: pod selection using AlliancePodBuilder */}
+                {week.format_type === 'alliance' && canEditMember && (() => {
+                  const podKey = `${week.id}-${m.user.id}`;
+                  const memberSelections = (week.alliance_selections || []).filter((s) => s.user_id === m.user.id);
+                  const podSelections = memberSelections.filter((s) => s.slot_type === 'pod');
+
+                  if (podSelections.length === 3) {
+                    // Already submitted — show existing with clear button
+                    return (
+                      <Box sx={{ ml: 4, mb: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Current Alliance:</Typography>
+                        {podSelections.sort((a, b) => a.slot_number - b.slot_number).map((s) => (
+                          <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                            <Chip label={`Pod ${s.slot_number}`} size="small" variant="outlined" />
+                            <Typography variant="body2">{s.deck_name || `Deck ${s.deck_id}`} — {s.house_name}</Typography>
+                          </Box>
+                        ))}
+                        <Button size="small" color="error" onClick={() => handleClearAllianceTeam(week.id, m.user.id)}>
+                          Clear Selection
+                        </Button>
+                      </Box>
+                    );
+                  }
+
+                  return (
+                    <Box sx={{ ml: 4, mb: 1 }}>
+                      <Typography variant="caption" color="text.secondary">Forge Alliance:</Typography>
+                      {week.alliance_restricted_list_version && (
+                        <Chip
+                          label={`Restricted List v${week.alliance_restricted_list_version.version}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ ml: 1 }}
+                        />
+                      )}
+                      <Box sx={{ mt: 0.5 }}>
+                        <AlliancePodBuilder
+                          allowedSets={week.allowed_sets}
+                          existingPods={memberSelections}
+                          onPodsChange={(pods, tok, proph) => {
+                            setOpenAlliancePods((prev) => ({ ...prev, [podKey]: pods }));
+                            setOpenAllianceTokenIds((prev) => ({ ...prev, [podKey]: tok }));
+                            setOpenAllianceProphecyIds((prev) => ({ ...prev, [podKey]: proph }));
+                          }}
+                        />
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        sx={{ mt: 1 }}
+                        onClick={() => handleSubmitOpenAlliance(week.id, m.user.id)}
+                        disabled={(openAlliancePods[podKey] || []).length < 3}
+                      >
+                        Forge Alliance
+                      </Button>
+                    </Box>
+                  );
+                })()}
+
+                {/* Render all slots (not for sealed_alliance/alliance or thief curation/steal phases) */}
+                {week.format_type !== 'sealed_alliance' && week.format_type !== 'alliance' &&
                   !(week.format_type === 'thief' && (week.status === 'curation' || week.status === 'team_paired' || week.status === 'thief')) &&
                   Array.from({ length: maxSlots }, (_, i) => i + 1).map((slotNum) => {
                   const sel = selections.find((s) => s.slot_number === slotNum);
@@ -1066,7 +1157,7 @@ export default function MyTeamPage() {
                     {wm.player_matchups.map((pm) => {
                       const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
                       const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
-                      const showPods = week.format_type === 'sealed_alliance' &&
+                      const showPods = (week.format_type === 'sealed_alliance' || week.format_type === 'alliance') &&
                         (week.status === 'published' || week.status === 'completed') &&
                         pm.player1_started && pm.player2_started;
                       return (

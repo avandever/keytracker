@@ -31,6 +31,8 @@ from keytracker.utils import (
     house_stats_to_csv,
     log_to_game,
     parse_house_stats,
+    parse_deck_url,
+    fetch_dok_alliance,
     turn_counts_from_logs,
     username_to_player,
     anonymize_game_for_player,
@@ -483,3 +485,78 @@ def admin_toggle_free_membership(user_id):
     user.free_membership = not user.free_membership
     db.session.commit()
     return jsonify({"success": True, "free_membership": user.free_membership}), 200
+
+
+@blueprint.route("/alliance-restricted-list-versions", methods=["GET"])
+def get_alliance_restricted_list_versions():
+    """Return all Alliance Restricted List versions ordered by version descending."""
+    from keytracker.schema import AllianceRestrictedListVersion
+
+    versions = AllianceRestrictedListVersion.query.order_by(
+        AllianceRestrictedListVersion.version.desc()
+    ).all()
+    return jsonify([{"id": v.id, "version": v.version} for v in versions])
+
+
+@blueprint.route("/decks/import", methods=["POST"])
+@login_required
+def import_deck_by_url():
+    """Import a deck by URL or UUID and return its summary."""
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "url is required"}), 400
+
+    kf_id = parse_deck_url(url)
+    if not kf_id:
+        return jsonify({"error": "Could not parse deck ID from URL"}), 400
+
+    try:
+        deck = get_deck_by_id_with_zeal(kf_id)
+    except Exception as e:
+        current_app.logger.error("Failed to import deck %s: %s", kf_id, e)
+        return jsonify({"error": f"Failed to fetch deck: {str(e)}"}), 400
+
+    houses = [ps.house for ps in deck.pod_stats if ps.house != "Archon Power"]
+    return jsonify(
+        {
+            "id": deck.id,
+            "kf_id": deck.kf_id,
+            "name": deck.name,
+            "expansion": deck.expansion,
+            "houses": houses,
+            "sas_rating": deck.sas_rating,
+        }
+    )
+
+
+@blueprint.route("/dok-alliance/import", methods=["POST"])
+@login_required
+def import_dok_alliance():
+    """Import a DoK alliance deck and return pod data."""
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    if not url:
+        return jsonify({"error": "url is required"}), 400
+
+    import re
+
+    m = re.search(r"alliance-decks/([a-f0-9-]+)", url)
+    if not m:
+        # Try treating as raw UUID
+        m2 = re.match(
+            r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$", url
+        )
+        if not m2:
+            return jsonify({"error": "Could not parse alliance deck UUID from URL"}), 400
+        uuid_str = url
+    else:
+        uuid_str = m.group(1)
+
+    try:
+        result = fetch_dok_alliance(uuid_str)
+    except Exception as e:
+        current_app.logger.error("Failed to import DoK alliance %s: %s", uuid_str, e)
+        return jsonify({"error": f"Failed to fetch alliance deck: {str(e)}"}), 400
+
+    return jsonify(result)

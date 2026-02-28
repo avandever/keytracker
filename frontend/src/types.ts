@@ -264,6 +264,7 @@ export interface LeagueWeek {
   alliance_selections?: AlliancePodSelectionInfo[];
   thief_curation_decks?: ThiefCurationDeckInfo[];
   thief_steals?: ThiefStealInfo[];
+  alliance_restricted_list_version?: AllianceRestrictedListVersion | null;
 }
 
 export interface WeekMatchup {
@@ -319,6 +320,13 @@ export interface StrikeInfo {
   struck_deck_selection_id: number;
 }
 
+// --- Alliance Restricted List ---
+
+export interface AllianceRestrictedListVersion {
+  id: number;
+  version: number;
+}
+
 // --- Standalone Match types ---
 
 export type StandaloneMatchStatus = 'setup' | 'deck_selection' | 'published' | 'completed';
@@ -346,6 +354,7 @@ export interface StandaloneMatch {
   opponent_selections: DeckSelectionInfo[];
   creator_pods: AlliancePodSelectionInfo[];
   opponent_pods: AlliancePodSelectionInfo[];
+  alliance_restricted_list_version: AllianceRestrictedListVersion | null;
 }
 
 export interface AdminLogEntry {

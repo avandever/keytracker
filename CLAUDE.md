@@ -47,6 +47,16 @@ docker run -d --name keytracker \
   keytracker
 ```
 
+### Alliance Restricted List Population
+
+To add cards to the Alliance Restricted List (run from project root):
+```bash
+python keytracker/scripts/add_alliance_restricted_card.py --version 2.5 --card-name "Reiteration"
+python keytracker/scripts/add_alliance_restricted_card.py --version 2.5 --card-name "Key Abduction" --max-copies 1
+```
+Reads `DATABASE_URL` from `.env`. Creates the version automatically if it doesn't exist.
+See `keytracker/scripts/ALLIANCE_RESTRICTED_LIST.md` for full documentation.
+
 ### No test suite exists in this project.
 
 ## Architecture

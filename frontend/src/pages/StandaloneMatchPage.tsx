@@ -37,6 +37,7 @@ import {
 import { getSets } from '../api/leagues';
 import WeekConstraints from '../components/WeekConstraints';
 import HouseIcons from '../components/HouseIcons';
+import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
 import type {
   StandaloneMatch,
@@ -52,6 +53,7 @@ const FORMAT_LABELS: Record<string, string> = {
   sealed_archon: 'Sealed Archon',
   sealed_alliance: 'Sealed Alliance',
   adaptive: 'Adaptive',
+  alliance: 'Alliance',
 };
 
 const TOKEN_SETS = new Set([855, 600]);
@@ -76,10 +78,15 @@ export default function StandaloneMatchPage() {
   const [submitting, setSubmitting] = useState(false);
   const [sealedDeckId, setSealedDeckId] = useState<number | ''>('');
 
-  // Alliance selection state
+  // Sealed Alliance selection state
   const [alliancePods, setAlliancePods] = useState<string[]>(['', '', '']);
   const [allianceTokenDeckId, setAllianceTokenDeckId] = useState(0);
   const [allianceProphecyDeckId, setAllianceProphecyDeckId] = useState(0);
+
+  // Open Alliance selection state (AlliancePodBuilder)
+  const [openAlliancePods, setOpenAlliancePods] = useState<PodEntry[]>([]);
+  const [openAllianceTokenId, setOpenAllianceTokenId] = useState<number | null>(null);
+  const [openAllianceProphecyId, setOpenAllianceProphecyId] = useState<number | null>(null);
 
   // Strike state
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
@@ -222,7 +229,9 @@ export default function StandaloneMatchPage() {
 
   const isSealed = match.format_type === 'sealed_archon' || match.format_type === 'sealed_alliance';
   const isTriad = match.format_type === 'triad';
-  const isAlliance = match.format_type === 'sealed_alliance';
+  const isSealedAlliance = match.format_type === 'sealed_alliance';
+  const isOpenAlliance = match.format_type === 'alliance';
+  const isAlliance = isSealedAlliance || isOpenAlliance;
   const isAdaptive = match.format_type === 'adaptive';
 
   const allowedSetsSet = new Set(match.allowed_sets || []);
@@ -278,6 +287,26 @@ export default function StandaloneMatchPage() {
       const payload: Parameters<typeof submitStandaloneAllianceSelection>[1] = { pods };
       if (needsToken && allianceTokenDeckId) payload.token_deck_id = allianceTokenDeckId;
       if (needsProphecy && allianceProphecyDeckId) payload.prophecy_deck_id = allianceProphecyDeckId;
+      await submitStandaloneAllianceSelection(id, payload);
+      await refresh();
+      setSuccess('Alliance submitted!');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err.response?.data?.error || 'Failed to submit alliance');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOpenAllianceSubmit = async () => {
+    setSubmitting(true);
+    setError('');
+    try {
+      const payload: Parameters<typeof submitStandaloneAllianceSelection>[1] = {
+        pods: openAlliancePods,
+      };
+      if (openAllianceTokenId) payload.token_deck_id = openAllianceTokenId;
+      if (openAllianceProphecyId) payload.prophecy_deck_id = openAllianceProphecyId;
       await submitStandaloneAllianceSelection(id, payload);
       await refresh();
       setSuccess('Alliance submitted!');
@@ -454,8 +483,51 @@ export default function StandaloneMatchPage() {
           <CardContent>
             <Typography variant="h6" gutterBottom>Deck Selection</Typography>
 
+            {/* Open Alliance: free pod selection */}
+            {isOpenAlliance && (
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>Forge Your Alliance</Typography>
+                {match.alliance_restricted_list_version && (
+                  <Chip
+                    label={`Restricted List v${match.alliance_restricted_list_version.version}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{ mb: 1 }}
+                  />
+                )}
+                <AlliancePodBuilder
+                  allowedSets={match.allowed_sets}
+                  existingPods={isParticipant && user?.id === match.creator.id ? match.creator_pods : match.opponent_pods}
+                  onPodsChange={(pods, tok, proph) => {
+                    setOpenAlliancePods(pods);
+                    setOpenAllianceTokenId(tok);
+                    setOpenAllianceProphecyId(proph);
+                  }}
+                  disabled={submitting}
+                />
+                <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="contained"
+                    onClick={handleOpenAllianceSubmit}
+                    disabled={submitting || openAlliancePods.length < 3}
+                  >
+                    Submit Alliance
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    onClick={async () => {
+                      await clearStandaloneAllianceSelection(id);
+                      await refresh();
+                    }}
+                  >
+                    Clear
+                  </Button>
+                </Box>
+              </Box>
+            )}
+
             {/* Sealed Alliance: pod selection */}
-            {isAlliance && (
+            {isSealedAlliance && (
               <Box>
                 <Typography variant="subtitle2" gutterBottom>Sealed Pool</Typography>
                 {sealedPool.map((entry) => (

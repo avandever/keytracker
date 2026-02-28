@@ -60,6 +60,7 @@ import {
   regeneratePlayerMatchups,
   editMatchup,
   regenerateSealedPools,
+  getRestrictedListVersions,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -71,6 +72,7 @@ const FORMAT_LABELS: Record<string, string> = {
   sealed_archon: 'Sealed Archon',
   sealed_alliance: 'Sealed Alliance',
   thief: 'Thief',
+  alliance: 'Alliance',
 };
 
 const STATUS_COLORS: Record<string, 'default' | 'info' | 'warning' | 'success'> = {
@@ -130,6 +132,9 @@ export default function LeagueAdminPage() {
   const [weekDecksPerPlayer, setWeekDecksPerPlayer] = useState('4');
   const [weekNoKeycheat, setWeekNoKeycheat] = useState(false);
   const [availableSets, setAvailableSets] = useState<KeyforgeSetInfo[]>([]);
+  // Alliance-specific
+  const [weekAllianceRlVersionId, setWeekAllianceRlVersionId] = useState<number | ''>('');
+  const [availableRlVersions, setAvailableRlVersions] = useState<{ id: number; version: number }[]>([]);
 
   // Week expanded
   const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({});
@@ -177,6 +182,7 @@ export default function LeagueAdminPage() {
 
   useEffect(() => {
     getSets().then(setAvailableSets).catch(() => {});
+    getRestrictedListVersions().then(setAvailableRlVersions).catch(() => {});
   }, []);
 
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
@@ -297,6 +303,7 @@ export default function LeagueAdminPage() {
     setWeekHouseDiversity(false);
     setWeekDecksPerPlayer('4');
     setWeekNoKeycheat(false);
+    setWeekAllianceRlVersionId('');
     setEditingWeekId(null);
   };
 
@@ -311,6 +318,7 @@ export default function LeagueAdminPage() {
     setWeekHouseDiversity(week.house_diversity || false);
     setWeekDecksPerPlayer(week.decks_per_player != null ? String(week.decks_per_player) : '4');
     setWeekNoKeycheat(week.no_keycheat || false);
+    setWeekAllianceRlVersionId(week.alliance_restricted_list_version?.id ?? '');
     setEditingWeekId(week.id);
     setWeekDialogOpen(true);
   };
@@ -332,6 +340,7 @@ export default function LeagueAdminPage() {
       house_diversity: weekHouseDiversity || false,
       decks_per_player: (weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance') ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
       no_keycheat: weekNoKeycheat,
+      alliance_restricted_list_version_id: weekFormat === 'alliance' && weekAllianceRlVersionId !== '' ? weekAllianceRlVersionId : null,
     };
     try {
       if (editingWeekId !== null) {
@@ -1031,11 +1040,13 @@ export default function LeagueAdminPage() {
                 const fmt = e.target.value;
                 setWeekFormat(fmt);
                 if (fmt === 'triad') setWeekBestOf('3');
+                else if (fmt === 'alliance') setWeekBestOf('1');
               }}>
                 <MenuItem value="archon_standard">Archon Standard</MenuItem>
                 <MenuItem value="triad">Triad</MenuItem>
                 <MenuItem value="sealed_archon">Sealed Archon</MenuItem>
                 <MenuItem value="sealed_alliance">Sealed Alliance</MenuItem>
+                <MenuItem value="alliance">Alliance</MenuItem>
                 <MenuItem value="thief">Thief</MenuItem>
               </Select>
               {editingWeekId !== null && (
@@ -1137,6 +1148,21 @@ export default function LeagueAdminPage() {
               }
               label="No Keycheat (disallow decks with 'Forge a key' or 'Take another turn' cards)"
             />
+            {weekFormat === 'alliance' && availableRlVersions.length > 0 && (
+              <FormControl fullWidth>
+                <InputLabel>Alliance Restricted List Version</InputLabel>
+                <Select
+                  value={weekAllianceRlVersionId}
+                  label="Alliance Restricted List Version"
+                  onChange={(e) => setWeekAllianceRlVersionId(e.target.value as number | '')}
+                >
+                  <MenuItem value=""><em>Latest version</em></MenuItem>
+                  {availableRlVersions.map((v) => (
+                    <MenuItem key={v.id} value={v.id}>v{v.version}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>
