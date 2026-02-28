@@ -3555,6 +3555,7 @@ def completed_match_decks(league_id, week_id):
         return jsonify({"error": "Week not found"}), 404
 
     wins_needed = math.ceil(week.best_of_n / 2)
+    is_alliance = week.format_type == WeekFormat.SEALED_ALLIANCE.value
     result = {}
 
     for wm in week.matchups:
@@ -3564,28 +3565,56 @@ def completed_match_decks(league_id, week_id):
             if p1_wins < wins_needed and p2_wins < wins_needed:
                 continue  # not complete
 
-            p1_sels = (
-                PlayerDeckSelection.query.filter_by(
-                    week_id=week.id, user_id=pm.player1_id
-                )
-                .order_by(PlayerDeckSelection.slot_number)
-                .all()
-            )
-            p2_sels = (
-                PlayerDeckSelection.query.filter_by(
-                    week_id=week.id, user_id=pm.player2_id
-                )
-                .order_by(PlayerDeckSelection.slot_number)
-                .all()
-            )
+            if is_alliance:
 
-            result[str(pm.id)] = {
-                "player1_decks": [
-                    serialize_deck_brief(s.deck) for s in p1_sels if s.deck
-                ],
-                "player2_decks": [
-                    serialize_deck_brief(s.deck) for s in p2_sels if s.deck
-                ],
-            }
+                def _pods_for(user_id):
+                    sels = (
+                        AlliancePodSelection.query.filter_by(
+                            week_id=week.id, user_id=user_id
+                        )
+                        .order_by(
+                            AlliancePodSelection.slot_type,
+                            AlliancePodSelection.slot_number,
+                        )
+                        .all()
+                    )
+                    return [
+                        {
+                            "deck": serialize_deck_brief(s.deck) if s.deck else None,
+                            "house_name": s.house_name,
+                            "slot_type": s.slot_type,
+                            "slot_number": s.slot_number,
+                        }
+                        for s in sels
+                        if s.deck
+                    ]
+
+                result[str(pm.id)] = {
+                    "player1_pods": _pods_for(pm.player1_id),
+                    "player2_pods": _pods_for(pm.player2_id),
+                }
+            else:
+                p1_sels = (
+                    PlayerDeckSelection.query.filter_by(
+                        week_id=week.id, user_id=pm.player1_id
+                    )
+                    .order_by(PlayerDeckSelection.slot_number)
+                    .all()
+                )
+                p2_sels = (
+                    PlayerDeckSelection.query.filter_by(
+                        week_id=week.id, user_id=pm.player2_id
+                    )
+                    .order_by(PlayerDeckSelection.slot_number)
+                    .all()
+                )
+                result[str(pm.id)] = {
+                    "player1_decks": [
+                        serialize_deck_brief(s.deck) for s in p1_sels if s.deck
+                    ],
+                    "player2_decks": [
+                        serialize_deck_brief(s.deck) for s in p2_sels if s.deck
+                    ],
+                }
 
     return jsonify(result)

@@ -25,7 +25,7 @@ import {
 import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
-import type { AdminLogEntry, CompletedMatchDecks, KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
+import type { AdminLogEntry, AlliancePodEntry, CompletedMatchDecks, KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
 import {
   Table,
   TableBody,
@@ -237,32 +237,42 @@ export default function LeagueDetailPage() {
                       {/* Show deck info for completed matchups */}
                       {isComplete && completedDecks[week.id]?.[String(pm.id)] && (() => {
                         const deckData = completedDecks[week.id][String(pm.id)];
+
+                        const renderDeckChip = (d: { db_id: number; name: string; sas_rating: number | null; dok_url: string | null }, label: string) => (
+                          <Chip
+                            key={d.db_id}
+                            label={`${label}: ${d.name}${d.sas_rating ? ` (${d.sas_rating})` : ''}`}
+                            size="small"
+                            variant="outlined"
+                            component={d.dok_url ? 'a' : 'div'}
+                            href={d.dok_url || undefined}
+                            target="_blank"
+                            clickable={!!d.dok_url}
+                          />
+                        );
+
+                        const renderPodChips = (pods: AlliancePodEntry[], playerName: string) =>
+                          pods.map((p) => {
+                            const slotLabel =
+                              p.slot_type === 'token' ? 'Token'
+                              : p.slot_type === 'prophecy' ? 'Prophecy'
+                              : p.house_name ?? `Pod ${p.slot_number}`;
+                            return renderDeckChip(p.deck, `${playerName} (${slotLabel})`);
+                          });
+
+                        if (deckData.player1_pods || deckData.player2_pods) {
+                          return (
+                            <Box sx={{ ml: 2, mt: 0.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                              {renderPodChips(deckData.player1_pods ?? [], pm.player1.name)}
+                              {renderPodChips(deckData.player2_pods ?? [], pm.player2.name)}
+                            </Box>
+                          );
+                        }
+
                         return (
-                          <Box sx={{ ml: 2, mt: 0.5, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                            {deckData.player1_decks.map((d) => (
-                              <Chip
-                                key={d.db_id}
-                                label={`${pm.player1.name}: ${d.name}${d.sas_rating ? ` (${d.sas_rating})` : ''}`}
-                                size="small"
-                                variant="outlined"
-                                component={d.dok_url ? 'a' : 'div'}
-                                href={d.dok_url || undefined}
-                                target="_blank"
-                                clickable={!!d.dok_url}
-                              />
-                            ))}
-                            {deckData.player2_decks.map((d) => (
-                              <Chip
-                                key={d.db_id}
-                                label={`${pm.player2.name}: ${d.name}${d.sas_rating ? ` (${d.sas_rating})` : ''}`}
-                                size="small"
-                                variant="outlined"
-                                component={d.dok_url ? 'a' : 'div'}
-                                href={d.dok_url || undefined}
-                                target="_blank"
-                                clickable={!!d.dok_url}
-                              />
-                            ))}
+                          <Box sx={{ ml: 2, mt: 0.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                            {(deckData.player1_decks ?? []).map((d) => renderDeckChip(d, pm.player1.name))}
+                            {(deckData.player2_decks ?? []).map((d) => renderDeckChip(d, pm.player2.name))}
                           </Box>
                         );
                       })()}

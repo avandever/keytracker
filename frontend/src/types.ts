@@ -364,7 +364,19 @@ export interface DeckBrief {
   houses: string[];
 }
 
-export type CompletedMatchDecks = Record<string, { player1_decks: DeckBrief[]; player2_decks: DeckBrief[] }>;
+export interface AlliancePodEntry {
+  deck: DeckBrief;
+  house_name: string | null;
+  slot_type: 'pod' | 'token' | 'prophecy';
+  slot_number: number;
+}
+
+export type CompletedMatchDecks = Record<string, {
+  player1_decks?: DeckBrief[];
+  player2_decks?: DeckBrief[];
+  player1_pods?: AlliancePodEntry[];
+  player2_pods?: AlliancePodEntry[];
+}>;
 
 export interface CsvPod {
   name: string;
