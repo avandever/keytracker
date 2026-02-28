@@ -225,7 +225,7 @@ export default function StandaloneMatchesPage() {
               <Select
                 value={allowedSets[0] ?? ''}
                 label="Set (required)"
-                onChange={(e) => setAllowedSets(e.target.value !== '' ? [e.target.value as number] : [])}
+                onChange={(e) => setAllowedSets([e.target.value as number])}
               >
                 {sets.map((s) => (
                   <MenuItem key={s.number} value={s.number}>{s.name} ({s.shortname})</MenuItem>
