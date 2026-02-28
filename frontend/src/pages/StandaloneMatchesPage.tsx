@@ -49,7 +49,7 @@ export default function StandaloneMatchesPage() {
 
   // Create form state
   const [formatType, setFormatType] = useState('archon_standard');
-  const [bestOfN, setBestOfN] = useState(3);
+  const [bestOfN, setBestOfN] = useState(1);
   const [isPublic, setIsPublic] = useState(true);
   const [maxSas, setMaxSas] = useState('');
   const [combinedMaxSas, setCombinedMaxSas] = useState('');

@@ -1044,7 +1044,7 @@ class StandaloneMatch(db.Model):
         nullable=False,
         default=StandaloneMatchStatus.SETUP,
     )
-    best_of_n = db.Column(db.Integer, nullable=False, default=3)
+    best_of_n = db.Column(db.Integer, nullable=False, default=1)
     is_public = db.Column(db.Boolean, nullable=False, default=False)
     max_sas = db.Column(db.Integer, nullable=True)
     combined_max_sas = db.Column(db.Integer, nullable=True)

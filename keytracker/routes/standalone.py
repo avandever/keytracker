@@ -118,7 +118,7 @@ def create_match():
             400,
         )
 
-    best_of_n = data.get("best_of_n", 3)
+    best_of_n = data.get("best_of_n", 1)
     if not isinstance(best_of_n, int) or best_of_n < 1:
         return jsonify({"error": "best_of_n must be a positive integer"}), 400
     if format_type in (WeekFormat.TRIAD, WeekFormat.ADAPTIVE):
