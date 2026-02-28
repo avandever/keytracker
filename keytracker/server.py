@@ -71,7 +71,12 @@ auth.init_oauth(app)
 
 # Add google_id and avatar_url columns if they don't exist (migration)
 with app.app_context():
-    db.create_all()
+    try:
+        db.create_all()
+    except Exception as e:  # noqa: BLE001
+        # Multiple gunicorn workers may race to create tables; ignore "already exists"
+        if "already exists" not in str(e):
+            raise
     try:
         from sqlalchemy import inspect as sa_inspect, text
 
