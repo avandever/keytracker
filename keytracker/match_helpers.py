@@ -295,6 +295,80 @@ def validate_strike_standalone(matchup, striking_user_id, struck_deck_selection_
     return None
 
 
+def get_adaptive_winning_deck_player_id(pm):
+    """
+    Return the player_id whose deck is the 'winning deck' (won both G1 and G2),
+    or None if conditions are not met (not exactly 2 games, or same winner both games).
+
+    In Adaptive: G1 = own decks, G2 = swapped decks.
+    The winning deck is the deck that won G1 (played by its owner) and G2 (played by
+    the opponent). So the winning deck owner is game1.winner_id.
+    """
+    games = sorted(pm.games, key=lambda g: g.game_number)
+    if len(games) != 2:
+        return None
+    g1, g2 = games[0], games[1]
+    if g1.winner_id == g2.winner_id:
+        return None  # Same player won both — match is already decided, no tie
+    return g1.winner_id
+
+
+def init_adaptive_bidding(pm):
+    """
+    Initialize adaptive bidding after a 1-1 tie in game 2.
+    Sets bid_chains=0, bidder_id=winning_deck_player_id, bidding_complete=False.
+    Does NOT commit.
+    """
+    winning_deck_player_id = get_adaptive_winning_deck_player_id(pm)
+    pm.adaptive_bid_chains = 0
+    pm.adaptive_bidder_id = winning_deck_player_id
+    pm.adaptive_bidding_complete = False
+
+
+def validate_adaptive_bid(pm, requesting_user_id, chains=None, concede=False):
+    """
+    Validate and process an adaptive bid or concede.
+
+    pm: PlayerMatchup instance
+    requesting_user_id: int — the user submitting the action
+    chains: int or None — number of chains to bid (must be > current bid)
+    concede: bool — if True, accept the current bid and complete bidding
+
+    Returns (success: bool, error: str or None).
+    """
+    # Must be a 1-1 tie situation with bidding initialized
+    if pm.adaptive_bid_chains is None:
+        return False, "Adaptive bidding has not been initialized"
+    if pm.adaptive_bidding_complete:
+        return False, "Adaptive bidding is already complete"
+    if requesting_user_id not in (pm.player1_id, pm.player2_id):
+        return False, "You are not in this matchup"
+
+    # It must be the non-bidder's turn to act
+    current_bidder_id = pm.adaptive_bidder_id
+    if requesting_user_id == current_bidder_id:
+        return False, "It is not your turn — waiting for your opponent to respond"
+
+    if concede:
+        pm.adaptive_bidding_complete = True
+        return True, None
+
+    if chains is None:
+        return False, "chains or concede is required"
+    if not isinstance(chains, int):
+        return False, "chains must be an integer"
+    if chains <= pm.adaptive_bid_chains:
+        return (
+            False,
+            f"chains must be greater than current bid ({pm.adaptive_bid_chains})",
+        )
+
+    # Raise: update bid and flip bidder
+    pm.adaptive_bid_chains = chains
+    pm.adaptive_bidder_id = requesting_user_id
+    return True, None
+
+
 def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_type):
     """
     Validate and record a game result for a PlayerMatchup.
@@ -358,6 +432,13 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
             if g.winner_id == matchup.player2_id and g.player2_deck_id == p2_deck_id:
                 return None, "Player 2's deck already won a game and cannot be reused"
 
+    if format_type == WeekFormat.ADAPTIVE and game_number == 3:
+        if not matchup.adaptive_bidding_complete:
+            return (
+                None,
+                "Adaptive bidding must be completed before game 3 can be played",
+            )
+
     game = MatchGame(
         player_matchup_id=matchup.id,
         game_number=game_number,
@@ -373,5 +454,11 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
     db.session.add(game)
     db.session.flush()
     db.session.expire(matchup, ["games"])
+
+    # After recording game 2 for Adaptive: if it creates a 1-1 tie, init bidding
+    if format_type == WeekFormat.ADAPTIVE and game_number == 2:
+        winning_deck_player_id = get_adaptive_winning_deck_player_id(matchup)
+        if winning_deck_player_id is not None:
+            init_adaptive_bidding(matchup)
 
     return game, None

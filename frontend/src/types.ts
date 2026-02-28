@@ -284,6 +284,10 @@ export interface PlayerMatchupInfo {
   is_feature: boolean;
   games: MatchGameInfo[];
   strikes: StrikeInfo[];
+  adaptive_bid_chains: number | null;
+  adaptive_bidder_id: number | null;
+  adaptive_bidding_complete: boolean;
+  adaptive_winning_deck_player_id: number | null;
 }
 
 export interface DeckSelectionInfo {

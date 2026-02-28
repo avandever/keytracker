@@ -3230,6 +3230,18 @@ def report_game(league_id, matchup_id):
     p1_deck_id = data.get("player1_deck_id")
     p2_deck_id = data.get("player2_deck_id")
 
+    # Adaptive: block game 3 until bidding is complete
+    if week.format_type == WeekFormat.ADAPTIVE.value and game_number == 3:
+        if not pm.adaptive_bidding_complete:
+            return (
+                jsonify(
+                    {
+                        "error": "Adaptive bidding must be completed before game 3 can be played"
+                    }
+                ),
+                400,
+            )
+
     # Triad-specific validation
     if week.format_type == WeekFormat.TRIAD.value:
         if not p1_deck_id or not p2_deck_id:
@@ -3293,6 +3305,17 @@ def report_game(league_id, matchup_id):
     # rather than the stale in-memory collection that predates this flush
     db.session.expire(pm, ["games"])
 
+    # Adaptive: after game 2 creates a 1-1 tie, initialize bidding
+    if week.format_type == WeekFormat.ADAPTIVE.value and game_number == 2:
+        from keytracker.match_helpers import (
+            get_adaptive_winning_deck_player_id,
+            init_adaptive_bidding,
+        )
+
+        winning_deck_player_id = get_adaptive_winning_deck_player_id(pm)
+        if winning_deck_player_id is not None:
+            init_adaptive_bidding(pm)
+
     # Check if match is now complete - auto-complete week if all matches done
     all_games = sorted(pm.games, key=lambda g: g.game_number)
     p1_total = sum(1 for g in all_games if g.winner_id == pm.player1_id)
@@ -3304,6 +3327,49 @@ def report_game(league_id, matchup_id):
 
     db.session.commit()
     return jsonify(serialize_match_game(game)), 201
+
+
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/adaptive-bid", methods=["POST"]
+)
+@login_required
+def submit_adaptive_bid(league_id, matchup_id):
+    """Submit an adaptive bid or concede for a league match."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.ADAPTIVE.value:
+        return jsonify({"error": "Only for Adaptive format"}), 400
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    effective = get_effective_user()
+    is_participant = effective.id in (pm.player1_id, pm.player2_id)
+    if not is_participant:
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    data = request.get_json(silent=True) or {}
+    chains = data.get("chains")
+    concede = bool(data.get("concede", False))
+
+    from keytracker.match_helpers import validate_adaptive_bid
+
+    success, error = validate_adaptive_bid(
+        pm, effective.id, chains=chains, concede=concede
+    )
+    if not success:
+        return jsonify({"error": error}), 400
+
+    db.session.commit()
+    viewer = get_effective_user() if current_user.is_authenticated else None
+    return jsonify(serialize_player_matchup(pm, viewer=viewer))
 
 
 def _check_week_completion(week):

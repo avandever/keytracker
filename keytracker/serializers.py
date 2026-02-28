@@ -312,6 +312,8 @@ def serialize_week_matchup(
 
 
 def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
+    from keytracker.match_helpers import get_adaptive_winning_deck_player_id
+
     data = {
         "id": pm.id,
         "week_matchup_id": pm.week_matchup_id,
@@ -324,6 +326,10 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
             serialize_match_game(g)
             for g in sorted(pm.games, key=lambda g: g.game_number)
         ],
+        "adaptive_bid_chains": pm.adaptive_bid_chains,
+        "adaptive_bidder_id": pm.adaptive_bidder_id,
+        "adaptive_bidding_complete": pm.adaptive_bidding_complete,
+        "adaptive_winning_deck_player_id": get_adaptive_winning_deck_player_id(pm),
     }
     # Include strike info
     data["strikes"] = [

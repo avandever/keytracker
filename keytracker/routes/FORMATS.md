@@ -5,6 +5,7 @@
 - `triad` — 3 decks, best of 3, with strikes
 - `sealed_archon` — Sealed pool, pick 1 deck
 - `sealed_alliance` — Sealed pool, pick 3 pods to form an alliance deck
+- `adaptive` — Best of 3: G1 own decks, G2 swapped, G3 (if 1-1) after asynchronous chain-bidding auction
 
 ## NOT supported in standalone matches
 - `thief` — Team-based deck-stealing mechanics; incompatible with 1v1 standalone play

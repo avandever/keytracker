@@ -32,6 +32,7 @@ import {
   startStandaloneMatch,
   submitStandaloneStrike,
   reportStandaloneGame,
+  submitAdaptiveBid,
 } from '../api/standalone';
 import { getSets } from '../api/leagues';
 import WeekConstraints from '../components/WeekConstraints';
@@ -50,6 +51,7 @@ const FORMAT_LABELS: Record<string, string> = {
   triad: 'Triad',
   sealed_archon: 'Sealed Archon',
   sealed_alliance: 'Sealed Alliance',
+  adaptive: 'Adaptive',
 };
 
 const TOKEN_SETS = new Set([855, 600]);
@@ -90,6 +92,9 @@ export default function StandaloneMatchPage() {
   const [reportLoserConceded, setReportLoserConceded] = useState(false);
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
   const [reportP2DeckId, setReportP2DeckId] = useState<number | ''>('');
+
+  // Adaptive bid state
+  const [adaptiveBidChains, setAdaptiveBidChains] = useState('');
 
   const [copiedUrl, setCopiedUrl] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -218,6 +223,7 @@ export default function StandaloneMatchPage() {
   const isSealed = match.format_type === 'sealed_archon' || match.format_type === 'sealed_alliance';
   const isTriad = match.format_type === 'triad';
   const isAlliance = match.format_type === 'sealed_alliance';
+  const isAdaptive = match.format_type === 'adaptive';
 
   const allowedSetsSet = new Set(match.allowed_sets || []);
   const needsToken = TOKEN_SETS.size > 0 && [...TOKEN_SETS].some((s) => allowedSetsSet.has(s));
@@ -310,6 +316,33 @@ export default function StandaloneMatchPage() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       setError(err.response?.data?.error || 'Failed to submit strike');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAdaptiveBid = async (concede: boolean) => {
+    setSubmitting(true);
+    setError('');
+    try {
+      const payload: { chains?: number; concede?: boolean } = {};
+      if (concede) {
+        payload.concede = true;
+      } else {
+        const chains = parseInt(adaptiveBidChains);
+        if (isNaN(chains) || chains < 0) {
+          setError('Chains must be a non-negative integer');
+          return;
+        }
+        payload.chains = chains;
+      }
+      const updated = await submitAdaptiveBid(id, payload);
+      setMatch(updated);
+      setAdaptiveBidChains('');
+      setSuccess(concede ? 'You accepted the bid!' : 'Bid submitted!');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err.response?.data?.error || 'Failed to submit bid');
     } finally {
       setSubmitting(false);
     }
@@ -698,6 +731,110 @@ export default function StandaloneMatchPage() {
             </Card>
           )}
 
+          {/* Adaptive: game assignment guidance */}
+          {isAdaptive && bothStarted && pm && (
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Game Assignments</Typography>
+                <Typography variant="body2">
+                  <strong>Game 1:</strong> {match.creator.name} plays their own deck / {match.opponent?.name} plays their own deck
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Game 2:</strong> {match.creator.name} plays {match.opponent?.name}&apos;s deck / {match.opponent?.name} plays {match.creator.name}&apos;s deck
+                </Typography>
+                {pm.adaptive_bidding_complete && pm.adaptive_bidder_id !== null && (() => {
+                  const bidderIsP1 = pm.adaptive_bidder_id === pm.player1.id;
+                  const winDeckOwnerIsP1 = pm.adaptive_winning_deck_player_id === pm.player1.id;
+                  // The bidder conceded, so the other player plays the winning deck
+                  // (The bidder agreed to play the losing deck with N chains)
+                  const winningDeckPlayer = winDeckOwnerIsP1 ? match.creator : match.opponent;
+                  const losingDeckPlayer = bidderIsP1 ? match.creator : match.opponent;
+                  return (
+                    <Typography variant="body2">
+                      <strong>Game 3:</strong> {winningDeckPlayer?.name} plays the winning deck / {losingDeckPlayer?.name} plays the losing deck with {pm.adaptive_bid_chains} chains
+                    </Typography>
+                  );
+                })()}
+                {!pm.adaptive_bidding_complete && games.length < 2 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    Game 3 assignments will be determined by bidding after a 1-1 tie.
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Adaptive: bidding UI (shown after 1-1 tie, before bidding complete) */}
+          {isAdaptive && bothStarted && pm && pm.adaptive_bid_chains !== null && !pm.adaptive_bidding_complete && isParticipant && (() => {
+            const myId = user!.id;
+            const isMyTurn = pm.adaptive_bidder_id !== myId;
+            const currentBidderName = pm.adaptive_bidder_id === pm.player1.id ? match.creator.name : match.opponent?.name;
+            const winningDeckOwnerName = pm.adaptive_winning_deck_player_id === pm.player1.id ? match.creator.name : match.opponent?.name;
+            const opponentName = isCreator ? match.opponent?.name : match.creator.name;
+            return (
+              <Card sx={{ mb: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Adaptive Bidding</Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    The match is tied 1-1. {winningDeckOwnerName}&apos;s deck won both games.
+                    Players bid chains to play the opponent&apos;s (winning) deck in game 3.
+                    The current bid holder must play the <em>losing</em> deck with that many chains.
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Current bid: <strong>{pm.adaptive_bid_chains} chains</strong> held by <strong>{currentBidderName}</strong>
+                  </Typography>
+                  {isMyTurn ? (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography variant="body2">
+                        It&apos;s your turn. You can raise the bid or accept {currentBidderName}&apos;s offer.
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <TextField
+                          label={`Chains (> ${pm.adaptive_bid_chains})`}
+                          type="number"
+                          size="small"
+                          value={adaptiveBidChains}
+                          onChange={(e) => setAdaptiveBidChains(e.target.value)}
+                          inputProps={{ min: pm.adaptive_bid_chains + 1 }}
+                          sx={{ width: 160 }}
+                        />
+                        <Button
+                          variant="contained"
+                          onClick={() => handleAdaptiveBid(false)}
+                          disabled={submitting || !adaptiveBidChains}
+                        >
+                          Raise Bid
+                        </Button>
+                      </Box>
+                      <Button
+                        variant="outlined"
+                        color="secondary"
+                        onClick={() => handleAdaptiveBid(true)}
+                        disabled={submitting}
+                      >
+                        Accept — let {currentBidderName} play the winning deck with {pm.adaptive_bid_chains} chains
+                      </Button>
+                    </Box>
+                  ) : (
+                    <Alert severity="info">
+                      Waiting for {opponentName} to respond to your bid of {pm.adaptive_bid_chains} chains.
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* Adaptive: post-bidding summary */}
+          {isAdaptive && pm && pm.adaptive_bidding_complete && (
+            <Alert severity="success" sx={{ mb: 2 }}>
+              {(() => {
+                const bidderName = pm.adaptive_bidder_id === pm.player1.id ? match.creator.name : match.opponent?.name;
+                return `Bidding complete — ${bidderName} plays the losing deck with ${pm.adaptive_bid_chains} chains in Game 3.`;
+              })()}
+            </Alert>
+          )}
+
           {/* Score */}
           {bothStarted && pm && (
             <Card sx={{ mb: 2 }}>
@@ -731,7 +868,7 @@ export default function StandaloneMatchPage() {
           )}
 
           {/* Game report form */}
-          {isParticipant && bothStarted && !matchDecided && pm && (
+          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (
             <Card sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Report Game {games.length + 1}</Typography>

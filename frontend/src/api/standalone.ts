@@ -105,3 +105,11 @@ export async function reportStandaloneGame(
   const { data } = await apiClient.post(`/standalone-matches/${matchId}/games`, payload);
   return data;
 }
+
+export async function submitAdaptiveBid(
+  matchId: number,
+  payload: { chains?: number; concede?: boolean },
+): Promise<StandaloneMatch> {
+  const { data } = await apiClient.post(`/standalone-matches/${matchId}/adaptive-bid`, payload);
+  return data;
+}

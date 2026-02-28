@@ -831,6 +831,7 @@ class WeekFormat(PyEnum):
     SEALED_ARCHON = "sealed_archon"
     SEALED_ALLIANCE = "sealed_alliance"
     THIEF = "thief"
+    ADAPTIVE = "adaptive"
 
 
 class WeekStatus(PyEnum):
@@ -1086,10 +1087,17 @@ class PlayerMatchup(db.Model):
     player2_started = db.Column(db.Boolean, default=False, nullable=False)
     is_feature = db.Column(db.Boolean, default=False, nullable=False)
 
+    adaptive_bid_chains = db.Column(db.Integer, nullable=True)
+    adaptive_bidder_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=True
+    )
+    adaptive_bidding_complete = db.Column(db.Boolean, default=False, nullable=False)
+
     week_matchup = db.relationship("WeekMatchup", back_populates="player_matchups")
     standalone_match = db.relationship("StandaloneMatch", back_populates="matchup")
     player1 = db.relationship("User", foreign_keys=[player1_id])
     player2 = db.relationship("User", foreign_keys=[player2_id])
+    adaptive_bidder = db.relationship("User", foreign_keys=[adaptive_bidder_id])
     games = db.relationship(
         "MatchGame", back_populates="player_matchup", cascade="all, delete-orphan"
     )

@@ -43,6 +43,7 @@ from keytracker.match_helpers import (
     validate_alliance_for_standalone,
     validate_strike_standalone,
     validate_and_record_game,
+    validate_adaptive_bid,
 )
 
 logger = logging.getLogger(__name__)
@@ -120,8 +121,8 @@ def create_match():
     best_of_n = data.get("best_of_n", 3)
     if not isinstance(best_of_n, int) or best_of_n < 1:
         return jsonify({"error": "best_of_n must be a positive integer"}), 400
-    if format_type == WeekFormat.TRIAD:
-        best_of_n = 3  # Triad is always best of 3
+    if format_type in (WeekFormat.TRIAD, WeekFormat.ADAPTIVE):
+        best_of_n = 3  # Triad and Adaptive are always best of 3
 
     is_public = bool(data.get("is_public", False))
     max_sas = data.get("max_sas")
@@ -592,6 +593,38 @@ def submit_strike(match_id):
             match, user.id if current_user.is_authenticated else None
         )
     )
+
+
+@standalone_bp.route("/<int:match_id>/adaptive-bid", methods=["POST"])
+def submit_adaptive_bid(match_id):
+    """Submit an adaptive bid or concede. Valid after a 1-1 tie in an Adaptive match."""
+    match, err = _get_match_or_404(match_id)
+    if err:
+        return err
+
+    if match.format_type != WeekFormat.ADAPTIVE:
+        return jsonify({"error": "Only for Adaptive format"}), 400
+    if match.status != StandaloneMatchStatus.PUBLISHED:
+        return jsonify({"error": "Match is not published"}), 400
+    if not match.matchup:
+        return jsonify({"error": "Match not started yet"}), 400
+
+    user = _current_user_or_guest()
+    if user is None or user.id not in (match.creator_id, match.opponent_id):
+        return jsonify({"error": "You are not in this match"}), 403
+
+    data = request.get_json(silent=True) or {}
+    chains = data.get("chains")
+    concede = bool(data.get("concede", False))
+
+    pm = match.matchup
+    success, error = validate_adaptive_bid(pm, user.id, chains=chains, concede=concede)
+    if not success:
+        return jsonify({"error": error}), 400
+
+    db.session.commit()
+    viewer_id = user.id if current_user.is_authenticated else None
+    return jsonify(serialize_standalone_match(match, viewer_id))
 
 
 @standalone_bp.route("/<int:match_id>/games", methods=["POST"])

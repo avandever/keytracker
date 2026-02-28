@@ -34,6 +34,7 @@ const FORMAT_LABELS: Record<string, string> = {
   triad: 'Triad',
   sealed_archon: 'Sealed Archon',
   sealed_alliance: 'Sealed Alliance',
+  adaptive: 'Adaptive',
 };
 
 export default function StandaloneMatchesPage() {
@@ -59,6 +60,7 @@ export default function StandaloneMatchesPage() {
 
   const isSealed = formatType === 'sealed_archon' || formatType === 'sealed_alliance';
   const isTriad = formatType === 'triad';
+  const isAdaptive = formatType === 'adaptive';
 
   useEffect(() => {
     Promise.all([
@@ -73,7 +75,7 @@ export default function StandaloneMatchesPage() {
     try {
       const match = await createStandaloneMatch({
         format_type: formatType,
-        best_of_n: isTriad ? 3 : bestOfN,
+        best_of_n: isTriad || isAdaptive ? 3 : bestOfN,
         is_public: isPublic,
         max_sas: maxSas ? parseInt(maxSas) : null,
         combined_max_sas: combinedMaxSas ? parseInt(combinedMaxSas) : null,
@@ -148,10 +150,11 @@ export default function StandaloneMatchesPage() {
               <MenuItem value="triad">Triad</MenuItem>
               <MenuItem value="sealed_archon">Sealed Archon</MenuItem>
               <MenuItem value="sealed_alliance">Sealed Alliance</MenuItem>
+              <MenuItem value="adaptive">Adaptive</MenuItem>
             </Select>
           </FormControl>
 
-          {!isTriad && (
+          {!isTriad && !isAdaptive && (
             <TextField
               label="Best of N"
               type="number"
