@@ -878,6 +878,8 @@ export default function MyTeamPage() {
                           <Chip label={`Pod ${s.slot_number}`} size="small" variant="outlined" />
                           <HouseIcons houses={[s.house_name || '']} />
                           <Typography variant="body2">{s.deck_name || `Deck ${s.deck_id}`} — {s.house_name}</Typography>
+                          {s.deck?.mv_url && <Link href={s.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>}
+                          {s.deck?.dok_url && <Link href={s.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>}
                         </Box>
                       ))}
                       {tokenSel && (
@@ -1064,19 +1066,47 @@ export default function MyTeamPage() {
                     {wm.player_matchups.map((pm) => {
                       const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
                       const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
+                      const showPods = week.format_type === 'sealed_alliance' &&
+                        (week.status === 'published' || week.status === 'completed') &&
+                        pm.player1_started && pm.player2_started;
                       return (
-                        <Box key={pm.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
-                          <Typography variant="body2">
-                            {pm.player1.name} vs {pm.player2.name}
-                          </Typography>
-                          {pm.games.length > 0 && (
-                            <Chip label={`${p1Wins}-${p2Wins}`} size="small" variant="outlined" />
+                        <Box key={pm.id} sx={{ mb: 1 }}>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                            <Typography variant="body2">
+                              {pm.player1.name} vs {pm.player2.name}
+                            </Typography>
+                            {pm.games.length > 0 && (
+                              <Chip label={`${p1Wins}-${p2Wins}`} size="small" variant="outlined" />
+                            )}
+                            {!pm.player1_started || !pm.player2_started ? (
+                              <Chip label="Not started" size="small" color="default" />
+                            ) : pm.games.length === 0 ? (
+                              <Chip label="In progress" size="small" color="info" />
+                            ) : null}
+                          </Box>
+                          {showPods && (
+                            <Box sx={{ ml: 2, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                              {[pm.player1, pm.player2].map((player) => {
+                                const playerPods = (week.alliance_selections || [])
+                                  .filter((s) => s.user_id === player.id && s.slot_type === 'pod')
+                                  .sort((a, b) => a.slot_number - b.slot_number);
+                                if (playerPods.length === 0) return null;
+                                return (
+                                  <Box key={player.id}>
+                                    <Typography variant="caption" color="text.secondary">{player.name}:</Typography>
+                                    {playerPods.map((s) => (
+                                      <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.25 }}>
+                                        <HouseIcons houses={[s.house_name || '']} />
+                                        <Typography variant="body2">{s.deck_name} — {s.house_name}</Typography>
+                                        {s.deck?.mv_url && <Link href={s.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>}
+                                        {s.deck?.dok_url && <Link href={s.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>}
+                                      </Box>
+                                    ))}
+                                  </Box>
+                                );
+                              })}
+                            </Box>
                           )}
-                          {!pm.player1_started || !pm.player2_started ? (
-                            <Chip label="Not started" size="small" color="default" />
-                          ) : pm.games.length === 0 ? (
-                            <Chip label="In progress" size="small" color="info" />
-                          ) : null}
                         </Box>
                       );
                     })}

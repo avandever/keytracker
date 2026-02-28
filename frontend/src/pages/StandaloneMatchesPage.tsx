@@ -59,6 +59,7 @@ export default function StandaloneMatchesPage() {
   const [decksPerPlayer, setDecksPerPlayer] = useState(3);
 
   const isSealed = formatType === 'sealed_archon' || formatType === 'sealed_alliance';
+  const isSealedAlliance = formatType === 'sealed_alliance';
   const isTriad = formatType === 'triad';
   const isAdaptive = formatType === 'adaptive';
 
@@ -69,7 +70,18 @@ export default function StandaloneMatchesPage() {
     ]).finally(() => setLoading(false));
   }, []);
 
+  const handleFormatChange = (newFormat: string) => {
+    setFormatType(newFormat);
+    if (newFormat === 'sealed_alliance') {
+      setAllowedSets([]);
+    }
+  };
+
   const handleCreate = async () => {
+    if (isSealedAlliance && allowedSets.length === 0) {
+      setCreateError('A set must be selected for Sealed Alliance');
+      return;
+    }
     setCreating(true);
     setCreateError('');
     try {
@@ -145,7 +157,7 @@ export default function StandaloneMatchesPage() {
 
           <FormControl fullWidth>
             <InputLabel>Format</InputLabel>
-            <Select value={formatType} label="Format" onChange={(e) => setFormatType(e.target.value)}>
+            <Select value={formatType} label="Format" onChange={(e) => handleFormatChange(e.target.value)}>
               <MenuItem value="archon_standard">Archon</MenuItem>
               <MenuItem value="triad">Triad</MenuItem>
               <MenuItem value="sealed_archon">Sealed Archon</MenuItem>
@@ -207,26 +219,41 @@ export default function StandaloneMatchesPage() {
             </>
           )}
 
-          <FormControl fullWidth>
-            <InputLabel>Allowed Sets (optional)</InputLabel>
-            <Select
-              multiple
-              value={allowedSets}
-              label="Allowed Sets (optional)"
-              onChange={(e) => setAllowedSets(e.target.value as number[])}
-              renderValue={(selected) => (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {(selected as number[]).map((v) => (
-                    <Chip key={v} label={sets.find((s) => s.number === v)?.shortname || v} size="small" />
-                  ))}
-                </Box>
-              )}
-            >
-              {sets.map((s) => (
-                <MenuItem key={s.number} value={s.number}>{s.name} ({s.shortname})</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          {isSealedAlliance ? (
+            <FormControl fullWidth required>
+              <InputLabel>Set (required)</InputLabel>
+              <Select
+                value={allowedSets[0] ?? ''}
+                label="Set (required)"
+                onChange={(e) => setAllowedSets(e.target.value !== '' ? [e.target.value as number] : [])}
+              >
+                {sets.map((s) => (
+                  <MenuItem key={s.number} value={s.number}>{s.name} ({s.shortname})</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : (
+            <FormControl fullWidth>
+              <InputLabel>Allowed Sets (optional)</InputLabel>
+              <Select
+                multiple
+                value={allowedSets}
+                label="Allowed Sets (optional)"
+                onChange={(e) => setAllowedSets(e.target.value as number[])}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {(selected as number[]).map((v) => (
+                      <Chip key={v} label={sets.find((s) => s.number === v)?.shortname || v} size="small" />
+                    ))}
+                  </Box>
+                )}
+              >
+                {sets.map((s) => (
+                  <MenuItem key={s.number} value={s.number}>{s.name} ({s.shortname})</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
 
           <FormControlLabel
             control={<Checkbox checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} />}

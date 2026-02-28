@@ -317,6 +317,10 @@ export default function LeagueAdminPage() {
 
   const handleSaveWeek = async () => {
     setError('');
+    if (weekFormat === 'sealed_alliance' && weekAllowedSets.length === 0) {
+      setError('A set must be selected for Sealed Alliance');
+      return;
+    }
     setWeekDialogOpen(false);
     const payload = {
       name: weekName.trim() || null,
@@ -533,9 +537,13 @@ export default function LeagueAdminPage() {
   const availableForReassign = league.signups.filter((s) => !allTeamMemberIds.has(s.user.id));
 
   const toggleSet = (setNumber: number) => {
-    setWeekAllowedSets((prev) =>
-      prev.includes(setNumber) ? prev.filter((s) => s !== setNumber) : [...prev, setNumber]
-    );
+    if (weekFormat === 'sealed_alliance') {
+      setWeekAllowedSets([setNumber]);
+    } else {
+      setWeekAllowedSets((prev) =>
+        prev.includes(setNumber) ? prev.filter((s) => s !== setNumber) : [...prev, setNumber]
+      );
+    }
   };
 
   const renderWeekActions = (week: LeagueWeek) => {
@@ -1102,7 +1110,9 @@ export default function LeagueAdminPage() {
             {availableSets.length > 0 && (
               <Box>
                 <Typography variant="subtitle2" gutterBottom>
-                  Allowed Sets {weekAllowedSets.length > 0 ? `(${weekAllowedSets.length} selected)` : '(all)'}
+                  {weekFormat === 'sealed_alliance'
+                    ? `Set (required)${weekAllowedSets.length > 0 ? ` — ${availableSets.find((s) => s.number === weekAllowedSets[0])?.shortname || weekAllowedSets[0]}` : ''}`
+                    : `Allowed Sets ${weekAllowedSets.length > 0 ? `(${weekAllowedSets.length} selected)` : '(all)'}`}
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {availableSets.map((s) => (

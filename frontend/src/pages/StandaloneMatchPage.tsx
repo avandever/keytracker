@@ -459,54 +459,57 @@ export default function StandaloneMatchPage() {
               <Box>
                 <Typography variant="subtitle2" gutterBottom>Sealed Pool</Typography>
                 {sealedPool.map((entry) => (
-                  <Box key={entry.id} sx={{ mb: 1 }}>
-                    <Typography variant="body2">{entry.deck?.name} ({entry.deck?.expansion_name})</Typography>
+                  <Box key={entry.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                     {entry.deck?.houses && <HouseIcons houses={entry.deck.houses} />}
+                    <Typography variant="body2">{entry.deck?.name} ({entry.deck?.expansion_name})</Typography>
+                    {entry.deck?.sas_rating != null && <Chip label={`SAS: ${entry.deck.sas_rating}`} size="small" variant="outlined" />}
+                    {entry.deck && (
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Link href={entry.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                        <Link href={entry.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                      </Box>
+                    )}
                   </Box>
                 ))}
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle2" gutterBottom>Select 3 Pods</Typography>
-                {[0, 1, 2].map((i) => (
-                  <Box key={i} sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                    <FormControl size="small" sx={{ minWidth: 200 }}>
-                      <InputLabel>Pod {i + 1} Deck</InputLabel>
-                      <Select
-                        value={alliancePods[i].split(':')[0] || ''}
-                        label={`Pod ${i + 1} Deck`}
-                        onChange={(e) => {
-                          const newPods = [...alliancePods];
-                          newPods[i] = e.target.value + ':';
-                          setAlliancePods(newPods);
-                        }}
-                      >
-                        {sealedPool.map((entry) => entry.deck && (
-                          <MenuItem key={entry.deck.db_id} value={String(entry.deck.db_id)}>
-                            {entry.deck.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                    <FormControl size="small" sx={{ minWidth: 120 }}>
-                      <InputLabel>House</InputLabel>
-                      <Select
-                        value={alliancePods[i].split(':')[1] || ''}
-                        label="House"
-                        onChange={(e) => {
-                          const newPods = [...alliancePods];
-                          const deckPart = newPods[i].split(':')[0];
-                          newPods[i] = deckPart + ':' + e.target.value;
-                          setAlliancePods(newPods);
-                        }}
-                      >
-                        {sealedPool
-                          .find((e) => String(e.deck?.db_id) === alliancePods[i].split(':')[0])
-                          ?.deck?.houses?.map((h) => (
-                            <MenuItem key={h} value={h}>{h}</MenuItem>
-                          ))}
-                      </Select>
-                    </FormControl>
-                  </Box>
-                ))}
+                {(() => {
+                  const allPairs = sealedPool.flatMap((entry) =>
+                    (entry.deck?.houses || []).map((house) => ({
+                      value: `${entry.deck!.db_id}:${house}`,
+                      label: `${entry.deck!.name} — ${house}`,
+                      house,
+                    }))
+                  );
+                  const selectedHouses = alliancePods.filter(Boolean).map((p) => p.split(':').slice(1).join(':'));
+                  const getPodOptions = (podIndex: number) => {
+                    const othersSelected = selectedHouses.filter((_, i) => i !== podIndex);
+                    return allPairs.filter((p) => !othersSelected.includes(p.house));
+                  };
+                  return (
+                    <>
+                      {[0, 1, 2].map((i) => (
+                        <FormControl key={i} size="small" fullWidth sx={{ mb: 1 }}>
+                          <InputLabel>Pod {i + 1}</InputLabel>
+                          <Select
+                            value={alliancePods[i]}
+                            label={`Pod ${i + 1}`}
+                            onChange={(e) => {
+                              const newPods = [...alliancePods];
+                              newPods[i] = e.target.value;
+                              setAlliancePods(newPods);
+                            }}
+                          >
+                            <MenuItem value=""><em>None</em></MenuItem>
+                            {getPodOptions(i).map((opt) => (
+                              <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      ))}
+                    </>
+                  );
+                })()}
                 {needsToken && (
                   <FormControl size="small" sx={{ minWidth: 200, mt: 1 }}>
                     <InputLabel>Token Deck</InputLabel>
@@ -536,7 +539,7 @@ export default function StandaloneMatchPage() {
                   </FormControl>
                 )}
                 <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-                  <Button variant="contained" onClick={handleAllianceSubmit} disabled={submitting}>
+                  <Button variant="contained" onClick={handleAllianceSubmit} disabled={submitting || alliancePods.filter(Boolean).length < 3}>
                     Submit Alliance
                   </Button>
                   <Button variant="outlined" onClick={async () => { await clearStandaloneAllianceSelection(id); await refresh(); }}>
@@ -631,8 +634,14 @@ export default function StandaloneMatchPage() {
             {myPods.length > 0 && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle2">Your alliance:</Typography>
-                {myPods.filter((p) => p.slot_type === 'pod').map((p) => (
-                  <Typography key={p.id} variant="body2">Pod {p.slot_number}: {p.deck_name} — {p.house_name}</Typography>
+                {myPods.filter((p) => p.slot_type === 'pod').sort((a, b) => a.slot_number - b.slot_number).map((p) => (
+                  <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                    <Chip label={`Pod ${p.slot_number}`} size="small" variant="outlined" />
+                    <HouseIcons houses={[p.house_name || '']} />
+                    <Typography variant="body2">{p.deck_name}</Typography>
+                    {p.deck?.mv_url && <Link href={p.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>}
+                    {p.deck?.dok_url && <Link href={p.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>}
+                  </Box>
                 ))}
               </Box>
             )}
@@ -694,8 +703,36 @@ export default function StandaloneMatchPage() {
             </Card>
           )}
 
-          {/* Decks (once both started) */}
-          {bothStarted && (
+          {/* Alliance pods (once both started, sealed_alliance only) */}
+          {isAlliance && bothStarted && (
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Alliance Pods</Typography>
+                <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {([
+                    { player: match.creator, pods: match.creator_pods },
+                    ...(match.opponent ? [{ player: match.opponent, pods: match.opponent_pods }] : []),
+                  ]).map(({ player, pods }) => (
+                    <Box key={player.id}>
+                      <Typography variant="subtitle2" gutterBottom>{player.name}</Typography>
+                      {pods.filter((p) => p.slot_type === 'pod').sort((a, b) => a.slot_number - b.slot_number).map((p) => (
+                        <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                          <Chip label={`Pod ${p.slot_number}`} size="small" variant="outlined" />
+                          <HouseIcons houses={[p.house_name || '']} />
+                          <Typography variant="body2">{p.deck_name}</Typography>
+                          {p.deck?.mv_url && <Link href={p.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>}
+                          {p.deck?.dok_url && <Link href={p.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>}
+                        </Box>
+                      ))}
+                    </Box>
+                  ))}
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Decks (once both started, non-alliance formats) */}
+          {!isAlliance && bothStarted && (
             <Card sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Decks</Typography>

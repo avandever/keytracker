@@ -77,6 +77,7 @@ def serialize_deck_brief(deck: Deck) -> dict:
         "expansion": deck.expansion,
         "expansion_name": EXPANSION_ID_TO_ABBR.get(deck.expansion, "Unknown"),
         "sas_rating": deck.sas_rating,
+        "mv_url": deck.mv_url,
         "dok_url": deck.dok_url,
         "houses": sorted(
             [ps.house for ps in deck.pod_stats if ps.house != "Archon Power"]
@@ -361,6 +362,7 @@ def serialize_alliance_selection(sel: AlliancePodSelection) -> dict:
         "house_name": sel.house_name,
         "slot_type": sel.slot_type,
         "slot_number": sel.slot_number,
+        "deck": serialize_deck_brief(sel.deck) if sel.deck else None,
     }
 
 

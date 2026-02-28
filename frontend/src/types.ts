@@ -225,6 +225,7 @@ export interface AlliancePodSelectionInfo {
   house_name: string | null;
   slot_type: 'pod' | 'token' | 'prophecy';
   slot_number: number;
+  deck?: DeckBrief | null;
 }
 
 export interface ThiefCurationDeckInfo {
@@ -364,6 +365,7 @@ export interface DeckBrief {
   expansion: number;
   expansion_name: string;
   sas_rating: number | null;
+  mv_url: string | null;
   dok_url: string | null;
   houses: string[];
 }
