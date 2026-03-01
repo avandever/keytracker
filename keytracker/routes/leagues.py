@@ -1833,11 +1833,12 @@ def generate_sealed_pools(league_id, week_id):
         WeekFormat.SEALED_ARCHON.value,
         WeekFormat.SEALED_ALLIANCE.value,
         WeekFormat.TEAM_SEALED.value,
+        WeekFormat.TEAM_SEALED_ALLIANCE.value,
     ):
         return (
             jsonify(
                 {
-                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, or Team Sealed format"
+                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, Team Sealed, or Team Sealed Alliance format"
                 }
             ),
             400,
@@ -1858,7 +1859,7 @@ def generate_sealed_pools(league_id, week_id):
                 pass
         return q
 
-    if week.format_type == WeekFormat.TEAM_SEALED.value:
+    if week.format_type in (WeekFormat.TEAM_SEALED.value, WeekFormat.TEAM_SEALED_ALLIANCE.value):
         # Each team shares one pool: decks_per_player * team_size decks
         teams = league.teams
         if not teams:
@@ -1974,8 +1975,8 @@ def get_team_sealed_pool(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.format_type != WeekFormat.TEAM_SEALED.value:
-        return jsonify({"error": "This endpoint is only for Team Sealed weeks"}), 400
+    if week.format_type not in (WeekFormat.TEAM_SEALED.value, WeekFormat.TEAM_SEALED_ALLIANCE.value):
+        return jsonify({"error": "This endpoint is only for Team Sealed or Team Sealed Alliance weeks"}), 400
 
     effective = get_effective_user()
     is_admin = _is_league_admin(league, effective)
@@ -2016,19 +2017,40 @@ def get_team_sealed_pool(league_id, week_id):
         week_id=week.id, team_id=target_team.id
     ).all()
 
-    # Determine which decks have been claimed and by whom
     team_user_ids = [m.user_id for m in target_team.members]
-    selections = PlayerDeckSelection.query.filter(
-        PlayerDeckSelection.week_id == week.id,
-        PlayerDeckSelection.user_id.in_(team_user_ids),
-    ).all()
-    claimed_map = {sel.deck_id: sel.user_id for sel in selections}
 
-    result = []
-    for spd in pool:
-        entry = serialize_sealed_pool_entry(spd)
-        entry["claimed_by_user_id"] = claimed_map.get(spd.deck_id)
-        result.append(entry)
+    if week.format_type == WeekFormat.TEAM_SEALED_ALLIANCE.value:
+        # For Team Sealed Alliance: track which (deck, house) pairs are claimed per deck
+        alliance_sels = AlliancePodSelection.query.filter(
+            AlliancePodSelection.week_id == week.id,
+            AlliancePodSelection.user_id.in_(team_user_ids),
+            AlliancePodSelection.slot_type == "pod",
+        ).all()
+        pods_claimed_map: dict = {}
+        for asel in alliance_sels:
+            pods_claimed_map.setdefault(asel.deck_id, []).append(
+                {"house_name": asel.house_name, "user_id": asel.user_id}
+            )
+        result = []
+        for spd in pool:
+            entry = serialize_sealed_pool_entry(spd)
+            entry["claimed_by_user_id"] = None
+            entry["pods_claimed"] = pods_claimed_map.get(spd.deck_id, [])
+            result.append(entry)
+    else:
+        # Determine which decks have been claimed and by whom (Team Sealed)
+        selections = PlayerDeckSelection.query.filter(
+            PlayerDeckSelection.week_id == week.id,
+            PlayerDeckSelection.user_id.in_(team_user_ids),
+        ).all()
+        claimed_map = {sel.deck_id: sel.user_id for sel in selections}
+        result = []
+        for spd in pool:
+            entry = serialize_sealed_pool_entry(spd)
+            entry["claimed_by_user_id"] = claimed_map.get(spd.deck_id)
+            entry["pods_claimed"] = []
+            result.append(entry)
+
     return jsonify(result)
 
 
@@ -2047,7 +2069,7 @@ def submit_alliance_selection(league_id, week_id):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
 
-    alliance_formats = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value)
+    alliance_formats = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value, WeekFormat.TEAM_SEALED_ALLIANCE.value)
     if week.format_type not in alliance_formats:
         return jsonify({"error": "Only for Alliance formats"}), 400
     if week.status not in (
@@ -2107,6 +2129,83 @@ def submit_alliance_selection(league_id, week_id):
                 pod_expansion_set.add(d.expansion)
         needs_token = bool(pod_expansion_set & TOKEN_EXPANSION_IDS)
         needs_prophecy = PROPHECY_EXPANSION_ID in pod_expansion_set
+    elif week.format_type == WeekFormat.TEAM_SEALED_ALLIANCE.value:
+        if not isinstance(pods, list) or len(pods) != 3:
+            return jsonify({"error": "Exactly 3 pods are required"}), 400
+
+        # Find the target user's team
+        target_team = None
+        for team in league.teams:
+            if any(m.user_id == target_user_id for m in team.members):
+                target_team = team
+                break
+        if not target_team:
+            return jsonify({"error": "User is not on a team in this league"}), 400
+
+        # Build team pool as set of deck_ids
+        team_pool = SealedPoolDeck.query.filter_by(week_id=week.id, team_id=target_team.id).all()
+        team_pool_deck_ids = {spd.deck_id for spd in team_pool}
+
+        teammate_ids = [m.user_id for m in target_team.members if m.user_id != target_user_id]
+
+        pod_deck_ids = []
+        houses = []
+        for i, pod in enumerate(pods):
+            deck_id = pod.get("deck_id")
+            house = pod.get("house", "")
+            if not deck_id or not house:
+                return jsonify({"error": f"Pod {i+1} requires deck_id and house"}), 400
+
+            # Deck must be in team pool
+            if deck_id not in team_pool_deck_ids:
+                return jsonify({"error": f"Pod {i+1}: deck not in team sealed pool"}), 400
+
+            # House must be a valid house for this deck
+            valid_house = (
+                PodStats.query.filter_by(deck_id=deck_id)
+                .filter(PodStats.house == house)
+                .first()
+            )
+            if not valid_house:
+                return (
+                    jsonify(
+                        {"error": f"Pod {i+1}: {house} is not a house of the selected deck"}
+                    ),
+                    400,
+                )
+
+            # Check no teammate already holds this (deck, house) pair
+            if teammate_ids:
+                conflict = AlliancePodSelection.query.filter(
+                    AlliancePodSelection.week_id == week.id,
+                    AlliancePodSelection.deck_id == deck_id,
+                    AlliancePodSelection.house_name == house,
+                    AlliancePodSelection.user_id.in_(teammate_ids),
+                    AlliancePodSelection.slot_type == "pod",
+                ).first()
+                if conflict:
+                    return (
+                        jsonify({"error": f"Pod {i+1}: {house} from this deck is already claimed by a teammate"}),
+                        400,
+                    )
+
+            pod_deck_ids.append(deck_id)
+            houses.append(house)
+
+        # 3 unique houses required
+        if len(set(houses)) != 3:
+            return jsonify({"error": "All 3 pods must have unique houses"}), 400
+
+        # Parse allowed sets for token/prophecy requirements
+        allowed_sets = set()
+        if week.allowed_sets:
+            try:
+                allowed_sets = set(json.loads(week.allowed_sets))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        needs_token = bool(allowed_sets & TOKEN_EXPANSION_IDS)
+        needs_prophecy = PROPHECY_EXPANSION_ID in allowed_sets
     else:
         if not isinstance(pods, list) or len(pods) != 3:
             return jsonify({"error": "Exactly 3 pods are required"}), 400
@@ -2243,7 +2342,7 @@ def clear_alliance_selection(league_id, week_id):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
 
-    _alliance_formats_clear = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value)
+    _alliance_formats_clear = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value, WeekFormat.TEAM_SEALED_ALLIANCE.value)
     if week.format_type not in _alliance_formats_clear:
         return jsonify({"error": "Only for Alliance formats"}), 400
 
@@ -2359,7 +2458,7 @@ def submit_deck_selection(league_id, week_id):
         return jsonify({"error": "Deck selection is not open"}), 400
 
     # Alliance formats use a different endpoint for pod selection
-    _af = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value)
+    _af = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value, WeekFormat.TEAM_SEALED_ALLIANCE.value)
     if week.format_type in _af:
         return (
             jsonify(
@@ -3711,11 +3810,12 @@ def regenerate_sealed_pools(league_id, week_id):
         WeekFormat.SEALED_ARCHON.value,
         WeekFormat.SEALED_ALLIANCE.value,
         WeekFormat.TEAM_SEALED.value,
+        WeekFormat.TEAM_SEALED_ALLIANCE.value,
     ):
         return (
             jsonify(
                 {
-                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, or Team Sealed format"
+                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, Team Sealed, or Team Sealed Alliance format"
                 }
             ),
             400,
@@ -3745,8 +3845,8 @@ def regenerate_sealed_pools(league_id, week_id):
             q = q.filter(~Deck.id.in_(excluded_ids))
         return q
 
-    if week.format_type == WeekFormat.TEAM_SEALED.value:
-        # For Team Sealed: always regenerate all teams
+    if week.format_type in (WeekFormat.TEAM_SEALED.value, WeekFormat.TEAM_SEALED_ALLIANCE.value):
+        # For Team Sealed / Team Sealed Alliance: always regenerate all teams
         teams = league.teams
         if not teams:
             return jsonify({"error": "No teams in league"}), 400
@@ -3758,6 +3858,10 @@ def regenerate_sealed_pools(league_id, week_id):
             PlayerDeckSelection.query.filter(
                 PlayerDeckSelection.week_id == week.id,
                 PlayerDeckSelection.user_id.in_(all_member_ids),
+            ).delete(synchronize_session=False)
+            AlliancePodSelection.query.filter(
+                AlliancePodSelection.week_id == week.id,
+                AlliancePodSelection.user_id.in_(all_member_ids),
             ).delete(synchronize_session=False)
         db.session.flush()
 

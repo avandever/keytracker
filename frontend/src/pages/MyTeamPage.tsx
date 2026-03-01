@@ -60,6 +60,7 @@ const FORMAT_LABELS: Record<string, string> = {
   sealed_archon: 'Sealed Archon',
   sealed_alliance: 'Sealed Alliance',
   team_sealed: 'Team Sealed',
+  team_sealed_alliance: 'Team Sealed Alliance',
   thief: 'Thief',
   alliance: 'Alliance',
 };
@@ -161,7 +162,7 @@ export default function MyTeamPage() {
     });
 
     const teamSealedWeeks = (league.weeks || []).filter(
-      (w) => w.format_type === 'team_sealed' && w.sealed_pools_generated,
+      (w) => (w.format_type === 'team_sealed' || w.format_type === 'team_sealed_alliance') && w.sealed_pools_generated,
     );
     teamSealedWeeks.forEach((week) => {
       const key = `${week.id}-${myTeam.id}`;
@@ -446,6 +447,11 @@ export default function MyTeamPage() {
           </Button>
         </Box>
       );
+    }
+
+    if (week.format_type === 'team_sealed_alliance') {
+      // team_sealed_alliance: rendered inline (not via renderDeckInput slots)
+      return null;
     }
 
     if (week.format_type === 'team_sealed') {
@@ -915,16 +921,20 @@ export default function MyTeamPage() {
             );
           })()}
 
-          {/* Team Sealed: shared pool display */}
-          {week.format_type === 'team_sealed' && (() => {
+          {/* Team Sealed / Team Sealed Alliance: shared pool display */}
+          {(week.format_type === 'team_sealed' || week.format_type === 'team_sealed_alliance') && (() => {
             const teamPoolKey = `${week.id}-${myTeam.id}`;
             const teamPool = teamSealedPools[teamPoolKey];
             if (!teamPool || teamPool.length === 0) return null;
+            const memberNameMap: Record<number, string> = {};
+            myTeam.members.forEach((m) => { memberNameMap[m.user.id] = m.user.name; });
             return (
               <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" color="text.secondary">Team Sealed Pool ({teamPool.length} decks):</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {week.format_type === 'team_sealed_alliance' ? 'Team Sealed Alliance Pool' : 'Team Sealed Pool'} ({teamPool.length} decks):
+                </Typography>
                 {teamPool.map((entry) => (
-                  <Box key={entry.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, ml: 2 }}>
+                  <Box key={entry.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, ml: 2, flexWrap: 'wrap' }}>
                     {entry.deck?.houses && <HouseIcons houses={entry.deck.houses} />}
                     <Typography variant="body2">{entry.deck?.name || 'Unknown'}</Typography>
                     {entry.deck?.sas_rating != null && (
@@ -933,7 +943,7 @@ export default function MyTeamPage() {
                     {entry.deck?.expansion_name && (
                       <Chip label={entry.deck.expansion_name} size="small" variant="outlined" />
                     )}
-                    {entry.claimed_by_user_id != null && (
+                    {week.format_type === 'team_sealed' && entry.claimed_by_user_id != null && (
                       <Chip
                         label={entry.claimed_by_user_id === user.id ? 'Claimed by you' : 'Claimed'}
                         size="small"
@@ -941,6 +951,15 @@ export default function MyTeamPage() {
                         variant="outlined"
                       />
                     )}
+                    {week.format_type === 'team_sealed_alliance' && (entry.pods_claimed || []).map((pc, idx) => (
+                      <Chip
+                        key={idx}
+                        label={`${pc.house_name} — ${pc.user_id === user.id ? 'you' : (memberNameMap[pc.user_id] || `User ${pc.user_id}`)}`}
+                        size="small"
+                        color={pc.user_id === user.id ? 'success' : 'default'}
+                        variant="outlined"
+                      />
+                    ))}
                     {entry.deck && (
                       <Box sx={{ display: 'flex', gap: 0.5 }}>
                         <Link href={entry.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
@@ -1003,8 +1022,8 @@ export default function MyTeamPage() {
                   );
                 })()}
 
-                {/* Sealed Alliance: show existing selection for this member */}
-                {week.format_type === 'sealed_alliance' && (() => {
+                {/* Sealed Alliance / Team Sealed Alliance: show existing selection for this member */}
+                {(week.format_type === 'sealed_alliance' || week.format_type === 'team_sealed_alliance') && (() => {
                   const memberSelections = (week.alliance_selections || []).filter((s) => s.user_id === m.user.id);
                   const podSelections = memberSelections
                     .filter((s) => s.slot_type === 'pod')
@@ -1132,6 +1151,107 @@ export default function MyTeamPage() {
                   );
                 })()}
 
+                {/* Team Sealed Alliance: pod selection UI from shared team pool */}
+                {week.format_type === 'team_sealed_alliance' && canEditMember && (() => {
+                  const teamPoolKey = `${week.id}-${myTeam.id}`;
+                  const teamPool = teamSealedPools[teamPoolKey] || [];
+                  if (teamPool.length === 0) return null;
+                  const podKey = `${week.id}-${m.user.id}`;
+                  const memberPods = alliancePods[podKey] || ['', '', ''];
+                  const needsToken = (week.allowed_sets || []).some((s) => TOKEN_SETS.has(s));
+                  const needsProphecy = (week.allowed_sets || []).includes(PROPHECY_EXPANSION_ID);
+
+                  // Build available (deck, house) pairs, filtering out pairs claimed by teammates
+                  const myUserId = m.user.id;
+                  const allPairs = teamPool.flatMap((entry) =>
+                    (entry.deck?.houses || []).map((house) => {
+                      const claimedByTeammate = (entry.pods_claimed || []).some(
+                        (pc) => pc.house_name === house && pc.user_id !== myUserId,
+                      );
+                      return {
+                        value: `${entry.deck!.db_id}:${house}`,
+                        label: `${entry.deck!.name} — ${house}`,
+                        house,
+                        disabled: claimedByTeammate,
+                      };
+                    })
+                  );
+                  const selectedHouses = memberPods.filter(Boolean).map((p) => p.split(':').slice(1).join(':'));
+                  const getPodOptions = (podIndex: number) => {
+                    const othersSelected = selectedHouses.filter((_, i) => i !== podIndex);
+                    return allPairs.filter((p) => !p.disabled && !othersSelected.includes(p.house));
+                  };
+                  const selectedPodDeckIds = memberPods.filter(Boolean).map((p) => parseInt(p.split(':')[0], 10)).filter(Boolean);
+                  const podPoolEntries = teamPool.filter((e) => e.deck?.db_id && selectedPodDeckIds.includes(e.deck.db_id));
+
+                  return (
+                    <Box sx={{ ml: 4, mb: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <Typography variant="caption" color="text.secondary">Alliance Pod Selection (from team pool):</Typography>
+                      {[0, 1, 2].map((podIndex) => (
+                        <FormControl key={podIndex} size="small" fullWidth>
+                          <InputLabel>Pod {podIndex + 1}</InputLabel>
+                          <Select
+                            value={memberPods[podIndex]}
+                            label={`Pod ${podIndex + 1}`}
+                            onChange={(e) => {
+                              const updated = [...memberPods];
+                              updated[podIndex] = e.target.value;
+                              setAlliancePods((prev) => ({ ...prev, [podKey]: updated }));
+                            }}
+                          >
+                            <MenuItem value=""><em>None</em></MenuItem>
+                            {getPodOptions(podIndex).map((opt) => (
+                              <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      ))}
+                      {needsToken && podPoolEntries.length > 0 && (
+                        <FormControl size="small" fullWidth>
+                          <InputLabel>Token Deck</InputLabel>
+                          <Select
+                            value={allianceTokenIds[podKey] || ''}
+                            label="Token Deck"
+                            onChange={(e) => setAllianceTokenIds((prev) => ({ ...prev, [podKey]: e.target.value as number }))}
+                          >
+                            <MenuItem value=""><em>None</em></MenuItem>
+                            {podPoolEntries.map((e) => (
+                              <MenuItem key={e.deck!.db_id} value={e.deck!.db_id!}>
+                                {e.deck!.name}{e.deck!.token_name ? ` (${e.deck!.token_name})` : ''}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                      {needsProphecy && podPoolEntries.length > 0 && (
+                        <FormControl size="small" fullWidth>
+                          <InputLabel>Prophecy Deck</InputLabel>
+                          <Select
+                            value={allianceProphecyIds[podKey] || ''}
+                            label="Prophecy Deck"
+                            onChange={(e) => setAllianceProphecyIds((prev) => ({ ...prev, [podKey]: e.target.value as number }))}
+                          >
+                            <MenuItem value=""><em>None</em></MenuItem>
+                            {podPoolEntries.map((e) => (
+                              <MenuItem key={e.deck!.db_id} value={e.deck!.db_id!}>
+                                {e.deck!.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleSubmitAlliance(week.id, m.user.id)}
+                        disabled={memberPods.filter(Boolean).length < 3}
+                      >
+                        Forge Alliance
+                      </Button>
+                    </Box>
+                  );
+                })()}
+
                 {/* Open Alliance: pod selection using AlliancePodBuilder */}
                 {week.format_type === 'alliance' && canEditMember && (() => {
                   const podKey = `${week.id}-${m.user.id}`;
@@ -1191,8 +1311,8 @@ export default function MyTeamPage() {
                   );
                 })()}
 
-                {/* Render all slots (not for sealed_alliance/alliance or thief curation/steal phases) */}
-                {week.format_type !== 'sealed_alliance' && week.format_type !== 'alliance' &&
+                {/* Render all slots (not for sealed_alliance/alliance/team_sealed_alliance or thief curation/steal phases) */}
+                {week.format_type !== 'sealed_alliance' && week.format_type !== 'alliance' && week.format_type !== 'team_sealed_alliance' &&
                   !(week.format_type === 'thief' && (week.status === 'curation' || week.status === 'team_paired' || week.status === 'thief')) &&
                   Array.from({ length: maxSlots }, (_, i) => i + 1).map((slotNum) => {
                   const sel = selections.find((s) => s.slot_number === slotNum);
@@ -1267,7 +1387,7 @@ export default function MyTeamPage() {
                     {wm.player_matchups.map((pm) => {
                       const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
                       const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
-                      const showPods = (week.format_type === 'sealed_alliance' || week.format_type === 'alliance') &&
+                      const showPods = (week.format_type === 'sealed_alliance' || week.format_type === 'alliance' || week.format_type === 'team_sealed_alliance') &&
                         (week.status === 'published' || week.status === 'completed') &&
                         pm.player1_started && pm.player2_started;
                       return (

@@ -325,6 +325,7 @@ export interface TeamSealedPoolEntry {
   id: number;
   deck: DeckSummary | null;
   claimed_by_user_id: number | null;
+  pods_claimed: { house_name: string; user_id: number }[];
 }
 
 export async function getTeamSealedPool(

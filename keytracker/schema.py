@@ -834,6 +834,7 @@ class WeekFormat(PyEnum):
     ADAPTIVE = "adaptive"
     ALLIANCE = "alliance"
     TEAM_SEALED = "team_sealed"
+    TEAM_SEALED_ALLIANCE = "team_sealed_alliance"
 
 
 class WeekStatus(PyEnum):
