@@ -1050,7 +1050,7 @@ class StandaloneMatch(db.Model):
         nullable=False,
     )
     status = db.Column(
-        db.Enum(StandaloneMatchStatus, values_callable=lambda e: [m.value for m in e]),
+        db.Enum(StandaloneMatchStatus),
         nullable=False,
         default=StandaloneMatchStatus.SETUP,
     )
