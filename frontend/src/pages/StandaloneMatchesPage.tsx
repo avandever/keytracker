@@ -117,7 +117,7 @@ export default function StandaloneMatchesPage() {
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Standalone Matches</Typography>
-        {user && (
+        {user?.is_member && (
           <Button variant="contained" onClick={() => setCreateOpen(true)}>
             Create Match
           </Button>
