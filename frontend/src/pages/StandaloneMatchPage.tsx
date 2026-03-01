@@ -658,7 +658,7 @@ export default function StandaloneMatchPage() {
             )}
 
             {/* Archon / Triad: submit by URL */}
-            {!isSealed && (
+            {!isSealed && !isOpenAlliance && (
               <Box>
                 {Array.from({ length: isTriad ? 3 : 1 }, (_, i) => i + 1).map((slot) => {
                   const sel = mySelections.find((s) => s.slot_number === slot);
