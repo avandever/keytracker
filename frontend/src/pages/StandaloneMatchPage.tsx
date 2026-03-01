@@ -1092,6 +1092,39 @@ export default function StandaloneMatchPage() {
                 </Typography>
               );
             })}
+
+            {/* Deck details for both players */}
+            <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap', mt: 2 }}>
+              {([
+                { player: match.creator, selections: match.creator_selections, pods: match.creator_pods },
+                ...(match.opponent ? [{ player: match.opponent, selections: match.opponent_selections, pods: match.opponent_pods }] : []),
+              ]).map(({ player, selections, pods }) => (
+                <Box key={player.id}>
+                  <Typography variant="subtitle2" gutterBottom>{player.name}</Typography>
+                  {isAlliance ? (
+                    pods.filter((p) => p.slot_type === 'pod').sort((a, b) => a.slot_number - b.slot_number).map((p) => (
+                      <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                        <Chip label={`Pod ${p.slot_number}`} size="small" variant="outlined" />
+                        <HouseIcons houses={[p.house_name || '']} />
+                        <Typography variant="body2">{p.deck_name}</Typography>
+                        {p.deck?.mv_url && <Link href={p.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>}
+                        {p.deck?.dok_url && <Link href={p.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>}
+                      </Box>
+                    ))
+                  ) : (
+                    selections.map((s) => (
+                      <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant="body2">{s.deck?.name}</Typography>
+                        {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                        {s.deck?.sas_rating != null && <Chip label={`SAS ${s.deck.sas_rating}`} size="small" variant="outlined" />}
+                        {s.deck?.mv_url && <Link href={s.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>}
+                        {s.deck?.dok_url && <Link href={s.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>}
+                      </Box>
+                    ))
+                  )}
+                </Box>
+              ))}
+            </Box>
           </CardContent>
         </Card>
       )}
