@@ -1045,9 +1045,12 @@ class StandaloneMatch(db.Model):
     uuid = db.Column(db.String(36), unique=True, nullable=False)
     creator_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
     opponent_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=True)
-    format_type = db.Column(db.Enum(WeekFormat), nullable=False)
+    format_type = db.Column(
+        db.Enum(WeekFormat, values_callable=lambda e: [m.value for m in e]),
+        nullable=False,
+    )
     status = db.Column(
-        db.Enum(StandaloneMatchStatus),
+        db.Enum(StandaloneMatchStatus, values_callable=lambda e: [m.value for m in e]),
         nullable=False,
         default=StandaloneMatchStatus.SETUP,
     )
