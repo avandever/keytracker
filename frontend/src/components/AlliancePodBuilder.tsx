@@ -107,21 +107,21 @@ export default function AlliancePodBuilder({
         return;
       }
 
-      // Fetch full deck info for each pod to get houses
+      // Use deck info already embedded in the pods response
       const newDecks: (LoadedDeck | null)[] = [null, null, null];
       const newHouses: string[] = ['', '', ''];
       const newUrls: string[] = ['', '', ''];
       for (let i = 0; i < 3; i++) {
         const pod = result.pods[i];
-        try {
-          const deck = await importDeckByUrl(String(pod.deck_id));
-          newDecks[i] = deck;
-          newHouses[i] = pod.house;
-          newUrls[i] = String(pod.deck_id);
-        } catch {
-          setDokError(`Failed to load pod ${i + 1} deck`);
-          return;
-        }
+        newDecks[i] = {
+          id: pod.deck_id,
+          name: pod.deck_name,
+          expansion: pod.expansion,
+          houses: pod.houses,
+          sas_rating: pod.sas_rating,
+        };
+        newHouses[i] = pod.house;
+        newUrls[i] = String(pod.deck_id);
       }
 
       setPodUrls(newUrls);

@@ -717,8 +717,16 @@ def fetch_dok_alliance(uuid: str) -> dict:
         if not kf_id or not house_name:
             continue
         deck = get_deck_by_id_with_zeal(kf_id)
+        deck_houses = [ps.house for ps in deck.pod_stats if ps.house != "Archon Power"]
         pods.append(
-            {"deck_id": deck.id, "deck_name": deck.name, "house": house_name}
+            {
+                "deck_id": deck.id,
+                "deck_name": deck.name,
+                "house": house_name,
+                "expansion": deck.expansion,
+                "houses": deck_houses,
+                "sas_rating": deck.sas_rating,
+            }
         )
 
     token_deck_id = None
