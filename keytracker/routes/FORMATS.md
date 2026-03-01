@@ -6,6 +6,7 @@
 - `sealed_archon` — Sealed pool, pick 1 deck
 - `sealed_alliance` — Sealed pool, pick 3 pods to form an alliance deck
 - `adaptive` — Best of 3: G1 own decks, G2 swapped, G3 (if 1-1) after asynchronous chain-bidding auction
+- `reversal` — Each player brings 1 deck they believe is hard to win with; opponents swap and play BO1
 
 ## NOT supported in standalone matches
 - `thief` — Team-based deck-stealing mechanics; incompatible with 1v1 standalone play

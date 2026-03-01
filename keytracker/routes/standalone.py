@@ -127,6 +127,8 @@ def create_match():
         return jsonify({"error": "best_of_n must be a positive integer"}), 400
     if format_type in (WeekFormat.TRIAD, WeekFormat.ADAPTIVE):
         best_of_n = 3  # Triad and Adaptive are always best of 3
+    if format_type == WeekFormat.REVERSAL:
+        best_of_n = 1  # Reversal is always BO1
 
     is_public = bool(data.get("is_public", False))
     max_sas = data.get("max_sas")

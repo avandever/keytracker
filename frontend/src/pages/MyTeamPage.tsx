@@ -65,6 +65,13 @@ const FORMAT_LABELS: Record<string, string> = {
   thief: 'Thief',
   alliance: 'Alliance',
   sas_ladder: 'SAS Ladder',
+  reversal: 'Reversal',
+  triad_short: 'Triad Short',
+  oubliette: 'Oubliette',
+  adaptive_short: 'Adaptive Short',
+  exchange: 'Exchange',
+  nordic_hexad: 'Nordic Hexad',
+  moirai: 'Moirai',
 };
 
 function getSasLadderRanges(maxes: number[]): [number, number | null][] {

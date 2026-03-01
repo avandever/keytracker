@@ -836,6 +836,13 @@ class WeekFormat(PyEnum):
     TEAM_SEALED = "team_sealed"
     TEAM_SEALED_ALLIANCE = "team_sealed_alliance"
     SAS_LADDER = "sas_ladder"
+    REVERSAL = "reversal"
+    TRIAD_SHORT = "triad_short"
+    OUBLIETTE = "oubliette"
+    ADAPTIVE_SHORT = "adaptive_short"
+    EXCHANGE = "exchange"
+    NORDIC_HEXAD = "nordic_hexad"
+    MOIRAI = "moirai"
 
 
 class WeekStatus(PyEnum):

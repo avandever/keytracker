@@ -54,6 +54,13 @@ const FORMAT_LABELS: Record<string, string> = {
   sealed_alliance: 'Sealed Alliance',
   adaptive: 'Adaptive',
   alliance: 'Alliance',
+  reversal: 'Reversal',
+  triad_short: 'Triad Short',
+  oubliette: 'Oubliette',
+  adaptive_short: 'Adaptive Short',
+  exchange: 'Exchange',
+  nordic_hexad: 'Nordic Hexad',
+  moirai: 'Moirai',
 };
 
 const TOKEN_SETS = new Set([855, 600]);
@@ -235,6 +242,7 @@ export default function StandaloneMatchPage() {
   const isOpenAlliance = match.format_type === 'alliance';
   const isAlliance = isSealedAlliance || isOpenAlliance;
   const isAdaptive = match.format_type === 'adaptive';
+  const isReversal = match.format_type === 'reversal';
 
   const allowedSetsSet = new Set(match.allowed_sets || []);
   const needsToken = TOKEN_SETS.size > 0 && [...TOKEN_SETS].some((s) => allowedSetsSet.has(s));
@@ -396,6 +404,13 @@ export default function StandaloneMatchPage() {
       };
       if (isTriad && reportP1DeckId) payload.player1_deck_id = reportP1DeckId as number;
       if (isTriad && reportP2DeckId) payload.player2_deck_id = reportP2DeckId as number;
+      // Reversal: player 1 plays opponent's deck, player 2 plays creator's deck
+      if (isReversal) {
+        const creatorDeckId = match.creator_selections[0]?.deck?.db_id;
+        const opponentDeckId = match.opponent_selections[0]?.deck?.db_id;
+        if (opponentDeckId) payload.player1_deck_id = opponentDeckId;
+        if (creatorDeckId) payload.player2_deck_id = creatorDeckId;
+      }
       await reportStandaloneGame(id, payload);
       await refresh();
       setSuccess('Game reported!');
@@ -842,6 +857,13 @@ export default function StandaloneMatchPage() {
                 </Box>
               </CardContent>
             </Card>
+          )}
+
+          {/* Reversal: deck swap note */}
+          {isReversal && bothStarted && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <strong>Reversal:</strong> {match.creator.name} plays with {match.opponent?.name}&apos;s deck, and {match.opponent?.name} plays with {match.creator.name}&apos;s deck.
+            </Alert>
           )}
 
           {/* Adaptive: game assignment guidance */}

@@ -1186,6 +1186,8 @@ def create_week(league_id):
 
     if format_type == "triad":
         best_of_n = 3
+    if format_type == WeekFormat.REVERSAL.value:
+        best_of_n = 1  # Reversal is always BO1
 
     # Determine next week number
     max_week = (
