@@ -32,10 +32,24 @@ def load_dotenv(path=".env"):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Add a card to the Alliance Restricted List")
-    parser.add_argument("--version", type=float, required=True, help="Restricted list version (e.g. 2.5)")
-    parser.add_argument("--card-name", required=True, help="Exact card title from PlatonicCard")
-    parser.add_argument("--max-copies", type=int, default=None, help="Max copies allowed per alliance (omit = unlimited)")
+    parser = argparse.ArgumentParser(
+        description="Add a card to the Alliance Restricted List"
+    )
+    parser.add_argument(
+        "--version",
+        type=float,
+        required=True,
+        help="Restricted list version (e.g. 2.5)",
+    )
+    parser.add_argument(
+        "--card-name", required=True, help="Exact card title from PlatonicCard"
+    )
+    parser.add_argument(
+        "--max-copies",
+        type=int,
+        default=None,
+        help="Max copies allowed per alliance (omit = unlimited)",
+    )
     args = parser.parse_args()
 
     load_dotenv()
@@ -60,23 +74,34 @@ def main():
         ).fetchone()
         if row:
             version_id = row[0]
-            print(f"Using existing restricted list version {args.version} (id={version_id})")
+            print(
+                f"Using existing restricted list version {args.version} (id={version_id})"
+            )
         else:
             result = session.execute(
-                text("INSERT INTO alliance_restricted_list_version (version) VALUES (:v)"),
+                text(
+                    "INSERT INTO alliance_restricted_list_version (version) VALUES (:v)"
+                ),
                 {"v": args.version},
             )
             version_id = result.lastrowid
             session.commit()
-            print(f"Created new restricted list version {args.version} (id={version_id})")
+            print(
+                f"Created new restricted list version {args.version} (id={version_id})"
+            )
 
         # Look up the PlatonicCard
         card_row = session.execute(
-            text("SELECT id FROM tracker_platonic_card WHERE card_title = :name LIMIT 1"),
+            text(
+                "SELECT id FROM tracker_platonic_card WHERE card_title = :name LIMIT 1"
+            ),
             {"name": args.card_name},
         ).fetchone()
         if not card_row:
-            print(f"ERROR: Card '{args.card_name}' not found in tracker_platonic_card", file=sys.stderr)
+            print(
+                f"ERROR: Card '{args.card_name}' not found in tracker_platonic_card",
+                file=sys.stderr,
+            )
             sys.exit(1)
         platonic_card_id = card_row[0]
 
@@ -89,7 +114,9 @@ def main():
             {"vid": version_id, "cid": platonic_card_id},
         ).fetchone()
         if existing:
-            print(f"Entry for '{args.card_name}' already exists in version {args.version} (entry id={existing[0]})")
+            print(
+                f"Entry for '{args.card_name}' already exists in version {args.version} (entry id={existing[0]})"
+            )
             sys.exit(0)
 
         # Insert the entry
@@ -103,7 +130,9 @@ def main():
         )
         session.commit()
         max_str = str(args.max_copies) if args.max_copies is not None else "unlimited"
-        print(f"Added '{args.card_name}' to restricted list v{args.version} (max_copies={max_str})")
+        print(
+            f"Added '{args.card_name}' to restricted list v{args.version} (max_copies={max_str})"
+        )
 
     except Exception as e:
         session.rollback()

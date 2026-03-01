@@ -680,9 +680,7 @@ def parse_deck_url(url: str):
     m = re.search(r"decksofkeyforge\.com/decks/([a-f0-9-]+)", url)
     if m:
         return m.group(1)
-    m = re.match(
-        r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$", url
-    )
+    m = re.match(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$", url)
     if m:
         return url
     return None

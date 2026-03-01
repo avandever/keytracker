@@ -259,10 +259,14 @@ def validate_alliance_for_standalone(
 
 def get_deck_platonic_card_ids(deck) -> list:
     """Return a list of platonic_card_id values (with duplicates) from a deck's cards."""
-    return [cid.platonic_card_id for cid in deck.cards_from_assoc if cid.platonic_card_id]
+    return [
+        cid.platonic_card_id for cid in deck.cards_from_assoc if cid.platonic_card_id
+    ]
 
 
-def validate_alliance_open(match_or_week, user_id, pods, token_deck_id, prophecy_deck_id):
+def validate_alliance_open(
+    match_or_week, user_id, pods, token_deck_id, prophecy_deck_id
+):
     """
     Validate open Alliance pod selection (not sealed — players choose any decks).
 
@@ -347,15 +351,15 @@ def validate_alliance_open(match_or_week, user_id, pods, token_deck_id, prophecy
 
     # Restricted list check — skip if all 3 pod decks are the same physical deck
     if len(set(pod_deck_ids)) > 1:
-        rl_version_id = getattr(match_or_week, "alliance_restricted_list_version_id", None)
+        rl_version_id = getattr(
+            match_or_week, "alliance_restricted_list_version_id", None
+        )
         if rl_version_id:
             rl_version = db.session.get(AllianceRestrictedListVersion, rl_version_id)
         else:
-            rl_version = (
-                AllianceRestrictedListVersion.query.order_by(
-                    AllianceRestrictedListVersion.version.desc()
-                ).first()
-            )
+            rl_version = AllianceRestrictedListVersion.query.order_by(
+                AllianceRestrictedListVersion.version.desc()
+            ).first()
 
         if rl_version and rl_version.entries:
             # Collect all platonic card ids from all pod decks (with duplicates)

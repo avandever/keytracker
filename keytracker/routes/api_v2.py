@@ -548,7 +548,10 @@ def import_dok_alliance():
             r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$", url
         )
         if not m2:
-            return jsonify({"error": "Could not parse alliance deck UUID from URL"}), 400
+            return (
+                jsonify({"error": "Could not parse alliance deck UUID from URL"}),
+                400,
+            )
         uuid_str = url
     else:
         uuid_str = m.group(1)

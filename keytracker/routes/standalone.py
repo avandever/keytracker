@@ -318,9 +318,7 @@ def submit_deck_selection(match_id):
 
     if match.format_type in ALLIANCE_FORMATS:
         return (
-            jsonify(
-                {"error": "Alliance formats use /alliance-selection endpoint"}
-            ),
+            jsonify({"error": "Alliance formats use /alliance-selection endpoint"}),
             400,
         )
 
