@@ -364,6 +364,20 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
         }
         for s in pm.strikes
     ]
+    # Triad Short picks — revealed simultaneously when both have submitted
+    triad_picks = getattr(pm, "triad_short_picks", [])
+    data["triad_short_picks_count"] = len(triad_picks)
+    data["triad_short_picks"] = (
+        [
+            {
+                "picking_user_id": p.picking_user_id,
+                "picked_deck_selection_id": p.picked_deck_selection_id,
+            }
+            for p in triad_picks
+        ]
+        if len(triad_picks) == 2
+        else []
+    )
     return data
 
 

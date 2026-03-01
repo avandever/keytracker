@@ -1139,6 +1139,11 @@ class PlayerMatchup(db.Model):
     strikes = db.relationship(
         "StrikeSelection", back_populates="player_matchup", cascade="all, delete-orphan"
     )
+    triad_short_picks = db.relationship(
+        "TriadShortPick",
+        back_populates="player_matchup",
+        cascade="all, delete-orphan",
+    )
 
 
 class FeatureDesignation(db.Model):
@@ -1240,6 +1245,30 @@ class StrikeSelection(db.Model):
     player_matchup = db.relationship("PlayerMatchup", back_populates="strikes")
     striking_user = db.relationship("User", foreign_keys=[striking_user_id])
     struck_deck_selection = db.relationship("PlayerDeckSelection")
+
+
+class TriadShortPick(db.Model):
+    __tablename__ = "triad_short_pick"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_matchup.id"), nullable=False
+    )
+    picking_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    picked_deck_selection_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_deck_selection.id"), nullable=False
+    )
+
+    player_matchup = db.relationship("PlayerMatchup", back_populates="triad_short_picks")
+    picking_user = db.relationship("User", foreign_keys=[picking_user_id])
+    picked_deck_selection = db.relationship("PlayerDeckSelection")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "player_matchup_id", "picking_user_id", name="uq_triad_short_pick"
+        ),
+    )
 
 
 class SealedPoolDeck(db.Model):

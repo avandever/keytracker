@@ -279,6 +279,11 @@ export interface WeekMatchup {
   player_matchups: PlayerMatchupInfo[];
 }
 
+export interface TriadShortPickInfo {
+  picking_user_id: number;
+  picked_deck_selection_id: number;
+}
+
 export interface PlayerMatchupInfo {
   id: number;
   week_matchup_id: number;
@@ -293,6 +298,8 @@ export interface PlayerMatchupInfo {
   adaptive_bidder_id: number | null;
   adaptive_bidding_complete: boolean;
   adaptive_winning_deck_player_id: number | null;
+  triad_short_picks_count?: number;
+  triad_short_picks?: TriadShortPickInfo[];
 }
 
 export interface DeckSelectionInfo {

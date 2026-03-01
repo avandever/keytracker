@@ -398,6 +398,61 @@ def validate_alliance_open(
     return []
 
 
+def validate_triad_short_pick(matchup, picking_user_id, picked_deck_selection_id):
+    """
+    Validate a Triad Short pick submission.
+
+    matchup: PlayerMatchup instance
+    picking_user_id: int
+    picked_deck_selection_id: int — must be one of the picker's own decks, not struck
+
+    Returns error string or None (None = valid).
+    """
+    from keytracker.schema import TriadShortPick
+
+    if picking_user_id not in (matchup.player1_id, matchup.player2_id):
+        return "You are not in this matchup"
+
+    if not matchup.player1_started or not matchup.player2_started:
+        return "Both players must start before picking"
+
+    # Both must have struck first
+    p1_strikes = [s for s in matchup.strikes if s.striking_user_id == matchup.player1_id]
+    p2_strikes = [s for s in matchup.strikes if s.striking_user_id == matchup.player2_id]
+    if not p1_strikes or not p2_strikes:
+        return "Both players must strike before picking"
+
+    # Already picked?
+    existing_pick = TriadShortPick.query.filter_by(
+        player_matchup_id=matchup.id, picking_user_id=picking_user_id
+    ).first()
+    if existing_pick:
+        return "You have already submitted a pick"
+
+    # Validate the picked deck selection belongs to picker
+    picked_sel = db.session.get(PlayerDeckSelection, picked_deck_selection_id)
+    if not picked_sel or picked_sel.user_id != picking_user_id:
+        return "Invalid deck selection to pick"
+
+    # Must belong to the same match context
+    if matchup.standalone_match_id:
+        if picked_sel.standalone_match_id != matchup.standalone_match_id:
+            return "Invalid deck selection to pick"
+    elif matchup.week_matchup_id:
+        from keytracker.schema import WeekMatchup
+
+        wm = db.session.get(WeekMatchup, matchup.week_matchup_id)
+        if wm and picked_sel.week_id != wm.week_id:
+            return "Invalid deck selection to pick"
+
+    # Must not be a struck deck
+    stricken_sel_ids = {s.struck_deck_selection_id for s in matchup.strikes}
+    if picked_deck_selection_id in stricken_sel_ids:
+        return "Struck deck cannot be picked"
+
+    return None
+
+
 def validate_strike_standalone(matchup, striking_user_id, struck_deck_selection_id):
     """
     Validate a strike submission for a standalone Triad match.
@@ -574,6 +629,25 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
                 return None, "Player 1's deck already won a game and cannot be reused"
             if g.winner_id == matchup.player2_id and g.player2_deck_id == p2_deck_id:
                 return None, "Player 2's deck already won a game and cannot be reused"
+
+    if format_type == WeekFormat.TRIAD_SHORT:
+        picks = getattr(matchup, "triad_short_picks", [])
+        p1_pick = next(
+            (p for p in picks if p.picking_user_id == matchup.player1_id), None
+        )
+        p2_pick = next(
+            (p for p in picks if p.picking_user_id == matchup.player2_id), None
+        )
+        if not p1_pick or not p2_pick:
+            return None, "Both players must pick before reporting games"
+        p1_sel = db.session.get(PlayerDeckSelection, p1_pick.picked_deck_selection_id)
+        p2_sel = db.session.get(PlayerDeckSelection, p2_pick.picked_deck_selection_id)
+        expected_p1 = p1_sel.deck_id if p1_sel else None
+        expected_p2 = p2_sel.deck_id if p2_sel else None
+        if p1_deck_id and expected_p1 and p1_deck_id != expected_p1:
+            return None, "Player 1's deck must match their Triad Short pick"
+        if p2_deck_id and expected_p2 and p2_deck_id != expected_p2:
+            return None, "Player 2's deck must match their Triad Short pick"
 
     if format_type == WeekFormat.ADAPTIVE and game_number == 3:
         if not matchup.adaptive_bidding_complete:

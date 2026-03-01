@@ -31,6 +31,7 @@ import {
   clearStandaloneAllianceSelection,
   startStandaloneMatch,
   submitStandaloneStrike,
+  submitTriadShortPick,
   reportStandaloneGame,
   submitAdaptiveBid,
 } from '../api/standalone';
@@ -97,6 +98,9 @@ export default function StandaloneMatchPage() {
 
   // Strike state
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
+
+  // Triad Short pick state
+  const [triadShortPickId, setTriadShortPickId] = useState<number | ''>('');
 
   // Game report state
   const [reportWinnerId, setReportWinnerId] = useState<number | ''>('');
@@ -243,6 +247,7 @@ export default function StandaloneMatchPage() {
   const isAlliance = isSealedAlliance || isOpenAlliance;
   const isAdaptive = match.format_type === 'adaptive';
   const isReversal = match.format_type === 'reversal';
+  const isTriadShort = match.format_type === 'triad_short';
 
   const allowedSetsSet = new Set(match.allowed_sets || []);
   const needsToken = TOKEN_SETS.size > 0 && [...TOKEN_SETS].some((s) => allowedSetsSet.has(s));
@@ -360,6 +365,23 @@ export default function StandaloneMatchPage() {
     }
   };
 
+  const handleTriadShortPick = async () => {
+    if (!triadShortPickId) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const updated = await submitTriadShortPick(id, triadShortPickId as number);
+      setMatch(updated);
+      setSuccess('Pick submitted!');
+      setTriadShortPickId('');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err.response?.data?.error || 'Failed to submit pick');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleAdaptiveBid = async (concede: boolean) => {
     setSubmitting(true);
     setError('');
@@ -410,6 +432,17 @@ export default function StandaloneMatchPage() {
         const opponentDeckId = match.opponent_selections[0]?.deck?.db_id;
         if (opponentDeckId) payload.player1_deck_id = opponentDeckId;
         if (creatorDeckId) payload.player2_deck_id = creatorDeckId;
+      }
+      // Triad Short: use picked deck IDs from revealed picks
+      if (isTriadShort && pm) {
+        const picks = pm.triad_short_picks || [];
+        const p1Pick = picks.find((p) => p.picking_user_id === pm.player1.id);
+        const p2Pick = picks.find((p) => p.picking_user_id === pm.player2.id);
+        const allSels = [...match.creator_selections, ...match.opponent_selections];
+        const p1Sel = allSels.find((s) => s.id === p1Pick?.picked_deck_selection_id);
+        const p2Sel = allSels.find((s) => s.id === p2Pick?.picked_deck_selection_id);
+        if (p1Sel?.deck?.db_id) payload.player1_deck_id = p1Sel.deck.db_id;
+        if (p2Sel?.deck?.db_id) payload.player2_deck_id = p2Sel.deck.db_id;
       }
       await reportStandaloneGame(id, payload);
       await refresh();
@@ -794,6 +827,82 @@ export default function StandaloneMatchPage() {
             </Card>
           )}
 
+          {/* Triad Short: pick phase (after both struck, before game) */}
+          {isTriadShort && bothStarted && pm && (() => {
+            const strikes = pm.strikes || [];
+            const bothStruck = strikes.length >= 2;
+            const picks = pm.triad_short_picks || [];
+            const bothPicked = picks.length >= 2;
+            const myPickCount = pm.triad_short_picks_count ?? picks.length;
+            const iAlreadyPicked = isCreator
+              ? myPickCount > 0 && picks.some((p) => p.picking_user_id === pm.player1.id)
+              : myPickCount > 0 && picks.some((p) => p.picking_user_id === pm.player2.id);
+            const strickenFromMe = new Set(
+              strikes.filter((s) => s.striking_user_id !== user?.id).map((s) => s.struck_deck_selection_id)
+            );
+            const myNonStruckSelections = mySelections.filter((s) => !strickenFromMe.has(s.id));
+
+            if (!bothStruck) return null;
+            if (bothPicked) {
+              // Show reveal
+              const myPick = picks.find((p) =>
+                p.picking_user_id === (isCreator ? pm.player1.id : pm.player2.id)
+              );
+              const oppPick = picks.find((p) =>
+                p.picking_user_id === (isCreator ? pm.player2.id : pm.player1.id)
+              );
+              const myPickedSel = [...mySelections, ...oppSelections].find(
+                (s) => s.id === myPick?.picked_deck_selection_id
+              );
+              const oppPickedSel = [...mySelections, ...oppSelections].find(
+                (s) => s.id === oppPick?.picked_deck_selection_id
+              );
+              return (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  <strong>Picks revealed!</strong> You play <strong>{myPickedSel?.deck?.name ?? '?'}</strong>; opponent plays <strong>{oppPickedSel?.deck?.name ?? '?'}</strong>
+                </Alert>
+              );
+            }
+            if (iAlreadyPicked || !isParticipant) {
+              return (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  {iAlreadyPicked ? 'Pick submitted — waiting for opponent to pick.' : 'Waiting for both players to pick.'}
+                </Alert>
+              );
+            }
+            return (
+              <Card sx={{ mb: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Pick Phase</Typography>
+                  <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Secretly choose one of your non-struck decks to play. Picks are revealed simultaneously.
+                  </Typography>
+                  {myNonStruckSelections.map((s) => (
+                    <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Typography variant="body2">{s.deck?.name} (SAS: {s.deck?.sas_rating ?? 'N/A'})</Typography>
+                      {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                      <Chip
+                        label={triadShortPickId === s.id ? 'Selected' : 'Pick'}
+                        color={triadShortPickId === s.id ? 'primary' : 'default'}
+                        size="small"
+                        onClick={() => setTriadShortPickId(s.id)}
+                        variant={triadShortPickId === s.id ? 'filled' : 'outlined'}
+                      />
+                    </Box>
+                  ))}
+                  <Button
+                    variant="contained"
+                    onClick={handleTriadShortPick}
+                    disabled={submitting || !triadShortPickId}
+                    sx={{ mt: 1 }}
+                  >
+                    Submit Pick
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Alliance pods (once both started, sealed_alliance only) */}
           {isAlliance && bothStarted && (
             <Card sx={{ mb: 2 }}>
@@ -1004,7 +1113,7 @@ export default function StandaloneMatchPage() {
           )}
 
           {/* Game report form */}
-          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (
+          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (
             <Card sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Report Game {games.length + 1}</Typography>

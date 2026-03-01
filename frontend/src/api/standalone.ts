@@ -144,3 +144,13 @@ export async function submitAdaptiveBid(
   const { data } = await apiClient.post(`/standalone-matches/${matchId}/adaptive-bid`, payload);
   return data;
 }
+
+export async function submitTriadShortPick(
+  matchId: number,
+  pickedDeckSelectionId: number,
+): Promise<StandaloneMatch> {
+  const { data } = await apiClient.post(`/standalone-matches/${matchId}/triad-short-pick`, {
+    picked_deck_selection_id: pickedDeckSelectionId,
+  });
+  return data;
+}
