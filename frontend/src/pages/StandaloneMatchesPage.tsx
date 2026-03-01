@@ -23,6 +23,7 @@ import {
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
+  Link,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { createStandaloneMatch, getPublicMatches } from '../api/standalone';
@@ -154,7 +155,13 @@ export default function StandaloneMatchesPage() {
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Create Standalone Match</DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-          {createError && <Alert severity="error">{createError}</Alert>}
+          {createError && (
+            <Alert severity="error">
+              {createError === 'Membership required' ? (
+                <>Membership required. <Link href="/account">Visit your account page</Link> to become a member.</>
+              ) : createError}
+            </Alert>
+          )}
 
           <FormControl fullWidth>
             <InputLabel>Format</InputLabel>

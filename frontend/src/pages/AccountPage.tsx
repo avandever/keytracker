@@ -9,6 +9,7 @@ import {
   Divider,
   FormControl,
   InputLabel,
+  Link,
   MenuItem,
   Paper,
   Select,
@@ -148,6 +149,12 @@ export default function AccountPage() {
             >
               Link Patreon
             </Button>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Not a patron yet?{' '}
+              <Link href="https://www.patreon.com/AV8R772" target="_blank" rel="noopener noreferrer">
+                Support Bear Tracks on Patreon
+              </Link>
+            </Typography>
           </>
         ) : (
           <>
@@ -166,7 +173,10 @@ export default function AccountPage() {
               <>
                 <Chip label="Patreon Linked" sx={{ mb: 1 }} />
                 <Typography color="text.secondary" sx={{ mt: 1, mb: 2 }}>
-                  No active membership found. If you recently subscribed, try refreshing.
+                  No active membership found. If you recently subscribed, try refreshing.{' '}
+                  <Link href="https://www.patreon.com/AV8R772" target="_blank" rel="noopener noreferrer">
+                    Support Bear Tracks on Patreon
+                  </Link>
                 </Typography>
               </>
             )}

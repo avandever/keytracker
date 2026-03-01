@@ -17,6 +17,8 @@ import uuid as uuid_module
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
 
+from keytracker.routes.auth import member_required
+
 from keytracker.schema import (
     db,
     User,
@@ -103,7 +105,7 @@ def _current_user_or_guest():
 
 
 @standalone_bp.route("/", methods=["POST"])
-@login_required
+@member_required
 def create_match():
     """Create a new standalone match."""
     data = request.get_json(silent=True) or {}

@@ -59,6 +59,22 @@ def patron_required(f):
     return decorated
 
 
+def member_required(f):
+    """Decorator that requires the user to be logged in and a member (patron or free membership)."""
+
+    @functools.wraps(f)
+    @login_required
+    def decorated(*args, **kwargs):
+        if not current_user.is_member:
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Membership required"}), 403
+            flash("This feature requires a membership.")
+            return redirect("/account")
+        return f(*args, **kwargs)
+
+    return decorated
+
+
 # --- Google OAuth ---
 
 
