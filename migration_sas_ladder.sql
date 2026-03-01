@@ -12,7 +12,7 @@ CREATE TABLE sas_ladder_assignment (
     rung_number INT NOT NULL,
     FOREIGN KEY (week_id) REFERENCES tracker_league_week(id),
     FOREIGN KEY (user_id) REFERENCES tracker_user(id),
-    FOREIGN KEY (team_id) REFERENCES team(id),
+    FOREIGN KEY (team_id) REFERENCES tracker_team(id),
     UNIQUE KEY uq_sla_week_user (week_id, user_id),
     UNIQUE KEY uq_sla_week_team_rung (week_id, team_id, rung_number)
 );

@@ -1289,7 +1289,7 @@ class SasLadderAssignment(db.Model):
         db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
     )
     user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
-    team_id = db.Column(db.Integer, db.ForeignKey("team.id"), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
     rung_number = db.Column(db.Integer, nullable=False)
     __table_args__ = (
         db.UniqueConstraint("week_id", "user_id", name="uq_sla_week_user"),
