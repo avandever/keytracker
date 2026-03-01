@@ -505,24 +505,26 @@ export default function StandaloneMatchPage() {
                   }}
                   disabled={submitting}
                 />
-                <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-                  <Button
-                    variant="contained"
-                    onClick={handleOpenAllianceSubmit}
-                    disabled={submitting || openAlliancePods.length < 3}
-                  >
-                    Submit Alliance
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    onClick={async () => {
-                      await clearStandaloneAllianceSelection(id);
-                      await refresh();
-                    }}
-                  >
-                    Clear
-                  </Button>
-                </Box>
+                {myPods.length < 3 && (
+                  <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+                    <Button
+                      variant="contained"
+                      onClick={handleOpenAllianceSubmit}
+                      disabled={submitting || openAlliancePods.length < 3}
+                    >
+                      Forge Alliance
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={async () => {
+                        await clearStandaloneAllianceSelection(id);
+                        await refresh();
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  </Box>
+                )}
               </Box>
             )}
 
@@ -703,7 +705,7 @@ export default function StandaloneMatchPage() {
               </Box>
             )}
 
-            {myPods.length > 0 && (
+            {myPods.length > 0 && !isOpenAlliance && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle2">Your alliance:</Typography>
                 {myPods.filter((p) => p.slot_type === 'pod').sort((a, b) => a.slot_number - b.slot_number).map((p) => (

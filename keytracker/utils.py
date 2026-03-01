@@ -721,6 +721,7 @@ def fetch_dok_alliance(uuid: str) -> dict:
         pods.append(
             {
                 "deck_id": deck.id,
+                "kf_id": deck.kf_id,
                 "deck_name": deck.name,
                 "house": house_name,
                 "expansion": deck.expansion,

@@ -12,7 +12,7 @@ export interface DeckImportResult {
 }
 
 export interface DokAllianceImportResult {
-  pods: { deck_id: number; deck_name: string; house: string; expansion: number; houses: string[]; sas_rating: number | null }[];
+  pods: { deck_id: number; kf_id: string; deck_name: string; house: string; expansion: number; houses: string[]; sas_rating: number | null }[];
   token_deck_id: number | null;
   prophecy_deck_id: number | null;
   valid_alliance: boolean;

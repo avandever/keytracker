@@ -35,6 +35,7 @@ export interface PodEntry {
 
 interface LoadedDeck {
   id: number;
+  kf_id?: string;
   name: string;
   expansion: number;
   houses: string[];
@@ -115,13 +116,14 @@ export default function AlliancePodBuilder({
         const pod = result.pods[i];
         newDecks[i] = {
           id: pod.deck_id,
+          kf_id: pod.kf_id,
           name: pod.deck_name,
           expansion: pod.expansion,
           houses: pod.houses,
           sas_rating: pod.sas_rating,
         };
         newHouses[i] = pod.house;
-        newUrls[i] = String(pod.deck_id);
+        newUrls[i] = pod.kf_id;
       }
 
       setPodUrls(newUrls);
@@ -170,6 +172,11 @@ export default function AlliancePodBuilder({
 
       const newDecks = [...podDecks];
       newDecks[podIndex] = result;
+
+      // Update URL to the canonical kf_id
+      const newUrls = [...podUrls];
+      newUrls[podIndex] = result.kf_id;
+      setPodUrls(newUrls);
 
       // Reset house for this pod (new deck)
       const newHouses = [...podHouses];
@@ -305,28 +312,31 @@ export default function AlliancePodBuilder({
           <Typography variant="caption" color="text.secondary">
             Pod {i + 1}
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mt: 0.5 }}>
-            <TextField
-              size="small"
-              label="Deck URL or UUID"
-              value={podUrls[i]}
-              onChange={(e) => {
-                const updated = [...podUrls];
-                updated[i] = e.target.value;
-                setPodUrls(updated);
-              }}
-              disabled={disabled || podLoading[i]}
-              sx={{ flex: 1 }}
-            />
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => handleLoadDeck(i)}
-              disabled={disabled || podLoading[i] || !podUrls[i].trim()}
-            >
-              {podLoading[i] ? <CircularProgress size={16} /> : 'Load'}
-            </Button>
-          </Box>
+          {/* Show URL input only when no deck is loaded yet */}
+          {!podDecks[i] && (
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mt: 0.5 }}>
+              <TextField
+                size="small"
+                label="Deck URL or UUID"
+                value={podUrls[i]}
+                onChange={(e) => {
+                  const updated = [...podUrls];
+                  updated[i] = e.target.value;
+                  setPodUrls(updated);
+                }}
+                disabled={disabled || podLoading[i]}
+                sx={{ flex: 1 }}
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => handleLoadDeck(i)}
+                disabled={disabled || podLoading[i] || !podUrls[i].trim()}
+              >
+                {podLoading[i] ? <CircularProgress size={16} /> : 'Load'}
+              </Button>
+            </Box>
+          )}
           {podErrors[i] && (
             <Typography variant="caption" color="error">
               {podErrors[i]}
@@ -337,6 +347,28 @@ export default function AlliancePodBuilder({
               <Typography variant="body2">{podDecks[i]!.name}</Typography>
               {podDecks[i]!.sas_rating != null && (
                 <Chip label={`SAS ${podDecks[i]!.sas_rating}`} size="small" variant="outlined" />
+              )}
+              {podDecks[i]!.kf_id && (
+                <>
+                  <Typography
+                    variant="body2"
+                    component="a"
+                    href={`https://www.keyforgegame.com/en-us/deck-details/${podDecks[i]!.kf_id}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    MV
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    component="a"
+                    href={`https://decksofkeyforge.com/decks/${podDecks[i]!.kf_id}`}
+                    target="_blank"
+                    rel="noopener"
+                  >
+                    DoK
+                  </Typography>
+                </>
               )}
               <FormControl size="small" sx={{ minWidth: 140 }}>
                 <InputLabel>House</InputLabel>
@@ -362,6 +394,25 @@ export default function AlliancePodBuilder({
                   ))}
                 </Select>
               </FormControl>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => {
+                  const newDecks = [...podDecks];
+                  newDecks[i] = null;
+                  const newUrls = [...podUrls];
+                  newUrls[i] = '';
+                  const newHouses = [...podHouses];
+                  newHouses[i] = '';
+                  setPodDecks(newDecks);
+                  setPodUrls(newUrls);
+                  setPodHouses(newHouses);
+                  notify(newDecks, newHouses, tokenDeckId, prophecyDeckId);
+                }}
+                disabled={disabled}
+              >
+                Change
+              </Button>
             </Box>
           )}
         </Box>
