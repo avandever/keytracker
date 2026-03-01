@@ -71,6 +71,7 @@ const FORMAT_LABELS: Record<string, string> = {
   triad: 'Triad',
   sealed_archon: 'Sealed Archon',
   sealed_alliance: 'Sealed Alliance',
+  team_sealed: 'Team Sealed',
   thief: 'Thief',
   alliance: 'Alliance',
 };
@@ -338,7 +339,7 @@ export default function LeagueAdminPage() {
       combined_max_sas: weekCombinedMaxSas ? parseInt(weekCombinedMaxSas, 10) : null,
       set_diversity: weekSetDiversity || false,
       house_diversity: weekHouseDiversity || false,
-      decks_per_player: (weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance') ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
+      decks_per_player: (weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance' || weekFormat === 'team_sealed') ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
       no_keycheat: weekNoKeycheat,
       alliance_restricted_list_version_id: weekFormat === 'alliance' && weekAllianceRlVersionId !== '' ? weekAllianceRlVersionId : null,
     };
@@ -558,8 +559,8 @@ export default function LeagueAdminPage() {
   const renderWeekActions = (week: LeagueWeek) => {
     const actions: React.ReactNode[] = [];
 
-    // Sealed pool generation (Sealed Archon + Sealed Alliance)
-    if (['sealed_archon', 'sealed_alliance'].includes(week.format_type) && !week.sealed_pools_generated &&
+    // Sealed pool generation (Sealed Archon + Sealed Alliance + Team Sealed)
+    if (['sealed_archon', 'sealed_alliance', 'team_sealed'].includes(week.format_type) && !week.sealed_pools_generated &&
         (week.status === 'setup' || week.status === 'deck_selection')) {
       actions.push(
         <Button key="sealed" size="small" variant="contained" color="secondary"
@@ -570,7 +571,7 @@ export default function LeagueAdminPage() {
     }
 
     // Regenerate sealed pools (when already generated and in deck_selection/team_paired)
-    if (['sealed_archon', 'sealed_alliance'].includes(week.format_type) && week.sealed_pools_generated &&
+    if (['sealed_archon', 'sealed_alliance', 'team_sealed'].includes(week.format_type) && week.sealed_pools_generated &&
         (week.status === 'deck_selection' || week.status === 'team_paired')) {
       actions.push(
         <Button key="regen-sealed" size="small" variant="outlined" color="secondary"
@@ -1046,6 +1047,7 @@ export default function LeagueAdminPage() {
                 <MenuItem value="triad">Triad</MenuItem>
                 <MenuItem value="sealed_archon">Sealed Archon</MenuItem>
                 <MenuItem value="sealed_alliance">Sealed Alliance</MenuItem>
+                <MenuItem value="team_sealed">Team Sealed</MenuItem>
                 <MenuItem value="alliance">Alliance</MenuItem>
                 <MenuItem value="thief">Thief</MenuItem>
               </Select>
@@ -1108,7 +1110,7 @@ export default function LeagueAdminPage() {
                 />
               </>
             )}
-            {(weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance') && (
+            {(weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance' || weekFormat === 'team_sealed') && (
               <TextField
                 label="Decks per Player"
                 value={weekDecksPerPlayer}

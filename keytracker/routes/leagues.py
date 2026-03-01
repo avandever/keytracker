@@ -1832,11 +1832,12 @@ def generate_sealed_pools(league_id, week_id):
     if week.format_type not in (
         WeekFormat.SEALED_ARCHON.value,
         WeekFormat.SEALED_ALLIANCE.value,
+        WeekFormat.TEAM_SEALED.value,
     ):
         return (
             jsonify(
                 {
-                    "error": "Sealed pools only for Sealed Archon or Sealed Alliance format"
+                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, or Team Sealed format"
                 }
             ),
             400,
@@ -1845,41 +1846,81 @@ def generate_sealed_pools(league_id, week_id):
         return jsonify({"error": "Sealed pools already generated"}), 400
 
     decks_per_player = week.decks_per_player or 4
-    active_members = _get_active_players(league)
-    num_players = len(active_members)
-    total_decks_needed = decks_per_player * num_players
 
-    # Query random decks from allowed sets
-    query = Deck.query
-    if week.allowed_sets:
-        try:
-            allowed = json.loads(week.allowed_sets)
-            query = query.filter(Deck.expansion.in_(allowed))
-        except (json.JSONDecodeError, TypeError):
-            pass
+    # Build a base deck query filtered by allowed sets
+    def _build_deck_query():
+        q = Deck.query
+        if week.allowed_sets:
+            try:
+                allowed = json.loads(week.allowed_sets)
+                q = q.filter(Deck.expansion.in_(allowed))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return q
 
-    decks = query.order_by(func.rand()).limit(total_decks_needed).all()
-    if len(decks) < total_decks_needed:
-        return (
-            jsonify(
-                {
-                    "error": f"Not enough decks in database ({len(decks)} available, {total_decks_needed} needed)"
-                }
-            ),
-            400,
+    if week.format_type == WeekFormat.TEAM_SEALED.value:
+        # Each team shares one pool: decks_per_player * team_size decks
+        teams = league.teams
+        if not teams:
+            return jsonify({"error": "No teams in league"}), 400
+        total_decks_needed = sum(
+            decks_per_player * len(team.members) for team in teams
         )
-
-    # Assign decks to players
-    random.shuffle(decks)
-    for i, member in enumerate(active_members):
-        player_decks = decks[i * decks_per_player : (i + 1) * decks_per_player]
-        for d in player_decks:
-            spd = SealedPoolDeck(
-                week_id=week.id,
-                user_id=member.user_id,
-                deck_id=d.id,
+        decks = (
+            _build_deck_query().order_by(func.rand()).limit(total_decks_needed).all()
+        )
+        if len(decks) < total_decks_needed:
+            return (
+                jsonify(
+                    {
+                        "error": f"Not enough decks in database ({len(decks)} available, {total_decks_needed} needed)"
+                    }
+                ),
+                400,
             )
-            db.session.add(spd)
+        random.shuffle(decks)
+        deck_offset = 0
+        for team in teams:
+            team_pool_size = decks_per_player * len(team.members)
+            team_decks = decks[deck_offset : deck_offset + team_pool_size]
+            deck_offset += team_pool_size
+            for d in team_decks:
+                spd = SealedPoolDeck(
+                    week_id=week.id,
+                    team_id=team.id,
+                    user_id=None,
+                    deck_id=d.id,
+                )
+                db.session.add(spd)
+    else:
+        active_members = _get_active_players(league)
+        num_players = len(active_members)
+        total_decks_needed = decks_per_player * num_players
+
+        decks = (
+            _build_deck_query().order_by(func.rand()).limit(total_decks_needed).all()
+        )
+        if len(decks) < total_decks_needed:
+            return (
+                jsonify(
+                    {
+                        "error": f"Not enough decks in database ({len(decks)} available, {total_decks_needed} needed)"
+                    }
+                ),
+                400,
+            )
+
+        # Assign decks to players
+        random.shuffle(decks)
+        for i, member in enumerate(active_members):
+            player_decks = decks[i * decks_per_player : (i + 1) * decks_per_player]
+            for d in player_decks:
+                spd = SealedPoolDeck(
+                    week_id=week.id,
+                    user_id=member.user_id,
+                    deck_id=d.id,
+                )
+                db.session.add(spd)
 
     week.sealed_pools_generated = True
     _log_admin_action(
@@ -1919,6 +1960,76 @@ def get_sealed_pool(league_id, week_id):
 
     pool = SealedPoolDeck.query.filter_by(week_id=week.id, user_id=target_user_id).all()
     return jsonify([serialize_sealed_pool_entry(spd) for spd in pool])
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/team-sealed-pool", methods=["GET"]
+)
+@login_required
+def get_team_sealed_pool(league_id, week_id):
+    """Get the shared sealed pool for the current user's team (Team Sealed format)."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.format_type != WeekFormat.TEAM_SEALED.value:
+        return jsonify({"error": "This endpoint is only for Team Sealed weeks"}), 400
+
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
+
+    # Determine target team
+    target_team_id = request.args.get("team_id", type=int)
+    if target_team_id:
+        if not is_admin:
+            # Allow captains to view their own team only
+            own_team = None
+            for team in league.teams:
+                if any(m.user_id == effective.id for m in team.members):
+                    own_team = team
+                    break
+            if not own_team or own_team.id != target_team_id:
+                is_captain = own_team and any(
+                    m.user_id == effective.id and m.is_captain
+                    for m in own_team.members
+                )
+                if not is_captain:
+                    return jsonify({"error": "Cannot view pool for this team"}), 403
+        target_team = db.session.get(Team, target_team_id)
+        if not target_team or target_team.league_id != league.id:
+            return jsonify({"error": "Team not found"}), 404
+    else:
+        target_team = None
+        for team in league.teams:
+            if any(m.user_id == effective.id for m in team.members):
+                target_team = team
+                break
+        if not target_team:
+            if is_admin and league.teams:
+                target_team = league.teams[0]
+            else:
+                return jsonify({"error": "User is not on a team in this league"}), 400
+
+    pool = SealedPoolDeck.query.filter_by(
+        week_id=week.id, team_id=target_team.id
+    ).all()
+
+    # Determine which decks have been claimed and by whom
+    team_user_ids = [m.user_id for m in target_team.members]
+    selections = PlayerDeckSelection.query.filter(
+        PlayerDeckSelection.week_id == week.id,
+        PlayerDeckSelection.user_id.in_(team_user_ids),
+    ).all()
+    claimed_map = {sel.deck_id: sel.user_id for sel in selections}
+
+    result = []
+    for spd in pool:
+        entry = serialize_sealed_pool_entry(spd)
+        entry["claimed_by_user_id"] = claimed_map.get(spd.deck_id)
+        result.append(entry)
+    return jsonify(result)
 
 
 # --- Alliance pod selection (Sealed Alliance format) ---
@@ -2309,6 +2420,34 @@ def submit_deck_selection(league_id, week_id):
         ).first()
         if not pool_entry:
             return jsonify({"error": "Deck is not in your sealed pool"}), 400
+        deck = db.session.get(Deck, deck_db_id)
+        if not deck:
+            return jsonify({"error": "Deck not found"}), 400
+    elif week.format_type == WeekFormat.TEAM_SEALED.value:
+        deck_db_id = data.get("deck_id")
+        if not deck_db_id:
+            return jsonify({"error": "deck_id is required for Team Sealed"}), 400
+        # Verify deck is in the team's shared pool
+        pool_entry = SealedPoolDeck.query.filter_by(
+            week_id=week.id, team_id=target_team.id, deck_id=deck_db_id
+        ).first()
+        if not pool_entry:
+            return jsonify({"error": "Deck is not in your team's sealed pool"}), 400
+        # Verify no teammate has already claimed this deck
+        team_user_ids = {m.user_id for m in target_team.members} - {target_user_id}
+        if team_user_ids:
+            teammate_claim = PlayerDeckSelection.query.filter(
+                PlayerDeckSelection.week_id == week.id,
+                PlayerDeckSelection.deck_id == deck_db_id,
+                PlayerDeckSelection.user_id.in_(team_user_ids),
+            ).first()
+            if teammate_claim:
+                return (
+                    jsonify(
+                        {"error": "Deck is already claimed by a teammate"}
+                    ),
+                    400,
+                )
         deck = db.session.get(Deck, deck_db_id)
         if not deck:
             return jsonify({"error": "Deck not found"}), 400
@@ -3571,11 +3710,12 @@ def regenerate_sealed_pools(league_id, week_id):
     if week.format_type not in (
         WeekFormat.SEALED_ARCHON.value,
         WeekFormat.SEALED_ALLIANCE.value,
+        WeekFormat.TEAM_SEALED.value,
     ):
         return (
             jsonify(
                 {
-                    "error": "Sealed pools only for Sealed Archon or Sealed Alliance format"
+                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, or Team Sealed format"
                 }
             ),
             400,
@@ -3591,70 +3731,130 @@ def regenerate_sealed_pools(league_id, week_id):
     if not week.sealed_pools_generated:
         return jsonify({"error": "Sealed pools have not been generated yet"}), 400
 
-    data = request.get_json(silent=True) or {}
-    target_user_ids = data.get("user_ids")  # optional list of int
-
-    active_members = _get_active_players(league)
-    if target_user_ids is not None:
-        active_members = [m for m in active_members if m.user_id in target_user_ids]
-
-    if not active_members:
-        return jsonify({"error": "No target players found"}), 400
-
     decks_per_player = week.decks_per_player or 4
 
-    # Collect already-assigned deck ids for players NOT being regenerated
-    all_member_ids = {m.user_id for m in _get_active_players(league)}
-    regen_ids = {m.user_id for m in active_members}
-    kept_ids = all_member_ids - regen_ids
-    excluded_deck_ids = set()
-    if kept_ids:
-        kept_pools = SealedPoolDeck.query.filter(
-            SealedPoolDeck.week_id == week.id,
-            SealedPoolDeck.user_id.in_(kept_ids),
-        ).all()
-        excluded_deck_ids = {spd.deck_id for spd in kept_pools}
+    def _build_regen_deck_query(excluded_ids=None):
+        q = Deck.query
+        if week.allowed_sets:
+            try:
+                allowed = json.loads(week.allowed_sets)
+                q = q.filter(Deck.expansion.in_(allowed))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if excluded_ids:
+            q = q.filter(~Deck.id.in_(excluded_ids))
+        return q
 
-    # For each target player: delete their pool, selections, and pod selections
-    for member in active_members:
-        uid = member.user_id
-        SealedPoolDeck.query.filter_by(week_id=week.id, user_id=uid).delete()
-        PlayerDeckSelection.query.filter_by(week_id=week.id, user_id=uid).delete()
-        AlliancePodSelection.query.filter_by(week_id=week.id, user_id=uid).delete()
+    if week.format_type == WeekFormat.TEAM_SEALED.value:
+        # For Team Sealed: always regenerate all teams
+        teams = league.teams
+        if not teams:
+            return jsonify({"error": "No teams in league"}), 400
 
-    db.session.flush()
+        # Delete all team pools and all member selections
+        SealedPoolDeck.query.filter_by(week_id=week.id).delete()
+        all_member_ids = [m.user_id for m in _get_active_players(league)]
+        if all_member_ids:
+            PlayerDeckSelection.query.filter(
+                PlayerDeckSelection.week_id == week.id,
+                PlayerDeckSelection.user_id.in_(all_member_ids),
+            ).delete(synchronize_session=False)
+        db.session.flush()
 
-    total_needed = decks_per_player * len(active_members)
-    query = Deck.query
-    if week.allowed_sets:
-        try:
-            allowed = json.loads(week.allowed_sets)
-            query = query.filter(Deck.expansion.in_(allowed))
-        except (json.JSONDecodeError, TypeError):
-            pass
-    if excluded_deck_ids:
-        query = query.filter(~Deck.id.in_(excluded_deck_ids))
-
-    decks = query.order_by(sql_func.rand()).limit(total_needed).all()
-    if len(decks) < total_needed:
-        db.session.rollback()
-        return (
-            jsonify(
-                {
-                    "error": f"Not enough decks in database ({len(decks)} available, {total_needed} needed)"
-                }
-            ),
-            400,
+        total_needed = sum(decks_per_player * len(team.members) for team in teams)
+        decks = (
+            _build_regen_deck_query()
+            .order_by(sql_func.rand())
+            .limit(total_needed)
+            .all()
         )
+        if len(decks) < total_needed:
+            db.session.rollback()
+            return (
+                jsonify(
+                    {
+                        "error": f"Not enough decks in database ({len(decks)} available, {total_needed} needed)"
+                    }
+                ),
+                400,
+            )
 
-    random.shuffle(decks)
-    for i, member in enumerate(active_members):
-        player_decks = decks[i * decks_per_player : (i + 1) * decks_per_player]
-        for d in player_decks:
-            spd = SealedPoolDeck(week_id=week.id, user_id=member.user_id, deck_id=d.id)
-            db.session.add(spd)
+        random.shuffle(decks)
+        deck_offset = 0
+        for team in teams:
+            team_pool_size = decks_per_player * len(team.members)
+            team_decks = decks[deck_offset : deck_offset + team_pool_size]
+            deck_offset += team_pool_size
+            for d in team_decks:
+                spd = SealedPoolDeck(
+                    week_id=week.id, team_id=team.id, user_id=None, deck_id=d.id
+                )
+                db.session.add(spd)
 
-    details = f"Regenerated for {len(active_members)} player(s)"
+        details = f"Regenerated for {len(teams)} team(s)"
+    else:
+        data = request.get_json(silent=True) or {}
+        target_user_ids = data.get("user_ids")  # optional list of int
+
+        active_members = _get_active_players(league)
+        if target_user_ids is not None:
+            active_members = [
+                m for m in active_members if m.user_id in target_user_ids
+            ]
+
+        if not active_members:
+            return jsonify({"error": "No target players found"}), 400
+
+        # Collect already-assigned deck ids for players NOT being regenerated
+        all_member_ids = {m.user_id for m in _get_active_players(league)}
+        regen_ids = {m.user_id for m in active_members}
+        kept_ids = all_member_ids - regen_ids
+        excluded_deck_ids = set()
+        if kept_ids:
+            kept_pools = SealedPoolDeck.query.filter(
+                SealedPoolDeck.week_id == week.id,
+                SealedPoolDeck.user_id.in_(kept_ids),
+            ).all()
+            excluded_deck_ids = {spd.deck_id for spd in kept_pools}
+
+        # For each target player: delete their pool, selections, and pod selections
+        for member in active_members:
+            uid = member.user_id
+            SealedPoolDeck.query.filter_by(week_id=week.id, user_id=uid).delete()
+            PlayerDeckSelection.query.filter_by(week_id=week.id, user_id=uid).delete()
+            AlliancePodSelection.query.filter_by(week_id=week.id, user_id=uid).delete()
+
+        db.session.flush()
+
+        total_needed = decks_per_player * len(active_members)
+        decks = (
+            _build_regen_deck_query(excluded_deck_ids)
+            .order_by(sql_func.rand())
+            .limit(total_needed)
+            .all()
+        )
+        if len(decks) < total_needed:
+            db.session.rollback()
+            return (
+                jsonify(
+                    {
+                        "error": f"Not enough decks in database ({len(decks)} available, {total_needed} needed)"
+                    }
+                ),
+                400,
+            )
+
+        random.shuffle(decks)
+        for i, member in enumerate(active_members):
+            player_decks = decks[i * decks_per_player : (i + 1) * decks_per_player]
+            for d in player_decks:
+                spd = SealedPoolDeck(
+                    week_id=week.id, user_id=member.user_id, deck_id=d.id
+                )
+                db.session.add(spd)
+
+        details = f"Regenerated for {len(active_members)} player(s)"
+
     _log_admin_action(league.id, week.id, user.id, "sealed_pools_regenerated", details)
     db.session.commit()
     db.session.refresh(week)

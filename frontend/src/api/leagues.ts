@@ -321,6 +321,22 @@ export async function getSealedPool(
   return data;
 }
 
+export interface TeamSealedPoolEntry {
+  id: number;
+  deck: DeckSummary | null;
+  claimed_by_user_id: number | null;
+}
+
+export async function getTeamSealedPool(
+  leagueId: number,
+  weekId: number,
+  teamId?: number,
+): Promise<TeamSealedPoolEntry[]> {
+  const params = teamId ? `?team_id=${teamId}` : '';
+  const { data } = await apiClient.get(`/leagues/${leagueId}/weeks/${weekId}/team-sealed-pool${params}`);
+  return data;
+}
+
 // --- Alliance Restricted List ---
 
 export async function getRestrictedListVersions(): Promise<AllianceRestrictedListVersion[]> {

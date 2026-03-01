@@ -37,6 +37,7 @@ import {
   submitDeckSelection,
   removeDeckSelection,
   getSealedPool,
+  getTeamSealedPool,
   getSets,
   setFeatureDesignation,
   clearFeatureDesignation,
@@ -51,13 +52,14 @@ import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
 import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
-import type { SealedPoolEntry } from '../api/leagues';
+import type { SealedPoolEntry, TeamSealedPoolEntry } from '../api/leagues';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
   triad: 'Triad',
   sealed_archon: 'Sealed Archon',
   sealed_alliance: 'Sealed Alliance',
+  team_sealed: 'Team Sealed',
   thief: 'Thief',
   alliance: 'Alliance',
 };
@@ -92,6 +94,8 @@ export default function MyTeamPage() {
 
   // Sealed pool state: keyed by `${weekId}-${userId}`
   const [sealedPools, setSealedPools] = useState<Record<string, SealedPoolEntry[]>>({});
+  // Team Sealed pool state: keyed by `${weekId}-${teamId}`
+  const [teamSealedPools, setTeamSealedPools] = useState<Record<string, TeamSealedPoolEntry[]>>({});
   // Sealed selection state: keyed by `${weekId}-${userId}-${slotNumber}`
   const [sealedSelections, setSealedSelections] = useState<Record<string, number>>({});
 
@@ -113,6 +117,7 @@ export default function MyTeamPage() {
   const refresh = useCallback(() => {
     if (!leagueId) return;
     setSealedPools({});
+    setTeamSealedPools({});
     getLeague(parseInt(leagueId, 10))
       .then((l) => {
         setLeague(l);
@@ -137,8 +142,6 @@ export default function MyTeamPage() {
     const sealedWeeks = (league.weeks || []).filter(
       (w) => ['sealed_archon', 'sealed_alliance'].includes(w.format_type) && w.sealed_pools_generated,
     );
-    if (sealedWeeks.length === 0) return;
-
     sealedWeeks.forEach((week) => {
       const members = isCaptain
         ? myTeam.members
@@ -155,6 +158,21 @@ export default function MyTeamPage() {
             // Silently ignore - pool may not be accessible
           });
       });
+    });
+
+    const teamSealedWeeks = (league.weeks || []).filter(
+      (w) => w.format_type === 'team_sealed' && w.sealed_pools_generated,
+    );
+    teamSealedWeeks.forEach((week) => {
+      const key = `${week.id}-${myTeam.id}`;
+      if (teamSealedPools[key]) return; // already fetched
+      getTeamSealedPool(league.id, week.id)
+        .then((pool) => {
+          setTeamSealedPools((prev) => ({ ...prev, [key]: pool }));
+        })
+        .catch(() => {
+          // Silently ignore - pool may not be accessible
+        });
     });
   }, [league, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -410,6 +428,60 @@ export default function MyTeamPage() {
                 [selKey]: e.target.value as number,
               }))}
               label="Select deck from pool"
+            >
+              {availableDecks.map((p) => (
+                <MenuItem key={p.deck!.db_id} value={p.deck!.db_id}>
+                  {p.deck!.name} {p.deck!.sas_rating != null ? `(SAS: ${p.deck!.sas_rating})` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => handleSubmitSealed(week.id, userId, slotNumber)}
+            disabled={!sealedSelections[selKey]}
+          >
+            Submit
+          </Button>
+        </Box>
+      );
+    }
+
+    if (week.format_type === 'team_sealed') {
+      const myTeam = league.teams.find((t) => t.id === league.my_team_id);
+      const teamPoolKey = myTeam ? `${week.id}-${myTeam.id}` : '';
+      const teamPool = teamSealedPools[teamPoolKey] || [];
+      if (teamPool.length === 0) {
+        return (
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+            Team pool not yet generated
+          </Typography>
+        );
+      }
+
+      // Filter out decks claimed by other teammates
+      const selections = getMemberSelections(week, userId);
+      const mySelectedDeckIds = new Set(selections.map((s) => s.deck?.db_id).filter(Boolean));
+      const availableDecks = teamPool.filter(
+        (p) =>
+          p.deck &&
+          !mySelectedDeckIds.has(p.deck.db_id) &&
+          (p.claimed_by_user_id === null || p.claimed_by_user_id === userId),
+      );
+
+      const selKey = `${week.id}-${userId}-${slotNumber}`;
+      return (
+        <Box sx={{ display: 'flex', gap: 1, ml: 4, mt: 0.5, alignItems: 'center' }}>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Select deck from team pool</InputLabel>
+            <Select
+              value={sealedSelections[selKey] || ''}
+              onChange={(e) => setSealedSelections((prev) => ({
+                ...prev,
+                [selKey]: e.target.value as number,
+              }))}
+              label="Select deck from team pool"
             >
               {availableDecks.map((p) => (
                 <MenuItem key={p.deck!.db_id} value={p.deck!.db_id}>
@@ -839,6 +911,44 @@ export default function MyTeamPage() {
                     {leftDecks.map(renderDeckRow)}
                   </Box>
                 )}
+              </Box>
+            );
+          })()}
+
+          {/* Team Sealed: shared pool display */}
+          {week.format_type === 'team_sealed' && (() => {
+            const teamPoolKey = `${week.id}-${myTeam.id}`;
+            const teamPool = teamSealedPools[teamPoolKey];
+            if (!teamPool || teamPool.length === 0) return null;
+            return (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Team Sealed Pool ({teamPool.length} decks):</Typography>
+                {teamPool.map((entry) => (
+                  <Box key={entry.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, ml: 2 }}>
+                    {entry.deck?.houses && <HouseIcons houses={entry.deck.houses} />}
+                    <Typography variant="body2">{entry.deck?.name || 'Unknown'}</Typography>
+                    {entry.deck?.sas_rating != null && (
+                      <Chip label={`SAS: ${entry.deck.sas_rating}`} size="small" variant="outlined" />
+                    )}
+                    {entry.deck?.expansion_name && (
+                      <Chip label={entry.deck.expansion_name} size="small" variant="outlined" />
+                    )}
+                    {entry.claimed_by_user_id != null && (
+                      <Chip
+                        label={entry.claimed_by_user_id === user.id ? 'Claimed by you' : 'Claimed'}
+                        size="small"
+                        color={entry.claimed_by_user_id === user.id ? 'success' : 'default'}
+                        variant="outlined"
+                      />
+                    )}
+                    {entry.deck && (
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Link href={entry.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                        <Link href={entry.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                      </Box>
+                    )}
+                  </Box>
+                ))}
               </Box>
             );
           })()}

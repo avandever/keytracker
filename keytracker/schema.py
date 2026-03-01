@@ -833,6 +833,7 @@ class WeekFormat(PyEnum):
     THIEF = "thief"
     ADAPTIVE = "adaptive"
     ALLIANCE = "alliance"
+    TEAM_SEALED = "team_sealed"
 
 
 class WeekStatus(PyEnum):
@@ -1235,7 +1236,8 @@ class SealedPoolDeck(db.Model):
     standalone_match_id = db.Column(
         db.Integer, db.ForeignKey("standalone_match.id"), nullable=True
     )
-    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=True)
     deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False)
 
     week = db.relationship("LeagueWeek")
@@ -1243,6 +1245,7 @@ class SealedPoolDeck(db.Model):
         "StandaloneMatch", back_populates="sealed_pool_decks"
     )
     user = db.relationship("User")
+    team = db.relationship("Team")
     deck = db.relationship("Deck")
 
 
