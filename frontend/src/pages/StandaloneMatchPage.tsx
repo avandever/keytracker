@@ -225,6 +225,8 @@ export default function StandaloneMatchPage() {
     matchups: [],
     deck_selections: [],
     feature_designations: [],
+    sas_ladder_maxes: null,
+    sas_ladder_feature_rung: null,
   };
 
   const isSealed = match.format_type === 'sealed_archon' || match.format_type === 'sealed_alliance';

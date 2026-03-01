@@ -22,6 +22,7 @@ from keytracker.schema import (
     ThiefCurationDeck,
     ThiefSteal,
     FeatureDesignation,
+    SasLadderAssignment,
     PodStats,
     SignupStatus,
     WeekFormat,
@@ -1065,6 +1066,40 @@ def _generate_thief_player_pairings(team1, team2, week_matchup, league, week):
     return pairings
 
 
+def _get_rung_ranges(sas_ladder_maxes_json):
+    """Parse SAS ladder maxes JSON and return list of (min, max_or_None) tuples."""
+    maxes = json.loads(sas_ladder_maxes_json)
+    ranges, prev = [], 0
+    for m in maxes:
+        ranges.append((prev, m))
+        prev = m + 1
+    ranges.append((prev, None))
+    return ranges
+
+
+def _generate_sas_ladder_pairings(team1, team2, week):
+    """Generate player pairings for SAS Ladder format based on rung assignments.
+
+    Returns list of (player1_id, player2_id, is_feature) tuples.
+    Feature pair (if any) is always first.
+    """
+    maxes = json.loads(week.sas_ladder_maxes) if week.sas_ladder_maxes else []
+    num_rungs = len(maxes) + 1
+    feature_rung = week.sas_ladder_feature_rung
+    feature, rest = [], []
+    for rung in range(1, num_rungs + 1):
+        a1 = SasLadderAssignment.query.filter_by(
+            week_id=week.id, team_id=team1.id, rung_number=rung
+        ).first()
+        a2 = SasLadderAssignment.query.filter_by(
+            week_id=week.id, team_id=team2.id, rung_number=rung
+        ).first()
+        if a1 and a2:
+            is_feat = feature_rung is not None and rung == feature_rung
+            (feature if is_feat else rest).append((a1.user_id, a2.user_id, is_feat))
+    return feature + rest
+
+
 def _generate_player_pairings(team1, team2, league, week, week_number):
     """Generate player pairings within a team matchup.
 
@@ -1186,6 +1221,13 @@ def create_week(league_id):
             if latest:
                 alliance_restricted_list_version_id = latest.id
 
+    sas_ladder_maxes_raw = data.get("sas_ladder_maxes")
+    sas_ladder_maxes_json = (
+        json.dumps(sas_ladder_maxes_raw)
+        if isinstance(sas_ladder_maxes_raw, list)
+        else None
+    )
+
     week = LeagueWeek(
         league_id=league.id,
         week_number=max_week + 1,
@@ -1201,6 +1243,8 @@ def create_week(league_id):
         decks_per_player=data.get("decks_per_player"),
         no_keycheat=bool(data.get("no_keycheat", False)),
         alliance_restricted_list_version_id=alliance_restricted_list_version_id,
+        sas_ladder_maxes=sas_ladder_maxes_json,
+        sas_ladder_feature_rung=data.get("sas_ladder_feature_rung"),
     )
     db.session.add(week)
     db.session.commit()
@@ -1322,6 +1366,13 @@ def update_week(league_id, week_id):
                     400,
                 )
             week.alliance_restricted_list_version_id = rl_id
+    if "sas_ladder_maxes" in data:
+        if data["sas_ladder_maxes"] and isinstance(data["sas_ladder_maxes"], list):
+            week.sas_ladder_maxes = json.dumps(data["sas_ladder_maxes"])
+        else:
+            week.sas_ladder_maxes = None
+    if "sas_ladder_feature_rung" in data:
+        week.sas_ladder_feature_rung = data["sas_ladder_feature_rung"]
 
     db.session.commit()
     db.session.refresh(week)
@@ -1389,7 +1440,10 @@ def generate_matchups(league_id, week_id):
             return jsonify({"error": "Previous week must be completed first"}), 400
 
     # Check all players have submitted deck selections
-    _alliance_week_formats = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value)
+    _alliance_week_formats = (
+        WeekFormat.SEALED_ALLIANCE.value,
+        WeekFormat.ALLIANCE.value,
+    )
     active_members = _get_active_players(league)
     for member in active_members:
         if week.format_type in _alliance_week_formats:
@@ -1608,8 +1662,11 @@ def generate_player_matchups(league_id, week_id):
         return jsonify({"error": "No team pairings found"}), 400
 
     # Pre-flight check: for even team_size leagues, all teams must have a feature designation
-    # (Skip for Thief format - feature is auto-constrained by thief_stolen_team_id)
-    if league.team_size % 2 == 0 and week.format_type != WeekFormat.THIEF.value:
+    # (Skip for Thief and SAS Ladder formats - they handle feature differently)
+    if league.team_size % 2 == 0 and week.format_type not in (
+        WeekFormat.THIEF.value,
+        WeekFormat.SAS_LADDER.value,
+    ):
         missing_teams = []
         seen_team_ids = set()
         for wm in matchups:
@@ -1630,6 +1687,30 @@ def generate_player_matchups(league_id, week_id):
                         "missing_teams": missing_teams,
                     }
                 ),
+                400,
+            )
+
+    # Pre-flight for SAS Ladder: all active players must have rung assignments
+    if week.format_type == WeekFormat.SAS_LADDER.value:
+        active_members = _get_active_players(league)
+        missing = []
+        for m in active_members:
+            if not SasLadderAssignment.query.filter_by(
+                week_id=week.id, user_id=m.user_id
+            ).first():
+                u = db.session.get(User, m.user_id)
+                name = u.name if u else f"User {m.user_id}"
+                missing.append(name)
+        if missing:
+            return (
+                jsonify(
+                    {"error": f"Players missing rung assignments: {', '.join(missing)}"}
+                ),
+                400,
+            )
+        if league.team_size % 2 == 0 and not week.sas_ladder_feature_rung:
+            return (
+                jsonify({"error": "Feature rung must be set for even team sizes"}),
                 400,
             )
 
@@ -1693,6 +1774,8 @@ def generate_player_matchups(league_id, week_id):
             player_pairs = _generate_thief_player_pairings(
                 team1, team2, wm, league, week
             )
+        elif week.format_type == WeekFormat.SAS_LADDER.value:
+            player_pairs = _generate_sas_ladder_pairings(team1, team2, week)
         else:
             player_pairs = _generate_player_pairings(
                 team1, team2, league, week, week.week_number
@@ -1859,14 +1942,15 @@ def generate_sealed_pools(league_id, week_id):
                 pass
         return q
 
-    if week.format_type in (WeekFormat.TEAM_SEALED.value, WeekFormat.TEAM_SEALED_ALLIANCE.value):
+    if week.format_type in (
+        WeekFormat.TEAM_SEALED.value,
+        WeekFormat.TEAM_SEALED_ALLIANCE.value,
+    ):
         # Each team shares one pool: decks_per_player * team_size decks
         teams = league.teams
         if not teams:
             return jsonify({"error": "No teams in league"}), 400
-        total_decks_needed = sum(
-            decks_per_player * len(team.members) for team in teams
-        )
+        total_decks_needed = sum(decks_per_player * len(team.members) for team in teams)
         decks = (
             _build_deck_query().order_by(func.rand()).limit(total_decks_needed).all()
         )
@@ -1975,8 +2059,18 @@ def get_team_sealed_pool(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.format_type not in (WeekFormat.TEAM_SEALED.value, WeekFormat.TEAM_SEALED_ALLIANCE.value):
-        return jsonify({"error": "This endpoint is only for Team Sealed or Team Sealed Alliance weeks"}), 400
+    if week.format_type not in (
+        WeekFormat.TEAM_SEALED.value,
+        WeekFormat.TEAM_SEALED_ALLIANCE.value,
+    ):
+        return (
+            jsonify(
+                {
+                    "error": "This endpoint is only for Team Sealed or Team Sealed Alliance weeks"
+                }
+            ),
+            400,
+        )
 
     effective = get_effective_user()
     is_admin = _is_league_admin(league, effective)
@@ -1993,8 +2087,7 @@ def get_team_sealed_pool(league_id, week_id):
                     break
             if not own_team or own_team.id != target_team_id:
                 is_captain = own_team and any(
-                    m.user_id == effective.id and m.is_captain
-                    for m in own_team.members
+                    m.user_id == effective.id and m.is_captain for m in own_team.members
                 )
                 if not is_captain:
                     return jsonify({"error": "Cannot view pool for this team"}), 403
@@ -2013,9 +2106,7 @@ def get_team_sealed_pool(league_id, week_id):
             else:
                 return jsonify({"error": "User is not on a team in this league"}), 400
 
-    pool = SealedPoolDeck.query.filter_by(
-        week_id=week.id, team_id=target_team.id
-    ).all()
+    pool = SealedPoolDeck.query.filter_by(week_id=week.id, team_id=target_team.id).all()
 
     team_user_ids = [m.user_id for m in target_team.members]
 
@@ -2069,7 +2160,11 @@ def submit_alliance_selection(league_id, week_id):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
 
-    alliance_formats = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value, WeekFormat.TEAM_SEALED_ALLIANCE.value)
+    alliance_formats = (
+        WeekFormat.SEALED_ALLIANCE.value,
+        WeekFormat.ALLIANCE.value,
+        WeekFormat.TEAM_SEALED_ALLIANCE.value,
+    )
     if week.format_type not in alliance_formats:
         return jsonify({"error": "Only for Alliance formats"}), 400
     if week.status not in (
@@ -2116,7 +2211,9 @@ def submit_alliance_selection(league_id, week_id):
     if week.format_type == WeekFormat.ALLIANCE.value:
         from keytracker.match_helpers import validate_alliance_open
 
-        errors = validate_alliance_open(week, target_user_id, pods, token_deck_id, prophecy_deck_id)
+        errors = validate_alliance_open(
+            week, target_user_id, pods, token_deck_id, prophecy_deck_id
+        )
         if errors:
             return jsonify({"error": errors[0]}), 400
 
@@ -2143,10 +2240,14 @@ def submit_alliance_selection(league_id, week_id):
             return jsonify({"error": "User is not on a team in this league"}), 400
 
         # Build team pool as set of deck_ids
-        team_pool = SealedPoolDeck.query.filter_by(week_id=week.id, team_id=target_team.id).all()
+        team_pool = SealedPoolDeck.query.filter_by(
+            week_id=week.id, team_id=target_team.id
+        ).all()
         team_pool_deck_ids = {spd.deck_id for spd in team_pool}
 
-        teammate_ids = [m.user_id for m in target_team.members if m.user_id != target_user_id]
+        teammate_ids = [
+            m.user_id for m in target_team.members if m.user_id != target_user_id
+        ]
 
         pod_deck_ids = []
         houses = []
@@ -2158,7 +2259,10 @@ def submit_alliance_selection(league_id, week_id):
 
             # Deck must be in team pool
             if deck_id not in team_pool_deck_ids:
-                return jsonify({"error": f"Pod {i+1}: deck not in team sealed pool"}), 400
+                return (
+                    jsonify({"error": f"Pod {i+1}: deck not in team sealed pool"}),
+                    400,
+                )
 
             # House must be a valid house for this deck
             valid_house = (
@@ -2169,7 +2273,9 @@ def submit_alliance_selection(league_id, week_id):
             if not valid_house:
                 return (
                     jsonify(
-                        {"error": f"Pod {i+1}: {house} is not a house of the selected deck"}
+                        {
+                            "error": f"Pod {i+1}: {house} is not a house of the selected deck"
+                        }
                     ),
                     400,
                 )
@@ -2185,7 +2291,11 @@ def submit_alliance_selection(league_id, week_id):
                 ).first()
                 if conflict:
                     return (
-                        jsonify({"error": f"Pod {i+1}: {house} from this deck is already claimed by a teammate"}),
+                        jsonify(
+                            {
+                                "error": f"Pod {i+1}: {house} from this deck is already claimed by a teammate"
+                            }
+                        ),
                         400,
                     )
 
@@ -2211,7 +2321,9 @@ def submit_alliance_selection(league_id, week_id):
             return jsonify({"error": "Exactly 3 pods are required"}), 400
 
         # Build player's sealed pool as set of deck_ids
-        pool = SealedPoolDeck.query.filter_by(week_id=week.id, user_id=target_user_id).all()
+        pool = SealedPoolDeck.query.filter_by(
+            week_id=week.id, user_id=target_user_id
+        ).all()
         pool_deck_ids_set = {spd.deck_id for spd in pool}
 
         pod_deck_ids = []
@@ -2224,7 +2336,10 @@ def submit_alliance_selection(league_id, week_id):
 
             # Deck must be in pool
             if deck_id not in pool_deck_ids_set:
-                return jsonify({"error": f"Pod {i+1}: deck not in your sealed pool"}), 400
+                return (
+                    jsonify({"error": f"Pod {i+1}: deck not in your sealed pool"}),
+                    400,
+                )
 
             # House must be a valid house for this deck
             valid_house = (
@@ -2235,7 +2350,9 @@ def submit_alliance_selection(league_id, week_id):
             if not valid_house:
                 return (
                     jsonify(
-                        {"error": f"Pod {i+1}: {house} is not a house of the selected deck"}
+                        {
+                            "error": f"Pod {i+1}: {house} is not a house of the selected deck"
+                        }
                     ),
                     400,
                 )
@@ -2261,7 +2378,9 @@ def submit_alliance_selection(league_id, week_id):
         if needs_token:
             if not token_deck_id:
                 return (
-                    jsonify({"error": "token_deck_id is required for this week's sets"}),
+                    jsonify(
+                        {"error": "token_deck_id is required for this week's sets"}
+                    ),
                     400,
                 )
             if token_deck_id not in pod_deck_ids:
@@ -2280,7 +2399,9 @@ def submit_alliance_selection(league_id, week_id):
                 )
             if prophecy_deck_id not in pod_deck_ids:
                 return (
-                    jsonify({"error": "prophecy_deck_id must be one of the 3 pod decks"}),
+                    jsonify(
+                        {"error": "prophecy_deck_id must be one of the 3 pod decks"}
+                    ),
                     400,
                 )
 
@@ -2342,7 +2463,11 @@ def clear_alliance_selection(league_id, week_id):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
 
-    _alliance_formats_clear = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value, WeekFormat.TEAM_SEALED_ALLIANCE.value)
+    _alliance_formats_clear = (
+        WeekFormat.SEALED_ALLIANCE.value,
+        WeekFormat.ALLIANCE.value,
+        WeekFormat.TEAM_SEALED_ALLIANCE.value,
+    )
     if week.format_type not in _alliance_formats_clear:
         return jsonify({"error": "Only for Alliance formats"}), 400
 
@@ -2458,12 +2583,14 @@ def submit_deck_selection(league_id, week_id):
         return jsonify({"error": "Deck selection is not open"}), 400
 
     # Alliance formats use a different endpoint for pod selection
-    _af = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value, WeekFormat.TEAM_SEALED_ALLIANCE.value)
+    _af = (
+        WeekFormat.SEALED_ALLIANCE.value,
+        WeekFormat.ALLIANCE.value,
+        WeekFormat.TEAM_SEALED_ALLIANCE.value,
+    )
     if week.format_type in _af:
         return (
-            jsonify(
-                {"error": "Alliance formats use /alliance-selection endpoint"}
-            ),
+            jsonify({"error": "Alliance formats use /alliance-selection endpoint"}),
             400,
         )
 
@@ -2542,9 +2669,7 @@ def submit_deck_selection(league_id, week_id):
             ).first()
             if teammate_claim:
                 return (
-                    jsonify(
-                        {"error": "Deck is already claimed by a teammate"}
-                    ),
+                    jsonify({"error": "Deck is already claimed by a teammate"}),
                     400,
                 )
         deck = db.session.get(Deck, deck_db_id)
@@ -2674,6 +2799,37 @@ def submit_deck_selection(league_id, week_id):
             return (
                 jsonify(
                     {"error": f"Deck SAS ({sas}) exceeds max SAS ({week.max_sas})"}
+                ),
+                400,
+            )
+
+    # Validate SAS Ladder rung
+    if week.format_type == WeekFormat.SAS_LADDER.value:
+        assignment = SasLadderAssignment.query.filter_by(
+            week_id=week.id, user_id=target_user_id
+        ).first()
+        if not assignment:
+            return (
+                jsonify({"error": "You have not been assigned a rung for this week"}),
+                400,
+            )
+        sas = deck.sas_rating
+        if sas is None:
+            return (
+                jsonify({"error": "Deck must have a SAS rating for SAS Ladder format"}),
+                400,
+            )
+        ranges = _get_rung_ranges(week.sas_ladder_maxes)
+        rung_min, rung_max = ranges[assignment.rung_number - 1]
+        if sas < rung_min or (rung_max is not None and sas > rung_max):
+            range_str = (
+                f"{rung_min}+" if rung_max is None else f"{rung_min}\u2013{rung_max}"
+            )
+            return (
+                jsonify(
+                    {
+                        "error": f"Deck SAS ({sas}) is not in your rung range ({range_str})"
+                    }
                 ),
                 400,
             )
@@ -3004,6 +3160,102 @@ def clear_feature_designation(league_id, week_id):
             week_id=week.id, team_id=captain_team.id
         ).delete()
 
+    db.session.commit()
+    db.session.refresh(week)
+    viewer = effective if current_user.is_authenticated else None
+    return jsonify(serialize_league_week(week, viewer=viewer))
+
+
+# --- SAS Ladder format routes ---
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/sas-ladder-assignment", methods=["POST"]
+)
+@login_required
+def set_sas_ladder_assignment(league_id, week_id):
+    """Assign a rung to a player for this SAS Ladder week."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.format_type != WeekFormat.SAS_LADDER.value:
+        return jsonify({"error": "Only for SAS Ladder format"}), 400
+    if week.status in (
+        WeekStatus.PAIRING.value,
+        WeekStatus.PUBLISHED.value,
+        WeekStatus.COMPLETED.value,
+    ):
+        return (
+            jsonify({"error": "Rung assignment is locked once pairings are generated"}),
+            400,
+        )
+
+    data = request.get_json(silent=True) or {}
+    rung_number = data.get("rung_number")
+    if rung_number is None:
+        return jsonify({"error": "rung_number is required"}), 400
+
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
+
+    target_user_id = data.get("user_id", effective.id)
+
+    # Find the team the target user belongs to
+    target_team = None
+    for team in league.teams:
+        if any(m.user_id == target_user_id for m in team.members):
+            target_team = team
+            break
+    if not target_team:
+        return (
+            jsonify({"error": "User is not a member of any team in this league"}),
+            404,
+        )
+
+    # Auth check
+    if target_user_id != effective.id:
+        is_captain = (
+            TeamMember.query.filter_by(
+                team_id=target_team.id, user_id=effective.id, is_captain=True
+            ).first()
+            is not None
+        )
+        if not is_admin and not is_captain:
+            return (
+                jsonify({"error": "Must be captain of the team or league admin"}),
+                403,
+            )
+
+    # Validate rung number
+    if not week.sas_ladder_maxes:
+        return jsonify({"error": "SAS ladder rungs have not been configured"}), 400
+    num_rungs = len(json.loads(week.sas_ladder_maxes)) + 1
+    if not isinstance(rung_number, int) or rung_number < 1 or rung_number > num_rungs:
+        return jsonify({"error": f"rung_number must be between 1 and {num_rungs}"}), 400
+
+    # Check if rung is already claimed by a different player on the same team
+    existing = SasLadderAssignment.query.filter_by(
+        week_id=week.id, team_id=target_team.id, rung_number=rung_number
+    ).first()
+    if existing and existing.user_id != target_user_id:
+        claimer = db.session.get(User, existing.user_id)
+        name = claimer.name if claimer else f"User {existing.user_id}"
+        return jsonify({"error": f"Rung already claimed by {name}"}), 409
+
+    # Upsert: delete existing assignment for this user+week, insert new one
+    SasLadderAssignment.query.filter_by(
+        week_id=week.id, user_id=target_user_id
+    ).delete()
+    assignment = SasLadderAssignment(
+        week_id=week.id,
+        user_id=target_user_id,
+        team_id=target_team.id,
+        rung_number=rung_number,
+    )
+    db.session.add(assignment)
     db.session.commit()
     db.session.refresh(week)
     viewer = effective if current_user.is_authenticated else None
@@ -3767,6 +4019,8 @@ def regenerate_player_matchups(league_id, week_id):
             player_pairs = _generate_thief_player_pairings(
                 team1, team2, wm, league, week
             )
+        elif week.format_type == WeekFormat.SAS_LADDER.value:
+            player_pairs = _generate_sas_ladder_pairings(team1, team2, week)
         else:
             player_pairs = _generate_player_pairings(
                 team1, team2, league, week, week.week_number
@@ -3845,7 +4099,10 @@ def regenerate_sealed_pools(league_id, week_id):
             q = q.filter(~Deck.id.in_(excluded_ids))
         return q
 
-    if week.format_type in (WeekFormat.TEAM_SEALED.value, WeekFormat.TEAM_SEALED_ALLIANCE.value):
+    if week.format_type in (
+        WeekFormat.TEAM_SEALED.value,
+        WeekFormat.TEAM_SEALED_ALLIANCE.value,
+    ):
         # For Team Sealed / Team Sealed Alliance: always regenerate all teams
         teams = league.teams
         if not teams:
@@ -3902,9 +4159,7 @@ def regenerate_sealed_pools(league_id, week_id):
 
         active_members = _get_active_players(league)
         if target_user_ids is not None:
-            active_members = [
-                m for m in active_members if m.user_id in target_user_ids
-            ]
+            active_members = [m for m in active_members if m.user_id in target_user_ids]
 
         if not active_members:
             return jsonify({"error": "No target players found"}), 400

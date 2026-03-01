@@ -835,6 +835,7 @@ class WeekFormat(PyEnum):
     ALLIANCE = "alliance"
     TEAM_SEALED = "team_sealed"
     TEAM_SEALED_ALLIANCE = "team_sealed_alliance"
+    SAS_LADDER = "sas_ladder"
 
 
 class WeekStatus(PyEnum):
@@ -1007,9 +1008,15 @@ class LeagueWeek(db.Model):
         db.ForeignKey("alliance_restricted_list_version.id"),
         nullable=True,
     )
+    # SAS Ladder-specific
+    sas_ladder_maxes = db.Column(db.Text, nullable=True)
+    sas_ladder_feature_rung = db.Column(db.Integer, nullable=True)
 
     league = db.relationship("League", backref="weeks")
-    alliance_restricted_list_version = db.relationship("AllianceRestrictedListVersion", foreign_keys=[alliance_restricted_list_version_id])
+    alliance_restricted_list_version = db.relationship(
+        "AllianceRestrictedListVersion",
+        foreign_keys=[alliance_restricted_list_version_id],
+    )
     matchups = db.relationship(
         "WeekMatchup", back_populates="week", cascade="all, delete-orphan"
     )
@@ -1273,6 +1280,26 @@ class AlliancePodSelection(db.Model):
     standalone_match = db.relationship(
         "StandaloneMatch", back_populates="alliance_selections"
     )
+
+
+class SasLadderAssignment(db.Model):
+    __tablename__ = "sas_ladder_assignment"
+    id = db.Column(db.Integer, primary_key=True)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    team_id = db.Column(db.Integer, db.ForeignKey("team.id"), nullable=False)
+    rung_number = db.Column(db.Integer, nullable=False)
+    __table_args__ = (
+        db.UniqueConstraint("week_id", "user_id", name="uq_sla_week_user"),
+        db.UniqueConstraint(
+            "week_id", "team_id", "rung_number", name="uq_sla_week_team_rung"
+        ),
+    )
+    week = db.relationship("LeagueWeek", backref="sas_ladder_assignments")
+    user = db.relationship("User")
+    team = db.relationship("Team")
 
 
 class AllianceRestrictedListVersion(db.Model):

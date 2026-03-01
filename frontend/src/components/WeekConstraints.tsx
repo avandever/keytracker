@@ -32,6 +32,13 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
   if (week.no_keycheat) {
     chips.push(<Chip key="no-keycheat" label="No Keycheat" size={size} variant="outlined" color="error" />);
   }
+  if (week.format_type === 'sas_ladder' && week.sas_ladder_maxes && week.sas_ladder_maxes.length > 0) {
+    const numRungs = week.sas_ladder_maxes.length + 1;
+    chips.push(<Chip key="sas-ladder" label={`SAS Ladder: ${numRungs} rungs`} size={size} variant="outlined" color="secondary" />);
+    if (week.sas_ladder_feature_rung != null) {
+      chips.push(<Chip key="feature-rung" label={`Feature: Rung ${week.sas_ladder_feature_rung}`} size={size} variant="outlined" />);
+    }
+  }
 
   if (chips.length === 0) return null;
 

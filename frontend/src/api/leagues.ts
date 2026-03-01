@@ -448,6 +448,21 @@ export async function clearFeatureDesignation(
   return data;
 }
 
+// --- SAS Ladder ---
+
+export async function setSasLadderAssignment(
+  leagueId: number,
+  weekId: number,
+  rungNumber: number,
+  userId?: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/sas-ladder-assignment`,
+    { rung_number: rungNumber, ...(userId !== undefined && { user_id: userId }) },
+  );
+  return data;
+}
+
 // --- Strikes (Triad) ---
 
 export async function submitStrike(

@@ -41,6 +41,7 @@ import {
   getSets,
   setFeatureDesignation,
   clearFeatureDesignation,
+  setSasLadderAssignment,
   submitAllianceSelection,
   clearAllianceSelection,
   submitCurationDeck,
@@ -63,7 +64,23 @@ const FORMAT_LABELS: Record<string, string> = {
   team_sealed_alliance: 'Team Sealed Alliance',
   thief: 'Thief',
   alliance: 'Alliance',
+  sas_ladder: 'SAS Ladder',
 };
+
+function getSasLadderRanges(maxes: number[]): [number, number | null][] {
+  const ranges: [number, number | null][] = [];
+  let prev = 0;
+  for (const m of maxes) {
+    ranges.push([prev, m]);
+    prev = m + 1;
+  }
+  ranges.push([prev, null]);
+  return ranges;
+}
+
+function sasRangeStr(rMin: number, rMax: number | null) {
+  return rMax == null ? `${rMin}+` : `${rMin}\u2013${rMax}`;
+}
 
 const TOKEN_SETS = new Set([855, 600]);
 const PROPHECY_EXPANSION_ID = 886;
@@ -114,6 +131,9 @@ export default function MyTeamPage() {
   const [openAlliancePods, setOpenAlliancePods] = useState<Record<string, PodEntry[]>>({});
   const [openAllianceTokenIds, setOpenAllianceTokenIds] = useState<Record<string, number | null>>({});
   const [openAllianceProphecyIds, setOpenAllianceProphecyIds] = useState<Record<string, number | null>>({});
+
+  // SAS Ladder: rung selections keyed by `${weekId}-${userId}`
+  const [sasRungSelections, setSasRungSelections] = useState<Record<string, number | ''>>({});
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -508,6 +528,41 @@ export default function MyTeamPage() {
       );
     }
 
+    // SAS Ladder: show range helper text
+    if (week.format_type === 'sas_ladder') {
+      const assignment = (week.sas_ladder_assignments || []).find((a) => a.user_id === userId);
+      const ranges = getSasLadderRanges(week.sas_ladder_maxes || []);
+      const rangeLabel = assignment
+        ? `Required SAS: ${sasRangeStr(...ranges[assignment.rung_number - 1])}`
+        : 'No rung assigned — cannot submit deck';
+      const urlKey = `${week.id}-${userId}-${slotNumber}`;
+      return (
+        <Box sx={{ display: 'flex', gap: 1, ml: 4, mt: 0.5 }}>
+          <TextField
+            label="Deck URL"
+            helperText={rangeLabel}
+            value={teammateDeckUrls[urlKey] || ''}
+            onChange={(e) => setTeammateDeckUrls((prev) => ({
+              ...prev,
+              [urlKey]: e.target.value,
+            }))}
+            size="small"
+            fullWidth
+            disabled={!assignment}
+            placeholder="https://decksofkeyforge.com/decks/..."
+          />
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => handleSubmitDeck(week.id, userId, slotNumber)}
+            disabled={!assignment}
+          >
+            Submit
+          </Button>
+        </Box>
+      );
+    }
+
     // Normal URL input for non-sealed formats
     const urlKey = `${week.id}-${userId}-${slotNumber}`;
     return (
@@ -549,6 +604,17 @@ export default function MyTeamPage() {
     setError('');
     try {
       await clearFeatureDesignation(league.id, weekId);
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleSetSasRung = async (weekId: number, userId: number, rungNumber: number) => {
+    setError('');
+    try {
+      await setSasLadderAssignment(league.id, weekId, rungNumber, userId !== user!.id ? userId : undefined);
+      setSuccess('Rung assigned!');
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -663,6 +729,7 @@ export default function MyTeamPage() {
       : week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
     const maxSlots = week.format_type === 'triad' ? 3 : 1;
     const showFeature = league.team_size % 2 === 0 &&
+      week.format_type !== 'sas_ladder' &&
       !['setup', 'pairing', 'published', 'completed'].includes(week.status);
     const currentFeature = showFeature
       ? week.feature_designations?.find((fd) => fd.team_id === myTeam.id)
@@ -1306,6 +1373,61 @@ export default function MyTeamPage() {
                         disabled={(openAlliancePods[podKey] || []).length < 3}
                       >
                         Forge Alliance
+                      </Button>
+                    </Box>
+                  );
+                })()}
+
+                {/* SAS Ladder rung assignment UI */}
+                {week.format_type === 'sas_ladder' && (() => {
+                  const ranges = getSasLadderRanges(week.sas_ladder_maxes || []);
+                  const assignment = (week.sas_ladder_assignments || []).find((a) => a.user_id === m.user.id);
+                  const isFeature = assignment != null && week.sas_ladder_feature_rung === assignment.rung_number;
+                  const canAssign = isWeekEditable && (isMe || isCaptain);
+                  const selKey = `${week.id}-${m.user.id}`;
+
+                  const rungChip = assignment
+                    ? <Chip
+                        label={`Rung ${assignment.rung_number}: SAS ${sasRangeStr(...ranges[assignment.rung_number - 1])}${isFeature ? ' ★' : ''}`}
+                        size="small"
+                        color={isFeature ? 'warning' : 'default'}
+                      />
+                    : <Typography variant="body2" color="text.secondary">No rung assigned</Typography>;
+
+                  if (!canAssign) {
+                    return <Box sx={{ ml: 4, mb: 0.5 }}>{rungChip}</Box>;
+                  }
+
+                  return (
+                    <Box sx={{ ml: 4, mb: 1, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {rungChip}
+                      <FormControl size="small" sx={{ minWidth: 200 }}>
+                        <InputLabel>Assign Rung</InputLabel>
+                        <Select
+                          value={sasRungSelections[selKey] ?? assignment?.rung_number ?? ''}
+                          label="Assign Rung"
+                          onChange={(e) => setSasRungSelections((prev) => ({ ...prev, [selKey]: e.target.value as number }))}
+                        >
+                          {ranges.map((range, i) => {
+                            const rungNum = i + 1;
+                            const takenBy = (week.sas_ladder_assignments || []).find(
+                              (a) => a.rung_number === rungNum && a.user_id !== m.user.id && a.team_id === myTeam.id
+                            );
+                            return (
+                              <MenuItem key={rungNum} value={rungNum} disabled={!!takenBy}>
+                                Rung {rungNum}: SAS {sasRangeStr(...range)}{takenBy ? ' (taken)' : ''}
+                              </MenuItem>
+                            );
+                          })}
+                        </Select>
+                      </FormControl>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleSetSasRung(week.id, m.user.id, sasRungSelections[selKey] as number)}
+                        disabled={!sasRungSelections[selKey]}
+                      >
+                        {assignment ? 'Change' : 'Claim'}
                       </Button>
                     </Box>
                   );

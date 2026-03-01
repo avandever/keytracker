@@ -265,6 +265,9 @@ export interface LeagueWeek {
   thief_curation_decks?: ThiefCurationDeckInfo[];
   thief_steals?: ThiefStealInfo[];
   alliance_restricted_list_version?: AllianceRestrictedListVersion | null;
+  sas_ladder_maxes: number[] | null;
+  sas_ladder_feature_rung: number | null;
+  sas_ladder_assignments?: { id: number; user_id: number; team_id: number; rung_number: number }[];
 }
 
 export interface WeekMatchup {

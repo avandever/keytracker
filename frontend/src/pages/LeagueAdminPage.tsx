@@ -75,6 +75,7 @@ const FORMAT_LABELS: Record<string, string> = {
   team_sealed_alliance: 'Team Sealed Alliance',
   thief: 'Thief',
   alliance: 'Alliance',
+  sas_ladder: 'SAS Ladder',
 };
 
 const STATUS_COLORS: Record<string, 'default' | 'info' | 'warning' | 'success'> = {
@@ -137,6 +138,9 @@ export default function LeagueAdminPage() {
   // Alliance-specific
   const [weekAllianceRlVersionId, setWeekAllianceRlVersionId] = useState<number | ''>('');
   const [availableRlVersions, setAvailableRlVersions] = useState<{ id: number; version: number }[]>([]);
+  // SAS Ladder-specific
+  const [weekSasLadderMaxes, setWeekSasLadderMaxes] = useState('');
+  const [weekSasLadderFeatureRung, setWeekSasLadderFeatureRung] = useState('');
 
   // Week expanded
   const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({});
@@ -306,6 +310,8 @@ export default function LeagueAdminPage() {
     setWeekDecksPerPlayer('4');
     setWeekNoKeycheat(false);
     setWeekAllianceRlVersionId('');
+    setWeekSasLadderMaxes('');
+    setWeekSasLadderFeatureRung('');
     setEditingWeekId(null);
   };
 
@@ -321,6 +327,8 @@ export default function LeagueAdminPage() {
     setWeekDecksPerPlayer(week.decks_per_player != null ? String(week.decks_per_player) : '4');
     setWeekNoKeycheat(week.no_keycheat || false);
     setWeekAllianceRlVersionId(week.alliance_restricted_list_version?.id ?? '');
+    setWeekSasLadderMaxes(week.sas_ladder_maxes?.join(',') ?? '');
+    setWeekSasLadderFeatureRung(week.sas_ladder_feature_rung != null ? String(week.sas_ladder_feature_rung) : '');
     setEditingWeekId(week.id);
     setWeekDialogOpen(true);
   };
@@ -343,6 +351,11 @@ export default function LeagueAdminPage() {
       decks_per_player: (weekFormat === 'sealed_archon' || weekFormat === 'sealed_alliance' || weekFormat === 'team_sealed' || weekFormat === 'team_sealed_alliance') ? parseInt(weekDecksPerPlayer, 10) || 4 : null,
       no_keycheat: weekNoKeycheat,
       alliance_restricted_list_version_id: weekFormat === 'alliance' && weekAllianceRlVersionId !== '' ? weekAllianceRlVersionId : null,
+      sas_ladder_maxes: weekFormat === 'sas_ladder' && weekSasLadderMaxes.trim()
+        ? weekSasLadderMaxes.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n))
+        : null,
+      sas_ladder_feature_rung: weekFormat === 'sas_ladder' && weekSasLadderFeatureRung
+        ? parseInt(weekSasLadderFeatureRung, 10) || null : null,
     };
     try {
       if (editingWeekId !== null) {
@@ -953,6 +966,34 @@ export default function LeagueAdminPage() {
                       </Box>
                     )}
 
+                    {/* SAS Ladder rung assignments (read-only) */}
+                    {week.format_type === 'sas_ladder' && (week.sas_ladder_assignments?.length ?? 0) > 0 && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" gutterBottom>Rung Assignments</Typography>
+                        {league.teams.map((team) => {
+                          const teamAssignments = (week.sas_ladder_assignments || [])
+                            .filter((a) => a.team_id === team.id)
+                            .sort((a, b) => a.rung_number - b.rung_number);
+                          if (teamAssignments.length === 0) return null;
+                          return (
+                            <Box key={team.id} sx={{ mb: 1 }}>
+                              <Typography variant="body2" fontWeight="bold">{team.name}</Typography>
+                              {teamAssignments.map((a) => {
+                                const member = team.members.find((m) => m.user.id === a.user_id);
+                                const name = member?.user.name ?? `User ${a.user_id}`;
+                                const isFeature = week.sas_ladder_feature_rung === a.rung_number;
+                                return (
+                                  <Typography key={a.id} variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                                    Rung {a.rung_number}: {name}{isFeature ? ' ★ (feature)' : ''}
+                                  </Typography>
+                                );
+                              })}
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    )}
+
                     {/* Matchups */}
                     {week.matchups.length > 0 && (
                       <Box>
@@ -1052,6 +1093,7 @@ export default function LeagueAdminPage() {
                 <MenuItem value="team_sealed_alliance">Team Sealed Alliance</MenuItem>
                 <MenuItem value="alliance">Alliance</MenuItem>
                 <MenuItem value="thief">Thief</MenuItem>
+                <MenuItem value="sas_ladder">SAS Ladder</MenuItem>
               </Select>
               {editingWeekId !== null && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -1166,6 +1208,28 @@ export default function LeagueAdminPage() {
                   ))}
                 </Select>
               </FormControl>
+            )}
+            {weekFormat === 'sas_ladder' && (
+              <>
+                <TextField
+                  label="Rung Boundaries"
+                  helperText={`Comma-separated SAS maxes. E.g. "55,60,65,70" → 5 rungs: 0–55, 56–60, 61–65, 66–70, 71+`}
+                  value={weekSasLadderMaxes}
+                  onChange={(e) => setWeekSasLadderMaxes(e.target.value)}
+                  size="small"
+                  fullWidth
+                />
+                {league.team_size % 2 === 0 && (
+                  <TextField
+                    label="Feature Rung (1-indexed)"
+                    value={weekSasLadderFeatureRung}
+                    onChange={(e) => setWeekSasLadderFeatureRung(e.target.value)}
+                    type="number"
+                    size="small"
+                    fullWidth
+                  />
+                )}
+              </>
             )}
           </Box>
         </DialogContent>

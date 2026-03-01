@@ -299,6 +299,19 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             }
             for s in thief_steals
         ],
+        "sas_ladder_maxes": (
+            json.loads(week.sas_ladder_maxes) if week.sas_ladder_maxes else None
+        ),
+        "sas_ladder_feature_rung": week.sas_ladder_feature_rung,
+        "sas_ladder_assignments": [
+            {
+                "id": a.id,
+                "user_id": a.user_id,
+                "team_id": a.team_id,
+                "rung_number": a.rung_number,
+            }
+            for a in (week.sas_ladder_assignments or [])
+        ],
     }
     return data
 
