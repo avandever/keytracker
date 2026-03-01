@@ -24,6 +24,7 @@ import {
   ListItemText,
   ListItemSecondaryAction,
   Link,
+  Tooltip,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { createStandaloneMatch, getPublicMatches } from '../api/standalone';
@@ -117,10 +118,14 @@ export default function StandaloneMatchesPage() {
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Standalone Matches</Typography>
-        {user?.is_member && (
-          <Button variant="contained" onClick={() => setCreateOpen(true)}>
-            Create Match
-          </Button>
+        {user && (
+          <Tooltip title={user.is_member ? '' : 'Link account to Patreon membership to unlock!'}>
+            <span>
+              <Button variant="contained" onClick={() => setCreateOpen(true)} disabled={!user.is_member}>
+                Create Match
+              </Button>
+            </span>
+          </Tooltip>
         )}
       </Box>
 
