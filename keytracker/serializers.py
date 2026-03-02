@@ -378,6 +378,42 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
         if len(triad_picks) == 2
         else []
     )
+    # Oubliette banned houses and eligible deck IDs
+    data["oubliette_p1_banned_house"] = getattr(pm, "oubliette_p1_banned_house", None)
+    data["oubliette_p2_banned_house"] = getattr(pm, "oubliette_p2_banned_house", None)
+    if pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house:
+        from keytracker.match_helpers import get_oubliette_eligible_deck_ids
+
+        if pm.standalone_match_id:
+            p1_sels = PlayerDeckSelection.query.filter_by(
+                standalone_match_id=pm.standalone_match_id, user_id=pm.player1_id
+            ).all()
+            p2_sels = PlayerDeckSelection.query.filter_by(
+                standalone_match_id=pm.standalone_match_id, user_id=pm.player2_id
+            ).all()
+        elif pm.week_matchup_id:
+            from keytracker.schema import WeekMatchup
+
+            wm = db.session.get(WeekMatchup, pm.week_matchup_id)
+            week_id = wm.week_id if wm else None
+            p1_sels = (
+                PlayerDeckSelection.query.filter_by(week_id=week_id, user_id=pm.player1_id).all()
+                if week_id
+                else []
+            )
+            p2_sels = (
+                PlayerDeckSelection.query.filter_by(week_id=week_id, user_id=pm.player2_id).all()
+                if week_id
+                else []
+            )
+        else:
+            p1_sels, p2_sels = [], []
+        eligible = get_oubliette_eligible_deck_ids(pm, p1_sels, p2_sels)
+        data["oubliette_p1_eligible_deck_ids"] = eligible["p1"] if eligible else []
+        data["oubliette_p2_eligible_deck_ids"] = eligible["p2"] if eligible else []
+    else:
+        data["oubliette_p1_eligible_deck_ids"] = None
+        data["oubliette_p2_eligible_deck_ids"] = None
     return data
 
 

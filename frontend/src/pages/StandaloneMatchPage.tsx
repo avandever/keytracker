@@ -32,6 +32,7 @@ import {
   startStandaloneMatch,
   submitStandaloneStrike,
   submitTriadShortPick,
+  submitOublietteBannedHouse,
   reportStandaloneGame,
   submitAdaptiveBid,
 } from '../api/standalone';
@@ -101,6 +102,9 @@ export default function StandaloneMatchPage() {
 
   // Triad Short pick state
   const [triadShortPickId, setTriadShortPickId] = useState<number | ''>('');
+
+  // Oubliette banned house state
+  const [oublietteBannedHouse, setOublietteBannedHouse] = useState('');
 
   // Game report state
   const [reportWinnerId, setReportWinnerId] = useState<number | ''>('');
@@ -248,6 +252,7 @@ export default function StandaloneMatchPage() {
   const isAdaptive = match.format_type === 'adaptive';
   const isReversal = match.format_type === 'reversal';
   const isTriadShort = match.format_type === 'triad_short';
+  const isOubliette = match.format_type === 'oubliette';
 
   const allowedSetsSet = new Set(match.allowed_sets || []);
   const needsToken = TOKEN_SETS.size > 0 && [...TOKEN_SETS].some((s) => allowedSetsSet.has(s));
@@ -360,6 +365,23 @@ export default function StandaloneMatchPage() {
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       setError(err.response?.data?.error || 'Failed to submit strike');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOublietteBan = async () => {
+    if (!oublietteBannedHouse.trim()) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const updated = await submitOublietteBannedHouse(id, oublietteBannedHouse.trim());
+      setMatch(updated);
+      setSuccess('Banned house submitted!');
+      setOublietteBannedHouse('');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err.response?.data?.error || 'Failed to submit banned house');
     } finally {
       setSubmitting(false);
     }
@@ -968,6 +990,83 @@ export default function StandaloneMatchPage() {
             </Card>
           )}
 
+          {/* Oubliette: banned house submission and eligibility display */}
+          {isOubliette && bothStarted && pm && (() => {
+            const myBan = isCreator ? pm.oubliette_p1_banned_house : pm.oubliette_p2_banned_house;
+            const oppBan = isCreator ? pm.oubliette_p2_banned_house : pm.oubliette_p1_banned_house;
+            const myEligible = isCreator ? pm.oubliette_p1_eligible_deck_ids : pm.oubliette_p2_eligible_deck_ids;
+            const oppEligible = isCreator ? pm.oubliette_p2_eligible_deck_ids : pm.oubliette_p1_eligible_deck_ids;
+            const bothBanned = !!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house;
+
+            return (
+              <Card sx={{ mb: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Oubliette — Banned Houses</Typography>
+                  {!myBan && isParticipant && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Ban a house that does NOT appear in either of your own decks. Any deck (yours or your opponent&apos;s) containing a banned house is eliminated.
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <TextField
+                          size="small"
+                          label="House to ban (e.g. Shadows)"
+                          value={oublietteBannedHouse}
+                          onChange={(e) => setOublietteBannedHouse(e.target.value)}
+                          sx={{ minWidth: 220 }}
+                        />
+                        <Button variant="contained" color="error" onClick={handleOublietteBan} disabled={submitting || !oublietteBannedHouse.trim()}>
+                          Submit Ban
+                        </Button>
+                      </Box>
+                    </Box>
+                  )}
+                  {myBan && !bothBanned && (
+                    <Alert severity="info" sx={{ mb: 1 }}>You banned <strong>{myBan}</strong>. Waiting for opponent to ban.</Alert>
+                  )}
+                  {bothBanned && (
+                    <>
+                      <Typography variant="body2"><strong>Your ban:</strong> {myBan}</Typography>
+                      <Typography variant="body2"><strong>Opponent&apos;s ban:</strong> {oppBan}</Typography>
+                      <Box sx={{ display: 'flex', gap: 4, mt: 1, flexWrap: 'wrap' }}>
+                        <Box>
+                          <Typography variant="subtitle2">Your eligible decks</Typography>
+                          {mySelections.map((s) => {
+                            const eligible = myEligible?.includes(s.deck?.db_id ?? -1);
+                            return (
+                              <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                                <Typography variant="body2" sx={{ textDecoration: eligible ? 'none' : 'line-through', color: eligible ? 'inherit' : 'text.disabled' }}>
+                                  {s.deck?.name}
+                                </Typography>
+                                <Chip label={eligible ? 'Eligible' : 'Eliminated'} size="small" color={eligible ? 'success' : 'error'} />
+                              </Box>
+                            );
+                          })}
+                          {myEligible?.length === 0 && <Alert severity="error" sx={{ mt: 0.5 }}>All your decks eliminated — you forfeit!</Alert>}
+                        </Box>
+                        <Box>
+                          <Typography variant="subtitle2">Opponent&apos;s eligible decks</Typography>
+                          {oppSelections.map((s) => {
+                            const eligible = oppEligible?.includes(s.deck?.db_id ?? -1);
+                            return (
+                              <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                                <Typography variant="body2" sx={{ textDecoration: eligible ? 'none' : 'line-through', color: eligible ? 'inherit' : 'text.disabled' }}>
+                                  {s.deck?.name}
+                                </Typography>
+                                <Chip label={eligible ? 'Eligible' : 'Eliminated'} size="small" color={eligible ? 'success' : 'error'} />
+                              </Box>
+                            );
+                          })}
+                          {oppEligible?.length === 0 && <Alert severity="success" sx={{ mt: 0.5 }}>Opponent forfeits — all their decks eliminated!</Alert>}
+                        </Box>
+                      </Box>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Reversal: deck swap note */}
           {isReversal && bothStarted && (
             <Alert severity="info" sx={{ mb: 2 }}>
@@ -1113,7 +1212,7 @@ export default function StandaloneMatchPage() {
           )}
 
           {/* Game report form */}
-          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (
+          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (!isOubliette || (!!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house)) && (
             <Card sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Report Game {games.length + 1}</Typography>

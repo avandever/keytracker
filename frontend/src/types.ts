@@ -300,6 +300,10 @@ export interface PlayerMatchupInfo {
   adaptive_winning_deck_player_id: number | null;
   triad_short_picks_count?: number;
   triad_short_picks?: TriadShortPickInfo[];
+  oubliette_p1_banned_house?: string | null;
+  oubliette_p2_banned_house?: string | null;
+  oubliette_p1_eligible_deck_ids?: number[] | null;
+  oubliette_p2_eligible_deck_ids?: number[] | null;
 }
 
 export interface DeckSelectionInfo {

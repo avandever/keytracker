@@ -47,6 +47,8 @@ from keytracker.match_helpers import (
     validate_alliance_open,
     validate_strike_standalone,
     validate_triad_short_pick,
+    validate_oubliette_ban,
+    get_oubliette_eligible_deck_ids,
     validate_and_record_game,
     validate_adaptive_bid,
 )
@@ -129,8 +131,8 @@ def create_match():
         return jsonify({"error": "best_of_n must be a positive integer"}), 400
     if format_type in (WeekFormat.TRIAD, WeekFormat.ADAPTIVE):
         best_of_n = 3  # Triad and Adaptive are always best of 3
-    if format_type in (WeekFormat.REVERSAL, WeekFormat.TRIAD_SHORT):
-        best_of_n = 1  # Reversal and Triad Short are always BO1
+    if format_type in (WeekFormat.REVERSAL, WeekFormat.TRIAD_SHORT, WeekFormat.OUBLIETTE):
+        best_of_n = 1  # Reversal, Triad Short, and Oubliette are always BO1
 
     is_public = bool(data.get("is_public", False))
     max_sas = data.get("max_sas")
@@ -334,7 +336,9 @@ def submit_deck_selection(match_id):
 
     data = request.get_json(silent=True) or {}
     slot_number = data.get("slot_number", 1)
-    max_slots = 3 if match.format_type in (WeekFormat.TRIAD, WeekFormat.TRIAD_SHORT) else 1
+    _three_slot = (WeekFormat.TRIAD, WeekFormat.TRIAD_SHORT)
+    _two_slot = (WeekFormat.OUBLIETTE,)
+    max_slots = 3 if match.format_type in _three_slot else (2 if match.format_type in _two_slot else 1)
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
 
@@ -679,6 +683,85 @@ def submit_triad_short_pick(match_id):
     db.session.add(pick)
     db.session.commit()
 
+    viewer_id = user.id if current_user.is_authenticated else None
+    return jsonify(serialize_standalone_match(match, viewer_id))
+
+
+@standalone_bp.route("/<int:match_id>/banned-house", methods=["POST"])
+def submit_banned_house(match_id):
+    """Submit an Oubliette banned house. Valid after both players have submitted decks."""
+    match, err = _get_match_or_404(match_id)
+    if err:
+        return err
+
+    if match.format_type != WeekFormat.OUBLIETTE:
+        return jsonify({"error": "Only for Oubliette format"}), 400
+    if match.status != StandaloneMatchStatus.PUBLISHED:
+        return jsonify({"error": "Match is not published"}), 400
+    if not match.matchup:
+        return jsonify({"error": "Match not started yet"}), 400
+
+    user = _current_user_or_guest()
+    if user is None or user.id not in (match.creator_id, match.opponent_id):
+        return jsonify({"error": "You are not in this match"}), 403
+
+    data = request.get_json(silent=True) or {}
+    banned_house = (data.get("banned_house") or "").strip()
+    if not banned_house:
+        return jsonify({"error": "banned_house is required"}), 400
+
+    pm = match.matchup
+    is_p1 = user.id == pm.player1_id
+    user_sels = PlayerDeckSelection.query.filter_by(
+        standalone_match_id=match.id, user_id=user.id
+    ).all()
+
+    error = validate_oubliette_ban(pm, user.id, banned_house, user_sels)
+    if error:
+        return jsonify({"error": error}), 400
+
+    if is_p1:
+        pm.oubliette_p1_banned_house = banned_house
+    else:
+        pm.oubliette_p2_banned_house = banned_house
+
+    db.session.flush()
+
+    # After both bans: check for forfeits
+    if pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house:
+        p1_sels = PlayerDeckSelection.query.filter_by(
+            standalone_match_id=match.id, user_id=pm.player1_id
+        ).all()
+        p2_sels = PlayerDeckSelection.query.filter_by(
+            standalone_match_id=match.id, user_id=pm.player2_id
+        ).all()
+        eligible = get_oubliette_eligible_deck_ids(pm, p1_sels, p2_sels)
+        if eligible:
+            forfeit_winner_id = None
+            if not eligible["p1"] and not eligible["p2"]:
+                # Both forfeit — no clear winner; skip auto-resolution
+                pass
+            elif not eligible["p1"]:
+                forfeit_winner_id = pm.player2_id
+            elif not eligible["p2"]:
+                forfeit_winner_id = pm.player1_id
+
+            if forfeit_winner_id:
+                from keytracker.schema import MatchGame
+
+                forfeit_game = MatchGame(
+                    player_matchup_id=pm.id,
+                    game_number=1,
+                    winner_id=forfeit_winner_id,
+                    player1_keys=0,
+                    player2_keys=0,
+                    went_to_time=False,
+                    loser_conceded=True,
+                )
+                db.session.add(forfeit_game)
+                match.status = StandaloneMatchStatus.COMPLETED
+
+    db.session.commit()
     viewer_id = user.id if current_user.is_authenticated else None
     return jsonify(serialize_standalone_match(match, viewer_id))
 

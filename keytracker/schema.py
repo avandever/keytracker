@@ -1128,6 +1128,9 @@ class PlayerMatchup(db.Model):
     )
     adaptive_bidding_complete = db.Column(db.Boolean, default=False, nullable=False)
 
+    oubliette_p1_banned_house = db.Column(db.Text, nullable=True)
+    oubliette_p2_banned_house = db.Column(db.Text, nullable=True)
+
     week_matchup = db.relationship("WeekMatchup", back_populates="player_matchups")
     standalone_match = db.relationship("StandaloneMatch", back_populates="matchup")
     player1 = db.relationship("User", foreign_keys=[player1_id])

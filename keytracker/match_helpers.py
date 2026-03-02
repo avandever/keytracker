@@ -398,6 +398,76 @@ def validate_alliance_open(
     return []
 
 
+def get_deck_houses(deck) -> set:
+    """Return the set of house names for a deck (excludes 'Archon Power')."""
+    from keytracker.schema import PodStats
+
+    return {ps.house for ps in deck.pod_stats if ps.house != "Archon Power"}
+
+
+def validate_oubliette_ban(pm, banning_user_id, banned_house, user_selections):
+    """
+    Validate an Oubliette banned-house submission.
+
+    pm: PlayerMatchup instance
+    banning_user_id: int
+    banned_house: str — house name to ban
+    user_selections: list of PlayerDeckSelection for the banning user
+
+    Returns error string or None (None = valid).
+    """
+    if banning_user_id not in (pm.player1_id, pm.player2_id):
+        return "You are not in this matchup"
+
+    if not banned_house or not isinstance(banned_house, str):
+        return "banned_house must be a non-empty string"
+
+    is_p1 = banning_user_id == pm.player1_id
+    already_banned = pm.oubliette_p1_banned_house if is_p1 else pm.oubliette_p2_banned_house
+    if already_banned:
+        return "You have already submitted a banned house"
+
+    # Banned house must NOT appear in any of the banning user's own decks
+    for sel in user_selections:
+        deck = db.session.get(Deck, sel.deck_id)
+        if not deck:
+            continue
+        if banned_house in get_deck_houses(deck):
+            return f"Banned house '{banned_house}' appears in one of your own decks"
+
+    return None
+
+
+def get_oubliette_eligible_deck_ids(pm, p1_selections, p2_selections):
+    """
+    Compute eligible deck IDs for each player based on submitted bans.
+
+    Returns dict with 'p1' and 'p2' lists of eligible deck IDs,
+    or None if both bans are not yet submitted.
+    """
+    p1_banned = pm.oubliette_p1_banned_house
+    p2_banned = pm.oubliette_p2_banned_house
+    if not p1_banned or not p2_banned:
+        return None
+
+    banned_houses = {h for h in [p1_banned, p2_banned] if h}
+
+    def eligible_ids(selections):
+        ids = []
+        for sel in selections:
+            deck = db.session.get(Deck, sel.deck_id)
+            if not deck:
+                continue
+            if not (get_deck_houses(deck) & banned_houses):
+                ids.append(deck.id)
+        return ids
+
+    return {
+        "p1": eligible_ids(p1_selections),
+        "p2": eligible_ids(p2_selections),
+    }
+
+
 def validate_triad_short_pick(matchup, picking_user_id, picked_deck_selection_id):
     """
     Validate a Triad Short pick submission.
@@ -629,6 +699,10 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
                 return None, "Player 1's deck already won a game and cannot be reused"
             if g.winner_id == matchup.player2_id and g.player2_deck_id == p2_deck_id:
                 return None, "Player 2's deck already won a game and cannot be reused"
+
+    if format_type == WeekFormat.OUBLIETTE:
+        if not matchup.oubliette_p1_banned_house or not matchup.oubliette_p2_banned_house:
+            return None, "Both players must submit banned houses before reporting games"
 
     if format_type == WeekFormat.TRIAD_SHORT:
         picks = getattr(matchup, "triad_short_picks", [])

@@ -154,3 +154,13 @@ export async function submitTriadShortPick(
   });
   return data;
 }
+
+export async function submitOublietteBannedHouse(
+  matchId: number,
+  bannedHouse: string,
+): Promise<StandaloneMatch> {
+  const { data } = await apiClient.post(`/standalone-matches/${matchId}/banned-house`, {
+    banned_house: bannedHouse,
+  });
+  return data;
+}

@@ -7,6 +7,7 @@
 - `sealed_alliance` — Sealed pool, pick 3 pods to form an alliance deck
 - `adaptive` — Best of 3: G1 own decks, G2 swapped, G3 (if 1-1) after asynchronous chain-bidding auction
 - `reversal` — Each player brings 1 deck they believe is hard to win with; opponents swap and play BO1
+- `oubliette` — 2 decks per player; each player secretly bans a house (not in their own decks); decks containing either banned house are eliminated; BO1 from remaining eligible decks; forfeit if all decks eliminated
 
 ## NOT supported in standalone matches
 - `thief` — Team-based deck-stealing mechanics; incompatible with 1v1 standalone play
