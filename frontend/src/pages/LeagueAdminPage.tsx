@@ -31,6 +31,7 @@ import {
   FormControlLabel,
   Tab,
   Tabs,
+  Tooltip,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -875,9 +876,30 @@ export default function LeagueAdminPage() {
           {/* Start draft */}
           {isSetup && (
             <Box sx={{ mb: 3 }}>
-              <Button variant="contained" color="warning" onClick={() => setDraftDialogOpen(true)}>
-                Start Draft
-              </Button>
+              {(() => {
+                const hasEnoughSignups =
+                  league.signups.length >= league.num_teams * league.team_size;
+                return (
+                  <Tooltip
+                    title={
+                      !hasEnoughSignups
+                        ? `Need ${league.num_teams * league.team_size} signups (${league.signups.length} so far)`
+                        : ""
+                    }
+                  >
+                    <span>
+                      <Button
+                        variant="contained"
+                        color="warning"
+                        disabled={!hasEnoughSignups}
+                        onClick={() => setDraftDialogOpen(true)}
+                      >
+                        Start Draft
+                      </Button>
+                    </span>
+                  </Tooltip>
+                );
+              })()}
             </Box>
           )}
 

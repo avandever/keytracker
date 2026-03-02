@@ -719,6 +719,14 @@ def start_draft(league_id):
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Draft can only start from setup status"}), 400
 
+    total_needed = league.num_teams * league.team_size
+    if len(league.signups) < total_needed:
+        return jsonify(
+            {
+                "error": f"Not enough signups: need {total_needed}, have {len(league.signups)}"
+            }
+        ), 400
+
     teams = sorted(league.teams, key=lambda t: t.order_number)
     if len(teams) < 2:
         return jsonify({"error": "Need at least 2 teams"}), 400
