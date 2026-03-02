@@ -468,6 +468,104 @@ def get_oubliette_eligible_deck_ids(pm, p1_selections, p2_selections):
     }
 
 
+def validate_adaptive_short_choice(matchup, choosing_user_id, chosen_deck_selection_id):
+    """
+    Validate an Adaptive Short choice submission.
+
+    matchup: PlayerMatchup instance
+    choosing_user_id: int
+    chosen_deck_selection_id: int — any deck selection from the combined 4-deck pool
+
+    Returns error string or None (None = valid).
+    """
+    from keytracker.schema import AdaptiveShortChoice
+
+    if choosing_user_id not in (matchup.player1_id, matchup.player2_id):
+        return "You are not in this matchup"
+
+    if not matchup.player1_started or not matchup.player2_started:
+        return "Both players must start before choosing"
+
+    existing = AdaptiveShortChoice.query.filter_by(
+        player_matchup_id=matchup.id, choosing_user_id=choosing_user_id
+    ).first()
+    if existing:
+        return "You have already submitted a choice"
+
+    # chosen_deck_selection_id must be in the combined pool
+    chosen_sel = db.session.get(PlayerDeckSelection, chosen_deck_selection_id)
+    if not chosen_sel:
+        return "Invalid deck selection"
+
+    # Must belong to this match context
+    if matchup.standalone_match_id:
+        if chosen_sel.standalone_match_id != matchup.standalone_match_id:
+            return "Deck selection does not belong to this match"
+    elif matchup.week_matchup_id:
+        from keytracker.schema import WeekMatchup
+
+        wm = db.session.get(WeekMatchup, matchup.week_matchup_id)
+        if wm and chosen_sel.week_id != wm.week_id:
+            return "Deck selection does not belong to this match"
+
+    # Must belong to one of the two players
+    if chosen_sel.user_id not in (matchup.player1_id, matchup.player2_id):
+        return "Chosen deck is not from the combined pool"
+
+    return None
+
+
+def init_adaptive_short_bidding(pm, contested_sel_id):
+    """
+    Initialize adaptive-short bidding after both players chose the same deck.
+
+    The owner of the contested deck starts as the bid holder.
+    The OTHER player must raise or concede first.
+    Does NOT commit.
+    """
+    contested_sel = db.session.get(PlayerDeckSelection, contested_sel_id)
+    owner_id = contested_sel.user_id if contested_sel else pm.player1_id
+    pm.adaptive_short_bid_chains = 0
+    pm.adaptive_short_bidder_id = owner_id
+    pm.adaptive_short_bidding_complete = False
+
+
+def validate_adaptive_short_bid(pm, requesting_user_id, chains=None, concede=False):
+    """
+    Validate and process an adaptive-short bid or concede.
+
+    Returns (success: bool, error: str or None).
+    """
+    if pm.adaptive_short_bid_chains is None:
+        return False, "Adaptive Short bidding has not been initialized"
+    if pm.adaptive_short_bidding_complete:
+        return False, "Adaptive Short bidding is already complete"
+    if requesting_user_id not in (pm.player1_id, pm.player2_id):
+        return False, "You are not in this matchup"
+
+    current_bidder_id = pm.adaptive_short_bidder_id
+    if requesting_user_id == current_bidder_id:
+        return False, "It is not your turn — waiting for your opponent to respond"
+
+    if concede:
+        pm.adaptive_short_bidding_complete = True
+        return True, None
+
+    if chains is None:
+        return False, "chains or concede is required"
+    if not isinstance(chains, int):
+        return False, "chains must be an integer"
+    if chains <= pm.adaptive_short_bid_chains:
+        return (
+            False,
+            f"chains must be greater than current bid ({pm.adaptive_short_bid_chains})",
+        )
+
+    pm.adaptive_short_bid_chains = chains
+    pm.adaptive_short_bidder_id = requesting_user_id
+    return True, None
+
+
 def validate_triad_short_pick(matchup, picking_user_id, picked_deck_selection_id):
     """
     Validate a Triad Short pick submission.
@@ -699,6 +797,17 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
                 return None, "Player 1's deck already won a game and cannot be reused"
             if g.winner_id == matchup.player2_id and g.player2_deck_id == p2_deck_id:
                 return None, "Player 2's deck already won a game and cannot be reused"
+
+    if format_type == WeekFormat.ADAPTIVE_SHORT:
+        choices = getattr(matchup, "adaptive_short_choices", [])
+        if len(choices) < 2:
+            return None, "Both players must choose before reporting games"
+        # If same deck chosen, bidding must complete
+        if (
+            matchup.adaptive_short_bid_chains is not None
+            and not matchup.adaptive_short_bidding_complete
+        ):
+            return None, "Adaptive Short bidding must complete before game can be played"
 
     if format_type == WeekFormat.OUBLIETTE:
         if not matchup.oubliette_p1_banned_house or not matchup.oubliette_p2_banned_house:

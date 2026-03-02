@@ -378,6 +378,25 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
         if len(triad_picks) == 2
         else []
     )
+    # Adaptive Short choices and bid state
+    adaptive_short_choices = getattr(pm, "adaptive_short_choices", [])
+    data["adaptive_short_choices_count"] = len(adaptive_short_choices)
+    data["adaptive_short_choices"] = (
+        [
+            {
+                "choosing_user_id": c.choosing_user_id,
+                "chosen_deck_selection_id": c.chosen_deck_selection_id,
+            }
+            for c in adaptive_short_choices
+        ]
+        if len(adaptive_short_choices) == 2
+        else []
+    )
+    data["adaptive_short_bid_chains"] = getattr(pm, "adaptive_short_bid_chains", None)
+    data["adaptive_short_bidder_id"] = getattr(pm, "adaptive_short_bidder_id", None)
+    data["adaptive_short_bidding_complete"] = getattr(
+        pm, "adaptive_short_bidding_complete", False
+    )
     # Oubliette banned houses and eligible deck IDs
     data["oubliette_p1_banned_house"] = getattr(pm, "oubliette_p1_banned_house", None)
     data["oubliette_p2_banned_house"] = getattr(pm, "oubliette_p2_banned_house", None)

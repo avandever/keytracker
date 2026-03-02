@@ -35,6 +35,8 @@ import {
   submitOublietteBannedHouse,
   reportStandaloneGame,
   submitAdaptiveBid,
+  submitAdaptiveShortChoice,
+  submitAdaptiveShortBid,
 } from '../api/standalone';
 import { getSets } from '../api/leagues';
 import WeekConstraints from '../components/WeekConstraints';
@@ -117,6 +119,10 @@ export default function StandaloneMatchPage() {
 
   // Adaptive bid state
   const [adaptiveBidChains, setAdaptiveBidChains] = useState('');
+
+  // Adaptive Short state
+  const [adaptiveShortChoiceId, setAdaptiveShortChoiceId] = useState<number | ''>('');
+  const [adaptiveShortBidChains, setAdaptiveShortBidChains] = useState('');
 
   const [copiedUrl, setCopiedUrl] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -253,6 +259,7 @@ export default function StandaloneMatchPage() {
   const isReversal = match.format_type === 'reversal';
   const isTriadShort = match.format_type === 'triad_short';
   const isOubliette = match.format_type === 'oubliette';
+  const isAdaptiveShort = match.format_type === 'adaptive_short';
 
   const allowedSetsSet = new Set(match.allowed_sets || []);
   const needsToken = TOKEN_SETS.size > 0 && [...TOKEN_SETS].some((s) => allowedSetsSet.has(s));
@@ -431,6 +438,50 @@ export default function StandaloneMatchPage() {
     }
   };
 
+  const handleAdaptiveShortChoice = async () => {
+    if (!adaptiveShortChoiceId) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const updated = await submitAdaptiveShortChoice(id, adaptiveShortChoiceId as number);
+      setMatch(updated);
+      setSuccess('Choice submitted!');
+      setAdaptiveShortChoiceId('');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err.response?.data?.error || 'Failed to submit choice');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAdaptiveShortBid = async (concede: boolean) => {
+    setSubmitting(true);
+    setError('');
+    try {
+      const payload: { chains?: number; concede?: boolean } = {};
+      if (concede) {
+        payload.concede = true;
+      } else {
+        const chains = parseInt(adaptiveShortBidChains);
+        if (isNaN(chains) || chains < 0) {
+          setError('Chains must be a non-negative integer');
+          return;
+        }
+        payload.chains = chains;
+      }
+      const updated = await submitAdaptiveShortBid(id, payload);
+      setMatch(updated);
+      setAdaptiveShortBidChains('');
+      setSuccess(concede ? 'You accepted the bid!' : 'Bid submitted!');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err.response?.data?.error || 'Failed to submit bid');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleReportGame = async () => {
     if (!reportWinnerId || !pm) return;
     setSubmitting(true);
@@ -465,6 +516,17 @@ export default function StandaloneMatchPage() {
         const p2Sel = allSels.find((s) => s.id === p2Pick?.picked_deck_selection_id);
         if (p1Sel?.deck?.db_id) payload.player1_deck_id = p1Sel.deck.db_id;
         if (p2Sel?.deck?.db_id) payload.player2_deck_id = p2Sel.deck.db_id;
+      }
+      // Adaptive Short: auto-populate decks from choices when no bidding occurred
+      if (isAdaptiveShort && pm && pm.adaptive_short_bid_chains === null) {
+        const choices = pm.adaptive_short_choices || [];
+        const p1Choice = choices.find((c) => c.choosing_user_id === pm.player1.id);
+        const p2Choice = choices.find((c) => c.choosing_user_id === pm.player2.id);
+        const allSels = [...match.creator_selections, ...match.opponent_selections];
+        const p1ChosenSel = allSels.find((s) => s.id === p1Choice?.chosen_deck_selection_id);
+        const p2ChosenSel = allSels.find((s) => s.id === p2Choice?.chosen_deck_selection_id);
+        if (p1ChosenSel?.deck?.db_id) payload.player1_deck_id = p1ChosenSel.deck.db_id;
+        if (p2ChosenSel?.deck?.db_id) payload.player2_deck_id = p2ChosenSel.deck.db_id;
       }
       await reportStandaloneGame(id, payload);
       await refresh();
@@ -732,7 +794,7 @@ export default function StandaloneMatchPage() {
             {/* Archon / Triad: submit by URL */}
             {!isSealed && !isOpenAlliance && (
               <Box>
-                {Array.from({ length: isTriad ? 3 : 1 }, (_, i) => i + 1).map((slot) => {
+                {Array.from({ length: isTriad || isTriadShort ? 3 : isOubliette || isAdaptiveShort ? 2 : 1 }, (_, i) => i + 1).map((slot) => {
                   const sel = mySelections.find((s) => s.slot_number === slot);
                   return (
                     <Box key={slot} sx={{ mb: 2 }}>
@@ -1179,6 +1241,141 @@ export default function StandaloneMatchPage() {
             </Alert>
           )}
 
+          {/* Adaptive Short: choice phase */}
+          {isAdaptiveShort && bothStarted && pm && (() => {
+            const choices = pm.adaptive_short_choices || [];
+            const bothChosen = choices.length >= 2;
+            const myId = user?.id;
+            const iAlreadyChose = choices.some((c) => c.choosing_user_id === myId);
+            const allSels = [...match.creator_selections, ...match.opponent_selections];
+
+            if (!bothChosen) {
+              if (!isParticipant || iAlreadyChose) {
+                return (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    {iAlreadyChose ? 'Choice submitted — waiting for opponent.' : 'Waiting for both players to choose.'}
+                  </Alert>
+                );
+              }
+              return (
+                <Card sx={{ mb: 2 }}>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>Adaptive Short — Choose Your Deck</Typography>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Secretly choose one deck from the combined pool of all 4 decks to play. Choices are revealed simultaneously.
+                    </Typography>
+                    {allSels.map((s) => (
+                      <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                        <Typography variant="body2">
+                          {match.creator_selections.some((cs) => cs.id === s.id) ? match.creator.name : match.opponent?.name}: {s.deck?.name} (SAS: {s.deck?.sas_rating ?? 'N/A'})
+                        </Typography>
+                        {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                        <Chip
+                          label={adaptiveShortChoiceId === s.id ? 'Selected' : 'Choose'}
+                          color={adaptiveShortChoiceId === s.id ? 'primary' : 'default'}
+                          size="small"
+                          onClick={() => setAdaptiveShortChoiceId(s.id)}
+                          variant={adaptiveShortChoiceId === s.id ? 'filled' : 'outlined'}
+                        />
+                      </Box>
+                    ))}
+                    <Button
+                      variant="contained"
+                      onClick={handleAdaptiveShortChoice}
+                      disabled={submitting || !adaptiveShortChoiceId}
+                      sx={{ mt: 1 }}
+                    >
+                      Submit Choice
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            // Both chosen — check if same deck (bidding) or different
+            const p1Choice = choices.find((c) => c.choosing_user_id === pm.player1.id);
+            const p2Choice = choices.find((c) => c.choosing_user_id === pm.player2.id);
+            const sameDeck = p1Choice && p2Choice && p1Choice.chosen_deck_selection_id === p2Choice.chosen_deck_selection_id;
+
+            if (sameDeck) {
+              // Bidding phase
+              const bidComplete = pm.adaptive_short_bidding_complete;
+              const contestedSel = allSels.find((s) => s.id === p1Choice?.chosen_deck_selection_id);
+              if (!bidComplete) {
+                const isMyTurn = pm.adaptive_short_bidder_id !== myId;
+                const currentBidderName = pm.adaptive_short_bidder_id === pm.player1.id ? match.creator.name : match.opponent?.name;
+                const opponentName = isCreator ? match.opponent?.name : match.creator.name;
+                return (
+                  <Card sx={{ mb: 2 }}>
+                    <CardContent>
+                      <Typography variant="h6" gutterBottom>Adaptive Short — Bidding</Typography>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Both players chose <strong>{contestedSel?.deck?.name ?? 'the same deck'}</strong>. Bid chains to play it.
+                        The bid winner plays the contested deck with that many chains. The current bid holder must play the deck with the chains they hold.
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        Current bid: <strong>{pm.adaptive_short_bid_chains} chains</strong> held by <strong>{currentBidderName}</strong>
+                      </Typography>
+                      {isParticipant && (isMyTurn ? (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Typography variant="body2">It&apos;s your turn. Raise the bid or accept.</Typography>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <TextField
+                              label={`Chains (> ${pm.adaptive_short_bid_chains})`}
+                              type="number"
+                              size="small"
+                              value={adaptiveShortBidChains}
+                              onChange={(e) => setAdaptiveShortBidChains(e.target.value)}
+                              inputProps={{ min: (pm.adaptive_short_bid_chains ?? 0) + 1 }}
+                              sx={{ width: 160 }}
+                            />
+                            <Button
+                              variant="contained"
+                              onClick={() => handleAdaptiveShortBid(false)}
+                              disabled={submitting || !adaptiveShortBidChains}
+                            >
+                              Raise Bid
+                            </Button>
+                          </Box>
+                          <Button
+                            variant="outlined"
+                            color="secondary"
+                            onClick={() => handleAdaptiveShortBid(true)}
+                            disabled={submitting}
+                          >
+                            Accept — let {currentBidderName} play the deck with {pm.adaptive_short_bid_chains} chains
+                          </Button>
+                        </Box>
+                      ) : (
+                        <Alert severity="info">
+                          Waiting for {opponentName} to respond to your bid of {pm.adaptive_short_bid_chains} chains.
+                        </Alert>
+                      ))}
+                    </CardContent>
+                  </Card>
+                );
+              }
+              // Bidding complete
+              const bidderName = pm.adaptive_short_bidder_id === pm.player1.id ? match.creator.name : match.opponent?.name;
+              return (
+                <Alert severity="success" sx={{ mb: 2 }}>
+                  Bidding complete — <strong>{bidderName}</strong> plays <strong>{contestedSel?.deck?.name ?? 'the contested deck'}</strong> with <strong>{pm.adaptive_short_bid_chains} chains</strong>.
+                </Alert>
+              );
+            }
+
+            // Different decks chosen — reveal
+            const myChoice = isCreator ? p1Choice : p2Choice;
+            const oppChoice = isCreator ? p2Choice : p1Choice;
+            const myChosenSel = allSels.find((s) => s.id === myChoice?.chosen_deck_selection_id);
+            const oppChosenSel = allSels.find((s) => s.id === oppChoice?.chosen_deck_selection_id);
+            return (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                <strong>Choices revealed!</strong> You play <strong>{myChosenSel?.deck?.name ?? '?'}</strong>; opponent plays <strong>{oppChosenSel?.deck?.name ?? '?'}</strong>
+              </Alert>
+            );
+          })()}
+
           {/* Score */}
           {bothStarted && pm && (
             <Card sx={{ mb: 2 }}>
@@ -1212,7 +1409,7 @@ export default function StandaloneMatchPage() {
           )}
 
           {/* Game report form */}
-          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (!isOubliette || (!!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house)) && (
+          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (!isOubliette || (!!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house)) && (!isAdaptiveShort || ((pm.adaptive_short_choices || []).length >= 2 && (pm.adaptive_short_bid_chains === null || !!pm.adaptive_short_bidding_complete))) && (
             <Card sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Report Game {games.length + 1}</Typography>

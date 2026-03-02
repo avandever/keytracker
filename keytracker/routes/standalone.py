@@ -29,6 +29,7 @@ from keytracker.schema import (
     SealedPoolDeck,
     StrikeSelection,
     TriadShortPick,
+    AdaptiveShortChoice,
     StandaloneMatch,
     StandaloneMatchStatus,
     WeekFormat,
@@ -49,6 +50,9 @@ from keytracker.match_helpers import (
     validate_triad_short_pick,
     validate_oubliette_ban,
     get_oubliette_eligible_deck_ids,
+    validate_adaptive_short_choice,
+    init_adaptive_short_bidding,
+    validate_adaptive_short_bid,
     validate_and_record_game,
     validate_adaptive_bid,
 )
@@ -131,8 +135,13 @@ def create_match():
         return jsonify({"error": "best_of_n must be a positive integer"}), 400
     if format_type in (WeekFormat.TRIAD, WeekFormat.ADAPTIVE):
         best_of_n = 3  # Triad and Adaptive are always best of 3
-    if format_type in (WeekFormat.REVERSAL, WeekFormat.TRIAD_SHORT, WeekFormat.OUBLIETTE):
-        best_of_n = 1  # Reversal, Triad Short, and Oubliette are always BO1
+    if format_type in (
+        WeekFormat.REVERSAL,
+        WeekFormat.TRIAD_SHORT,
+        WeekFormat.OUBLIETTE,
+        WeekFormat.ADAPTIVE_SHORT,
+    ):
+        best_of_n = 1  # These formats are always BO1
 
     is_public = bool(data.get("is_public", False))
     max_sas = data.get("max_sas")
@@ -337,7 +346,7 @@ def submit_deck_selection(match_id):
     data = request.get_json(silent=True) or {}
     slot_number = data.get("slot_number", 1)
     _three_slot = (WeekFormat.TRIAD, WeekFormat.TRIAD_SHORT)
-    _two_slot = (WeekFormat.OUBLIETTE,)
+    _two_slot = (WeekFormat.OUBLIETTE, WeekFormat.ADAPTIVE_SHORT)
     max_slots = 3 if match.format_type in _three_slot else (2 if match.format_type in _two_slot else 1)
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
@@ -760,6 +769,89 @@ def submit_banned_house(match_id):
                 )
                 db.session.add(forfeit_game)
                 match.status = StandaloneMatchStatus.COMPLETED
+
+    db.session.commit()
+    viewer_id = user.id if current_user.is_authenticated else None
+    return jsonify(serialize_standalone_match(match, viewer_id))
+
+
+@standalone_bp.route("/<int:match_id>/adaptive-short-choice", methods=["POST"])
+def submit_adaptive_short_choice(match_id):
+    """Submit an Adaptive Short deck choice. Hidden until both players submit."""
+    match, err = _get_match_or_404(match_id)
+    if err:
+        return err
+
+    if match.format_type != WeekFormat.ADAPTIVE_SHORT:
+        return jsonify({"error": "Only for Adaptive Short format"}), 400
+    if match.status != StandaloneMatchStatus.PUBLISHED:
+        return jsonify({"error": "Match is not published"}), 400
+    if not match.matchup:
+        return jsonify({"error": "Match not started yet"}), 400
+
+    user = _current_user_or_guest()
+    if user is None or user.id not in (match.creator_id, match.opponent_id):
+        return jsonify({"error": "You are not in this match"}), 403
+
+    data = request.get_json(silent=True) or {}
+    chosen_sel_id = data.get("chosen_deck_selection_id")
+    if not chosen_sel_id:
+        return jsonify({"error": "chosen_deck_selection_id is required"}), 400
+
+    pm = match.matchup
+    error = validate_adaptive_short_choice(pm, user.id, chosen_sel_id)
+    if error:
+        return jsonify({"error": error}), 400
+
+    choice = AdaptiveShortChoice(
+        player_matchup_id=pm.id,
+        choosing_user_id=user.id,
+        chosen_deck_selection_id=chosen_sel_id,
+    )
+    db.session.add(choice)
+    db.session.flush()
+    db.session.expire(pm, ["adaptive_short_choices"])
+
+    # After both choices: check if same deck was chosen
+    choices = pm.adaptive_short_choices
+    if len(choices) == 2:
+        c1, c2 = choices[0], choices[1]
+        if c1.chosen_deck_selection_id == c2.chosen_deck_selection_id:
+            init_adaptive_short_bidding(pm, c1.chosen_deck_selection_id)
+
+    db.session.commit()
+    viewer_id = user.id if current_user.is_authenticated else None
+    return jsonify(serialize_standalone_match(match, viewer_id))
+
+
+@standalone_bp.route("/<int:match_id>/adaptive-short-bid", methods=["POST"])
+def submit_adaptive_short_bid(match_id):
+    """Submit an Adaptive Short bid or concede."""
+    match, err = _get_match_or_404(match_id)
+    if err:
+        return err
+
+    if match.format_type != WeekFormat.ADAPTIVE_SHORT:
+        return jsonify({"error": "Only for Adaptive Short format"}), 400
+    if match.status != StandaloneMatchStatus.PUBLISHED:
+        return jsonify({"error": "Match is not published"}), 400
+    if not match.matchup:
+        return jsonify({"error": "Match not started yet"}), 400
+
+    user = _current_user_or_guest()
+    if user is None or user.id not in (match.creator_id, match.opponent_id):
+        return jsonify({"error": "You are not in this match"}), 403
+
+    data = request.get_json(silent=True) or {}
+    chains = data.get("chains")
+    concede = bool(data.get("concede", False))
+
+    pm = match.matchup
+    success, error = validate_adaptive_short_bid(
+        pm, user.id, chains=chains, concede=concede
+    )
+    if not success:
+        return jsonify({"error": error}), 400
 
     db.session.commit()
     viewer_id = user.id if current_user.is_authenticated else None

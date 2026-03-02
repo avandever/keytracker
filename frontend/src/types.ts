@@ -304,6 +304,16 @@ export interface PlayerMatchupInfo {
   oubliette_p2_banned_house?: string | null;
   oubliette_p1_eligible_deck_ids?: number[] | null;
   oubliette_p2_eligible_deck_ids?: number[] | null;
+  adaptive_short_choices_count?: number;
+  adaptive_short_choices?: AdaptiveShortChoiceInfo[];
+  adaptive_short_bid_chains?: number | null;
+  adaptive_short_bidder_id?: number | null;
+  adaptive_short_bidding_complete?: boolean;
+}
+
+export interface AdaptiveShortChoiceInfo {
+  choosing_user_id: number;
+  chosen_deck_selection_id: number;
 }
 
 export interface DeckSelectionInfo {

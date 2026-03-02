@@ -1190,8 +1190,9 @@ def create_week(league_id):
         WeekFormat.REVERSAL.value,
         WeekFormat.TRIAD_SHORT.value,
         WeekFormat.OUBLIETTE.value,
+        WeekFormat.ADAPTIVE_SHORT.value,
     ):
-        best_of_n = 1  # Reversal, Triad Short, and Oubliette are always BO1
+        best_of_n = 1  # These formats are always BO1
 
     # Determine next week number
     max_week = (
@@ -1468,7 +1469,7 @@ def generate_matchups(league_id, week_id):
                     400,
                 )
         else:
-            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type == WeekFormat.OUBLIETTE.value else 1)
+            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value) else 1)
             selections = PlayerDeckSelection.query.filter_by(
                 week_id=week.id, user_id=member.user_id
             ).count()
@@ -1628,7 +1629,7 @@ def generate_player_matchups(league_id, week_id):
                     name = u.name if u else f"User {member.user_id}"
                     missing.append(f"{name} ({pod_count}/3 pods)")
         else:
-            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type == WeekFormat.OUBLIETTE.value else 1)
+            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value) else 1)
             for member in active_members:
                 selections = PlayerDeckSelection.query.filter_by(
                     week_id=week.id, user_id=member.user_id
@@ -1882,7 +1883,7 @@ def publish_week(league_id, week_id):
                     400,
                 )
         else:
-            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type == WeekFormat.OUBLIETTE.value else 1)
+            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value) else 1)
             selections = PlayerDeckSelection.query.filter_by(
                 week_id=week.id, user_id=member.user_id
             ).count()
@@ -2638,7 +2639,7 @@ def submit_deck_selection(league_id, week_id):
 
     slot_number = data.get("slot_number", 1)
     _three_slot = (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value)
-    _two_slot = (WeekFormat.OUBLIETTE.value,)
+    _two_slot = (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value)
     max_slots = 3 if week.format_type in _three_slot else (2 if week.format_type in _two_slot else 1)
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
@@ -3796,6 +3797,104 @@ def submit_oubliette_banned_house(league_id, matchup_id):
     return jsonify(serialize_player_matchup(pm))
 
 
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/adaptive-short-choice", methods=["POST"]
+)
+@login_required
+def submit_adaptive_short_choice(league_id, matchup_id):
+    """Submit an Adaptive Short choice for a league match."""
+    from keytracker.schema import AdaptiveShortChoice as ASC
+    from keytracker.match_helpers import (
+        validate_adaptive_short_choice,
+        init_adaptive_short_bidding,
+    )
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.ADAPTIVE_SHORT.value:
+        return jsonify({"error": "Only for Adaptive Short format"}), 400
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    data = request.get_json(silent=True) or {}
+    chosen_sel_id = data.get("chosen_deck_selection_id")
+    if not chosen_sel_id:
+        return jsonify({"error": "chosen_deck_selection_id is required"}), 400
+
+    error = validate_adaptive_short_choice(pm, effective.id, chosen_sel_id)
+    if error:
+        return jsonify({"error": error}), 400
+
+    choice = ASC(
+        player_matchup_id=pm.id,
+        choosing_user_id=effective.id,
+        chosen_deck_selection_id=chosen_sel_id,
+    )
+    db.session.add(choice)
+    db.session.flush()
+    db.session.expire(pm, ["adaptive_short_choices"])
+
+    choices = pm.adaptive_short_choices
+    if len(choices) == 2:
+        c1, c2 = choices[0], choices[1]
+        if c1.chosen_deck_selection_id == c2.chosen_deck_selection_id:
+            init_adaptive_short_bidding(pm, c1.chosen_deck_selection_id)
+
+    db.session.commit()
+    return jsonify(serialize_player_matchup(pm))
+
+
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/adaptive-short-bid", methods=["POST"]
+)
+@login_required
+def submit_adaptive_short_bid(league_id, matchup_id):
+    """Submit an Adaptive Short bid or concede for a league match."""
+    from keytracker.match_helpers import validate_adaptive_short_bid
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.ADAPTIVE_SHORT.value:
+        return jsonify({"error": "Only for Adaptive Short format"}), 400
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    data = request.get_json(silent=True) or {}
+    chains = data.get("chains")
+    concede = bool(data.get("concede", False))
+
+    success, error = validate_adaptive_short_bid(pm, effective.id, chains=chains, concede=concede)
+    if not success:
+        return jsonify({"error": error}), 400
+
+    db.session.commit()
+    return jsonify(serialize_player_matchup(pm))
+
+
 # --- Match flow ---
 
 
@@ -3974,6 +4073,17 @@ def report_game(league_id, matchup_id):
                     ),
                     400,
                 )
+
+    # Adaptive Short: both must choose; if same deck chosen, bidding must be complete
+    if week.format_type == WeekFormat.ADAPTIVE_SHORT.value:
+        choices = pm.adaptive_short_choices
+        if len(choices) < 2:
+            return jsonify({"error": "Both players must choose before reporting games"}), 400
+        if (
+            pm.adaptive_short_bid_chains is not None
+            and not pm.adaptive_short_bidding_complete
+        ):
+            return jsonify({"error": "Adaptive Short bidding must complete before game can be played"}), 400
 
     # Oubliette: both banned houses must be submitted
     if week.format_type == WeekFormat.OUBLIETTE.value:

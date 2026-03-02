@@ -1131,11 +1131,22 @@ class PlayerMatchup(db.Model):
     oubliette_p1_banned_house = db.Column(db.Text, nullable=True)
     oubliette_p2_banned_house = db.Column(db.Text, nullable=True)
 
+    adaptive_short_bid_chains = db.Column(db.Integer, nullable=True)
+    adaptive_short_bidder_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=True
+    )
+    adaptive_short_bidding_complete = db.Column(
+        db.Boolean, default=False, nullable=False
+    )
+
     week_matchup = db.relationship("WeekMatchup", back_populates="player_matchups")
     standalone_match = db.relationship("StandaloneMatch", back_populates="matchup")
     player1 = db.relationship("User", foreign_keys=[player1_id])
     player2 = db.relationship("User", foreign_keys=[player2_id])
     adaptive_bidder = db.relationship("User", foreign_keys=[adaptive_bidder_id])
+    adaptive_short_bidder = db.relationship(
+        "User", foreign_keys=[adaptive_short_bidder_id]
+    )
     games = db.relationship(
         "MatchGame", back_populates="player_matchup", cascade="all, delete-orphan"
     )
@@ -1144,6 +1155,11 @@ class PlayerMatchup(db.Model):
     )
     triad_short_picks = db.relationship(
         "TriadShortPick",
+        back_populates="player_matchup",
+        cascade="all, delete-orphan",
+    )
+    adaptive_short_choices = db.relationship(
+        "AdaptiveShortChoice",
         back_populates="player_matchup",
         cascade="all, delete-orphan",
     )
@@ -1270,6 +1286,34 @@ class TriadShortPick(db.Model):
     __table_args__ = (
         db.UniqueConstraint(
             "player_matchup_id", "picking_user_id", name="uq_triad_short_pick"
+        ),
+    )
+
+
+class AdaptiveShortChoice(db.Model):
+    __tablename__ = "adaptive_short_choice"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_matchup.id"), nullable=False
+    )
+    choosing_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    chosen_deck_selection_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_deck_selection.id"), nullable=False
+    )
+
+    player_matchup = db.relationship(
+        "PlayerMatchup", back_populates="adaptive_short_choices"
+    )
+    choosing_user = db.relationship("User", foreign_keys=[choosing_user_id])
+    chosen_deck_selection = db.relationship("PlayerDeckSelection")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "player_matchup_id",
+            "choosing_user_id",
+            name="uq_adaptive_short_choice",
         ),
     )
 

@@ -164,3 +164,21 @@ export async function submitOublietteBannedHouse(
   });
   return data;
 }
+
+export async function submitAdaptiveShortChoice(
+  matchId: number,
+  chosenDeckSelectionId: number,
+): Promise<StandaloneMatch> {
+  const { data } = await apiClient.post(`/standalone-matches/${matchId}/adaptive-short-choice`, {
+    chosen_deck_selection_id: chosenDeckSelectionId,
+  });
+  return data;
+}
+
+export async function submitAdaptiveShortBid(
+  matchId: number,
+  payload: { chains?: number; concede?: boolean },
+): Promise<StandaloneMatch> {
+  const { data } = await apiClient.post(`/standalone-matches/${matchId}/adaptive-short-bid`, payload);
+  return data;
+}
