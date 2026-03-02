@@ -65,6 +65,12 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
 import type { LeagueDetail, KeyforgeSetInfo, LeagueWeek } from '../types';
+import { alpha } from '@mui/material/styles';
+
+const getChipSx = (color: string) => (theme: any) => {
+  if (!color || color === 'default') return {};
+  return { bgcolor: alpha(theme.palette[color]?.main, 0.12), color: theme.palette[color]?.dark };
+};
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
@@ -927,8 +933,8 @@ export default function LeagueAdminPage() {
                 <ListItemButton onClick={() => toggleWeekExpanded(week.id)} sx={{ py: 1 }}>
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flex: 1, flexWrap: 'wrap' }}>
                     <Typography variant="subtitle1">{week.name || `Week ${week.week_number}`}</Typography>
-                    <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" />
-                    <Chip label={week.status.replace('_', ' ')} size="small" color={STATUS_COLORS[week.status] || 'default'} />
+                    <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" variant="outlined" />
+                    <Chip label={week.status.replace('_', ' ')} size="small" sx={getChipSx(STATUS_COLORS[week.status] || 'default')} />
                     <Typography variant="body2" color="text.secondary">
                       Bo{week.best_of_n}
                     </Typography>

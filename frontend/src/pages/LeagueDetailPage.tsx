@@ -34,11 +34,17 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
   triad: 'Triad',
   sealed_archon: 'Sealed Archon',
+};
+
+const getChipSx = (color: string) => (theme: any) => {
+  if (!color || color === 'default') return {};
+  return { bgcolor: alpha(theme.palette[color]?.main, 0.12), color: theme.palette[color]?.dark };
 };
 
 export default function LeagueDetailPage() {
@@ -156,11 +162,11 @@ export default function LeagueDetailPage() {
     return (
       <Box>
         <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-          <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} />
+          <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} variant="outlined" />
           <Chip label={`Bo${week.best_of_n}`} variant="outlined" />
           <Chip
             label={week.status.replace('_', ' ')}
-            color={week.status === 'completed' ? 'success' : week.status === 'published' ? 'info' : 'default'}
+            sx={getChipSx(week.status === 'completed' ? 'success' : week.status === 'published' ? 'info' : 'default')}
           />
           <WeekConstraints week={week} sets={sets} />
         </Box>
@@ -208,13 +214,13 @@ export default function LeagueDetailPage() {
                             </Typography>
                           )}
                         </Typography>
-                        {pm.is_feature && <Chip label="Feature" size="small" color="warning" />}
-                        {isComplete && <Chip label="Complete" size="small" color="success" />}
+                        {pm.is_feature && <Chip label="Feature" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />}
+                        {isComplete && <Chip label="Complete" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />}
                         {!isComplete && pm.player1_started && pm.player2_started && (
-                          <Chip label="In progress" size="small" color="info" />
+                          <Chip label="In progress" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
                         )}
                         {!pm.player1_started || !pm.player2_started ? (
-                          <Chip label="Not started" size="small" color="default" />
+                          <Chip label="Not started" size="small" />
                         ) : null}
                       </Box>
 
@@ -525,7 +531,7 @@ export default function LeagueDetailPage() {
                             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
                               <Typography variant="body2">{member.user.name}</Typography>
                               {member.is_captain && (
-                                <Chip label="C" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem' }} />
+                                <Chip label="C" size="small" sx={(theme) => ({ height: 18, fontSize: '0.65rem', bgcolor: alpha(theme.palette.primary.main, 0.12), color: theme.palette.primary.dark })} />
                               )}
                             </Box>
                           </TableCell>
@@ -699,7 +705,7 @@ export default function LeagueDetailPage() {
                       primary={
                         <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
                           <Typography variant="body2">{m.user.name}</Typography>
-                          {m.is_captain && <Chip label="C" size="small" color="primary" sx={{ height: 18, fontSize: '0.65rem' }} />}
+                          {m.is_captain && <Chip label="C" size="small" sx={(theme) => ({ height: 18, fontSize: '0.65rem', bgcolor: alpha(theme.palette.primary.main, 0.12), color: theme.palette.primary.dark })} />}
                         </Box>
                       }
                     />
@@ -743,13 +749,13 @@ export default function LeagueDetailPage() {
         <Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Typography variant="h4">{league.name}</Typography>
-            {league.is_test && <Chip label="Test" size="small" color="secondary" />}
+            {league.is_test && <Chip label="Test" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.secondary.main, 0.12), color: theme.palette.secondary.dark })} />}
           </Box>
           {league.description && (
             <Typography color="text.secondary" sx={{ mt: 1 }}>{league.description}</Typography>
           )}
         </Box>
-        <Chip label={league.status} color={league.status === 'active' ? 'success' : league.status === 'drafting' || league.status === 'playoffs' ? 'warning' : 'info'} />
+        <Chip label={league.status} sx={getChipSx(league.status === 'active' ? 'success' : league.status === 'drafting' || league.status === 'playoffs' ? 'warning' : 'info')} />
       </Box>
 
       <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>

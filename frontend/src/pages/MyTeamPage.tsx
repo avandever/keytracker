@@ -54,6 +54,7 @@ import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuil
 import { useAuth } from '../contexts/AuthContext';
 import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
 import type { SealedPoolEntry, TeamSealedPoolEntry } from '../api/leagues';
+import { alpha } from '@mui/material/styles';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
@@ -754,8 +755,8 @@ export default function MyTeamPage() {
         <CardContent>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">{week.name || `Week ${week.week_number}`}</Typography>
-            <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" />
-            <Chip label={week.status.replace('_', ' ')} size="small" color="info" />
+            <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" variant="outlined" />
+            <Chip label={week.status.replace('_', ' ')} size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
             <WeekConstraints week={week} sets={sets} />
           </Box>
 
@@ -768,7 +769,7 @@ export default function MyTeamPage() {
                   <Typography variant="body2">
                     {myTeam.members.find((m) => m.user.id === currentFeature.user_id)?.user.name || `User ${currentFeature.user_id}`}
                   </Typography>
-                  <Chip label="Feature" size="small" color="warning" />
+                  <Chip label="Feature" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />
                   {isCaptain && (
                     <Button size="small" color="error" onClick={() => handleClearFeature(week.id)}>
                       Clear
@@ -1060,7 +1061,7 @@ export default function MyTeamPage() {
                     {m.user.name}
                     {isMe ? ' (you)' : ''}
                   </Typography>
-                  {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
+                  {m.is_captain && <Chip label="Captain" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.primary.main, 0.12), color: theme.palette.primary.dark })} />}
                 </Box>
 
                 {/* Sealed pool display (sealed_archon and sealed_alliance) */}
@@ -1531,7 +1532,7 @@ export default function MyTeamPage() {
                             {!pm.player1_started || !pm.player2_started ? (
                               <Chip label="Not started" size="small" color="default" />
                             ) : pm.games.length === 0 ? (
-                              <Chip label="In progress" size="small" color="info" />
+                              <Chip label="In progress" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
                             ) : null}
                           </Box>
                           {showPods && (
@@ -1645,7 +1646,7 @@ export default function MyTeamPage() {
                       primary={
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                           {m.user.name}
-                          {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
+                          {m.is_captain && <Chip label="Captain" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.primary.main, 0.12), color: theme.palette.primary.dark })} />}
                         </Box>
                       }
                     />

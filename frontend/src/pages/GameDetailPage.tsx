@@ -18,6 +18,7 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 import { getGame } from '../api/games';
 import type { GameDetail } from '../types';
+import { alpha } from '@mui/material/styles';
 import GameLogEntry from '../components/GameLogEntry';
 
 export default function GameDetailPage() {
@@ -51,7 +52,7 @@ export default function GameDetailPage() {
         {players.join(' vs ')}
       </Typography>
       <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-        <Chip label={`Winner: ${game.winner}`} color="primary" />
+        <Chip label={`Winner: ${game.winner}`} sx={(theme) => ({ bgcolor: alpha(theme.palette.primary.main, 0.12), color: theme.palette.primary.dark })} />
         <Chip label={`Keys: ${game.winner_keys} - ${game.loser_keys}`} variant="outlined" />
         {game.date && <Chip label={new Date(game.date).toLocaleString()} variant="outlined" />}
       </Box>

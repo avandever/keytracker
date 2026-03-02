@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { updateSettings } from '../api/auth';
 import { useSearchParams } from 'react-router-dom';
+import { alpha } from '@mui/material/styles';
 
 export default function AccountPage() {
   const { user, loading, refresh } = useAuth();
@@ -208,7 +209,7 @@ export default function AccountPage() {
           </>
         ) : (
           <>
-            <Chip label="Google Linked" color="success" sx={{ mb: 1 }} />
+            <Chip label="Google Linked" sx={(theme) => ({ mb: 1, bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />
             <Box sx={{ mt: 1 }}>
               <Button variant="outlined" size="small" color="error" href="/auth/google/unlink">
                 Unlink

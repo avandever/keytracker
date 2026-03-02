@@ -51,6 +51,7 @@ import type {
   PlayerMatchupInfo,
   DeckSelectionInfo,
 } from '../types';
+import { alpha } from '@mui/material/styles';
 
 const TOKEN_SETS = new Set([855, 600]);
 const PROPHECY_EXPANSION_ID = 886;
@@ -438,7 +439,7 @@ export default function MyLeagueInfoPage() {
                           <Link href={sel.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
                         </Box>
                       )}
-                      {isStruck && <Chip label="Struck" size="small" color="error" />}
+                      {isStruck && <Chip label="Struck" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.error.main, 0.12), color: theme.palette.error.dark })} />}
                       {canSelectDeck && (
                         <Button size="small" color="error" onClick={() => handleRemoveDeck(week.id, sel.slot_number)}>
                           Remove
@@ -834,8 +835,7 @@ export default function MyLeagueInfoPage() {
                     <Chip
                       label={thiefFavorThieving ? 'Feature: must use stolen deck' : 'Feature: must use own deck'}
                       size="small"
-                      color="warning"
-                      sx={{ mb: 1 }}
+                      sx={(theme) => ({ mb: 1, bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })}
                     />
                   )}
                   {mySelections.length > 0 ? null : (
@@ -967,7 +967,7 @@ export default function MyLeagueInfoPage() {
                           <Link href={ds.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
                         </Box>
                       )}
-                      {isStruck && <Chip label="Struck" size="small" color="error" />}
+                      {isStruck && <Chip label="Struck" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.error.main, 0.12), color: theme.palette.error.dark })} />}
                     </Box>
                   );
                 })}
@@ -983,7 +983,7 @@ export default function MyLeagueInfoPage() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                 <Typography variant="h6">My Match</Typography>
                 {myMatchup.is_feature && (
-                  <Chip label="Feature Match" color="warning" size="small" />
+                  <Chip label="Feature Match" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />
                 )}
               </Box>
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
@@ -1011,12 +1011,12 @@ export default function MyLeagueInfoPage() {
                 <Chip
                   label={`${myMatchup.player1.name}: ${myMatchup.player1_started ? 'Ready' : 'Not started'}`}
                   size="small"
-                  color={myMatchup.player1_started ? 'success' : 'default'}
+                  sx={myMatchup.player1_started ? (theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark }) : undefined}
                 />
                 <Chip
                   label={`${myMatchup.player2.name}: ${myMatchup.player2_started ? 'Ready' : 'Not started'}`}
                   size="small"
-                  color={myMatchup.player2_started ? 'success' : 'default'}
+                  sx={myMatchup.player2_started ? (theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark }) : undefined}
                 />
               </Box>
 
@@ -1111,8 +1111,8 @@ export default function MyLeagueInfoPage() {
                         <Typography variant="body2">
                           Winner: {winner.name} | Keys: {g.player1_keys}-{g.player2_keys}
                         </Typography>
-                        {g.went_to_time && <Chip label="Time" size="small" color="warning" />}
-                        {g.loser_conceded && <Chip label="Conceded" size="small" color="info" />}
+                        {g.went_to_time && <Chip label="Time" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />}
+                        {g.loser_conceded && <Chip label="Conceded" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />}
                       </Box>
                     );
                   })}
@@ -1277,7 +1277,7 @@ export default function MyLeagueInfoPage() {
                 isFeaturePlayer ? (
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
                     <span>{weekLabel}</span>
-                    <Chip label="Feature" size="small" color="warning" sx={{ height: 16, fontSize: '0.6rem', mt: 0.25 }} />
+                    <Chip label="Feature" size="small" sx={(theme) => ({ height: 16, fontSize: '0.6rem', mt: 0.25, bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />
                   </Box>
                 ) : (
                   weekLabel
@@ -1309,7 +1309,7 @@ export default function MyLeagueInfoPage() {
                     primary={
                       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         {m.user.name}
-                        {m.is_captain && <Chip label="Captain" size="small" color="primary" />}
+                        {m.is_captain && <Chip label="Captain" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.primary.main, 0.12), color: theme.palette.primary.dark })} />}
                         {m.user.id === effectiveUserId && <Chip label="You" size="small" variant="outlined" />}
                       </Box>
                     }
@@ -1330,8 +1330,7 @@ export default function MyLeagueInfoPage() {
             </Typography>
             <Chip
               label={myMember?.has_paid ? 'Paid' : 'Unpaid'}
-              color={myMember?.has_paid ? 'success' : 'warning'}
-              sx={{ mt: 1 }}
+              sx={(theme) => ({ mt: 1, ...(myMember?.has_paid ? { bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark } : { bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark }) })}
             />
           </CardContent>
         </Card>

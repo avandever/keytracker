@@ -12,6 +12,7 @@ import {
   Chip,
   Button,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { listLeagues } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import type { LeagueSummary } from '../types';
@@ -22,6 +23,11 @@ const STATUS_COLORS: Record<string, 'default' | 'info' | 'success' | 'warning'> 
   active: 'success',
   playoffs: 'warning',
   completed: 'default',
+};
+
+const getChipSx = (color: string) => (theme: any) => {
+  if (color === 'default') return {};
+  return { bgcolor: alpha(theme.palette[color]?.main, 0.12), color: theme.palette[color]?.dark };
 };
 
 export default function LeagueListPage() {
@@ -60,12 +66,12 @@ export default function LeagueListPage() {
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                   <Typography variant="h6">{league.name}</Typography>
-                  {league.is_test && <Chip label="Test" size="small" color="secondary" />}
+                  {league.is_test && <Chip label="Test" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.secondary.main, 0.12), color: theme.palette.secondary.dark })} />}
                 </Box>
                 <Chip
                   label={league.status}
                   size="small"
-                  color={STATUS_COLORS[league.status] || 'default'}
+                  sx={getChipSx(STATUS_COLORS[league.status] || 'default')}
                 />
               </Box>
               {league.description && (

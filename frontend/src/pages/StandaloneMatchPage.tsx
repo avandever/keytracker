@@ -54,6 +54,7 @@ import type {
   MoiraiAssignmentInfo,
 } from '../types';
 import type { SealedPoolEntry } from '../api/leagues';
+import { alpha } from '@mui/material/styles';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon',
@@ -631,9 +632,9 @@ export default function StandaloneMatchPage() {
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <Typography variant="h4">Standalone Match</Typography>
-        <Chip label={FORMAT_LABELS[match.format_type] || match.format_type} />
+        <Chip label={FORMAT_LABELS[match.format_type] || match.format_type} variant="outlined" />
         <Chip label={`Bo${match.best_of_n}`} variant="outlined" />
-        <Chip label={match.status} color={match.status === 'completed' ? 'success' : 'default'} />
+        <Chip label={match.status} sx={match.status === 'completed' ? (theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark }) : undefined} />
       </Box>
 
       {/* Constraints */}
@@ -1100,7 +1101,7 @@ export default function StandaloneMatchPage() {
                           {s.deck?.name}
                         </Typography>
                         {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
-                        {strickenIds.has(s.id) && <Chip label="Struck" size="small" color="error" />}
+                        {strickenIds.has(s.id) && <Chip label="Struck" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.error.main, 0.12), color: theme.palette.error.dark })} />}
                       </Box>
                     ))}
                   </Box>
@@ -1113,7 +1114,7 @@ export default function StandaloneMatchPage() {
                             {s.deck?.name}
                           </Typography>
                           {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
-                          {strickenIds.has(s.id) && <Chip label="Struck" size="small" color="error" />}
+                          {strickenIds.has(s.id) && <Chip label="Struck" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.error.main, 0.12), color: theme.palette.error.dark })} />}
                         </Box>
                       ))}
                     </Box>
@@ -1507,7 +1508,7 @@ export default function StandaloneMatchPage() {
                             <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
                               <Typography variant="body2">{s.deck?.name}</Typography>
                               {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
-                              {p1Pool.borrowed && s.id === p1Pool.borrowed.id && <Chip label="Borrowed" size="small" color="info" />}
+                              {p1Pool.borrowed && s.id === p1Pool.borrowed.id && <Chip label="Borrowed" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />}
                             </Box>
                           ))}
                         </Box>
@@ -1517,7 +1518,7 @@ export default function StandaloneMatchPage() {
                             <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
                               <Typography variant="body2">{s.deck?.name}</Typography>
                               {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
-                              {p2Pool.borrowed && s.id === p2Pool.borrowed.id && <Chip label="Borrowed" size="small" color="info" />}
+                              {p2Pool.borrowed && s.id === p2Pool.borrowed.id && <Chip label="Borrowed" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />}
                             </Box>
                           ))}
                         </Box>

@@ -23,6 +23,7 @@ import {
 import { listUsers, deleteUser, toggleFreeMembership } from '../api/admin';
 import type { AdminUser } from '../api/admin';
 import { useAuth } from '../contexts/AuthContext';
+import { alpha } from '@mui/material/styles';
 
 const ADMIN_EMAIL = 'andrew.vandever@gmail.com';
 
@@ -113,9 +114,9 @@ export default function UserAdminPage() {
                   <TableCell>{u.email}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                      {u.is_patron && <Chip label="Patron" size="small" color="success" />}
-                      {u.free_membership && <Chip label="Free Member" size="small" color="info" />}
-                      {u.is_league_admin && <Chip label="League Admin" size="small" color="warning" />}
+                      {u.is_patron && <Chip label="Patron" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />}
+                      {u.free_membership && <Chip label="Free Member" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />}
+                      {u.is_league_admin && <Chip label="League Admin" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />}
                       {u.is_test_user && <Chip label="Test" size="small" />}
                     </Box>
                   </TableCell>

@@ -140,7 +140,7 @@ export default function StandaloneMatchesPage() {
                 primary={
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="body1">{match.creator.name}</Typography>
-                    <Chip label={FORMAT_LABELS[match.format_type] || match.format_type} size="small" />
+                    <Chip label={FORMAT_LABELS[match.format_type] || match.format_type} size="small" variant="outlined" />
                     <Chip label={`Bo${match.best_of_n}`} size="small" variant="outlined" />
                   </Box>
                 }
