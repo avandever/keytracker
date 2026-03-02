@@ -801,6 +801,41 @@ export default function LeagueDetailPage() {
         )}
       </Box>
 
+      {/* Status banner */}
+      {league.status === 'setup' && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          This league is open for registration — sign up above to join! We will be starting soon.
+          For the latest information, visit our{' '}
+          <a
+            href="https://discord.com/channels/698635177248948316/772542071445127189"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Discord channel
+          </a>.
+        </Alert>
+      )}
+      {league.status === 'drafting' && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          The draft is currently in progress. Check back soon for team announcements.
+        </Alert>
+      )}
+      {league.status === 'active' && (
+        <Alert severity="success" sx={{ mb: 3 }}>
+          This league is currently active. Results are updated as matches are reported.
+        </Alert>
+      )}
+      {league.status === 'playoffs' && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          This league is in the playoffs stage.
+        </Alert>
+      )}
+      {league.status === 'completed' && (
+        <Alert severity="success" sx={{ mb: 3 }}>
+          This league has concluded. Final standings are shown below.
+        </Alert>
+      )}
+
       {/* Tabbed content */}
       {weeks.length > 0 ? (
         <>
