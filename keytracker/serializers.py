@@ -447,6 +447,49 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
         if len(exchange_borrows) == 2
         else None
     )
+
+    data["nordic_hexad_phase"] = getattr(pm, "nordic_hexad_phase", None)
+    nordic_actions_raw = getattr(pm, "nordic_hexad_actions", [])
+    current_phase = data["nordic_hexad_phase"] or 0
+    # Reveal actions phase by phase — only show actions for phases already completed
+    # (phase X is complete when current_phase > X)
+    revealed_actions = [
+        {
+            "player_id": a.player_id,
+            "phase": a.phase,
+            "target_deck_selection_id": a.target_deck_selection_id,
+        }
+        for a in nordic_actions_raw
+        if current_phase > a.phase
+    ]
+    data["nordic_hexad_actions"] = revealed_actions
+    # Count actions submitted for the current (unrevealed) phase so the UI can show
+    # "one player has submitted, waiting for the other" without leaking what was chosen
+    if current_phase in (1, 2, 3):
+        data["nordic_hexad_pending_phase_count"] = sum(
+            1 for a in nordic_actions_raw if a.phase == current_phase
+        )
+    else:
+        data["nordic_hexad_pending_phase_count"] = 0
+    # After phase 3 (current_phase == 4), compute remaining deck IDs
+    if current_phase >= 4:
+        from keytracker.match_helpers import get_nordic_remaining_deck_ids
+
+        remaining = get_nordic_remaining_deck_ids(pm)
+        if remaining:
+            data["nordic_p1_remaining_deck_ids"] = list(
+                remaining.get(pm.player1_id, set())
+            )
+            data["nordic_p2_remaining_deck_ids"] = list(
+                remaining.get(pm.player2_id, set())
+            )
+        else:
+            data["nordic_p1_remaining_deck_ids"] = None
+            data["nordic_p2_remaining_deck_ids"] = None
+    else:
+        data["nordic_p1_remaining_deck_ids"] = None
+        data["nordic_p2_remaining_deck_ids"] = None
+
     return data
 
 

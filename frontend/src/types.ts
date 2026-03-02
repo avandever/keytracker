@@ -311,6 +311,11 @@ export interface PlayerMatchupInfo {
   adaptive_short_bidding_complete?: boolean;
   exchange_borrows_count?: number;
   exchange_borrows?: ExchangeBorrowInfo[] | null;
+  nordic_hexad_phase?: number | null;
+  nordic_hexad_actions?: NordicHexadActionInfo[];
+  nordic_hexad_pending_phase_count?: number | null;
+  nordic_p1_remaining_deck_ids?: number[] | null;
+  nordic_p2_remaining_deck_ids?: number[] | null;
 }
 
 export interface AdaptiveShortChoiceInfo {
@@ -321,6 +326,12 @@ export interface AdaptiveShortChoiceInfo {
 export interface ExchangeBorrowInfo {
   borrowing_user_id: number;
   borrowed_deck_selection_id: number;
+}
+
+export interface NordicHexadActionInfo {
+  player_id: number;
+  phase: number;
+  target_deck_selection_id: number;
 }
 
 export interface DeckSelectionInfo {

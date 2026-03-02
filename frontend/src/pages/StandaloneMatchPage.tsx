@@ -38,6 +38,7 @@ import {
   submitAdaptiveShortChoice,
   submitAdaptiveShortBid,
   submitExchangeBorrow,
+  submitNordicAction,
 } from '../api/standalone';
 import { getSets } from '../api/leagues';
 import WeekConstraints from '../components/WeekConstraints';
@@ -127,6 +128,9 @@ export default function StandaloneMatchPage() {
 
   // Exchange state
   const [exchangeBorrowId, setExchangeBorrowId] = useState<number | ''>('');
+
+  // Nordic Hexad state
+  const [nordicActionTargetId, setNordicActionTargetId] = useState<number | ''>('');
 
   const [copiedUrl, setCopiedUrl] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -265,6 +269,7 @@ export default function StandaloneMatchPage() {
   const isOubliette = match.format_type === 'oubliette';
   const isAdaptiveShort = match.format_type === 'adaptive_short';
   const isExchange = match.format_type === 'exchange';
+  const isNordicHexad = match.format_type === 'nordic_hexad';
 
   const allowedSetsSet = new Set(match.allowed_sets || []);
   const needsToken = TOKEN_SETS.size > 0 && [...TOKEN_SETS].some((s) => allowedSetsSet.has(s));
@@ -443,6 +448,23 @@ export default function StandaloneMatchPage() {
     }
   };
 
+  const handleNordicAction = async (phase: number) => {
+    if (!nordicActionTargetId) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const updated = await submitNordicAction(id, phase, nordicActionTargetId as number);
+      setMatch(updated);
+      setNordicActionTargetId('');
+      setSuccess(phase === 2 ? 'Protection submitted!' : 'Ban submitted!');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err.response?.data?.error || 'Failed to submit action');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleExchangeBorrow = async () => {
     if (!exchangeBorrowId) return;
     setSubmitting(true);
@@ -519,8 +541,8 @@ export default function StandaloneMatchPage() {
         went_to_time: reportWentToTime,
         loser_conceded: reportLoserConceded,
       };
-      if ((isTriad || isExchange) && reportP1DeckId) payload.player1_deck_id = reportP1DeckId as number;
-      if ((isTriad || isExchange) && reportP2DeckId) payload.player2_deck_id = reportP2DeckId as number;
+      if ((isTriad || isExchange || isNordicHexad) && reportP1DeckId) payload.player1_deck_id = reportP1DeckId as number;
+      if ((isTriad || isExchange || isNordicHexad) && reportP2DeckId) payload.player2_deck_id = reportP2DeckId as number;
       // Reversal: player 1 plays opponent's deck, player 2 plays creator's deck
       if (isReversal) {
         const creatorDeckId = match.creator_selections[0]?.deck?.db_id;
@@ -816,7 +838,7 @@ export default function StandaloneMatchPage() {
             {/* Archon / Triad: submit by URL */}
             {!isSealed && !isOpenAlliance && (
               <Box>
-                {Array.from({ length: isTriad || isTriadShort ? 3 : isOubliette || isAdaptiveShort || isExchange ? 2 : 1 }, (_, i) => i + 1).map((slot) => {
+                {Array.from({ length: isNordicHexad ? 6 : isTriad || isTriadShort ? 3 : isOubliette || isAdaptiveShort || isExchange ? 2 : 1 }, (_, i) => i + 1).map((slot) => {
                   const sel = mySelections.find((s) => s.slot_number === slot);
                   return (
                     <Box key={slot} sx={{ mb: 2 }}>
@@ -1483,6 +1505,172 @@ export default function StandaloneMatchPage() {
             );
           })()}
 
+          {/* Nordic Hexad: phase-gated ban/protect UI */}
+          {isNordicHexad && bothStarted && pm && (() => {
+            const phase = pm.nordic_hexad_phase ?? 0;
+            if (phase === 0 || phase > 3) return null;
+
+            const pendingCount = pm.nordic_hexad_pending_phase_count ?? 0;
+            const revealedActions = pm.nordic_hexad_actions || [];
+            const allSels = [...match.creator_selections, ...match.opponent_selections];
+
+            // Collect revealed bans and protects from completed phases
+            const p1BannedPhase1Id = revealedActions.find((a) => a.phase === 1 && a.player_id === pm.player1.id)?.target_deck_selection_id;
+            const p2BannedPhase1Id = revealedActions.find((a) => a.phase === 1 && a.player_id === pm.player2.id)?.target_deck_selection_id;
+            const p1ProtectedId = revealedActions.find((a) => a.phase === 2 && a.player_id === pm.player1.id)?.target_deck_selection_id;
+            const p2ProtectedId = revealedActions.find((a) => a.phase === 2 && a.player_id === pm.player2.id)?.target_deck_selection_id;
+
+            // For phase 3, opponent's banned decks from phase 1 and their protected deck from phase 2
+            const oppProtectedId = isCreator ? p2ProtectedId : p1ProtectedId;
+            const oppBannedPhase1Id = isCreator ? p2BannedPhase1Id : p1BannedPhase1Id;
+
+            const phaseLabel = phase === 1 ? 'Ban Phase 1' : phase === 2 ? 'Protect Phase' : 'Ban Phase 2';
+            const phaseDesc = phase === 1
+              ? "Secretly choose one of your opponent's decks to ban."
+              : phase === 2
+              ? 'Secretly choose one of your own decks to protect from the second ban.'
+              : "Secretly choose one of your opponent's remaining (non-protected) decks to ban.";
+
+            // Options the current player can target this phase
+            const targetOptions = isParticipant
+              ? (() => {
+                if (phase === 1) return oppSelections;
+                if (phase === 2) return mySelections;
+                // Phase 3: opponent's selections minus their phase-1 ban (already removed) and excluding their protected deck
+                return oppSelections.filter((s) => s.id !== oppBannedPhase1Id && s.id !== oppProtectedId);
+              })()
+              : [];
+
+            return (
+              <Card sx={{ mb: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Nordic Hexad — {phaseLabel}</Typography>
+
+                  {/* Show completed phase results */}
+                  {phase >= 2 && p1BannedPhase1Id != null && p2BannedPhase1Id != null && (
+                    <Box sx={{ mb: 1 }}>
+                      <Typography variant="subtitle2">Ban Phase 1 (revealed):</Typography>
+                      <Typography variant="body2">
+                        {match.creator.name} banned: <strong>{allSels.find((s) => s.id === p1BannedPhase1Id)?.deck?.name ?? '?'}</strong>
+                        {' '}from {match.opponent?.name}&apos;s pool
+                      </Typography>
+                      <Typography variant="body2">
+                        {match.opponent?.name} banned: <strong>{allSels.find((s) => s.id === p2BannedPhase1Id)?.deck?.name ?? '?'}</strong>
+                        {' '}from {match.creator.name}&apos;s pool
+                      </Typography>
+                    </Box>
+                  )}
+                  {phase >= 3 && p1ProtectedId != null && p2ProtectedId != null && (
+                    <Box sx={{ mb: 1 }}>
+                      <Typography variant="subtitle2">Protect Phase (revealed):</Typography>
+                      <Typography variant="body2">
+                        {match.creator.name} protected: <strong>{allSels.find((s) => s.id === p1ProtectedId)?.deck?.name ?? '?'}</strong>
+                      </Typography>
+                      <Typography variant="body2">
+                        {match.opponent?.name} protected: <strong>{allSels.find((s) => s.id === p2ProtectedId)?.deck?.name ?? '?'}</strong>
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Current phase action */}
+                  {isParticipant && pendingCount < 2 && (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        {phaseDesc} Actions are revealed simultaneously when both players submit.
+                      </Typography>
+                      {pendingCount === 1 && (
+                        <Alert severity="info" sx={{ mb: 1 }}>One player has already submitted — waiting for the other.</Alert>
+                      )}
+                      {targetOptions.map((s) => (
+                        <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Typography variant="body2">{s.deck?.name} (SAS: {s.deck?.sas_rating ?? 'N/A'})</Typography>
+                          {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                          {phase === 3 && s.id === (isCreator ? p2ProtectedId : p1ProtectedId) ? (
+                            <Chip label="Protected" size="small" color="warning" variant="outlined" />
+                          ) : (
+                            <Chip
+                              label={nordicActionTargetId === s.id ? 'Selected' : phase === 2 ? 'Protect' : 'Ban'}
+                              color={nordicActionTargetId === s.id ? 'primary' : 'default'}
+                              size="small"
+                              onClick={() => setNordicActionTargetId(s.id)}
+                              variant={nordicActionTargetId === s.id ? 'filled' : 'outlined'}
+                            />
+                          )}
+                        </Box>
+                      ))}
+                      <Button
+                        variant="contained"
+                        onClick={() => handleNordicAction(phase)}
+                        disabled={submitting || !nordicActionTargetId}
+                        sx={{ mt: 1 }}
+                      >
+                        Submit {phase === 2 ? 'Protection' : 'Ban'}
+                      </Button>
+                    </Box>
+                  )}
+                  {!isParticipant && (
+                    <Alert severity="info">Waiting for both players to complete {phaseLabel.toLowerCase()}.</Alert>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* Nordic Hexad: remaining deck pool display (phase 4) */}
+          {isNordicHexad && bothStarted && pm && pm.nordic_hexad_phase === 4 && (() => {
+            const allSels = [...match.creator_selections, ...match.opponent_selections];
+            const p1RemainingIds = new Set(pm.nordic_p1_remaining_deck_ids || []);
+            const p2RemainingIds = new Set(pm.nordic_p2_remaining_deck_ids || []);
+            const p1Remaining = match.creator_selections.filter((s) => s.deck?.db_id != null && p1RemainingIds.has(s.deck.db_id));
+            const p2Remaining = match.opponent_selections.filter((s) => s.deck?.db_id != null && p2RemainingIds.has(s.deck.db_id));
+
+            // Show all revealed actions as a summary
+            const revealedActions = pm.nordic_hexad_actions || [];
+            const getSelName = (id: number) => allSels.find((s) => s.id === id)?.deck?.name ?? '?';
+            return (
+              <Card sx={{ mb: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Nordic Hexad — Remaining Decks</Typography>
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="subtitle2">Ban/Protect summary:</Typography>
+                    {[1, 2, 3].map((ph) => {
+                      const p1a = revealedActions.find((a) => a.phase === ph && a.player_id === pm.player1.id);
+                      const p2a = revealedActions.find((a) => a.phase === ph && a.player_id === pm.player2.id);
+                      const label = ph === 1 ? 'Ban 1' : ph === 2 ? 'Protect' : 'Ban 2';
+                      return (
+                        <Typography key={ph} variant="body2">
+                          <strong>{label}:</strong>{' '}
+                          {match.creator.name}: {p1a ? getSelName(p1a.target_deck_selection_id) : '?'},{' '}
+                          {match.opponent?.name}: {p2a ? getSelName(p2a.target_deck_selection_id) : '?'}
+                        </Typography>
+                      );
+                    })}
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap', mt: 1 }}>
+                    <Box>
+                      <Typography variant="subtitle2">{match.creator.name}&apos;s remaining decks</Typography>
+                      {p1Remaining.map((s) => (
+                        <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                          <Typography variant="body2">{s.deck?.name}</Typography>
+                          {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                        </Box>
+                      ))}
+                    </Box>
+                    <Box>
+                      <Typography variant="subtitle2">{match.opponent?.name}&apos;s remaining decks</Typography>
+                      {p2Remaining.map((s) => (
+                        <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                          <Typography variant="body2">{s.deck?.name}</Typography>
+                          {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Score */}
           {bothStarted && pm && (
             <Card sx={{ mb: 2 }}>
@@ -1516,7 +1704,7 @@ export default function StandaloneMatchPage() {
           )}
 
           {/* Game report form */}
-          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (!isOubliette || (!!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house)) && (!isAdaptiveShort || ((pm.adaptive_short_choices || []).length >= 2 && (pm.adaptive_short_bid_chains === null || !!pm.adaptive_short_bidding_complete))) && (!isExchange || (pm.exchange_borrows || []).length >= 2) && (
+          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (!isOubliette || (!!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house)) && (!isAdaptiveShort || ((pm.adaptive_short_choices || []).length >= 2 && (pm.adaptive_short_bid_chains === null || !!pm.adaptive_short_bidding_complete))) && (!isExchange || (pm.exchange_borrows || []).length >= 2) && (!isNordicHexad || pm.nordic_hexad_phase === 4) && (
             <Card sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Report Game {games.length + 1}</Typography>
@@ -1586,6 +1774,47 @@ export default function StandaloneMatchPage() {
                       </FormControl>
                     </Box>
                   )}
+
+                  {isNordicHexad && pm && pm.nordic_hexad_phase === 4 && (() => {
+                    const p1RemainingIds = new Set(pm.nordic_p1_remaining_deck_ids || []);
+                    const p2RemainingIds = new Set(pm.nordic_p2_remaining_deck_ids || []);
+                    return (
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <FormControl size="small" sx={{ minWidth: 200 }}>
+                          <InputLabel>{match.creator.name}&apos;s Deck</InputLabel>
+                          <Select
+                            value={reportP1DeckId}
+                            label={`${match.creator.name}'s Deck`}
+                            onChange={(e) => setReportP1DeckId(e.target.value as number)}
+                          >
+                            {match.creator_selections
+                              .filter((s) => s.deck?.db_id != null && p1RemainingIds.has(s.deck.db_id))
+                              .map((s) => (
+                                <MenuItem key={s.deck?.db_id} value={s.deck?.db_id}>
+                                  {s.deck?.name}
+                                </MenuItem>
+                              ))}
+                          </Select>
+                        </FormControl>
+                        <FormControl size="small" sx={{ minWidth: 200 }}>
+                          <InputLabel>{match.opponent?.name}&apos;s Deck</InputLabel>
+                          <Select
+                            value={reportP2DeckId}
+                            label={`${match.opponent?.name || 'Opponent'}'s Deck`}
+                            onChange={(e) => setReportP2DeckId(e.target.value as number)}
+                          >
+                            {match.opponent_selections
+                              .filter((s) => s.deck?.db_id != null && p2RemainingIds.has(s.deck.db_id))
+                              .map((s) => (
+                                <MenuItem key={s.deck?.db_id} value={s.deck?.db_id}>
+                                  {s.deck?.name}
+                                </MenuItem>
+                              ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                    );
+                  })()}
 
                   {isExchange && pm && (() => {
                     const borrows = pm.exchange_borrows || [];
