@@ -182,3 +182,13 @@ export async function submitAdaptiveShortBid(
   const { data } = await apiClient.post(`/standalone-matches/${matchId}/adaptive-short-bid`, payload);
   return data;
 }
+
+export async function submitExchangeBorrow(
+  matchId: number,
+  borrowedDeckSelectionId: number,
+): Promise<StandaloneMatch> {
+  const { data } = await apiClient.post(`/standalone-matches/${matchId}/exchange-borrow`, {
+    borrowed_deck_selection_id: borrowedDeckSelectionId,
+  });
+  return data;
+}

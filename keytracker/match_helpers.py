@@ -566,6 +566,166 @@ def validate_adaptive_short_bid(pm, requesting_user_id, chains=None, concede=Fal
     return True, None
 
 
+def _get_exchange_selections(matchup):
+    """
+    Return (p1_selections, p2_selections) as PlayerDeckSelection lists
+    for the given matchup (used by Exchange win condition checks).
+    """
+    from keytracker.schema import WeekMatchup
+
+    if matchup.standalone_match_id:
+        p1_sels = PlayerDeckSelection.query.filter_by(
+            standalone_match_id=matchup.standalone_match_id,
+            user_id=matchup.player1_id,
+        ).all()
+        p2_sels = PlayerDeckSelection.query.filter_by(
+            standalone_match_id=matchup.standalone_match_id,
+            user_id=matchup.player2_id,
+        ).all()
+    elif matchup.week_matchup_id:
+        wm = db.session.get(WeekMatchup, matchup.week_matchup_id)
+        week_id = wm.week_id if wm else None
+        if week_id:
+            p1_sels = PlayerDeckSelection.query.filter_by(
+                week_id=week_id, user_id=matchup.player1_id
+            ).all()
+            p2_sels = PlayerDeckSelection.query.filter_by(
+                week_id=week_id, user_id=matchup.player2_id
+            ).all()
+        else:
+            p1_sels, p2_sels = [], []
+    else:
+        p1_sels, p2_sels = [], []
+    return p1_sels, p2_sels
+
+
+def validate_exchange_borrow(matchup, borrowing_user_id, borrowed_deck_selection_id):
+    """
+    Validate an Exchange borrow submission.
+
+    The borrowing player must choose one of the OPPONENT's two deck selections.
+    Returns error string or None (None = valid).
+    """
+    from keytracker.schema import ExchangeBorrow
+
+    if borrowing_user_id not in (matchup.player1_id, matchup.player2_id):
+        return "You are not in this matchup"
+
+    if not matchup.player1_started or not matchup.player2_started:
+        return "Both players must start before submitting borrows"
+
+    existing = ExchangeBorrow.query.filter_by(
+        player_matchup_id=matchup.id, borrowing_user_id=borrowing_user_id
+    ).first()
+    if existing:
+        return "You have already submitted a borrow"
+
+    borrowed_sel = db.session.get(PlayerDeckSelection, borrowed_deck_selection_id)
+    if not borrowed_sel:
+        return "Invalid deck selection"
+
+    # Must belong to this match context
+    if matchup.standalone_match_id:
+        if borrowed_sel.standalone_match_id != matchup.standalone_match_id:
+            return "Deck selection does not belong to this match"
+    elif matchup.week_matchup_id:
+        from keytracker.schema import WeekMatchup
+
+        wm = db.session.get(WeekMatchup, matchup.week_matchup_id)
+        if wm and borrowed_sel.week_id != wm.week_id:
+            return "Deck selection does not belong to this match"
+
+    # Must belong to the OPPONENT
+    opponent_id = (
+        matchup.player2_id
+        if borrowing_user_id == matchup.player1_id
+        else matchup.player1_id
+    )
+    if borrowed_sel.user_id != opponent_id:
+        return "You must borrow one of your opponent's decks"
+
+    return None
+
+
+def get_exchange_decks(matchup, player_id, p1_selections, p2_selections):
+    """
+    Return the two exchange decks for a player after borrows are revealed.
+
+    exchange_decks = [own_non_borrowed_deck, borrowed_deck]
+
+    Returns (own_sel, borrowed_sel) or (None, None) if borrows not yet revealed.
+    """
+    borrows = getattr(matchup, "exchange_borrows", [])
+    if len(borrows) < 2:
+        return None, None
+
+    opponent_id = (
+        matchup.player2_id if player_id == matchup.player1_id else matchup.player1_id
+    )
+    opp_selections = p2_selections if player_id == matchup.player1_id else p1_selections
+    my_selections = p1_selections if player_id == matchup.player1_id else p2_selections
+
+    # Borrow made BY the opponent (they borrowed one of my decks → I lose that one)
+    opp_borrow = next(
+        (b for b in borrows if b.borrowing_user_id == opponent_id), None
+    )
+    # Borrow made BY me (I borrowed one of opponent's decks)
+    my_borrow = next(
+        (b for b in borrows if b.borrowing_user_id == player_id), None
+    )
+
+    if not opp_borrow or not my_borrow:
+        return None, None
+
+    # My own deck that was NOT borrowed away by opponent
+    my_non_borrowed = next(
+        (s for s in my_selections if s.id != opp_borrow.borrowed_deck_selection_id),
+        None,
+    )
+    # The opponent's deck I borrowed
+    my_borrowed_sel = db.session.get(
+        PlayerDeckSelection, my_borrow.borrowed_deck_selection_id
+    )
+
+    return my_non_borrowed, my_borrowed_sel
+
+
+def check_exchange_win_condition(matchup, p1_selections, p2_selections):
+    """
+    Check Exchange win condition: a player wins when they have won at least 1 game
+    with EACH of their two exchange decks.
+
+    Returns winner_id (int) or None if no winner yet.
+    """
+    games = getattr(matchup, "games", [])
+
+    for player_id in (matchup.player1_id, matchup.player2_id):
+        own_sel, borrowed_sel = get_exchange_decks(
+            matchup, player_id, p1_selections, p2_selections
+        )
+        if not own_sel or not borrowed_sel:
+            continue
+
+        own_deck_id = own_sel.deck_id
+        borrowed_deck_id = borrowed_sel.deck_id
+
+        is_p1 = player_id == matchup.player1_id
+        won_with_own = any(
+            g.winner_id == player_id
+            and (g.player1_deck_id if is_p1 else g.player2_deck_id) == own_deck_id
+            for g in games
+        )
+        won_with_borrowed = any(
+            g.winner_id == player_id
+            and (g.player1_deck_id if is_p1 else g.player2_deck_id) == borrowed_deck_id
+            for g in games
+        )
+        if won_with_own and won_with_borrowed:
+            return player_id
+
+    return None
+
+
 def validate_triad_short_pick(matchup, picking_user_id, picked_deck_selection_id):
     """
     Validate a Triad Short pick submission.
@@ -763,7 +923,16 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
     wins_needed = math.ceil(best_of_n / 2)
     p1_wins = sum(1 for g in existing_games if g.winner_id == matchup.player1_id)
     p2_wins = sum(1 for g in existing_games if g.winner_id == matchup.player2_id)
-    if p1_wins >= wins_needed or p2_wins >= wins_needed:
+    if format_type == WeekFormat.EXCHANGE:
+        # Exchange uses a custom win condition — check it instead of wins_needed
+        if len(existing_games) >= best_of_n:
+            return None, "Match is already decided"
+        _borrows = getattr(matchup, "exchange_borrows", [])
+        if len(_borrows) >= 2:
+            _p1_sels, _p2_sels = _get_exchange_selections(matchup)
+            if check_exchange_win_condition(matchup, _p1_sels, _p2_sels):
+                return None, "Match is already decided"
+    elif p1_wins >= wins_needed or p2_wins >= wins_needed:
         return None, "Match is already decided"
 
     p1_keys = game_data.get("player1_keys", 0)
@@ -797,6 +966,42 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
                 return None, "Player 1's deck already won a game and cannot be reused"
             if g.winner_id == matchup.player2_id and g.player2_deck_id == p2_deck_id:
                 return None, "Player 2's deck already won a game and cannot be reused"
+
+    if format_type == WeekFormat.EXCHANGE:
+        borrows = getattr(matchup, "exchange_borrows", [])
+        if len(borrows) < 2:
+            return None, "Both players must submit borrows before reporting games"
+        if not p1_deck_id or not p2_deck_id:
+            return None, "player1_deck_id and player2_deck_id required for Exchange"
+        _p1_sels, _p2_sels = _get_exchange_selections(matchup)
+        p1_own_sel, p1_borrowed_sel = get_exchange_decks(
+            matchup, matchup.player1_id, _p1_sels, _p2_sels
+        )
+        p2_own_sel, p2_borrowed_sel = get_exchange_decks(
+            matchup, matchup.player2_id, _p1_sels, _p2_sels
+        )
+        p1_valid_decks = set(
+            filter(
+                None,
+                [
+                    p1_own_sel.deck_id if p1_own_sel else None,
+                    p1_borrowed_sel.deck_id if p1_borrowed_sel else None,
+                ],
+            )
+        )
+        p2_valid_decks = set(
+            filter(
+                None,
+                [
+                    p2_own_sel.deck_id if p2_own_sel else None,
+                    p2_borrowed_sel.deck_id if p2_borrowed_sel else None,
+                ],
+            )
+        )
+        if p1_valid_decks and p1_deck_id not in p1_valid_decks:
+            return None, "Player 1's deck is not in their exchange deck pool"
+        if p2_valid_decks and p2_deck_id not in p2_valid_decks:
+            return None, "Player 2's deck is not in their exchange deck pool"
 
     if format_type == WeekFormat.ADAPTIVE_SHORT:
         choices = getattr(matchup, "adaptive_short_choices", [])

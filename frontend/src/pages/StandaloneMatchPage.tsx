@@ -37,6 +37,7 @@ import {
   submitAdaptiveBid,
   submitAdaptiveShortChoice,
   submitAdaptiveShortBid,
+  submitExchangeBorrow,
 } from '../api/standalone';
 import { getSets } from '../api/leagues';
 import WeekConstraints from '../components/WeekConstraints';
@@ -123,6 +124,9 @@ export default function StandaloneMatchPage() {
   // Adaptive Short state
   const [adaptiveShortChoiceId, setAdaptiveShortChoiceId] = useState<number | ''>('');
   const [adaptiveShortBidChains, setAdaptiveShortBidChains] = useState('');
+
+  // Exchange state
+  const [exchangeBorrowId, setExchangeBorrowId] = useState<number | ''>('');
 
   const [copiedUrl, setCopiedUrl] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -260,6 +264,7 @@ export default function StandaloneMatchPage() {
   const isTriadShort = match.format_type === 'triad_short';
   const isOubliette = match.format_type === 'oubliette';
   const isAdaptiveShort = match.format_type === 'adaptive_short';
+  const isExchange = match.format_type === 'exchange';
 
   const allowedSetsSet = new Set(match.allowed_sets || []);
   const needsToken = TOKEN_SETS.size > 0 && [...TOKEN_SETS].some((s) => allowedSetsSet.has(s));
@@ -438,6 +443,23 @@ export default function StandaloneMatchPage() {
     }
   };
 
+  const handleExchangeBorrow = async () => {
+    if (!exchangeBorrowId) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const updated = await submitExchangeBorrow(id, exchangeBorrowId as number);
+      setMatch(updated);
+      setSuccess('Borrow submitted!');
+      setExchangeBorrowId('');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err.response?.data?.error || 'Failed to submit borrow');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleAdaptiveShortChoice = async () => {
     if (!adaptiveShortChoiceId) return;
     setSubmitting(true);
@@ -497,8 +519,8 @@ export default function StandaloneMatchPage() {
         went_to_time: reportWentToTime,
         loser_conceded: reportLoserConceded,
       };
-      if (isTriad && reportP1DeckId) payload.player1_deck_id = reportP1DeckId as number;
-      if (isTriad && reportP2DeckId) payload.player2_deck_id = reportP2DeckId as number;
+      if ((isTriad || isExchange) && reportP1DeckId) payload.player1_deck_id = reportP1DeckId as number;
+      if ((isTriad || isExchange) && reportP2DeckId) payload.player2_deck_id = reportP2DeckId as number;
       // Reversal: player 1 plays opponent's deck, player 2 plays creator's deck
       if (isReversal) {
         const creatorDeckId = match.creator_selections[0]?.deck?.db_id;
@@ -794,7 +816,7 @@ export default function StandaloneMatchPage() {
             {/* Archon / Triad: submit by URL */}
             {!isSealed && !isOpenAlliance && (
               <Box>
-                {Array.from({ length: isTriad || isTriadShort ? 3 : isOubliette || isAdaptiveShort ? 2 : 1 }, (_, i) => i + 1).map((slot) => {
+                {Array.from({ length: isTriad || isTriadShort ? 3 : isOubliette || isAdaptiveShort || isExchange ? 2 : 1 }, (_, i) => i + 1).map((slot) => {
                   const sel = mySelections.find((s) => s.slot_number === slot);
                   return (
                     <Box key={slot} sx={{ mb: 2 }}>
@@ -1376,6 +1398,91 @@ export default function StandaloneMatchPage() {
             );
           })()}
 
+          {/* Exchange: borrow submission and exchange deck display */}
+          {isExchange && bothStarted && pm && (() => {
+            const borrows = pm.exchange_borrows || [];
+            const bothBorrowed = borrows.length >= 2;
+            const myBorrow = borrows.find((b) => b.borrowing_user_id === user?.id);
+            const allSels = [...match.creator_selections, ...match.opponent_selections];
+
+            return (
+              <Card sx={{ mb: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Exchange — Borrow a Deck</Typography>
+                  {!myBorrow && isParticipant && (
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Secretly choose one of your opponent&apos;s decks to borrow. You will play your remaining deck and the borrowed deck. Borrows are revealed simultaneously.
+                      </Typography>
+                      {oppSelections.map((s) => (
+                        <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                          <Typography variant="body2">{s.deck?.name} (SAS: {s.deck?.sas_rating ?? 'N/A'})</Typography>
+                          {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                          <Chip
+                            label={exchangeBorrowId === s.id ? 'Selected' : 'Borrow'}
+                            color={exchangeBorrowId === s.id ? 'primary' : 'default'}
+                            size="small"
+                            onClick={() => setExchangeBorrowId(s.id)}
+                            variant={exchangeBorrowId === s.id ? 'filled' : 'outlined'}
+                          />
+                        </Box>
+                      ))}
+                      <Button
+                        variant="contained"
+                        onClick={handleExchangeBorrow}
+                        disabled={submitting || !exchangeBorrowId}
+                        sx={{ mt: 1 }}
+                      >
+                        Submit Borrow
+                      </Button>
+                    </Box>
+                  )}
+                  {myBorrow && !bothBorrowed && (
+                    <Alert severity="info" sx={{ mb: 1 }}>Borrow submitted — waiting for opponent.</Alert>
+                  )}
+                  {bothBorrowed && (() => {
+                    const getExchangePool = (playerId: number, selectionSet: typeof match.creator_selections) => {
+                      const oppBorrow = borrows.find((b) => b.borrowing_user_id !== playerId);
+                      const myBorrowEntry = borrows.find((b) => b.borrowing_user_id === playerId);
+                      const myNonBorrowed = selectionSet.filter((s) => s.id !== oppBorrow?.borrowed_deck_selection_id);
+                      const borrowedSel = allSels.find((s) => s.id === myBorrowEntry?.borrowed_deck_selection_id);
+                      return { nonBorrowed: myNonBorrowed, borrowed: borrowedSel };
+                    };
+                    const p1Pool = getExchangePool(pm.player1.id, match.creator_selections);
+                    const p2Pool = getExchangePool(pm.player2.id, match.opponent_selections);
+                    return (
+                      <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        <Box>
+                          <Typography variant="subtitle2">{match.creator.name}&apos;s exchange decks</Typography>
+                          {[...p1Pool.nonBorrowed, ...(p1Pool.borrowed ? [p1Pool.borrowed] : [])].map((s) => (
+                            <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                              <Typography variant="body2">{s.deck?.name}</Typography>
+                              {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                              {p1Pool.borrowed && s.id === p1Pool.borrowed.id && <Chip label="Borrowed" size="small" color="info" />}
+                            </Box>
+                          ))}
+                        </Box>
+                        <Box>
+                          <Typography variant="subtitle2">{match.opponent?.name}&apos;s exchange decks</Typography>
+                          {[...p2Pool.nonBorrowed, ...(p2Pool.borrowed ? [p2Pool.borrowed] : [])].map((s) => (
+                            <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                              <Typography variant="body2">{s.deck?.name}</Typography>
+                              {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                              {p2Pool.borrowed && s.id === p2Pool.borrowed.id && <Chip label="Borrowed" size="small" color="info" />}
+                            </Box>
+                          ))}
+                        </Box>
+                      </Box>
+                    );
+                  })()}
+                  {!bothBorrowed && !isParticipant && (
+                    <Alert severity="info">Waiting for both players to submit borrows.</Alert>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Score */}
           {bothStarted && pm && (
             <Card sx={{ mb: 2 }}>
@@ -1409,7 +1516,7 @@ export default function StandaloneMatchPage() {
           )}
 
           {/* Game report form */}
-          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (!isOubliette || (!!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house)) && (!isAdaptiveShort || ((pm.adaptive_short_choices || []).length >= 2 && (pm.adaptive_short_bid_chains === null || !!pm.adaptive_short_bidding_complete))) && (
+          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (!isOubliette || (!!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house)) && (!isAdaptiveShort || ((pm.adaptive_short_choices || []).length >= 2 && (pm.adaptive_short_bid_chains === null || !!pm.adaptive_short_bidding_complete))) && (!isExchange || (pm.exchange_borrows || []).length >= 2) && (
             <Card sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Report Game {games.length + 1}</Typography>
@@ -1479,6 +1586,53 @@ export default function StandaloneMatchPage() {
                       </FormControl>
                     </Box>
                   )}
+
+                  {isExchange && pm && (() => {
+                    const borrows = pm.exchange_borrows || [];
+                    const allSels = [...match.creator_selections, ...match.opponent_selections];
+                    // Compute exchange deck pools: own non-borrowed + borrowed from opponent
+                    const getExchangePool = (playerId: number, selectionSet: typeof match.creator_selections) => {
+                      const oppBorrow = borrows.find((b) => b.borrowing_user_id !== playerId);
+                      const myBorrow = borrows.find((b) => b.borrowing_user_id === playerId);
+                      const myNonBorrowed = selectionSet.filter((s) => s.id !== oppBorrow?.borrowed_deck_selection_id);
+                      const borrowedSel = allSels.find((s) => s.id === myBorrow?.borrowed_deck_selection_id);
+                      return [...myNonBorrowed, ...(borrowedSel ? [borrowedSel] : [])];
+                    };
+                    const p1Pool = getExchangePool(pm.player1.id, match.creator_selections);
+                    const p2Pool = getExchangePool(pm.player2.id, match.opponent_selections);
+                    return (
+                      <Box sx={{ display: 'flex', gap: 2 }}>
+                        <FormControl size="small" sx={{ minWidth: 200 }}>
+                          <InputLabel>{match.creator.name}&apos;s Deck</InputLabel>
+                          <Select
+                            value={reportP1DeckId}
+                            label={`${match.creator.name}'s Deck`}
+                            onChange={(e) => setReportP1DeckId(e.target.value as number)}
+                          >
+                            {p1Pool.map((s) => (
+                              <MenuItem key={s.deck?.db_id} value={s.deck?.db_id}>
+                                {s.deck?.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        <FormControl size="small" sx={{ minWidth: 200 }}>
+                          <InputLabel>{match.opponent?.name}&apos;s Deck</InputLabel>
+                          <Select
+                            value={reportP2DeckId}
+                            label={`${match.opponent?.name || 'Opponent'}'s Deck`}
+                            onChange={(e) => setReportP2DeckId(e.target.value as number)}
+                          >
+                            {p2Pool.map((s) => (
+                              <MenuItem key={s.deck?.db_id} value={s.deck?.db_id}>
+                                {s.deck?.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Box>
+                    );
+                  })()}
 
                   <Box>
                     <FormControlLabel

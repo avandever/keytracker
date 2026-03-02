@@ -9,6 +9,7 @@
 - `reversal` — Each player brings 1 deck they believe is hard to win with; opponents swap and play BO1
 - `oubliette` — 2 decks per player; each player secretly bans a house (not in their own decks); decks containing either banned house are eliminated; BO1 from remaining eligible decks; forfeit if all decks eliminated
 - `adaptive_short` — 2 decks per player; both players simultaneously and secretly choose 1 deck from the combined 4-deck pool; reveal: if different decks chosen each plays their choice (BO1); if same deck chosen, chain-bid auction to determine who plays it with how many chains (BO1)
+- `exchange` — 2 decks per player; each player secretly borrows one of the opponent's decks (reveal simultaneously); each player's exchange pool = own non-borrowed deck + borrowed deck; BO3; win condition: win at least 1 game with EACH of your 2 exchange decks
 
 ## NOT supported in standalone matches
 - `thief` — Team-based deck-stealing mechanics; incompatible with 1v1 standalone play

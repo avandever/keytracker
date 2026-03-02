@@ -309,11 +309,18 @@ export interface PlayerMatchupInfo {
   adaptive_short_bid_chains?: number | null;
   adaptive_short_bidder_id?: number | null;
   adaptive_short_bidding_complete?: boolean;
+  exchange_borrows_count?: number;
+  exchange_borrows?: ExchangeBorrowInfo[] | null;
 }
 
 export interface AdaptiveShortChoiceInfo {
   choosing_user_id: number;
   chosen_deck_selection_id: number;
+}
+
+export interface ExchangeBorrowInfo {
+  borrowing_user_id: number;
+  borrowed_deck_selection_id: number;
 }
 
 export interface DeckSelectionInfo {

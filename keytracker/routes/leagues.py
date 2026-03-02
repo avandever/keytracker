@@ -1184,8 +1184,8 @@ def create_week(league_id):
     if not isinstance(best_of_n, int) or best_of_n < 1 or best_of_n % 2 == 0:
         return jsonify({"error": "best_of_n must be a positive odd integer"}), 400
 
-    if format_type == "triad":
-        best_of_n = 3
+    if format_type in ("triad", WeekFormat.EXCHANGE.value):
+        best_of_n = 3  # These formats are always best of 3
     if format_type in (
         WeekFormat.REVERSAL.value,
         WeekFormat.TRIAD_SHORT.value,
@@ -1469,7 +1469,7 @@ def generate_matchups(league_id, week_id):
                     400,
                 )
         else:
-            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value) else 1)
+            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value, WeekFormat.EXCHANGE.value) else 1)
             selections = PlayerDeckSelection.query.filter_by(
                 week_id=week.id, user_id=member.user_id
             ).count()
@@ -1629,7 +1629,7 @@ def generate_player_matchups(league_id, week_id):
                     name = u.name if u else f"User {member.user_id}"
                     missing.append(f"{name} ({pod_count}/3 pods)")
         else:
-            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value) else 1)
+            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value, WeekFormat.EXCHANGE.value) else 1)
             for member in active_members:
                 selections = PlayerDeckSelection.query.filter_by(
                     week_id=week.id, user_id=member.user_id
@@ -1883,7 +1883,7 @@ def publish_week(league_id, week_id):
                     400,
                 )
         else:
-            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value) else 1)
+            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value, WeekFormat.EXCHANGE.value) else 1)
             selections = PlayerDeckSelection.query.filter_by(
                 week_id=week.id, user_id=member.user_id
             ).count()
@@ -2639,7 +2639,7 @@ def submit_deck_selection(league_id, week_id):
 
     slot_number = data.get("slot_number", 1)
     _three_slot = (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value)
-    _two_slot = (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value)
+    _two_slot = (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value, WeekFormat.EXCHANGE.value)
     max_slots = 3 if week.format_type in _three_slot else (2 if week.format_type in _two_slot else 1)
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
@@ -3895,6 +3895,53 @@ def submit_adaptive_short_bid(league_id, matchup_id):
     return jsonify(serialize_player_matchup(pm))
 
 
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/exchange-borrow", methods=["POST"]
+)
+@login_required
+def submit_exchange_borrow(league_id, matchup_id):
+    """Submit an Exchange borrow — secretly choose one of the opponent's decks to borrow."""
+    from keytracker.schema import ExchangeBorrow as ExchangeBorrowModel
+    from keytracker.match_helpers import validate_exchange_borrow
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.EXCHANGE.value:
+        return jsonify({"error": "Only for Exchange format"}), 400
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    data = request.get_json(silent=True) or {}
+    borrowed_deck_selection_id = data.get("borrowed_deck_selection_id")
+    if not isinstance(borrowed_deck_selection_id, int):
+        return jsonify({"error": "borrowed_deck_selection_id is required"}), 400
+
+    error = validate_exchange_borrow(pm, effective.id, borrowed_deck_selection_id)
+    if error:
+        return jsonify({"error": error}), 400
+
+    borrow = ExchangeBorrowModel(
+        player_matchup_id=pm.id,
+        borrowing_user_id=effective.id,
+        borrowed_deck_selection_id=borrowed_deck_selection_id,
+    )
+    db.session.add(borrow)
+    db.session.commit()
+    return jsonify(serialize_player_matchup(pm))
+
+
 # --- Match flow ---
 
 
@@ -4004,7 +4051,20 @@ def report_game(league_id, matchup_id):
     wins_needed = math.ceil(week.best_of_n / 2)
     p1_wins = sum(1 for g in existing_games if g.winner_id == pm.player1_id)
     p2_wins = sum(1 for g in existing_games if g.winner_id == pm.player2_id)
-    if p1_wins >= wins_needed or p2_wins >= wins_needed:
+    if week.format_type == WeekFormat.EXCHANGE.value:
+        if len(existing_games) >= week.best_of_n:
+            return jsonify({"error": "Match is already decided"}), 400
+        _borrows = getattr(pm, "exchange_borrows", [])
+        if len(_borrows) >= 2:
+            from keytracker.match_helpers import (
+                check_exchange_win_condition,
+                _get_exchange_selections,
+            )
+
+            _p1_sels, _p2_sels = _get_exchange_selections(pm)
+            if check_exchange_win_condition(pm, _p1_sels, _p2_sels):
+                return jsonify({"error": "Match is already decided"}), 400
+    elif p1_wins >= wins_needed or p2_wins >= wins_needed:
         return jsonify({"error": "Match is already decided"}), 400
 
     p1_keys = data.get("player1_keys", 0)
@@ -4074,6 +4134,34 @@ def report_game(league_id, matchup_id):
                     400,
                 )
 
+    # Exchange: both borrows must be submitted; validate deck pools
+    if week.format_type == WeekFormat.EXCHANGE.value:
+        from keytracker.match_helpers import (
+            get_exchange_decks,
+            _get_exchange_selections,
+        )
+
+        borrows = pm.exchange_borrows
+        if len(borrows) < 2:
+            return jsonify({"error": "Both players must submit borrows before reporting games"}), 400
+        if not p1_deck_id or not p2_deck_id:
+            return jsonify({"error": "player1_deck_id and player2_deck_id required for Exchange"}), 400
+        _p1_sels, _p2_sels = _get_exchange_selections(pm)
+        p1_own_sel, p1_borrowed_sel = get_exchange_decks(pm, pm.player1_id, _p1_sels, _p2_sels)
+        p2_own_sel, p2_borrowed_sel = get_exchange_decks(pm, pm.player2_id, _p1_sels, _p2_sels)
+        p1_valid = set(filter(None, [
+            p1_own_sel.deck_id if p1_own_sel else None,
+            p1_borrowed_sel.deck_id if p1_borrowed_sel else None,
+        ]))
+        p2_valid = set(filter(None, [
+            p2_own_sel.deck_id if p2_own_sel else None,
+            p2_borrowed_sel.deck_id if p2_borrowed_sel else None,
+        ]))
+        if p1_valid and p1_deck_id not in p1_valid:
+            return jsonify({"error": "Player 1's deck is not in their exchange deck pool"}), 400
+        if p2_valid and p2_deck_id not in p2_valid:
+            return jsonify({"error": "Player 2's deck is not in their exchange deck pool"}), 400
+
     # Adaptive Short: both must choose; if same deck chosen, bidding must be complete
     if week.format_type == WeekFormat.ADAPTIVE_SHORT.value:
         choices = pm.adaptive_short_choices
@@ -4136,13 +4224,21 @@ def report_game(league_id, matchup_id):
             init_adaptive_bidding(pm)
 
     # Check if match is now complete - auto-complete week if all matches done
-    all_games = sorted(pm.games, key=lambda g: g.game_number)
-    p1_total = sum(1 for g in all_games if g.winner_id == pm.player1_id)
-    p2_total = sum(1 for g in all_games if g.winner_id == pm.player2_id)
+    if week.format_type == WeekFormat.EXCHANGE.value:
+        from keytracker.match_helpers import (
+            check_exchange_win_condition,
+            _get_exchange_selections,
+        )
 
-    # Check if entire week is complete
-    if p1_total >= wins_needed or p2_total >= wins_needed:
-        _check_week_completion(week)
+        _p1_sels, _p2_sels = _get_exchange_selections(pm)
+        if check_exchange_win_condition(pm, _p1_sels, _p2_sels):
+            _check_week_completion(week)
+    else:
+        all_games = sorted(pm.games, key=lambda g: g.game_number)
+        p1_total = sum(1 for g in all_games if g.winner_id == pm.player1_id)
+        p2_total = sum(1 for g in all_games if g.winner_id == pm.player2_id)
+        if p1_total >= wins_needed or p2_total >= wins_needed:
+            _check_week_completion(week)
 
     db.session.commit()
     return jsonify(serialize_match_game(game)), 201
@@ -4197,13 +4293,24 @@ def _check_week_completion(week):
     Also transitions the league to PLAYOFFS if all weeks are now complete.
     """
     wins_needed = math.ceil(week.best_of_n / 2)
+    is_exchange = week.format_type == WeekFormat.EXCHANGE.value
     for wm in week.matchups:
         for pm in wm.player_matchups:
             games = sorted(pm.games, key=lambda g: g.game_number)
-            p1_wins = sum(1 for g in games if g.winner_id == pm.player1_id)
-            p2_wins = sum(1 for g in games if g.winner_id == pm.player2_id)
-            if p1_wins < wins_needed and p2_wins < wins_needed:
-                return  # Not all matches complete
+            if is_exchange:
+                from keytracker.match_helpers import (
+                    check_exchange_win_condition,
+                    _get_exchange_selections,
+                )
+
+                _p1_sels, _p2_sels = _get_exchange_selections(pm)
+                if not check_exchange_win_condition(pm, _p1_sels, _p2_sels):
+                    return  # Not all matches complete
+            else:
+                p1_wins = sum(1 for g in games if g.winner_id == pm.player1_id)
+                p2_wins = sum(1 for g in games if g.winner_id == pm.player2_id)
+                if p1_wins < wins_needed and p2_wins < wins_needed:
+                    return  # Not all matches complete
     week.status = WeekStatus.COMPLETED.value
 
     # Check if all weeks in the league are now complete

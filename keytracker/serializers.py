@@ -433,6 +433,20 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
     else:
         data["oubliette_p1_eligible_deck_ids"] = None
         data["oubliette_p2_eligible_deck_ids"] = None
+
+    exchange_borrows = getattr(pm, "exchange_borrows", [])
+    data["exchange_borrows_count"] = len(exchange_borrows)
+    data["exchange_borrows"] = (
+        [
+            {
+                "borrowing_user_id": b.borrowing_user_id,
+                "borrowed_deck_selection_id": b.borrowed_deck_selection_id,
+            }
+            for b in exchange_borrows
+        ]
+        if len(exchange_borrows) == 2
+        else None
+    )
     return data
 
 

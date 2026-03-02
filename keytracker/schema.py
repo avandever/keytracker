@@ -1163,6 +1163,11 @@ class PlayerMatchup(db.Model):
         back_populates="player_matchup",
         cascade="all, delete-orphan",
     )
+    exchange_borrows = db.relationship(
+        "ExchangeBorrow",
+        back_populates="player_matchup",
+        cascade="all, delete-orphan",
+    )
 
 
 class FeatureDesignation(db.Model):
@@ -1314,6 +1319,39 @@ class AdaptiveShortChoice(db.Model):
             "player_matchup_id",
             "choosing_user_id",
             name="uq_adaptive_short_choice",
+        ),
+    )
+
+
+class ExchangeBorrow(db.Model):
+    """
+    Records which of the opponent's decks a player borrows in Exchange format.
+    Reveal (borrows become visible to both) when len(borrows) == 2.
+    """
+
+    __tablename__ = "exchange_borrow"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_matchup.id"), nullable=False
+    )
+    borrowing_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    borrowed_deck_selection_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_deck_selection.id"), nullable=False
+    )
+
+    player_matchup = db.relationship(
+        "PlayerMatchup", back_populates="exchange_borrows"
+    )
+    borrowing_user = db.relationship("User", foreign_keys=[borrowing_user_id])
+    borrowed_deck_selection = db.relationship("PlayerDeckSelection")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "player_matchup_id",
+            "borrowing_user_id",
+            name="uq_exchange_borrow",
         ),
     )
 
