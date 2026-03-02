@@ -232,7 +232,7 @@ export default function AccountPage() {
           value={dokProfileUrl}
           onChange={(e) => setDokProfileUrl(e.target.value)}
           placeholder="https://decksofkeyforge.com/users/your-username"
-          label="DoK Profile URL"
+          label="DoK Collection URL (My Decks)"
           sx={{ mb: 2 }}
         />
         <FormControl fullWidth size="small" sx={{ mb: 2 }}>
