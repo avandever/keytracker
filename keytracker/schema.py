@@ -1168,6 +1168,17 @@ class PlayerMatchup(db.Model):
         back_populates="player_matchup",
         cascade="all, delete-orphan",
     )
+    nordic_hexad_phase = db.Column(db.SmallInteger, nullable=True)
+    nordic_hexad_actions = db.relationship(
+        "NordicHexadAction",
+        back_populates="player_matchup",
+        cascade="all, delete-orphan",
+    )
+    moirai_assignments = db.relationship(
+        "MoiraiAssignment",
+        back_populates="player_matchup",
+        cascade="all, delete-orphan",
+    )
 
 
 class FeatureDesignation(db.Model):
@@ -1284,7 +1295,9 @@ class TriadShortPick(db.Model):
         db.Integer, db.ForeignKey("tracker_player_deck_selection.id"), nullable=False
     )
 
-    player_matchup = db.relationship("PlayerMatchup", back_populates="triad_short_picks")
+    player_matchup = db.relationship(
+        "PlayerMatchup", back_populates="triad_short_picks"
+    )
     picking_user = db.relationship("User", foreign_keys=[picking_user_id])
     picked_deck_selection = db.relationship("PlayerDeckSelection")
 
@@ -1341,9 +1354,7 @@ class ExchangeBorrow(db.Model):
         db.Integer, db.ForeignKey("tracker_player_deck_selection.id"), nullable=False
     )
 
-    player_matchup = db.relationship(
-        "PlayerMatchup", back_populates="exchange_borrows"
-    )
+    player_matchup = db.relationship("PlayerMatchup", back_populates="exchange_borrows")
     borrowing_user = db.relationship("User", foreign_keys=[borrowing_user_id])
     borrowed_deck_selection = db.relationship("PlayerDeckSelection")
 
@@ -1352,6 +1363,90 @@ class ExchangeBorrow(db.Model):
             "player_matchup_id",
             "borrowing_user_id",
             name="uq_exchange_borrow",
+        ),
+    )
+
+
+class NordicHexadAction(db.Model):
+    """
+    Records a single ban or protect action in a Nordic Hexad match.
+
+    phase: 1 = ban1 (ban an opponent's deck)
+           2 = protect (protect one of your own decks)
+           3 = ban2 (ban another opponent's deck; cannot target protected)
+    target_deck_selection_id: the selection being banned or protected.
+    Reveal per phase: when len(actions where phase=X) == 2, phase X is complete.
+    """
+
+    __tablename__ = "nordic_hexad_action"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_matchup.id"), nullable=False
+    )
+    player_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    phase = db.Column(db.SmallInteger, nullable=False)
+    target_deck_selection_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_deck_selection.id"), nullable=False
+    )
+
+    player_matchup = db.relationship(
+        "PlayerMatchup", back_populates="nordic_hexad_actions"
+    )
+    player = db.relationship("User", foreign_keys=[player_id])
+    target_deck_selection = db.relationship("PlayerDeckSelection")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "player_matchup_id",
+            "player_id",
+            "phase",
+            name="uq_nordic_hexad_action",
+        ),
+    )
+
+
+class MoiraiAssignment(db.Model):
+    """
+    Records one game-slot assignment in Moirai format.
+    Each player assigns all 3 of the OPPONENT's deck selections to game slots 1, 2, 3.
+    Reveal: when len(assignments) == 6 (both players submitted all 3).
+
+    Game deck mapping after reveal:
+      G1 (Archon):   P1 plays the deck P2 assigned for slot 1 (from P1's pool);
+                     P2 plays the deck P1 assigned for slot 1 (from P2's pool).
+      G2 (Reversal): P1 plays the deck P1 assigned for slot 2 (from P2's pool);
+                     P2 plays the deck P2 assigned for slot 2 (from P1's pool).
+      G3 (Adaptive Short): pool = {P2's slot-3 deck from P1's pool, P1's slot-3 deck from P2's pool};
+                           both players choose simultaneously.
+    """
+
+    __tablename__ = "moirai_assignment"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_matchup.id"), nullable=False
+    )
+    assigning_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    game_number = db.Column(db.SmallInteger, nullable=False)  # 1, 2, or 3
+    assigned_deck_selection_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_player_deck_selection.id"),
+        nullable=False,
+    )
+
+    player_matchup = db.relationship(
+        "PlayerMatchup", back_populates="moirai_assignments"
+    )
+    assigning_user = db.relationship("User", foreign_keys=[assigning_user_id])
+    assigned_deck_selection = db.relationship("PlayerDeckSelection")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "player_matchup_id",
+            "assigning_user_id",
+            "game_number",
+            name="uq_moirai_assignment",
         ),
     )
 

@@ -39,6 +39,7 @@ import {
   submitAdaptiveShortBid,
   submitExchangeBorrow,
   submitNordicAction,
+  submitMoiraiAssignments,
 } from '../api/standalone';
 import { getSets } from '../api/leagues';
 import WeekConstraints from '../components/WeekConstraints';
@@ -50,6 +51,7 @@ import type {
   DeckSelectionInfo,
   AlliancePodSelectionInfo,
   KeyforgeSetInfo,
+  MoiraiAssignmentInfo,
 } from '../types';
 import type { SealedPoolEntry } from '../api/leagues';
 
@@ -131,6 +133,9 @@ export default function StandaloneMatchPage() {
 
   // Nordic Hexad state
   const [nordicActionTargetId, setNordicActionTargetId] = useState<number | ''>('');
+
+  // Moirai state: track pending assignments (game_number → deck_selection_id)
+  const [moiraiAssignments, setMoiraiAssignments] = useState<Record<number, number>>({});
 
   const [copiedUrl, setCopiedUrl] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -270,6 +275,7 @@ export default function StandaloneMatchPage() {
   const isAdaptiveShort = match.format_type === 'adaptive_short';
   const isExchange = match.format_type === 'exchange';
   const isNordicHexad = match.format_type === 'nordic_hexad';
+  const isMoirai = match.format_type === 'moirai';
 
   const allowedSetsSet = new Set(match.allowed_sets || []);
   const needsToken = TOKEN_SETS.size > 0 && [...TOKEN_SETS].some((s) => allowedSetsSet.has(s));
@@ -465,6 +471,27 @@ export default function StandaloneMatchPage() {
     }
   };
 
+  const handleMoiraiAssignments = async () => {
+    if (Object.keys(moiraiAssignments).length !== 3) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const payload = Object.entries(moiraiAssignments).map(([gn, selId]) => ({
+        game_number: parseInt(gn),
+        deck_selection_id: selId,
+      }));
+      const updated = await submitMoiraiAssignments(id, payload);
+      setMatch(updated);
+      setMoiraiAssignments({});
+      setSuccess('Assignments submitted!');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } };
+      setError(err.response?.data?.error || 'Failed to submit assignments');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleExchangeBorrow = async () => {
     if (!exchangeBorrowId) return;
     setSubmitting(true);
@@ -541,8 +568,8 @@ export default function StandaloneMatchPage() {
         went_to_time: reportWentToTime,
         loser_conceded: reportLoserConceded,
       };
-      if ((isTriad || isExchange || isNordicHexad) && reportP1DeckId) payload.player1_deck_id = reportP1DeckId as number;
-      if ((isTriad || isExchange || isNordicHexad) && reportP2DeckId) payload.player2_deck_id = reportP2DeckId as number;
+      if ((isTriad || isExchange || isNordicHexad || isMoirai) && reportP1DeckId) payload.player1_deck_id = reportP1DeckId as number;
+      if ((isTriad || isExchange || isNordicHexad || isMoirai) && reportP2DeckId) payload.player2_deck_id = reportP2DeckId as number;
       // Reversal: player 1 plays opponent's deck, player 2 plays creator's deck
       if (isReversal) {
         const creatorDeckId = match.creator_selections[0]?.deck?.db_id;
@@ -838,7 +865,7 @@ export default function StandaloneMatchPage() {
             {/* Archon / Triad: submit by URL */}
             {!isSealed && !isOpenAlliance && (
               <Box>
-                {Array.from({ length: isNordicHexad ? 6 : isTriad || isTriadShort ? 3 : isOubliette || isAdaptiveShort || isExchange ? 2 : 1 }, (_, i) => i + 1).map((slot) => {
+                {Array.from({ length: isNordicHexad ? 6 : isTriad || isTriadShort || isMoirai ? 3 : isOubliette || isAdaptiveShort || isExchange ? 2 : 1 }, (_, i) => i + 1).map((slot) => {
                   const sel = mySelections.find((s) => s.slot_number === slot);
                   return (
                     <Box key={slot} sx={{ mb: 2 }}>
@@ -1671,6 +1698,313 @@ export default function StandaloneMatchPage() {
             );
           })()}
 
+          {/* Moirai: assignment phase and game deck display */}
+          {isMoirai && bothStarted && pm && (() => {
+            const assignments = pm.moirai_assignments || null;
+            const assignmentsRevealed = assignments !== null && assignments.length === 6;
+            const myCount = assignmentsRevealed
+              ? 0
+              : (pm.moirai_assignments_count ?? 0);
+            // Helpers
+            const allSels = [...match.creator_selections, ...match.opponent_selections];
+            const getSelById = (id: number) => allSels.find((s) => s.id === id);
+
+            // Compute per-game deck assignments after reveal
+            const getGameDecks = (gameNumber: number) => {
+              if (!assignments) return null;
+              const p1Id = pm.player1.id;
+              const p1Assigns: Record<number, number> = {};
+              const p2Assigns: Record<number, number> = {};
+              assignments.forEach((a: MoiraiAssignmentInfo) => {
+                if (a.assigning_user_id === p1Id) p1Assigns[a.game_number] = a.assigned_deck_selection_id;
+                else p2Assigns[a.game_number] = a.assigned_deck_selection_id;
+              });
+              if (gameNumber === 1) {
+                // P1 plays what P2 assigned for G1 (from P1's pool); P2 plays what P1 assigned for G1 (from P2's pool)
+                return { p1Sel: getSelById(p2Assigns[1]), p2Sel: getSelById(p1Assigns[1]) };
+              } else if (gameNumber === 2) {
+                // Reversal: P1 plays what P1 assigned for G2 (from P2's pool); P2 plays what P2 assigned for G2 (from P1's pool)
+                return { p1Sel: getSelById(p1Assigns[2]), p2Sel: getSelById(p2Assigns[2]) };
+              }
+              return null;
+            };
+
+            // G3 pool: P1's G3 deck = what P2 assigned for G3 from P1's pool; P2's G3 deck = what P1 assigned for G3 from P2's pool
+            const getG3Pool = () => {
+              if (!assignments) return null;
+              const p1Id = pm.player1.id;
+              const p1Assigns: Record<number, number> = {};
+              const p2Assigns: Record<number, number> = {};
+              assignments.forEach((a: MoiraiAssignmentInfo) => {
+                if (a.assigning_user_id === p1Id) p1Assigns[a.game_number] = a.assigned_deck_selection_id;
+                else p2Assigns[a.game_number] = a.assigned_deck_selection_id;
+              });
+              return { p1Sel: getSelById(p2Assigns[3]), p2Sel: getSelById(p1Assigns[3]) };
+            };
+
+            return (
+              <Card sx={{ mb: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Moirai — Game Assignments</Typography>
+
+                  {!assignmentsRevealed && isParticipant && (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Secretly assign each of your opponent&apos;s 3 decks to a game slot (G1=Archon, G2=Reversal, G3=Adaptive Short).
+                        Assignments are revealed simultaneously when both players submit.
+                      </Typography>
+                      {myCount === 3 && (
+                        <Alert severity="info" sx={{ mb: 1 }}>Your assignments submitted — waiting for opponent.</Alert>
+                      )}
+                      {myCount < 3 && (
+                        <Box sx={{ mb: 2 }}>
+                          {[1, 2, 3].map((gameNum) => (
+                            <Box key={gameNum} sx={{ mb: 1 }}>
+                              <Typography variant="subtitle2">Game {gameNum} ({gameNum === 1 ? 'Archon' : gameNum === 2 ? 'Reversal' : 'Adaptive Short'}):</Typography>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {oppSelections.map((s) => {
+                                  const alreadyAssignedToOtherSlot = Object.entries(moiraiAssignments).some(
+                                    ([gn, selId]) => selId === s.id && parseInt(gn) !== gameNum
+                                  );
+                                  const selected = moiraiAssignments[gameNum] === s.id;
+                                  return (
+                                    <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                      <Typography variant="body2" sx={{ mr: 0.5 }}>{s.deck?.name}</Typography>
+                                      {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                                      <Chip
+                                        label={selected ? 'Assigned' : alreadyAssignedToOtherSlot ? 'Used' : 'Assign'}
+                                        color={selected ? 'primary' : 'default'}
+                                        size="small"
+                                        disabled={alreadyAssignedToOtherSlot}
+                                        onClick={() => !alreadyAssignedToOtherSlot && setMoiraiAssignments((prev) => ({ ...prev, [gameNum]: s.id }))}
+                                        variant={selected ? 'filled' : 'outlined'}
+                                      />
+                                    </Box>
+                                  );
+                                })}
+                              </Box>
+                            </Box>
+                          ))}
+                          <Button
+                            variant="contained"
+                            onClick={handleMoiraiAssignments}
+                            disabled={submitting || Object.keys(moiraiAssignments).length !== 3}
+                            sx={{ mt: 1 }}
+                          >
+                            Submit Assignments
+                          </Button>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                  {!assignmentsRevealed && !isParticipant && (
+                    <Alert severity="info">Waiting for both players to submit assignments.</Alert>
+                  )}
+
+                  {assignmentsRevealed && (
+                    <Box>
+                      {[1, 2, 3].map((gameNum) => {
+                        const gameLabel = gameNum === 1 ? 'G1 (Archon)' : gameNum === 2 ? 'G2 (Reversal)' : 'G3 (Adaptive Short)';
+                        if (gameNum === 3) {
+                          const g3 = getG3Pool();
+                          return (
+                            <Box key={gameNum} sx={{ mb: 0.5 }}>
+                              <Typography variant="body2">
+                                <strong>{gameLabel}:</strong>{' '}
+                                {match.creator.name}: {g3?.p1Sel?.deck?.name ?? '?'},{' '}
+                                {match.opponent?.name}: {g3?.p2Sel?.deck?.name ?? '?'}
+                                {' '}(pool — Adaptive Short choice required)
+                              </Typography>
+                            </Box>
+                          );
+                        }
+                        const decks = getGameDecks(gameNum);
+                        return (
+                          <Box key={gameNum} sx={{ mb: 0.5 }}>
+                            <Typography variant="body2">
+                              <strong>{gameLabel}:</strong>{' '}
+                              {match.creator.name}: {decks?.p1Sel?.deck?.name ?? '?'},{' '}
+                              {match.opponent?.name}: {decks?.p2Sel?.deck?.name ?? '?'}
+                            </Typography>
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* Moirai G3: Adaptive Short choice phase (after 2 games are played and assignments revealed) */}
+          {isMoirai && bothStarted && pm && pm.moirai_assignments && pm.moirai_assignments.length === 6 && games.length >= 2 && (() => {
+            const choices = pm.adaptive_short_choices || [];
+            const bothChose = choices.length >= 2;
+            const myChoice = choices.find((c) => c.choosing_user_id === user?.id);
+            const allSels = [...match.creator_selections, ...match.opponent_selections];
+
+            // Compute G3 pool
+            const p1Id = pm.player1.id;
+            const p1Assigns: Record<number, number> = {};
+            const p2Assigns: Record<number, number> = {};
+            pm.moirai_assignments.forEach((a: MoiraiAssignmentInfo) => {
+              if (a.assigning_user_id === p1Id) p1Assigns[a.game_number] = a.assigned_deck_selection_id;
+              else p2Assigns[a.game_number] = a.assigned_deck_selection_id;
+            });
+            const p1G3SelId = p2Assigns[3];
+            const p2G3SelId = p1Assigns[3];
+            const g3Pool = [p1G3SelId, p2G3SelId].filter(Boolean).map((selId) => allSels.find((s) => s.id === selId)).filter(Boolean) as typeof allSels;
+
+            if (matchDecided) return null;
+
+            return (
+              <Card sx={{ mb: 2 }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>Moirai G3 — Adaptive Short Choice</Typography>
+                  {!bothChose && (
+                    <>
+                      <Typography variant="body2" color="text.secondary" gutterBottom>
+                        Secretly choose one deck from the G3 pool to play. If both choose the same deck, a chain-bid auction determines who plays it.
+                      </Typography>
+                      {isParticipant && !myChoice && (
+                        <Box sx={{ mb: 1 }}>
+                          {g3Pool.map((s) => (
+                            <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                              <Typography variant="body2">{s.deck?.name} (SAS: {s.deck?.sas_rating ?? 'N/A'})</Typography>
+                              {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                              <Chip
+                                label={adaptiveShortChoiceId === s.id ? 'Selected' : 'Choose'}
+                                color={adaptiveShortChoiceId === s.id ? 'primary' : 'default'}
+                                size="small"
+                                onClick={() => setAdaptiveShortChoiceId(s.id)}
+                                variant={adaptiveShortChoiceId === s.id ? 'filled' : 'outlined'}
+                              />
+                            </Box>
+                          ))}
+                          <Button
+                            variant="contained"
+                            onClick={async () => {
+                              if (!adaptiveShortChoiceId) return;
+                              setSubmitting(true); setError('');
+                              try {
+                                const updated = await submitAdaptiveShortChoice(id, adaptiveShortChoiceId as number);
+                                setMatch(updated); setAdaptiveShortChoiceId('');
+                                setSuccess('G3 choice submitted!');
+                              } catch (e: unknown) {
+                                const err = e as { response?: { data?: { error?: string } } };
+                                setError(err.response?.data?.error || 'Failed');
+                              } finally { setSubmitting(false); }
+                            }}
+                            disabled={submitting || !adaptiveShortChoiceId}
+                            sx={{ mt: 1 }}
+                          >
+                            Submit G3 Choice
+                          </Button>
+                        </Box>
+                      )}
+                      {isParticipant && myChoice && (
+                        <Alert severity="info">G3 choice submitted — waiting for opponent.</Alert>
+                      )}
+                      {!isParticipant && (
+                        <Alert severity="info">Waiting for both players to choose G3 deck.</Alert>
+                      )}
+                    </>
+                  )}
+                  {bothChose && (() => {
+                    const p1Choice = choices.find((c) => c.choosing_user_id === pm.player1.id);
+                    const p2Choice = choices.find((c) => c.choosing_user_id === pm.player2.id);
+                    const myChoiceEntry = isCreator ? p1Choice : p2Choice;
+                    const oppChoiceEntry = isCreator ? p2Choice : p1Choice;
+                    if (!p1Choice || !p2Choice) return null;
+
+                    const contestedSelId = p1Choice.chosen_deck_selection_id;
+                    const sameDeck = p1Choice.chosen_deck_selection_id === p2Choice.chosen_deck_selection_id;
+                    if (!sameDeck) {
+                      const myChosenSel = allSels.find((s) => s.id === myChoiceEntry?.chosen_deck_selection_id);
+                      const oppChosenSel = allSels.find((s) => s.id === oppChoiceEntry?.chosen_deck_selection_id);
+                      return (
+                        <Alert severity="success">
+                          <strong>Choices revealed!</strong> You play <strong>{myChosenSel?.deck?.name ?? '?'}</strong>; opponent plays <strong>{oppChosenSel?.deck?.name ?? '?'}</strong>
+                        </Alert>
+                      );
+                    }
+
+                    // Same deck — bidding phase
+                    const contestedSel = allSels.find((s) => s.id === contestedSelId);
+                    const bidComplete = pm.adaptive_short_bidding_complete;
+                    const bidChains = pm.adaptive_short_bid_chains;
+                    const bidderId = pm.adaptive_short_bidder_id;
+                    const bidderName = bidderId === pm.player1.id ? match.creator.name : match.opponent?.name;
+                    const iAmBidder = bidderId === user?.id;
+
+                    if (bidComplete) {
+                      return (
+                        <Alert severity="success">
+                          Bidding complete — <strong>{bidderName}</strong> plays <strong>{contestedSel?.deck?.name ?? '?'}</strong> with <strong>{bidChains} chains</strong>.
+                        </Alert>
+                      );
+                    }
+
+                    return (
+                      <Box>
+                        <Alert severity="warning" sx={{ mb: 1 }}>
+                          Both chose <strong>{contestedSel?.deck?.name}</strong>. Chain bid: current bid = <strong>{bidChains ?? 0}</strong>. {iAmBidder ? 'Your opponent must raise or concede.' : 'Your turn — raise the bid or concede.'}
+                        </Alert>
+                        {isParticipant && !iAmBidder && (
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <TextField
+                              size="small"
+                              type="number"
+                              label="Chains"
+                              value={adaptiveShortBidChains}
+                              onChange={(e) => setAdaptiveShortBidChains(e.target.value)}
+                              sx={{ width: 100 }}
+                            />
+                            <Button
+                              variant="contained"
+                              onClick={async () => {
+                                setSubmitting(true); setError('');
+                                try {
+                                  const updated = await submitAdaptiveShortBid(id, { chains: parseInt(adaptiveShortBidChains) });
+                                  setMatch(updated); setAdaptiveShortBidChains('');
+                                } catch (e: unknown) {
+                                  const err = e as { response?: { data?: { error?: string } } };
+                                  setError(err.response?.data?.error || 'Failed');
+                                } finally { setSubmitting(false); }
+                              }}
+                              disabled={submitting || !adaptiveShortBidChains}
+                            >
+                              Raise Bid
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              onClick={async () => {
+                                setSubmitting(true); setError('');
+                                try {
+                                  const updated = await submitAdaptiveShortBid(id, { concede: true });
+                                  setMatch(updated);
+                                } catch (e: unknown) {
+                                  const err = e as { response?: { data?: { error?: string } } };
+                                  setError(err.response?.data?.error || 'Failed');
+                                } finally { setSubmitting(false); }
+                              }}
+                              disabled={submitting}
+                            >
+                              Concede
+                            </Button>
+                          </Box>
+                        )}
+                      </Box>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* Moirai G1/G2/G3 deck selectors in game form */}
+
           {/* Score */}
           {bothStarted && pm && (
             <Card sx={{ mb: 2 }}>
@@ -1704,7 +2038,7 @@ export default function StandaloneMatchPage() {
           )}
 
           {/* Game report form */}
-          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (!isOubliette || (!!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house)) && (!isAdaptiveShort || ((pm.adaptive_short_choices || []).length >= 2 && (pm.adaptive_short_bid_chains === null || !!pm.adaptive_short_bidding_complete))) && (!isExchange || (pm.exchange_borrows || []).length >= 2) && (!isNordicHexad || pm.nordic_hexad_phase === 4) && (
+          {isParticipant && bothStarted && !matchDecided && pm && (!isAdaptive || games.length < 2 || pm.adaptive_bidding_complete) && (!isTriadShort || (pm.triad_short_picks || []).length >= 2) && (!isOubliette || (!!pm.oubliette_p1_banned_house && !!pm.oubliette_p2_banned_house)) && (!isAdaptiveShort || ((pm.adaptive_short_choices || []).length >= 2 && (pm.adaptive_short_bid_chains === null || !!pm.adaptive_short_bidding_complete))) && (!isExchange || (pm.exchange_borrows || []).length >= 2) && (!isNordicHexad || pm.nordic_hexad_phase === 4) && (!isMoirai || ((pm.moirai_assignments || []).length >= 6 && (games.length < 2 || ((pm.adaptive_short_choices || []).length >= 2 && (pm.adaptive_short_bid_chains === null || !!pm.adaptive_short_bidding_complete))))) && (
             <Card sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Report Game {games.length + 1}</Typography>
@@ -1812,6 +2146,59 @@ export default function StandaloneMatchPage() {
                               ))}
                           </Select>
                         </FormControl>
+                      </Box>
+                    );
+                  })()}
+
+                  {isMoirai && pm && pm.moirai_assignments && pm.moirai_assignments.length === 6 && (() => {
+                    // Compute the expected deck for each player based on game number
+                    const allSels = [...match.creator_selections, ...match.opponent_selections];
+                    const p1Id = pm.player1.id;
+                    const p1Assigns: Record<number, number> = {};
+                    const p2Assigns: Record<number, number> = {};
+                    pm.moirai_assignments.forEach((a: MoiraiAssignmentInfo) => {
+                      if (a.assigning_user_id === p1Id) p1Assigns[a.game_number] = a.assigned_deck_selection_id;
+                      else p2Assigns[a.game_number] = a.assigned_deck_selection_id;
+                    });
+                    const gn = games.length + 1;
+                    let p1Sel: typeof allSels[0] | undefined;
+                    let p2Sel: typeof allSels[0] | undefined;
+                    if (gn === 1) {
+                      p1Sel = allSels.find((s) => s.id === p2Assigns[1]);
+                      p2Sel = allSels.find((s) => s.id === p1Assigns[1]);
+                    } else if (gn === 2) {
+                      p1Sel = allSels.find((s) => s.id === p1Assigns[2]);
+                      p2Sel = allSels.find((s) => s.id === p2Assigns[2]);
+                    } else {
+                      // G3: from adaptive short choices
+                      const choices = pm.adaptive_short_choices || [];
+                      const p1Choice = choices.find((c) => c.choosing_user_id === pm.player1.id);
+                      const p2Choice = choices.find((c) => c.choosing_user_id === pm.player2.id);
+                      if (p1Choice && p2Choice) {
+                        const bidderId = pm.adaptive_short_bidder_id;
+                        if (p1Choice.chosen_deck_selection_id === p2Choice.chosen_deck_selection_id) {
+                          // Same deck chosen — bidder plays contested; other plays remaining
+                          const contestedSel = allSels.find((s) => s.id === p1Choice.chosen_deck_selection_id);
+                          const p1G3SelId = p2Assigns[3];
+                          const p2G3SelId = p1Assigns[3];
+                          const otherSelId = p1Choice.chosen_deck_selection_id === p1G3SelId ? p2G3SelId : p1G3SelId;
+                          const otherSel = allSels.find((s) => s.id === otherSelId);
+                          if (bidderId === pm.player1.id) { p1Sel = contestedSel; p2Sel = otherSel; }
+                          else { p1Sel = otherSel; p2Sel = contestedSel; }
+                        } else {
+                          p1Sel = allSels.find((s) => s.id === p1Choice.chosen_deck_selection_id);
+                          p2Sel = allSels.find((s) => s.id === p2Choice.chosen_deck_selection_id);
+                        }
+                      }
+                    }
+                    // Auto-populate when deck is determined
+                    if (p1Sel?.deck?.db_id && !reportP1DeckId) setReportP1DeckId(p1Sel.deck.db_id);
+                    if (p2Sel?.deck?.db_id && !reportP2DeckId) setReportP2DeckId(p2Sel.deck.db_id);
+                    return (
+                      <Box>
+                        <Typography variant="body2" color="text.secondary">
+                          G{gn} decks: <strong>{match.creator.name}</strong>: {p1Sel?.deck?.name ?? '?'} | <strong>{match.opponent?.name}</strong>: {p2Sel?.deck?.name ?? '?'}
+                        </Typography>
                       </Box>
                     );
                   })()}

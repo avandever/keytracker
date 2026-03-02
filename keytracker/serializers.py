@@ -416,12 +416,16 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
             wm = db.session.get(WeekMatchup, pm.week_matchup_id)
             week_id = wm.week_id if wm else None
             p1_sels = (
-                PlayerDeckSelection.query.filter_by(week_id=week_id, user_id=pm.player1_id).all()
+                PlayerDeckSelection.query.filter_by(
+                    week_id=week_id, user_id=pm.player1_id
+                ).all()
                 if week_id
                 else []
             )
             p2_sels = (
-                PlayerDeckSelection.query.filter_by(week_id=week_id, user_id=pm.player2_id).all()
+                PlayerDeckSelection.query.filter_by(
+                    week_id=week_id, user_id=pm.player2_id
+                ).all()
                 if week_id
                 else []
             )
@@ -489,6 +493,21 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
     else:
         data["nordic_p1_remaining_deck_ids"] = None
         data["nordic_p2_remaining_deck_ids"] = None
+
+    # Moirai: reveal assignments only after both players have submitted all 3 (total 6)
+    moirai_assignments_raw = getattr(pm, "moirai_assignments", [])
+    data["moirai_assignments_count"] = len(moirai_assignments_raw)
+    if len(moirai_assignments_raw) == 6:
+        data["moirai_assignments"] = [
+            {
+                "assigning_user_id": a.assigning_user_id,
+                "game_number": a.game_number,
+                "assigned_deck_selection_id": a.assigned_deck_selection_id,
+            }
+            for a in moirai_assignments_raw
+        ]
+    else:
+        data["moirai_assignments"] = None
 
     return data
 

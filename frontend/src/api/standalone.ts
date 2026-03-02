@@ -192,3 +192,25 @@ export async function submitExchangeBorrow(
   });
   return data;
 }
+
+export async function submitNordicAction(
+  matchId: number,
+  phase: number,
+  targetDeckSelectionId: number,
+): Promise<StandaloneMatch> {
+  const { data } = await apiClient.post(`/standalone-matches/${matchId}/nordic-action`, {
+    phase,
+    target_deck_selection_id: targetDeckSelectionId,
+  });
+  return data;
+}
+
+export async function submitMoiraiAssignments(
+  matchId: number,
+  assignments: { game_number: number; deck_selection_id: number }[],
+): Promise<StandaloneMatch> {
+  const { data } = await apiClient.post(`/standalone-matches/${matchId}/moirai-assignments`, {
+    assignments,
+  });
+  return data;
+}

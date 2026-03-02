@@ -31,6 +31,8 @@ from keytracker.schema import (
     TriadShortPick,
     AdaptiveShortChoice,
     ExchangeBorrow,
+    NordicHexadAction,
+    MoiraiAssignment,
     StandaloneMatch,
     StandaloneMatchStatus,
     WeekFormat,
@@ -57,6 +59,13 @@ from keytracker.match_helpers import (
     validate_exchange_borrow,
     check_exchange_win_condition,
     _get_exchange_selections,
+    validate_nordic_action,
+    advance_nordic_phase,
+    get_nordic_remaining_deck_ids,
+    validate_moirai_assignments,
+    get_moirai_game_deck_sel_ids,
+    get_moirai_g3_pool_sel_ids,
+    validate_moirai_adaptive_choice,
     validate_and_record_game,
     validate_adaptive_bid,
 )
@@ -137,7 +146,13 @@ def create_match():
     best_of_n = data.get("best_of_n", 1)
     if not isinstance(best_of_n, int) or best_of_n < 1:
         return jsonify({"error": "best_of_n must be a positive integer"}), 400
-    if format_type in (WeekFormat.TRIAD, WeekFormat.ADAPTIVE, WeekFormat.EXCHANGE):
+    if format_type in (
+        WeekFormat.TRIAD,
+        WeekFormat.ADAPTIVE,
+        WeekFormat.EXCHANGE,
+        WeekFormat.NORDIC_HEXAD,
+        WeekFormat.MOIRAI,
+    ):
         best_of_n = 3  # These formats are always best of 3
     if format_type in (
         WeekFormat.REVERSAL,
@@ -349,9 +364,18 @@ def submit_deck_selection(match_id):
 
     data = request.get_json(silent=True) or {}
     slot_number = data.get("slot_number", 1)
-    _three_slot = (WeekFormat.TRIAD, WeekFormat.TRIAD_SHORT)
+    _three_slot = (WeekFormat.TRIAD, WeekFormat.TRIAD_SHORT, WeekFormat.MOIRAI)
     _two_slot = (WeekFormat.OUBLIETTE, WeekFormat.ADAPTIVE_SHORT, WeekFormat.EXCHANGE)
-    max_slots = 3 if match.format_type in _three_slot else (2 if match.format_type in _two_slot else 1)
+    _six_slot = (WeekFormat.NORDIC_HEXAD,)
+    max_slots = (
+        6
+        if match.format_type in _six_slot
+        else (
+            3
+            if match.format_type in _three_slot
+            else (2 if match.format_type in _two_slot else 1)
+        )
+    )
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
 
@@ -605,12 +629,9 @@ def start_match(match_id):
 
     # Check if both started
     if pm.player1_started and pm.player2_started:
-        if match.format_type == WeekFormat.TRIAD:
-            # Triad needs strikes before PUBLISHED — but we publish anyway
-            # and show strike UI in PUBLISHED state
-            match.status = StandaloneMatchStatus.PUBLISHED
-        else:
-            match.status = StandaloneMatchStatus.PUBLISHED
+        match.status = StandaloneMatchStatus.PUBLISHED
+        if match.format_type == WeekFormat.NORDIC_HEXAD:
+            pm.nordic_hexad_phase = 1
 
     db.session.commit()
     viewer_id = user.id if current_user.is_authenticated else None
@@ -786,8 +807,8 @@ def submit_adaptive_short_choice(match_id):
     if err:
         return err
 
-    if match.format_type != WeekFormat.ADAPTIVE_SHORT:
-        return jsonify({"error": "Only for Adaptive Short format"}), 400
+    if match.format_type not in (WeekFormat.ADAPTIVE_SHORT, WeekFormat.MOIRAI):
+        return jsonify({"error": "Only for Adaptive Short or Moirai format"}), 400
     if match.status != StandaloneMatchStatus.PUBLISHED:
         return jsonify({"error": "Match is not published"}), 400
     if not match.matchup:
@@ -803,7 +824,10 @@ def submit_adaptive_short_choice(match_id):
         return jsonify({"error": "chosen_deck_selection_id is required"}), 400
 
     pm = match.matchup
-    error = validate_adaptive_short_choice(pm, user.id, chosen_sel_id)
+    if match.format_type == WeekFormat.MOIRAI:
+        error = validate_moirai_adaptive_choice(pm, user.id, chosen_sel_id)
+    else:
+        error = validate_adaptive_short_choice(pm, user.id, chosen_sel_id)
     if error:
         return jsonify({"error": error}), 400
 
@@ -835,8 +859,8 @@ def submit_adaptive_short_bid(match_id):
     if err:
         return err
 
-    if match.format_type != WeekFormat.ADAPTIVE_SHORT:
-        return jsonify({"error": "Only for Adaptive Short format"}), 400
+    if match.format_type not in (WeekFormat.ADAPTIVE_SHORT, WeekFormat.MOIRAI):
+        return jsonify({"error": "Only for Adaptive Short or Moirai format"}), 400
     if match.status != StandaloneMatchStatus.PUBLISHED:
         return jsonify({"error": "Match is not published"}), 400
     if not match.matchup:
@@ -896,6 +920,88 @@ def submit_exchange_borrow(match_id):
         borrowed_deck_selection_id=borrowed_deck_selection_id,
     )
     db.session.add(borrow)
+    db.session.commit()
+    viewer_id = user.id if current_user.is_authenticated else None
+    return jsonify(serialize_standalone_match(match, viewer_id))
+
+
+@standalone_bp.route("/<int:match_id>/nordic-action", methods=["POST"])
+def submit_nordic_action(match_id):
+    """Submit a Nordic Hexad ban or protect action."""
+    match, err = _get_match_or_404(match_id)
+    if err:
+        return err
+
+    if match.format_type != WeekFormat.NORDIC_HEXAD:
+        return jsonify({"error": "Only for Nordic Hexad format"}), 400
+    if match.status != StandaloneMatchStatus.PUBLISHED:
+        return jsonify({"error": "Match is not published"}), 400
+    if not match.matchup:
+        return jsonify({"error": "Match not started yet"}), 400
+
+    user = _current_user_or_guest()
+    if user is None or user.id not in (match.creator_id, match.opponent_id):
+        return jsonify({"error": "You are not in this match"}), 403
+
+    data = request.get_json(silent=True) or {}
+    phase = data.get("phase")
+    target_deck_selection_id = data.get("target_deck_selection_id")
+    if not isinstance(phase, int) or not isinstance(target_deck_selection_id, int):
+        return (
+            jsonify({"error": "phase and target_deck_selection_id are required"}),
+            400,
+        )
+
+    pm = match.matchup
+    error = validate_nordic_action(pm, user.id, phase, target_deck_selection_id)
+    if error:
+        return jsonify({"error": error}), 400
+
+    action = NordicHexadAction(
+        player_matchup_id=pm.id,
+        player_id=user.id,
+        phase=phase,
+        target_deck_selection_id=target_deck_selection_id,
+    )
+    db.session.add(action)
+    db.session.flush()
+    advance_nordic_phase(pm)
+    db.session.commit()
+    viewer_id = user.id if current_user.is_authenticated else None
+    return jsonify(serialize_standalone_match(match, viewer_id))
+
+
+@standalone_bp.route("/<int:match_id>/moirai-assignments", methods=["POST"])
+def submit_moirai_assignments(match_id):
+    """Submit Moirai game-slot assignments (all 3 of the opponent's decks at once)."""
+    match, err = _get_match_or_404(match_id)
+    if err:
+        return err
+
+    if match.format_type != WeekFormat.MOIRAI:
+        return jsonify({"error": "Only for Moirai format"}), 400
+    if match.status != StandaloneMatchStatus.PUBLISHED:
+        return jsonify({"error": "Match is not published"}), 400
+    if not match.matchup:
+        return jsonify({"error": "Match not started yet"}), 400
+
+    user = _current_user_or_guest()
+    if user is None or user.id not in (match.creator_id, match.opponent_id):
+        return jsonify({"error": "You are not in this match"}), 403
+
+    data = request.get_json(silent=True) or {}
+    assignments = data.get("assignments")
+    if not isinstance(assignments, list):
+        return jsonify({"error": "assignments must be a list"}), 400
+
+    pm = match.matchup
+    new_assignments, error = validate_moirai_assignments(pm, user.id, assignments)
+    if error:
+        return jsonify({"error": error}), 400
+
+    for a in new_assignments:
+        db.session.add(a)
+
     db.session.commit()
     viewer_id = user.id if current_user.is_authenticated else None
     return jsonify(serialize_standalone_match(match, viewer_id))

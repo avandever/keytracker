@@ -1184,7 +1184,12 @@ def create_week(league_id):
     if not isinstance(best_of_n, int) or best_of_n < 1 or best_of_n % 2 == 0:
         return jsonify({"error": "best_of_n must be a positive odd integer"}), 400
 
-    if format_type in ("triad", WeekFormat.EXCHANGE.value):
+    if format_type in (
+        "triad",
+        WeekFormat.EXCHANGE.value,
+        WeekFormat.NORDIC_HEXAD.value,
+        WeekFormat.MOIRAI.value,
+    ):
         best_of_n = 3  # These formats are always best of 3
     if format_type in (
         WeekFormat.REVERSAL.value,
@@ -1469,7 +1474,29 @@ def generate_matchups(league_id, week_id):
                     400,
                 )
         else:
-            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value, WeekFormat.EXCHANGE.value) else 1)
+            required_slots = (
+                6
+                if week.format_type == WeekFormat.NORDIC_HEXAD.value
+                else (
+                    3
+                    if week.format_type
+                    in (
+                        WeekFormat.TRIAD.value,
+                        WeekFormat.TRIAD_SHORT.value,
+                        WeekFormat.MOIRAI.value,
+                    )
+                    else (
+                        2
+                        if week.format_type
+                        in (
+                            WeekFormat.OUBLIETTE.value,
+                            WeekFormat.ADAPTIVE_SHORT.value,
+                            WeekFormat.EXCHANGE.value,
+                        )
+                        else 1
+                    )
+                )
+            )
             selections = PlayerDeckSelection.query.filter_by(
                 week_id=week.id, user_id=member.user_id
             ).count()
@@ -1629,7 +1656,29 @@ def generate_player_matchups(league_id, week_id):
                     name = u.name if u else f"User {member.user_id}"
                     missing.append(f"{name} ({pod_count}/3 pods)")
         else:
-            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value, WeekFormat.EXCHANGE.value) else 1)
+            required_slots = (
+                6
+                if week.format_type == WeekFormat.NORDIC_HEXAD.value
+                else (
+                    3
+                    if week.format_type
+                    in (
+                        WeekFormat.TRIAD.value,
+                        WeekFormat.TRIAD_SHORT.value,
+                        WeekFormat.MOIRAI.value,
+                    )
+                    else (
+                        2
+                        if week.format_type
+                        in (
+                            WeekFormat.OUBLIETTE.value,
+                            WeekFormat.ADAPTIVE_SHORT.value,
+                            WeekFormat.EXCHANGE.value,
+                        )
+                        else 1
+                    )
+                )
+            )
             for member in active_members:
                 selections = PlayerDeckSelection.query.filter_by(
                     week_id=week.id, user_id=member.user_id
@@ -1883,7 +1932,29 @@ def publish_week(league_id, week_id):
                     400,
                 )
         else:
-            required_slots = 3 if week.format_type in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value) else (2 if week.format_type in (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value, WeekFormat.EXCHANGE.value) else 1)
+            required_slots = (
+                6
+                if week.format_type == WeekFormat.NORDIC_HEXAD.value
+                else (
+                    3
+                    if week.format_type
+                    in (
+                        WeekFormat.TRIAD.value,
+                        WeekFormat.TRIAD_SHORT.value,
+                        WeekFormat.MOIRAI.value,
+                    )
+                    else (
+                        2
+                        if week.format_type
+                        in (
+                            WeekFormat.OUBLIETTE.value,
+                            WeekFormat.ADAPTIVE_SHORT.value,
+                            WeekFormat.EXCHANGE.value,
+                        )
+                        else 1
+                    )
+                )
+            )
             selections = PlayerDeckSelection.query.filter_by(
                 week_id=week.id, user_id=member.user_id
             ).count()
@@ -2638,9 +2709,25 @@ def submit_deck_selection(league_id, week_id):
     target_team = db.session.get(Team, member.team_id)
 
     slot_number = data.get("slot_number", 1)
-    _three_slot = (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value)
-    _two_slot = (WeekFormat.OUBLIETTE.value, WeekFormat.ADAPTIVE_SHORT.value, WeekFormat.EXCHANGE.value)
-    max_slots = 3 if week.format_type in _three_slot else (2 if week.format_type in _two_slot else 1)
+    _three_slot = (
+        WeekFormat.TRIAD.value,
+        WeekFormat.TRIAD_SHORT.value,
+        WeekFormat.MOIRAI.value,
+    )
+    _two_slot = (
+        WeekFormat.OUBLIETTE.value,
+        WeekFormat.ADAPTIVE_SHORT.value,
+        WeekFormat.EXCHANGE.value,
+    )
+    max_slots = (
+        6
+        if week.format_type == WeekFormat.NORDIC_HEXAD.value
+        else (
+            3
+            if week.format_type in _three_slot
+            else (2 if week.format_type in _two_slot else 1)
+        )
+    )
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
 
@@ -3718,7 +3805,10 @@ def submit_triad_short_pick(league_id, matchup_id):
 @login_required
 def submit_oubliette_banned_house(league_id, matchup_id):
     """Submit an Oubliette banned house for a league match."""
-    from keytracker.match_helpers import validate_oubliette_ban, get_oubliette_eligible_deck_ids
+    from keytracker.match_helpers import (
+        validate_oubliette_ban,
+        get_oubliette_eligible_deck_ids,
+    )
 
     league, err = _get_league_or_404(league_id)
     if err:
@@ -3819,8 +3909,11 @@ def submit_adaptive_short_choice(league_id, matchup_id):
     week = wm.week if wm else None
     if not week or week.league_id != league.id:
         return jsonify({"error": "Matchup not found"}), 404
-    if week.format_type != WeekFormat.ADAPTIVE_SHORT.value:
-        return jsonify({"error": "Only for Adaptive Short format"}), 400
+    if week.format_type not in (
+        WeekFormat.ADAPTIVE_SHORT.value,
+        WeekFormat.MOIRAI.value,
+    ):
+        return jsonify({"error": "Only for Adaptive Short or Moirai format"}), 400
     if week.status != WeekStatus.PUBLISHED.value:
         return jsonify({"error": "Week is not published"}), 400
 
@@ -3833,7 +3926,12 @@ def submit_adaptive_short_choice(league_id, matchup_id):
     if not chosen_sel_id:
         return jsonify({"error": "chosen_deck_selection_id is required"}), 400
 
-    error = validate_adaptive_short_choice(pm, effective.id, chosen_sel_id)
+    if week.format_type == WeekFormat.MOIRAI.value:
+        from keytracker.match_helpers import validate_moirai_adaptive_choice
+
+        error = validate_moirai_adaptive_choice(pm, effective.id, chosen_sel_id)
+    else:
+        error = validate_adaptive_short_choice(pm, effective.id, chosen_sel_id)
     if error:
         return jsonify({"error": error}), 400
 
@@ -3874,8 +3972,11 @@ def submit_adaptive_short_bid(league_id, matchup_id):
     week = wm.week if wm else None
     if not week or week.league_id != league.id:
         return jsonify({"error": "Matchup not found"}), 404
-    if week.format_type != WeekFormat.ADAPTIVE_SHORT.value:
-        return jsonify({"error": "Only for Adaptive Short format"}), 400
+    if week.format_type not in (
+        WeekFormat.ADAPTIVE_SHORT.value,
+        WeekFormat.MOIRAI.value,
+    ):
+        return jsonify({"error": "Only for Adaptive Short or Moirai format"}), 400
     if week.status != WeekStatus.PUBLISHED.value:
         return jsonify({"error": "Week is not published"}), 400
 
@@ -3887,9 +3988,55 @@ def submit_adaptive_short_bid(league_id, matchup_id):
     chains = data.get("chains")
     concede = bool(data.get("concede", False))
 
-    success, error = validate_adaptive_short_bid(pm, effective.id, chains=chains, concede=concede)
+    success, error = validate_adaptive_short_bid(
+        pm, effective.id, chains=chains, concede=concede
+    )
     if not success:
         return jsonify({"error": error}), 400
+
+    db.session.commit()
+    return jsonify(serialize_player_matchup(pm))
+
+
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/moirai-assignments", methods=["POST"]
+)
+@login_required
+def submit_moirai_assignments(league_id, matchup_id):
+    """Submit Moirai game-slot assignments for a league match."""
+    from keytracker.schema import MoiraiAssignment as MA
+    from keytracker.match_helpers import validate_moirai_assignments
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.MOIRAI.value:
+        return jsonify({"error": "Only for Moirai format"}), 400
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    data = request.get_json(silent=True) or {}
+    assignments = data.get("assignments")
+    if not isinstance(assignments, list):
+        return jsonify({"error": "assignments must be a list"}), 400
+
+    new_assignments, error = validate_moirai_assignments(pm, effective.id, assignments)
+    if error:
+        return jsonify({"error": error}), 400
+
+    for a in new_assignments:
+        db.session.add(a)
 
     db.session.commit()
     return jsonify(serialize_player_matchup(pm))
@@ -3942,6 +4089,60 @@ def submit_exchange_borrow(league_id, matchup_id):
     return jsonify(serialize_player_matchup(pm))
 
 
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/nordic-action", methods=["POST"]
+)
+@login_required
+def submit_nordic_action(league_id, matchup_id):
+    """Submit a Nordic Hexad ban or protect action."""
+    from keytracker.schema import NordicHexadAction as NordicHexadActionModel
+    from keytracker.match_helpers import validate_nordic_action, advance_nordic_phase
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.NORDIC_HEXAD.value:
+        return jsonify({"error": "Only for Nordic Hexad format"}), 400
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    data = request.get_json(silent=True) or {}
+    phase = data.get("phase")
+    target_deck_selection_id = data.get("target_deck_selection_id")
+    if not isinstance(phase, int) or not isinstance(target_deck_selection_id, int):
+        return (
+            jsonify({"error": "phase and target_deck_selection_id are required"}),
+            400,
+        )
+
+    error = validate_nordic_action(pm, effective.id, phase, target_deck_selection_id)
+    if error:
+        return jsonify({"error": error}), 400
+
+    action = NordicHexadActionModel(
+        player_matchup_id=pm.id,
+        player_id=effective.id,
+        phase=phase,
+        target_deck_selection_id=target_deck_selection_id,
+    )
+    db.session.add(action)
+    db.session.flush()
+    advance_nordic_phase(pm)
+    db.session.commit()
+    return jsonify(serialize_player_matchup(pm))
+
+
 # --- Match flow ---
 
 
@@ -3981,6 +4182,15 @@ def start_match(league_id, matchup_id):
                 return jsonify({"error": "Specify player_id for admin start"}), 400
         else:
             return jsonify({"error": "You are not in this matchup"}), 403
+
+    # Initialize Nordic Hexad phase when both players have started
+    if (
+        pm.player1_started
+        and pm.player2_started
+        and week.format_type == WeekFormat.NORDIC_HEXAD.value
+    ):
+        if pm.nordic_hexad_phase is None:
+            pm.nordic_hexad_phase = 1
 
     db.session.commit()
     return jsonify(serialize_player_matchup(pm))
@@ -4143,40 +4353,155 @@ def report_game(league_id, matchup_id):
 
         borrows = pm.exchange_borrows
         if len(borrows) < 2:
-            return jsonify({"error": "Both players must submit borrows before reporting games"}), 400
+            return (
+                jsonify(
+                    {"error": "Both players must submit borrows before reporting games"}
+                ),
+                400,
+            )
         if not p1_deck_id or not p2_deck_id:
-            return jsonify({"error": "player1_deck_id and player2_deck_id required for Exchange"}), 400
+            return (
+                jsonify(
+                    {
+                        "error": "player1_deck_id and player2_deck_id required for Exchange"
+                    }
+                ),
+                400,
+            )
         _p1_sels, _p2_sels = _get_exchange_selections(pm)
-        p1_own_sel, p1_borrowed_sel = get_exchange_decks(pm, pm.player1_id, _p1_sels, _p2_sels)
-        p2_own_sel, p2_borrowed_sel = get_exchange_decks(pm, pm.player2_id, _p1_sels, _p2_sels)
-        p1_valid = set(filter(None, [
-            p1_own_sel.deck_id if p1_own_sel else None,
-            p1_borrowed_sel.deck_id if p1_borrowed_sel else None,
-        ]))
-        p2_valid = set(filter(None, [
-            p2_own_sel.deck_id if p2_own_sel else None,
-            p2_borrowed_sel.deck_id if p2_borrowed_sel else None,
-        ]))
+        p1_own_sel, p1_borrowed_sel = get_exchange_decks(
+            pm, pm.player1_id, _p1_sels, _p2_sels
+        )
+        p2_own_sel, p2_borrowed_sel = get_exchange_decks(
+            pm, pm.player2_id, _p1_sels, _p2_sels
+        )
+        p1_valid = set(
+            filter(
+                None,
+                [
+                    p1_own_sel.deck_id if p1_own_sel else None,
+                    p1_borrowed_sel.deck_id if p1_borrowed_sel else None,
+                ],
+            )
+        )
+        p2_valid = set(
+            filter(
+                None,
+                [
+                    p2_own_sel.deck_id if p2_own_sel else None,
+                    p2_borrowed_sel.deck_id if p2_borrowed_sel else None,
+                ],
+            )
+        )
         if p1_valid and p1_deck_id not in p1_valid:
-            return jsonify({"error": "Player 1's deck is not in their exchange deck pool"}), 400
+            return (
+                jsonify(
+                    {"error": "Player 1's deck is not in their exchange deck pool"}
+                ),
+                400,
+            )
         if p2_valid and p2_deck_id not in p2_valid:
-            return jsonify({"error": "Player 2's deck is not in their exchange deck pool"}), 400
+            return (
+                jsonify(
+                    {"error": "Player 2's deck is not in their exchange deck pool"}
+                ),
+                400,
+            )
 
     # Adaptive Short: both must choose; if same deck chosen, bidding must be complete
     if week.format_type == WeekFormat.ADAPTIVE_SHORT.value:
         choices = pm.adaptive_short_choices
         if len(choices) < 2:
-            return jsonify({"error": "Both players must choose before reporting games"}), 400
+            return (
+                jsonify({"error": "Both players must choose before reporting games"}),
+                400,
+            )
         if (
             pm.adaptive_short_bid_chains is not None
             and not pm.adaptive_short_bidding_complete
         ):
-            return jsonify({"error": "Adaptive Short bidding must complete before game can be played"}), 400
+            return (
+                jsonify(
+                    {
+                        "error": "Adaptive Short bidding must complete before game can be played"
+                    }
+                ),
+                400,
+            )
 
     # Oubliette: both banned houses must be submitted
     if week.format_type == WeekFormat.OUBLIETTE.value:
         if not pm.oubliette_p1_banned_house or not pm.oubliette_p2_banned_house:
-            return jsonify({"error": "Both players must submit banned houses before reporting games"}), 400
+            return (
+                jsonify(
+                    {
+                        "error": "Both players must submit banned houses before reporting games"
+                    }
+                ),
+                400,
+            )
+
+    # Nordic Hexad: all 3 phases must complete; validate remaining deck pools and unique-deck rule
+    if week.format_type == WeekFormat.NORDIC_HEXAD.value:
+        from keytracker.match_helpers import get_nordic_remaining_deck_ids
+
+        if pm.nordic_hexad_phase != 4:
+            return (
+                jsonify(
+                    {
+                        "error": "All three Nordic Hexad phases must complete before reporting games"
+                    }
+                ),
+                400,
+            )
+        if not p1_deck_id or not p2_deck_id:
+            return (
+                jsonify(
+                    {
+                        "error": "player1_deck_id and player2_deck_id required for Nordic Hexad"
+                    }
+                ),
+                400,
+            )
+        remaining = get_nordic_remaining_deck_ids(pm)
+        if remaining:
+            if p1_deck_id not in remaining.get(pm.player1_id, set()):
+                return (
+                    jsonify(
+                        {
+                            "error": "Player 1's deck is not in the Nordic Hexad remaining pool"
+                        }
+                    ),
+                    400,
+                )
+            if p2_deck_id not in remaining.get(pm.player2_id, set()):
+                return (
+                    jsonify(
+                        {
+                            "error": "Player 2's deck is not in the Nordic Hexad remaining pool"
+                        }
+                    ),
+                    400,
+                )
+        for g in existing_games:
+            if g.winner_id == pm.player1_id and g.player1_deck_id == p1_deck_id:
+                return (
+                    jsonify(
+                        {
+                            "error": "Player 1's deck already won a game and cannot be reused"
+                        }
+                    ),
+                    400,
+                )
+            if g.winner_id == pm.player2_id and g.player2_deck_id == p2_deck_id:
+                return (
+                    jsonify(
+                        {
+                            "error": "Player 2's deck already won a game and cannot be reused"
+                        }
+                    ),
+                    400,
+                )
 
     # Triad Short: both players must have picked; validate deck IDs match picks
     if week.format_type == WeekFormat.TRIAD_SHORT.value:
@@ -4184,15 +4509,97 @@ def report_game(league_id, matchup_id):
         p1_pick = next((p for p in picks if p.picking_user_id == pm.player1_id), None)
         p2_pick = next((p for p in picks if p.picking_user_id == pm.player2_id), None)
         if not p1_pick or not p2_pick:
-            return jsonify({"error": "Both players must pick before reporting games"}), 400
+            return (
+                jsonify({"error": "Both players must pick before reporting games"}),
+                400,
+            )
         p1_sel = db.session.get(PlayerDeckSelection, p1_pick.picked_deck_selection_id)
         p2_sel = db.session.get(PlayerDeckSelection, p2_pick.picked_deck_selection_id)
         expected_p1 = p1_sel.deck_id if p1_sel else None
         expected_p2 = p2_sel.deck_id if p2_sel else None
         if p1_deck_id and expected_p1 and p1_deck_id != expected_p1:
-            return jsonify({"error": "Player 1's deck must match their Triad Short pick"}), 400
+            return (
+                jsonify({"error": "Player 1's deck must match their Triad Short pick"}),
+                400,
+            )
         if p2_deck_id and expected_p2 and p2_deck_id != expected_p2:
-            return jsonify({"error": "Player 2's deck must match their Triad Short pick"}), 400
+            return (
+                jsonify({"error": "Player 2's deck must match their Triad Short pick"}),
+                400,
+            )
+
+    # Moirai: assignments must be complete; validate deck IDs match assignments / G3 choices
+    if week.format_type == WeekFormat.MOIRAI.value:
+        from keytracker.match_helpers import (
+            get_moirai_game_deck_sel_ids,
+            get_moirai_g3_pool_sel_ids,
+        )
+
+        moirai_assignments = getattr(pm, "moirai_assignments", [])
+        if len(moirai_assignments) < 6:
+            return (
+                jsonify(
+                    {
+                        "error": "Moirai assignments must be complete before reporting games"
+                    }
+                ),
+                400,
+            )
+        if not p1_deck_id or not p2_deck_id:
+            return (
+                jsonify(
+                    {"error": "player1_deck_id and player2_deck_id required for Moirai"}
+                ),
+                400,
+            )
+        if game_number in (1, 2):
+            p1_sel_id, p2_sel_id = get_moirai_game_deck_sel_ids(pm, game_number)
+            p1_exp_sel = (
+                db.session.get(PlayerDeckSelection, p1_sel_id) if p1_sel_id else None
+            )
+            p2_exp_sel = (
+                db.session.get(PlayerDeckSelection, p2_sel_id) if p2_sel_id else None
+            )
+            if p1_exp_sel and p1_deck_id != p1_exp_sel.deck_id:
+                return (
+                    jsonify(
+                        {
+                            "error": f"Player 1's deck does not match Moirai G{game_number} assignment"
+                        }
+                    ),
+                    400,
+                )
+            if p2_exp_sel and p2_deck_id != p2_exp_sel.deck_id:
+                return (
+                    jsonify(
+                        {
+                            "error": f"Player 2's deck does not match Moirai G{game_number} assignment"
+                        }
+                    ),
+                    400,
+                )
+        elif game_number == 3:
+            adaptive_choices = getattr(pm, "adaptive_short_choices", [])
+            if len(adaptive_choices) < 2:
+                return (
+                    jsonify(
+                        {
+                            "error": "G3 requires Adaptive Short choice phase to complete first"
+                        }
+                    ),
+                    400,
+                )
+            bid_chains = getattr(pm, "adaptive_short_bid_chains", None)
+            bid_complete = getattr(pm, "adaptive_short_bidding_complete", False)
+            if bid_chains is not None and not bid_complete:
+                return (
+                    jsonify(
+                        {
+                            "error": "G3 requires Adaptive Short bidding to complete first"
+                        }
+                    ),
+                    400,
+                )
 
     game = MatchGame(
         player_matchup_id=pm.id,

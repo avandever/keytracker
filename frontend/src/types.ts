@@ -316,6 +316,8 @@ export interface PlayerMatchupInfo {
   nordic_hexad_pending_phase_count?: number | null;
   nordic_p1_remaining_deck_ids?: number[] | null;
   nordic_p2_remaining_deck_ids?: number[] | null;
+  moirai_assignments_count?: number | null;
+  moirai_assignments?: MoiraiAssignmentInfo[] | null;
 }
 
 export interface AdaptiveShortChoiceInfo {
@@ -332,6 +334,12 @@ export interface NordicHexadActionInfo {
   player_id: number;
   phase: number;
   target_deck_selection_id: number;
+}
+
+export interface MoiraiAssignmentInfo {
+  assigning_user_id: number;
+  game_number: number;
+  assigned_deck_selection_id: number;
 }
 
 export interface DeckSelectionInfo {

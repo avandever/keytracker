@@ -11,6 +11,7 @@
 - `adaptive_short` — 2 decks per player; both players simultaneously and secretly choose 1 deck from the combined 4-deck pool; reveal: if different decks chosen each plays their choice (BO1); if same deck chosen, chain-bid auction to determine who plays it with how many chains (BO1)
 - `exchange` — 2 decks per player; each player secretly borrows one of the opponent's decks (reveal simultaneously); each player's exchange pool = own non-borrowed deck + borrowed deck; BO3; win condition: win at least 1 game with EACH of your 2 exchange decks
 - `nordic_hexad` — 6 decks per player; 3 sequential hidden-reveal phases: (1) each player bans 1 opponent deck, (2) each player protects 1 of their own decks, (3) each player bans another opponent deck (protected deck is immune); 4 decks per player remain; BO3 where each game must use a deck not previously played
+- `moirai` — 3 decks per player; each player secretly assigns all 3 of the opponent's decks to game slots 1/2/3 (simultaneous reveal); G1=Archon (P1 plays what P2 assigned; P2 plays what P1 assigned), G2=Reversal (each plays the deck they themselves assigned for G2), G3=Adaptive Short (pool = the 2 G3-assigned decks; simultaneous choice with chain-bid tiebreaker); BO3
 
 ## NOT supported in standalone matches
 - `thief` — Team-based deck-stealing mechanics; incompatible with 1v1 standalone play

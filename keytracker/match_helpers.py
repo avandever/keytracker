@@ -423,7 +423,9 @@ def validate_oubliette_ban(pm, banning_user_id, banned_house, user_selections):
         return "banned_house must be a non-empty string"
 
     is_p1 = banning_user_id == pm.player1_id
-    already_banned = pm.oubliette_p1_banned_house if is_p1 else pm.oubliette_p2_banned_house
+    already_banned = (
+        pm.oubliette_p1_banned_house if is_p1 else pm.oubliette_p2_banned_house
+    )
     if already_banned:
         return "You have already submitted a banned house"
 
@@ -666,13 +668,9 @@ def get_exchange_decks(matchup, player_id, p1_selections, p2_selections):
     my_selections = p1_selections if player_id == matchup.player1_id else p2_selections
 
     # Borrow made BY the opponent (they borrowed one of my decks → I lose that one)
-    opp_borrow = next(
-        (b for b in borrows if b.borrowing_user_id == opponent_id), None
-    )
+    opp_borrow = next((b for b in borrows if b.borrowing_user_id == opponent_id), None)
     # Borrow made BY me (I borrowed one of opponent's decks)
-    my_borrow = next(
-        (b for b in borrows if b.borrowing_user_id == player_id), None
-    )
+    my_borrow = next((b for b in borrows if b.borrowing_user_id == player_id), None)
 
     if not opp_borrow or not my_borrow:
         return None, None
@@ -726,6 +724,330 @@ def check_exchange_win_condition(matchup, p1_selections, p2_selections):
     return None
 
 
+def validate_nordic_action(matchup, player_id, phase, target_deck_selection_id):
+    """
+    Validate a Nordic Hexad ban/protect action.
+
+    phase 1 (ban1): player bans one of the opponent's decks
+    phase 2 (protect): player protects one of their own decks
+    phase 3 (ban2): player bans one of the opponent's remaining (non-protected) decks
+
+    Returns error string or None (None = valid).
+    """
+    from keytracker.schema import NordicHexadAction
+
+    if player_id not in (matchup.player1_id, matchup.player2_id):
+        return "You are not in this matchup"
+
+    if not matchup.player1_started or not matchup.player2_started:
+        return "Both players must start before acting"
+
+    if phase not in (1, 2, 3):
+        return "phase must be 1, 2, or 3"
+
+    # Check current phase
+    current_phase = matchup.nordic_hexad_phase
+    if current_phase is None or current_phase != phase:
+        return f"It is not phase {phase} yet"
+
+    # Check player hasn't already acted in this phase
+    existing = NordicHexadAction.query.filter_by(
+        player_matchup_id=matchup.id, player_id=player_id, phase=phase
+    ).first()
+    if existing:
+        return "You have already submitted an action for this phase"
+
+    target_sel = db.session.get(PlayerDeckSelection, target_deck_selection_id)
+    if not target_sel:
+        return "Invalid deck selection"
+
+    # Validate target belongs to this match context
+    if matchup.standalone_match_id:
+        if target_sel.standalone_match_id != matchup.standalone_match_id:
+            return "Deck selection does not belong to this match"
+    elif matchup.week_matchup_id:
+        from keytracker.schema import WeekMatchup
+
+        wm = db.session.get(WeekMatchup, matchup.week_matchup_id)
+        if wm and target_sel.week_id != wm.week_id:
+            return "Deck selection does not belong to this match"
+
+    opponent_id = (
+        matchup.player2_id if player_id == matchup.player1_id else matchup.player1_id
+    )
+
+    if phase in (1, 3):
+        # Ban must target opponent's deck
+        if target_sel.user_id != opponent_id:
+            return "You must ban one of your opponent's decks"
+
+        # Phase 3: cannot target the protected deck
+        if phase == 3:
+            protect_action = NordicHexadAction.query.filter_by(
+                player_matchup_id=matchup.id, player_id=opponent_id, phase=2
+            ).first()
+            if (
+                protect_action
+                and protect_action.target_deck_selection_id == target_deck_selection_id
+            ):
+                return "You cannot ban your opponent's protected deck"
+
+        # Cannot ban a deck already banned in this match
+        all_bans = NordicHexadAction.query.filter(
+            NordicHexadAction.player_matchup_id == matchup.id,
+            NordicHexadAction.phase.in_([1, 3]),
+        ).all()
+        already_banned_ids = {b.target_deck_selection_id for b in all_bans}
+        if target_deck_selection_id in already_banned_ids:
+            return "That deck has already been banned"
+
+    elif phase == 2:
+        # Protect must be player's own deck
+        if target_sel.user_id != player_id:
+            return "You must protect one of your own decks"
+
+    return None
+
+
+def advance_nordic_phase(matchup):
+    """
+    After both players act in the current phase, advance to the next phase.
+    Does NOT commit.
+    """
+    from keytracker.schema import NordicHexadAction
+
+    current_phase = matchup.nordic_hexad_phase
+    if current_phase is None:
+        return
+
+    phase_actions = NordicHexadAction.query.filter_by(
+        player_matchup_id=matchup.id, phase=current_phase
+    ).count()
+    if phase_actions >= 2:
+        matchup.nordic_hexad_phase = current_phase + 1
+
+
+def get_nordic_remaining_deck_ids(matchup):
+    """
+    After phase 3 is complete (phase = 4), return the set of deck IDs that
+    remain in play for each player (their 6 decks minus the 2 banned).
+
+    Returns {player1_id: set of deck_ids, player2_id: set of deck_ids}
+    or None if phase 3 is not complete.
+    """
+    from keytracker.schema import NordicHexadAction
+
+    if matchup.nordic_hexad_phase != 4:
+        return None
+
+    bans = NordicHexadAction.query.filter(
+        NordicHexadAction.player_matchup_id == matchup.id,
+        NordicHexadAction.phase.in_([1, 3]),
+    ).all()
+    banned_sel_ids = {b.target_deck_selection_id for b in bans}
+    banned_deck_ids = set()
+    for sel_id in banned_sel_ids:
+        sel = db.session.get(PlayerDeckSelection, sel_id)
+        if sel:
+            banned_deck_ids.add(sel.deck_id)
+
+    # Load all 12 selections
+    if matchup.standalone_match_id:
+        all_sels = PlayerDeckSelection.query.filter_by(
+            standalone_match_id=matchup.standalone_match_id
+        ).all()
+    elif matchup.week_matchup_id:
+        from keytracker.schema import WeekMatchup
+
+        wm = db.session.get(WeekMatchup, matchup.week_matchup_id)
+        week_id = wm.week_id if wm else None
+        all_sels = (
+            PlayerDeckSelection.query.filter_by(week_id=week_id).all()
+            if week_id
+            else []
+        )
+    else:
+        all_sels = []
+
+    result = {matchup.player1_id: set(), matchup.player2_id: set()}
+    for sel in all_sels:
+        if sel.user_id not in result:
+            continue
+        if sel.deck_id not in banned_deck_ids:
+            result[sel.user_id].add(sel.deck_id)
+    return result
+
+
+def validate_moirai_assignments(matchup, assigning_user_id, assignments):
+    """
+    Validate and create MoiraiAssignment records.
+
+    assignments: list of {"game_number": int, "deck_selection_id": int}
+    Returns (list[MoiraiAssignment], error_message).
+    """
+    from keytracker.schema import MoiraiAssignment
+
+    if assigning_user_id not in (matchup.player1_id, matchup.player2_id):
+        return None, "You are not in this matchup"
+
+    if not matchup.player1_started or not matchup.player2_started:
+        return None, "Both players must start before submitting assignments"
+
+    # Already submitted?
+    existing = [
+        a
+        for a in getattr(matchup, "moirai_assignments", [])
+        if a.assigning_user_id == assigning_user_id
+    ]
+    if existing:
+        return None, "You have already submitted Moirai assignments"
+
+    # Must have exactly 3 assignments for slots 1, 2, 3
+    if len(assignments) != 3:
+        return None, "Must provide exactly 3 assignments (one per game slot)"
+
+    game_numbers = [a["game_number"] for a in assignments]
+    if sorted(game_numbers) != [1, 2, 3]:
+        return None, "Must assign to game slots 1, 2, and 3"
+
+    deck_sel_ids = [a["deck_selection_id"] for a in assignments]
+    if len(set(deck_sel_ids)) != 3:
+        return None, "Cannot assign the same deck to multiple game slots"
+
+    # All assigned decks must belong to the opponent
+    opponent_id = (
+        matchup.player2_id
+        if assigning_user_id == matchup.player1_id
+        else matchup.player1_id
+    )
+    for sel_id in deck_sel_ids:
+        sel = db.session.get(PlayerDeckSelection, sel_id)
+        if not sel:
+            return None, f"Invalid deck selection: {sel_id}"
+        if sel.user_id != opponent_id:
+            return None, "You must assign the opponent's decks (not your own)"
+        # Validate match context
+        if matchup.standalone_match_id:
+            if sel.standalone_match_id != matchup.standalone_match_id:
+                return None, "Deck selection does not belong to this match"
+        elif matchup.week_matchup_id:
+            from keytracker.schema import WeekMatchup
+
+            wm = db.session.get(WeekMatchup, matchup.week_matchup_id)
+            if wm and sel.week_id != wm.week_id:
+                return None, "Deck selection does not belong to this match"
+
+    new_assignments = [
+        MoiraiAssignment(
+            player_matchup_id=matchup.id,
+            assigning_user_id=assigning_user_id,
+            game_number=a["game_number"],
+            assigned_deck_selection_id=a["deck_selection_id"],
+        )
+        for a in assignments
+    ]
+    return new_assignments, None
+
+
+def get_moirai_game_deck_sel_ids(pm, game_number):
+    """
+    After both players have submitted assignments (6 total), return the
+    PlayerDeckSelection IDs for each player's game deck.
+
+    G1 (Archon):   P1 plays the deck P2 assigned for slot 1 (from P1's pool);
+                   P2 plays the deck P1 assigned for slot 1 (from P2's pool).
+    G2 (Reversal): P1 plays the deck P1 assigned for slot 2 (from P2's pool);
+                   P2 plays the deck P2 assigned for slot 2 (from P1's pool).
+
+    Returns (p1_sel_id, p2_sel_id) or (None, None) if not ready / G3.
+    """
+    assignments = getattr(pm, "moirai_assignments", [])
+    if len(assignments) < 6:
+        return None, None
+
+    p1_assigns = {
+        a.game_number: a.assigned_deck_selection_id
+        for a in assignments
+        if a.assigning_user_id == pm.player1_id
+    }
+    p2_assigns = {
+        a.game_number: a.assigned_deck_selection_id
+        for a in assignments
+        if a.assigning_user_id == pm.player2_id
+    }
+
+    if game_number == 1:
+        # P1 plays what P2 assigned to G1 (from P1's pool)
+        # P2 plays what P1 assigned to G1 (from P2's pool)
+        return p2_assigns.get(1), p1_assigns.get(1)
+    elif game_number == 2:
+        # Reversal: P1 plays what P1 themselves assigned to G2 (from P2's pool)
+        # P2 plays what P2 themselves assigned to G2 (from P1's pool)
+        return p1_assigns.get(2), p2_assigns.get(2)
+    return None, None
+
+
+def get_moirai_g3_pool_sel_ids(pm):
+    """
+    Returns (p1_g3_sel_id, p2_g3_sel_id) — the selection IDs in the G3 pool.
+    p1_g3_sel_id: what P2 assigned to G3 from P1's pool (→ P1 plays this)
+    p2_g3_sel_id: what P1 assigned to G3 from P2's pool (→ P2 plays this)
+    """
+    assignments = getattr(pm, "moirai_assignments", [])
+    if len(assignments) < 6:
+        return None, None
+
+    p1_assigns = {
+        a.game_number: a.assigned_deck_selection_id
+        for a in assignments
+        if a.assigning_user_id == pm.player1_id
+    }
+    p2_assigns = {
+        a.game_number: a.assigned_deck_selection_id
+        for a in assignments
+        if a.assigning_user_id == pm.player2_id
+    }
+    return p2_assigns.get(3), p1_assigns.get(3)
+
+
+def validate_moirai_adaptive_choice(
+    matchup, choosing_user_id, chosen_deck_selection_id
+):
+    """
+    Validate a G3 Adaptive Short choice in a Moirai match.
+
+    The pool is the 2 G3 deck selections (one from each player's pool).
+    Only available once both players have submitted assignments and 2 games are complete.
+
+    Returns error string or None.
+    """
+    from keytracker.schema import AdaptiveShortChoice
+
+    if choosing_user_id not in (matchup.player1_id, matchup.player2_id):
+        return "You are not in this matchup"
+
+    assignments = getattr(matchup, "moirai_assignments", [])
+    if len(assignments) < 6:
+        return "Moirai assignments must be complete before G3 choices can be submitted"
+
+    existing_games = getattr(matchup, "games", [])
+    if len(existing_games) < 2:
+        return "Games 1 and 2 must be complete before G3 choices can be submitted"
+
+    existing = AdaptiveShortChoice.query.filter_by(
+        player_matchup_id=matchup.id, choosing_user_id=choosing_user_id
+    ).first()
+    if existing:
+        return "You have already submitted your G3 choice"
+
+    p1_g3_sel_id, p2_g3_sel_id = get_moirai_g3_pool_sel_ids(matchup)
+    g3_pool = {p1_g3_sel_id, p2_g3_sel_id} - {None}
+    if chosen_deck_selection_id not in g3_pool:
+        return "Chosen deck is not in the G3 pool"
+
+    return None
+
+
 def validate_triad_short_pick(matchup, picking_user_id, picked_deck_selection_id):
     """
     Validate a Triad Short pick submission.
@@ -745,8 +1067,12 @@ def validate_triad_short_pick(matchup, picking_user_id, picked_deck_selection_id
         return "Both players must start before picking"
 
     # Both must have struck first
-    p1_strikes = [s for s in matchup.strikes if s.striking_user_id == matchup.player1_id]
-    p2_strikes = [s for s in matchup.strikes if s.striking_user_id == matchup.player2_id]
+    p1_strikes = [
+        s for s in matchup.strikes if s.striking_user_id == matchup.player1_id
+    ]
+    p2_strikes = [
+        s for s in matchup.strikes if s.striking_user_id == matchup.player2_id
+    ]
     if not p1_strikes or not p2_strikes:
         return "Both players must strike before picking"
 
@@ -1012,10 +1338,16 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
             matchup.adaptive_short_bid_chains is not None
             and not matchup.adaptive_short_bidding_complete
         ):
-            return None, "Adaptive Short bidding must complete before game can be played"
+            return (
+                None,
+                "Adaptive Short bidding must complete before game can be played",
+            )
 
     if format_type == WeekFormat.OUBLIETTE:
-        if not matchup.oubliette_p1_banned_house or not matchup.oubliette_p2_banned_house:
+        if (
+            not matchup.oubliette_p1_banned_house
+            or not matchup.oubliette_p2_banned_house
+        ):
             return None, "Both players must submit banned houses before reporting games"
 
     if format_type == WeekFormat.TRIAD_SHORT:
@@ -1043,6 +1375,109 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
                 None,
                 "Adaptive bidding must be completed before game 3 can be played",
             )
+
+    if format_type == WeekFormat.NORDIC_HEXAD:
+        if matchup.nordic_hexad_phase != 4:
+            return (
+                None,
+                "All three Nordic Hexad phases must complete before reporting games",
+            )
+        if not p1_deck_id or not p2_deck_id:
+            return None, "player1_deck_id and player2_deck_id required for Nordic Hexad"
+        remaining = get_nordic_remaining_deck_ids(matchup)
+        if remaining:
+            if p1_deck_id not in remaining.get(matchup.player1_id, set()):
+                return None, "Player 1's deck is not in the Nordic Hexad remaining pool"
+            if p2_deck_id not in remaining.get(matchup.player2_id, set()):
+                return None, "Player 2's deck is not in the Nordic Hexad remaining pool"
+        # Unique-deck constraint: each deck can only win once per player
+        for g in existing_games:
+            if g.winner_id == matchup.player1_id and g.player1_deck_id == p1_deck_id:
+                return None, "Player 1's deck already won a game and cannot be reused"
+            if g.winner_id == matchup.player2_id and g.player2_deck_id == p2_deck_id:
+                return None, "Player 2's deck already won a game and cannot be reused"
+
+    if format_type == WeekFormat.MOIRAI:
+        moirai_assignments = getattr(matchup, "moirai_assignments", [])
+        if len(moirai_assignments) < 6:
+            return None, "Moirai assignments must be complete before reporting games"
+        if not p1_deck_id or not p2_deck_id:
+            return None, "player1_deck_id and player2_deck_id required for Moirai"
+
+        if game_number in (1, 2):
+            p1_sel_id, p2_sel_id = get_moirai_game_deck_sel_ids(matchup, game_number)
+            p1_expected_sel = (
+                db.session.get(PlayerDeckSelection, p1_sel_id) if p1_sel_id else None
+            )
+            p2_expected_sel = (
+                db.session.get(PlayerDeckSelection, p2_sel_id) if p2_sel_id else None
+            )
+            if p1_expected_sel and p1_deck_id != p1_expected_sel.deck_id:
+                return (
+                    None,
+                    f"Player 1's deck does not match the Moirai G{game_number} assignment",
+                )
+            if p2_expected_sel and p2_deck_id != p2_expected_sel.deck_id:
+                return (
+                    None,
+                    f"Player 2's deck does not match the Moirai G{game_number} assignment",
+                )
+        elif game_number == 3:
+            adaptive_choices = getattr(matchup, "adaptive_short_choices", [])
+            if len(adaptive_choices) < 2:
+                return None, "G3 requires Adaptive Short choice phase to complete first"
+            bid_chains = getattr(matchup, "adaptive_short_bid_chains", None)
+            bid_complete = getattr(matchup, "adaptive_short_bidding_complete", False)
+            if bid_chains is not None and not bid_complete:
+                return None, "G3 requires Adaptive Short bidding to complete first"
+            # Validate deck IDs against choices
+            p1_choice = next(
+                (
+                    c
+                    for c in adaptive_choices
+                    if c.choosing_user_id == matchup.player1_id
+                ),
+                None,
+            )
+            p2_choice = next(
+                (
+                    c
+                    for c in adaptive_choices
+                    if c.choosing_user_id == matchup.player2_id
+                ),
+                None,
+            )
+            if p1_choice and p2_choice:
+                c1_sel_id = p1_choice.chosen_deck_selection_id
+                c2_sel_id = p2_choice.chosen_deck_selection_id
+                if c1_sel_id == c2_sel_id:
+                    # Same deck chosen — bidder plays the contested deck
+                    bidder_id = getattr(matchup, "adaptive_short_bidder_id", None)
+                    contested_sel = db.session.get(PlayerDeckSelection, c1_sel_id)
+                    p1_g3_sel_id, p2_g3_sel_id = get_moirai_g3_pool_sel_ids(matchup)
+                    other_sel_id = (
+                        p2_g3_sel_id if c1_sel_id == p1_g3_sel_id else p1_g3_sel_id
+                    )
+                    other_sel = (
+                        db.session.get(PlayerDeckSelection, other_sel_id)
+                        if other_sel_id
+                        else None
+                    )
+                    if bidder_id == matchup.player1_id:
+                        exp_p1 = contested_sel.deck_id if contested_sel else None
+                        exp_p2 = other_sel.deck_id if other_sel else None
+                    else:
+                        exp_p1 = other_sel.deck_id if other_sel else None
+                        exp_p2 = contested_sel.deck_id if contested_sel else None
+                else:
+                    p1_sel = db.session.get(PlayerDeckSelection, c1_sel_id)
+                    p2_sel = db.session.get(PlayerDeckSelection, c2_sel_id)
+                    exp_p1 = p1_sel.deck_id if p1_sel else None
+                    exp_p2 = p2_sel.deck_id if p2_sel else None
+                if exp_p1 and p1_deck_id != exp_p1:
+                    return None, "Player 1's deck does not match their Moirai G3 choice"
+                if exp_p2 and p2_deck_id != exp_p2:
+                    return None, "Player 2's deck does not match their Moirai G3 choice"
 
     game = MatchGame(
         player_matchup_id=matchup.id,
