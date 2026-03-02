@@ -636,5 +636,6 @@ def serialize_match_game(game: MatchGame) -> dict:
         "player1_deck_id": game.player1_deck_id,
         "player2_deck_id": game.player2_deck_id,
         "reported_by_id": game.reported_by_id,
+        "game_id": game.game_id,
         "created_at": game.created_at.isoformat() if game.created_at else None,
     }

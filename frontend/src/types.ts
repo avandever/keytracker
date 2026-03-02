@@ -362,6 +362,7 @@ export interface MatchGameInfo {
   player1_deck_id: number | null;
   player2_deck_id: number | null;
   reported_by_id: number | null;
+  game_id: number | null;
   created_at: string | null;
 }
 

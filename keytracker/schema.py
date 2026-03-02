@@ -1251,6 +1251,7 @@ class MatchGame(db.Model):
     reported_by_id = db.Column(
         db.Integer, db.ForeignKey("tracker_user.id"), nullable=True
     )
+    game_id = db.Column(db.Integer, db.ForeignKey("tracker_game.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     player_matchup = db.relationship("PlayerMatchup", back_populates="games")
@@ -1258,6 +1259,7 @@ class MatchGame(db.Model):
     player1_deck = db.relationship("Deck", foreign_keys=[player1_deck_id])
     player2_deck = db.relationship("Deck", foreign_keys=[player2_deck_id])
     reported_by = db.relationship("User", foreign_keys=[reported_by_id])
+    game = db.relationship("Game", foreign_keys=[game_id])
 
     __table_args__ = (
         db.UniqueConstraint("player_matchup_id", "game_number", name="uq_match_game"),

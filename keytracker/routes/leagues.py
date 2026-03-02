@@ -4619,6 +4619,17 @@ def report_game(league_id, matchup_id):
     # rather than the stale in-memory collection that predates this flush
     db.session.expire(pm, ["games"])
 
+    # Optionally attach an uploaded game log
+    log_text = data.get("log", "").strip()
+    if log_text:
+        from keytracker.match_helpers import attach_log_to_match_game
+
+        _, log_err = attach_log_to_match_game(log_text, game)
+        if log_err:
+            logger.warning(
+                "Failed to parse game log for match_game %s: %s", game.id, log_err
+            )
+
     # Adaptive: after game 2 creates a 1-1 tie, initialize bidding
     if week.format_type == WeekFormat.ADAPTIVE.value and game_number == 2:
         from keytracker.match_helpers import (

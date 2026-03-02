@@ -121,6 +121,7 @@ export default function StandaloneMatchPage() {
   const [reportLoserConceded, setReportLoserConceded] = useState(false);
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
   const [reportP2DeckId, setReportP2DeckId] = useState<number | ''>('');
+  const [reportLog, setReportLog] = useState('');
 
   // Adaptive bid state
   const [adaptiveBidChains, setAdaptiveBidChains] = useState('');
@@ -571,6 +572,7 @@ export default function StandaloneMatchPage() {
       };
       if ((isTriad || isExchange || isNordicHexad || isMoirai) && reportP1DeckId) payload.player1_deck_id = reportP1DeckId as number;
       if ((isTriad || isExchange || isNordicHexad || isMoirai) && reportP2DeckId) payload.player2_deck_id = reportP2DeckId as number;
+      if (reportLog.trim()) payload.log = reportLog.trim();
       // Reversal: player 1 plays opponent's deck, player 2 plays creator's deck
       if (isReversal) {
         const creatorDeckId = match.creator_selections[0]?.deck?.db_id;
@@ -610,6 +612,7 @@ export default function StandaloneMatchPage() {
       setReportLoserConceded(false);
       setReportP1DeckId('');
       setReportP2DeckId('');
+      setReportLog('');
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } };
       setError(err.response?.data?.error || 'Failed to report game');
@@ -2261,6 +2264,18 @@ export default function StandaloneMatchPage() {
                       label="Loser conceded"
                     />
                   </Box>
+
+                  <TextField
+                    label="Game Log (optional)"
+                    placeholder="Paste Crucible game log here to link a full game record"
+                    multiline
+                    minRows={2}
+                    maxRows={6}
+                    size="small"
+                    fullWidth
+                    value={reportLog}
+                    onChange={(e) => setReportLog(e.target.value)}
+                  />
 
                   <Button
                     variant="contained"

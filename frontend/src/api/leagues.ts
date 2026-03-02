@@ -507,6 +507,7 @@ export async function reportGame(
     loser_conceded?: boolean;
     player1_deck_id?: number;
     player2_deck_id?: number;
+    log?: string;
   },
 ): Promise<MatchGameInfo> {
   const { data } = await apiClient.post(

@@ -79,6 +79,8 @@ export default function MyLeagueInfoPage() {
   const [reportWentToTime, setReportWentToTime] = useState(false);
   const [reportLoserConceded, setReportLoserConceded] = useState(false);
 
+  const [reportLog, setReportLog] = useState('');
+
   // Triad: strike selection and deck pickers
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
@@ -281,6 +283,7 @@ export default function MyLeagueInfoPage() {
         loser_conceded: reportLoserConceded,
         player1_deck_id: reportP1DeckId || undefined,
         player2_deck_id: reportP2DeckId || undefined,
+        log: reportLog.trim() || undefined,
       });
       setSuccess('Game reported!');
       setReportWinnerId('');
@@ -290,6 +293,7 @@ export default function MyLeagueInfoPage() {
       setReportLoserConceded(false);
       setReportP1DeckId('');
       setReportP2DeckId('');
+      setReportLog('');
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -1221,6 +1225,17 @@ export default function MyLeagueInfoPage() {
                         label="Loser conceded"
                       />
                     </Box>
+                    <TextField
+                      label="Game Log (optional)"
+                      placeholder="Paste Crucible game log here to link a full game record"
+                      multiline
+                      minRows={2}
+                      maxRows={6}
+                      size="small"
+                      fullWidth
+                      value={reportLog}
+                      onChange={(e) => setReportLog(e.target.value)}
+                    />
                     <Button
                       variant="contained"
                       onClick={() => handleReportGame(myMatchup.id, myMatchup)}

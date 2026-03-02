@@ -1502,3 +1502,55 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
             init_adaptive_bidding(matchup)
 
     return game, None
+
+
+def attach_log_to_match_game(log_text, match_game):
+    """Parse a Crucible game log and link the resulting Game record to a MatchGame.
+
+    Should be called before the outer db.session.commit().
+    Returns (game, error_string or None).
+    """
+    import datetime
+
+    from keytracker.schema import (
+        Game,  # noqa: F401
+        Log,
+        Player,
+    )
+    from keytracker.utils import (
+        BadLog,
+        log_to_game,
+        turn_counts_from_logs,
+        anonymize_game_for_player,
+    )
+
+    try:
+        game = log_to_game(log_text)
+    except BadLog as exc:
+        return None, str(exc)
+
+    game.date = datetime.datetime.now()
+    db.session.add(game)
+    db.session.flush()
+    game.crucible_game_id = f"UNKNOWN-{game.id}"
+
+    for seq, line in enumerate(log_text.split("\n")):
+        log_obj = Log(
+            game_id=game.id,
+            message=line,
+            winner_perspective=False,
+            time=game.date + datetime.timedelta(seconds=seq),
+        )
+        db.session.add(log_obj)
+
+    db.session.flush()
+    turn_counts_from_logs(game)
+    winner = Player.query.filter_by(username=game.winner).first()
+    loser = Player.query.filter_by(username=game.loser).first()
+    if winner and winner.anonymous:
+        anonymize_game_for_player(game, winner)
+    if loser and loser.anonymous:
+        anonymize_game_for_player(game, loser)
+
+    match_game.game_id = game.id
+    return game, None

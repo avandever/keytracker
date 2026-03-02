@@ -1067,6 +1067,17 @@ def report_game(match_id):
         db.session.rollback()
         return jsonify({"error": error}), 400
 
+    # Optionally attach an uploaded game log
+    log_text = data.get("log", "").strip()
+    if log_text:
+        from keytracker.match_helpers import attach_log_to_match_game
+
+        _, log_err = attach_log_to_match_game(log_text, game)
+        if log_err:
+            logger.warning(
+                "Failed to parse game log for match_game %s: %s", game.id, log_err
+            )
+
     # Check if match is now complete
     db.session.expire(pm, ["games"])
     if match.format_type == WeekFormat.EXCHANGE:
