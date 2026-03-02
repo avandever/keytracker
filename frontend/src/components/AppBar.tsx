@@ -10,18 +10,53 @@ import {
   Menu,
   MenuItem,
   IconButton,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Divider,
 } from '@mui/material';
-import { Link as RouterLink, useLocation } from 'react-router-dom';
+import MenuIcon from '@mui/icons-material/Menu';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+
+const NAV_LINKS = [
+  { label: 'Games', to: '/games' },
+  { label: 'Decks', to: '/decks' },
+  { label: 'Players', to: '/user' },
+  { label: 'Leagues', to: '/leagues' },
+  { label: 'Matches', to: '/matches' },
+  { label: 'Upload', to: '/upload' },
+  { label: 'Simple Upload', to: '/upload_simple' },
+  { label: 'CSV Pods', to: '/csv_to_pods' },
+];
 
 export default function AppBar() {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleDrawerNav = (to: string) => {
+    setDrawerOpen(false);
+    navigate(to);
+  };
 
   return (
     <MuiAppBar position="static">
       <Toolbar>
+        {/* Mobile hamburger */}
+        <IconButton
+          color="inherit"
+          edge="start"
+          onClick={() => setDrawerOpen(true)}
+          sx={{ mr: 1, display: { md: 'none' } }}
+        >
+          <MenuIcon />
+        </IconButton>
+
         <Typography
           variant="h6"
           component={RouterLink}
@@ -30,40 +65,27 @@ export default function AppBar() {
         >
           Bear Tracks
         </Typography>
-        <Box sx={{ flexGrow: 1, display: 'flex', gap: 1 }}>
-          <Button color="inherit" component={RouterLink} to="/games">
-            Games
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/decks">
-            Decks
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/user">
-            Players
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/leagues">
-            Leagues
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/matches">
-            Matches
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/upload">
-            Upload
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/upload_simple">
-            Simple Upload
-          </Button>
-          <Button color="inherit" component={RouterLink} to="/csv_to_pods">
-            CSV Pods
-          </Button>
+
+        {/* Desktop nav */}
+        <Box sx={{ flexGrow: 1, display: { xs: 'none', md: 'flex' }, gap: 1 }}>
+          {NAV_LINKS.map((link) => (
+            <Button key={link.to} color="inherit" component={RouterLink} to={link.to}>
+              {link.label}
+            </Button>
+          ))}
         </Box>
+
+        {/* Spacer on mobile so user controls stay right */}
+        <Box sx={{ flexGrow: 1, display: { xs: 'flex', md: 'none' } }} />
+
         {!loading && (
           user ? (
             <>
-              <Button color="inherit" component={RouterLink} to="/my-games">
+              <Button color="inherit" component={RouterLink} to="/my-games" sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
                 My Games
               </Button>
               {user.email === 'andrew.vandever@gmail.com' && (
-                <Button color="inherit" component={RouterLink} to="/admin/users">
+                <Button color="inherit" component={RouterLink} to="/admin/users" sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
                   Admin
                 </Button>
               )}
@@ -117,6 +139,38 @@ export default function AppBar() {
           )
         )}
       </Toolbar>
+
+      {/* Mobile drawer */}
+      <Drawer anchor="left" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
+        <Box sx={{ width: 240 }} role="presentation">
+          <List>
+            {NAV_LINKS.map((link) => (
+              <ListItem key={link.to} disablePadding>
+                <ListItemButton onClick={() => handleDrawerNav(link.to)}>
+                  <ListItemText primary={link.label} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+            {!loading && user && (
+              <>
+                <Divider />
+                <ListItem disablePadding>
+                  <ListItemButton onClick={() => handleDrawerNav('/my-games')}>
+                    <ListItemText primary="My Games" />
+                  </ListItemButton>
+                </ListItem>
+                {user.email === 'andrew.vandever@gmail.com' && (
+                  <ListItem disablePadding>
+                    <ListItemButton onClick={() => handleDrawerNav('/admin/users')}>
+                      <ListItemText primary="Admin" />
+                    </ListItemButton>
+                  </ListItem>
+                )}
+              </>
+            )}
+          </List>
+        </Box>
+      </Drawer>
     </MuiAppBar>
   );
 }

@@ -89,7 +89,7 @@ export default function GameListing({ game, highlightUser, highlightDeckId }: Pr
   return (
     <Card variant="outlined" sx={{ mb: 1 }}>
       <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
           <PlayerName name={firstPlayer} highlight={highlightUser} />
           <Typography component="span" variant="body2" color="text.secondary">vs.</Typography>
           <PlayerName name={secondPlayer} highlight={highlightUser} />
@@ -123,7 +123,7 @@ export default function GameListing({ game, highlightUser, highlightDeckId }: Pr
             {formatDate(game.date)}
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <DeckName name={firstDeckName} deckId={firstDeckId} sas={firstSas} aerc={firstAerc} highlight={highlightDeckId} />
           <Typography variant="body2" color="text.secondary">vs.</Typography>
           <DeckName name={secondDeckName} deckId={secondDeckId} sas={secondSas} aerc={secondAerc} highlight={highlightDeckId} />

@@ -70,7 +70,7 @@ export default function GamesSearchPage() {
           values={filters}
           onChange={handleChange}
         />
-        <Box sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 2, mb: 2, alignItems: 'center', flexWrap: 'wrap' }}>
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>Sort By</InputLabel>
             <Select

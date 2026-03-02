@@ -84,7 +84,7 @@ export default function DecksSearchPage() {
         <>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>{decks.length} results</Typography>
           {decks.length > 0 ? (
-            <TableContainer component={Paper}>
+            <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
               <Table size="small">
                 <TableHead>
                   <TableRow>

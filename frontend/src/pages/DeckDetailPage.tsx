@@ -53,7 +53,7 @@ export default function DeckDetailPage() {
         <Chip label={`${deck.games_won}W - ${deck.games_lost}L`} variant="outlined" />
         <Chip label={deck.houses.join(' / ')} variant="outlined" />
       </Box>
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+      <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
         <Link href={deck.mv_url} target="_blank" rel="noopener">Master Vault</Link>
         <Link href={deck.dok_url} target="_blank" rel="noopener">Decks of Keyforge</Link>
       </Box>
@@ -61,7 +61,7 @@ export default function DeckDetailPage() {
       {deck.pod_stats.length > 0 && (
         <>
           <Typography variant="h6" sx={{ mb: 1 }}>Pod Stats</Typography>
-          <TableContainer component={Paper} sx={{ mb: 3 }}>
+          <TableContainer component={Paper} sx={{ mb: 3, overflowX: 'auto' }}>
             <Table size="small">
               <TableHead>
                 <TableRow>
