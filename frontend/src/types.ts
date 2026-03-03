@@ -444,6 +444,35 @@ export type CompletedMatchDecks = Record<string, {
   player2_pods?: AlliancePodEntry[];
 }>;
 
+export interface DeckExportSlot {
+  slot_number: number;
+  dok_url: string | null;
+  deck_name: string;
+}
+
+export interface DeckExportPod {
+  slot_number: number;
+  dok_url: string | null;
+  house_name: string | null;
+}
+
+export interface DeckExportPlayerData {
+  user_id: number;
+  slots?: DeckExportSlot[];
+  stolen?: boolean | null;
+  pods?: DeckExportPod[];
+  extra?: string;
+}
+
+export interface DeckExportWeek {
+  week_id: number;
+  week_number: number;
+  name: string | null;
+  format_type: string;
+  status: string;
+  player_data: DeckExportPlayerData[];
+}
+
 export interface CsvPod {
   name: string;
   sas: number;

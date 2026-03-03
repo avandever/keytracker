@@ -721,11 +721,14 @@ def start_draft(league_id):
 
     total_needed = league.num_teams * league.team_size
     if len(league.signups) < total_needed:
-        return jsonify(
-            {
-                "error": f"Not enough signups: need {total_needed}, have {len(league.signups)}"
-            }
-        ), 400
+        return (
+            jsonify(
+                {
+                    "error": f"Not enough signups: need {total_needed}, have {len(league.signups)}"
+                }
+            ),
+            400,
+        )
 
     teams = sorted(league.teams, key=lambda t: t.order_number)
     if len(teams) < 2:
@@ -5106,3 +5109,171 @@ def completed_match_decks(league_id, week_id):
                 }
 
     return jsonify(result)
+
+
+# --- Deck Export ---
+
+
+def _deck_export_standard(week):
+    """Return player deck data for standard (non-thief, non-alliance) week formats."""
+    from collections import defaultdict
+
+    by_user = defaultdict(list)
+    for sel in week.deck_selections:
+        if sel.deck:
+            by_user[sel.user_id].append(sel)
+    result = []
+    for user_id, sels in by_user.items():
+        sels_sorted = sorted(sels, key=lambda s: s.slot_number)
+        slots = [
+            {
+                "slot_number": s.slot_number,
+                "dok_url": s.deck.dok_url,
+                "deck_name": s.deck.name,
+            }
+            for s in sels_sorted
+        ]
+        result.append({"user_id": user_id, "slots": slots, "stolen": None})
+    return result
+
+
+def _deck_export_thief(week):
+    """Return player deck data for thief format weeks, including stolen flag."""
+    from collections import defaultdict
+
+    # Map deck_id → curating team_id
+    curating_team = {
+        tcd.deck_id: tcd.team_id
+        for tcd in ThiefCurationDeck.query.filter_by(week_id=week.id).all()
+    }
+
+    # Map user_id → team_id from league teams
+    user_team = {}
+    for team in week.league.teams:
+        for member in team.members:
+            user_team[member.user_id] = team.id
+
+    by_user = defaultdict(list)
+    for sel in week.deck_selections:
+        if sel.deck:
+            by_user[sel.user_id].append(sel)
+
+    result = []
+    for user_id, sels in by_user.items():
+        sels_sorted = sorted(sels, key=lambda s: s.slot_number)
+        slots = [
+            {
+                "slot_number": s.slot_number,
+                "dok_url": s.deck.dok_url,
+                "deck_name": s.deck.name,
+            }
+            for s in sels_sorted
+        ]
+        player_team_id = user_team.get(user_id)
+        deck_id = sels_sorted[0].deck_id if sels_sorted else None
+        curation_team_id = curating_team.get(deck_id)
+        stolen = (
+            (curation_team_id != player_team_id)
+            if (curation_team_id is not None and player_team_id is not None)
+            else None
+        )
+        result.append({"user_id": user_id, "slots": slots, "stolen": stolen})
+    return result
+
+
+def _deck_export_alliance(week):
+    """Return player deck data for alliance format weeks."""
+    from collections import defaultdict
+
+    sels = (
+        AlliancePodSelection.query.filter_by(week_id=week.id)
+        .order_by(AlliancePodSelection.user_id, AlliancePodSelection.slot_number)
+        .all()
+    )
+
+    by_user = defaultdict(list)
+    for sel in sels:
+        by_user[sel.user_id].append(sel)
+
+    result = []
+    for user_id, user_sels in by_user.items():
+        pods = []
+        extra = "N/A"
+        for sel in user_sels:
+            if sel.slot_type == "pod" and sel.deck:
+                pods.append(
+                    {
+                        "slot_number": sel.slot_number,
+                        "dok_url": sel.deck.dok_url,
+                        "house_name": sel.house_name,
+                    }
+                )
+            elif sel.slot_type == "token" and sel.deck:
+                tokens = [
+                    c
+                    for c in sel.deck.cards_from_assoc
+                    if c.card_type == "Token Creature"
+                ]
+                if tokens:
+                    extra = tokens[0].card_title or sel.deck.name
+                else:
+                    extra = sel.deck.name
+            elif sel.slot_type == "prophecy" and sel.deck:
+                prophecy_cards = [
+                    c for c in sel.deck.cards_from_assoc if c.house == "Prophecy"
+                ]
+                if prophecy_cards:
+                    extra = (
+                        ", ".join(c.card_title for c in prophecy_cards if c.card_title)
+                        or sel.deck.name
+                    )
+                else:
+                    extra = sel.deck.name
+        pods.sort(key=lambda p: p["slot_number"])
+        result.append({"user_id": user_id, "pods": pods, "extra": extra})
+    return result
+
+
+@blueprint.route("/<int:league_id>/deck-export", methods=["GET"])
+@login_required
+def deck_export(league_id):
+    """Return all players' deck selections across all weeks for CSV export."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+
+    effective = get_effective_user()
+    member = (
+        TeamMember.query.join(Team)
+        .filter(Team.league_id == league.id, TeamMember.user_id == effective.id)
+        .first()
+    )
+    if member is None and not _is_league_admin(league, effective):
+        return jsonify({"error": "League members only"}), 403
+
+    _alliance_formats = {"alliance", "sealed_alliance", "team_sealed_alliance"}
+    weeks_data = []
+    for week in sorted(league.weeks, key=lambda w: w.week_number):
+        if week.status == WeekStatus.COMPLETED.value:
+            fmt = week.format_type
+            if fmt == WeekFormat.THIEF.value:
+                player_data = _deck_export_thief(week)
+            elif fmt in _alliance_formats:
+                player_data = _deck_export_alliance(week)
+            else:
+                player_data = _deck_export_standard(week)
+        else:
+            player_data = []
+
+        weeks_data.append(
+            {
+                "week_id": week.id,
+                "week_number": week.week_number,
+                "name": week.name,
+                "format_type": week.format_type,
+                "status": week.status,
+                "player_data": player_data,
+            }
+        )
+
+    return jsonify(weeks_data)

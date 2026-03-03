@@ -22,10 +22,10 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
-import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks } from '../api/leagues';
+import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
-import type { AdminLogEntry, AlliancePodEntry, CompletedMatchDecks, KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
+import type { AdminLogEntry, AlliancePodEntry, CompletedMatchDecks, DeckExportPlayerData, DeckExportWeek, KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
 import {
   Table,
   TableBody,
@@ -388,7 +388,8 @@ export default function LeagueDetailPage() {
     const rows = computeStandings();
     return (
       <>
-        <Box sx={{ mb: 1, display: 'flex', justifyContent: 'flex-end' }}>
+        <Box sx={{ mb: 1, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+          <Button size="small" onClick={handleDownloadDeckExport}>Export Deck History</Button>
           <Button size="small" variant="outlined" onClick={handleDownloadTeamStandings}>Download CSV</Button>
         </Box>
       <Table size="small">
@@ -653,6 +654,93 @@ export default function LeagueDetailPage() {
       }
     }
     downloadCsv('player-standings.csv', [header, ...dataRows]);
+  };
+
+  const ALLIANCE_FORMATS = new Set(['alliance', 'sealed_alliance', 'team_sealed_alliance']);
+
+  const getWeekColumnHeaders = (week: DeckExportWeek): string[] => {
+    const label = week.name || `Week ${week.week_number}`;
+    const fmt = week.format_type;
+    if (ALLIANCE_FORMATS.has(fmt)) {
+      return [
+        `${label} Pod 1`, `${label} Pod 1 House`,
+        `${label} Pod 2`, `${label} Pod 2 House`,
+        `${label} Pod 3`, `${label} Pod 3 House`,
+        `${label} Extra`,
+      ];
+    }
+    if (fmt === 'thief') return [label, `${label} Stolen?`];
+    const slotCounts: Record<string, number> = {
+      adaptive_short: 2, oubliette: 2, exchange: 2,
+      triad: 3, triad_short: 3, moirai: 3,
+      nordic_hexad: 6,
+    };
+    const n = slotCounts[fmt] ?? 1;
+    return n === 1 ? [label] : Array.from({ length: n }, (_, i) => `${label} Deck ${i + 1}`);
+  };
+
+  const getPlayerWeekCells = (
+    playerData: DeckExportPlayerData | undefined,
+    week: DeckExportWeek,
+    colCount: number,
+  ): string[] => {
+    const empty = Array<string>(colCount).fill('');
+    if (!playerData) return empty;
+    const fmt = week.format_type;
+    if (ALLIANCE_FORMATS.has(fmt)) {
+      const pods = playerData.pods ?? [];
+      const sorted = [...pods].sort((a, b) => a.slot_number - b.slot_number);
+      const cells = sorted.flatMap((p) => [p.dok_url || '', p.house_name || '']);
+      while (cells.length < 6) cells.push('', '');
+      cells.push(playerData.extra ?? 'N/A');
+      return cells;
+    }
+    if (fmt === 'thief') {
+      const slot = playerData.slots?.[0];
+      return [slot ? (slot.dok_url || slot.deck_name) : '', playerData.stolen ? 'Stolen' : 'Kept'];
+    }
+    const slots = [...(playerData.slots ?? [])].sort((a, b) => a.slot_number - b.slot_number);
+    const cells = slots.map((s) => s.dok_url || s.deck_name);
+    while (cells.length < colCount) cells.push('');
+    return cells;
+  };
+
+  const handleDownloadDeckExport = async () => {
+    if (!league) return;
+    const exportWeeks = await getLeagueDeckExport(league.id);
+
+    // Build user_id → {teamName, playerName} lookup
+    const userInfo: Record<number, { teamName: string; playerName: string }> = {};
+    for (const team of league.teams) {
+      for (const member of team.members) {
+        userInfo[member.user.id] = { teamName: team.name, playerName: member.user.name };
+      }
+    }
+
+    // Ordered player list: by team then member order
+    const orderedUserIds: number[] = [];
+    for (const team of league.teams) {
+      for (const member of team.members) {
+        orderedUserIds.push(member.user.id);
+      }
+    }
+
+    // Build headers
+    const weekHeaders = exportWeeks.flatMap((w) => getWeekColumnHeaders(w));
+    const header = ['Team', 'Player', ...weekHeaders];
+
+    // Build data rows
+    const dataRows = orderedUserIds.map((userId) => {
+      const info = userInfo[userId] ?? { teamName: '', playerName: '' };
+      const weekCells = exportWeeks.flatMap((w) => {
+        const cols = getWeekColumnHeaders(w);
+        const pd = w.player_data.find((p) => p.user_id === userId);
+        return getPlayerWeekCells(pd, w, cols.length);
+      });
+      return [info.teamName, info.playerName, ...weekCells];
+    });
+
+    downloadCsv('deck-history.csv', [header, ...dataRows]);
   };
 
   const renderAdminLogTab = () => {

@@ -15,6 +15,7 @@ import type {
   AllianceRestrictedListVersion,
   AdminLogEntry,
   CompletedMatchDecks,
+  DeckExportWeek,
 } from '../types';
 
 export async function listLeagues(): Promise<LeagueSummary[]> {
@@ -566,5 +567,10 @@ export async function getCompletedMatchDecks(
   const { data } = await apiClient.get(
     `/leagues/${leagueId}/weeks/${weekId}/completed-match-decks`,
   );
+  return data;
+}
+
+export async function getLeagueDeckExport(leagueId: number): Promise<DeckExportWeek[]> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/deck-export`);
   return data;
 }
