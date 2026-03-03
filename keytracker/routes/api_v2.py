@@ -10,7 +10,9 @@ from keytracker.schema import (
     Deck,
     Game,
     Log,
+    MatchGame,
     Player,
+    PlayerDeckSelection,
     TcoUsername,
     User,
 )
@@ -29,6 +31,7 @@ from keytracker.utils import (
     DuplicateGameError,
     get_deck_by_id_with_zeal,
     house_stats_to_csv,
+    infer_alliance_pods,
     log_to_game,
     parse_house_stats,
     parse_deck_url,
@@ -328,12 +331,57 @@ def user_detail(username):
     )
 
 
+def _apply_match_game_decks(game: Game, match_game: MatchGame) -> None:
+    """Override game deck fields using recorded match selections."""
+    matchup = match_game.player_matchup
+    if matchup.player1.username == game.winner:
+        winner_deck = match_game.player1_deck
+        loser_deck = match_game.player2_deck
+        winner_player_id = matchup.player1_id
+        loser_player_id = matchup.player2_id
+    else:
+        winner_deck = match_game.player2_deck
+        loser_deck = match_game.player1_deck
+        winner_player_id = matchup.player2_id
+        loser_player_id = matchup.player1_id
+
+    week_id = matchup.week_matchup.week_id if matchup.week_matchup else None
+    standalone_id = matchup.standalone_match_id
+    if winner_deck is None:
+        sel = PlayerDeckSelection.query.filter_by(
+            week_id=week_id,
+            standalone_match_id=standalone_id,
+            user_id=winner_player_id,
+        ).first()
+        winner_deck = sel.deck if sel else None
+    if loser_deck is None:
+        sel = PlayerDeckSelection.query.filter_by(
+            week_id=week_id,
+            standalone_match_id=standalone_id,
+            user_id=loser_player_id,
+        ).first()
+        loser_deck = sel.deck if sel else None
+
+    if winner_deck:
+        game.winner_deck = winner_deck
+        game.winner_deck_id = winner_deck.kf_id
+        game.winner_deck_name = winner_deck.name
+        game.winner_deck_dbid = winner_deck.id
+    if loser_deck:
+        game.loser_deck = loser_deck
+        game.loser_deck_id = loser_deck.kf_id
+        game.loser_deck_name = loser_deck.name
+        game.loser_deck_dbid = loser_deck.id
+
+
 @blueprint.route("/upload/log", methods=["POST"])
 @login_required
 def upload_log():
     data = request.get_json(silent=True) or {}
     log_text = data.get("log", "")
     date_str = data.get("date")
+    is_alliance = bool(data.get("is_alliance", False))
+    match_game_id = data.get("match_game_id")
     if not log_text:
         return jsonify({"error": "Missing 'log' field"}), 400
     if date_str:
@@ -341,15 +389,27 @@ def upload_log():
     else:
         game_start = datetime.datetime.now()
     try:
-        game = log_to_game(log_text)
+        game = log_to_game(log_text, is_alliance=is_alliance)
     except (BadLog, DeckNotFoundError) as exc:
         return jsonify({"error": str(exc)}), 400
+
+    match_game = None
+    if match_game_id:
+        match_game = MatchGame.query.get(match_game_id)
+        if match_game:
+            _apply_match_game_decks(game, match_game)
+
     game.date = game_start
     db.session.add(game)
     db.session.commit()
     db.session.refresh(game)
     game.crucible_game_id = f"UNKNOWN-{game.id}"
     db.session.commit()
+
+    if match_game:
+        match_game.game_id = game.id
+        db.session.commit()
+
     for seq, line in enumerate(log_text.split("\n")):
         log_obj = Log(
             game_id=game.id,
@@ -367,7 +427,20 @@ def upload_log():
         anonymize_game_for_player(game, winner)
     if loser and loser.anonymous:
         anonymize_game_for_player(game, loser)
-    return jsonify({"success": True, "crucible_game_id": game.crucible_game_id}), 201
+
+    pods_data = None
+    if is_alliance and not match_game_id:
+        pods_data = infer_alliance_pods(log_text, game)
+
+    return jsonify(
+        {
+            "success": True,
+            "crucible_game_id": game.crucible_game_id,
+            "winner_deck_id": game.winner_deck_id,
+            "loser_deck_id": game.loser_deck_id,
+            "pods": pods_data,
+        }
+    ), 201
 
 
 @blueprint.route("/upload/simple", methods=["POST"])

@@ -138,6 +138,19 @@ HOUSE_MANUAL_MATCHER = re.compile(
 )
 FORGE_MATCHER = re.compile(r"^(.*) forges the (.*) key *, paying ([0-9]+) Æmber")
 WIN_MATCHER = re.compile(r"\s*([^ ].*) has won the game")
+CONNECTED_MATCHER = re.compile(r"^(.*) has connected to the game server")
+CARD_PLAY_MATCHER = re.compile(r"^(\S+) plays (.+)$")
+ATTACHING_SUFFIX_RE = re.compile(r"\s+attaching\s+it\s+to\s+.+$")
+
+# Log house names may differ from DB house names (e.g. no spaces)
+LOG_HOUSE_NAME_MAP = {
+    "staralliance": "star alliance",
+}
+
+
+def _normalize_log_house(name: str) -> str:
+    return LOG_HOUSE_NAME_MAP.get(name.lower(), name.lower())
+
 
 MV_API_BASE = "https://www.keyforgegame.com/api/decks"
 
@@ -559,78 +572,109 @@ class PlayerInfo:
         return "PlayerInfo(player_name={self.player_name}, deck_name={self.deck_name})"
 
 
-def log_to_game(log: str) -> Game:
+def log_to_game(log: str, is_alliance: bool = False) -> Game:
     lines = log.split("\n")
     current_app.logger.debug(f"Starting to parse log with {len(lines)} lines.")
-    cursor = iter(lines)
     player_infos = {}
-    try:
-        current_app.logger.debug("Looking for players!")
-        count = 1
-        while len(player_infos) < 2:
-            line = next(cursor)
-            count += 1
-            m = PLAYER_DECK_MATCHER.match(line)
-            if m:
-                current_app.logger.debug(
-                    f"Found player {m.group(1)} with deck {m.group(2)}"
-                )
-                player_infos[m.group(1)] = PlayerInfo()
-                player_infos[m.group(1)].deck_name = m.group(2)
-                player_infos[m.group(1)].player_name = m.group(1)
-    except StopIteration:
+    first_player = None
+
+    # Phase 1: pre-scan to find players and first player
+    for line in lines:
+        m = PLAYER_DECK_MATCHER.match(line)
+        if m:
+            name = m.group(1)
+            current_app.logger.debug(f"Found player {name} with deck {m.group(2)}")
+            if name not in player_infos:
+                player_infos[name] = PlayerInfo()
+                player_infos[name].player_name = name
+            player_infos[name].deck_name = m.group(2)
+            continue
+        m = CONNECTED_MATCHER.match(line)
+        if m:
+            name = m.group(1)
+            if name not in player_infos:
+                current_app.logger.debug(f"Found player (connected): {name}")
+                player_infos[name] = PlayerInfo()
+                player_infos[name].player_name = name
+            continue
+        m = FIRST_PLAYER_MATCHER.match(line)
+        if m:
+            name = m.group(1)
+            first_player = name
+            if name not in player_infos:
+                player_infos[name] = PlayerInfo()
+                player_infos[name].player_name = name
+            current_app.logger.debug(f"Found first player: {name}")
+            continue
+        if len(player_infos) >= 2 and first_player:
+            break
+
+    if len(player_infos) < 2:
         raise BadLog("Did not find two players in log")
-    try:
-        while not any(pi.first_player for pi in player_infos.values()):
-            line = next(cursor)
-            m = FIRST_PLAYER_MATCHER.match(line)
-            if m:
-                current_app.logger.debug(f"Found first player: {m.group(1)}")
-                player_infos[m.group(1)].first_player = True
-                first_player = m.group(1)
-    except StopIteration:
+    if first_player is None:
         raise BadLog("Could not determine first player from log")
-    try:
-        while not line.startswith("Key phase"):
-            line = next(cursor)
-            m = SHUFFLE_MATCHER.match(line)
-            if m:
-                current_app.logger.debug("Found first turn")
-                player_infos[m.group(1)].shuffles += 1
-    except StopIteration:
-        raise BadLog("Could not find first turn start")
-    try:
-        while True:
-            line = next(cursor)
-            m = HOUSE_CHOICE_MATCHER.match(line)
-            if m:
-                current_app.logger.debug(f"{m.group(1)} picked {m.group(2)}")
-                player_infos[m.group(1)].house_counts[m.group(2)] += 1
-                continue
-            m = FORGE_MATCHER.match(line)
-            if m:
-                current_app.logger.debug(f"{m.group(1)} forged for {m.group(3)}")
-                player_infos[m.group(1)].keys_forged += 1
-                player_infos[m.group(1)].key_costs.append(int(m.group(3)))
-                continue
-            m = WIN_MATCHER.match(line)
-            if m:
-                current_app.logger.debug(f"{m.group(1)} won")
-                player_infos[m.group(1)].winner = True
-                break
-    except StopIteration:
+
+    # Phase 2: full scan for house choices, forges, and winner
+    for line in lines:
+        m = HOUSE_CHOICE_MATCHER.match(line)
+        if m and m.group(1) in player_infos:
+            current_app.logger.debug(f"{m.group(1)} picked {m.group(2)}")
+            player_infos[m.group(1)].house_counts[m.group(2)] += 1
+            continue
+        m = HOUSE_MANUAL_MATCHER.match(line)
+        if m and m.group(1) in player_infos:
+            player_infos[m.group(1)].house_counts[m.group(2)] += 1
+            continue
+        m = FORGE_MATCHER.match(line)
+        if m and m.group(1) in player_infos:
+            current_app.logger.debug(f"{m.group(1)} forged for {m.group(3)}")
+            player_infos[m.group(1)].keys_forged += 1
+            player_infos[m.group(1)].key_costs.append(int(m.group(3)))
+            continue
+        m = SHUFFLE_MATCHER.match(line)
+        if m and m.group(1) in player_infos:
+            player_infos[m.group(1)].shuffles += 1
+            continue
+        m = WIN_MATCHER.match(line)
+        if m and m.group(1) in player_infos:
+            current_app.logger.debug(f"{m.group(1)} won")
+            player_infos[m.group(1)].winner = True
+
+    if not any(pi.winner for pi in player_infos.values()):
         raise BadLog("Could not determine game winner from log")
+
     for player in player_infos.values():
         if player.winner:
             winner_info = player
         else:
             loser_info = player
+
     winner_name = winner_info.player_name
     loser_name = loser_info.player_name
-    winner_deck = get_deck_by_name_with_zeal(winner_info.deck_name)
-    loser_deck = get_deck_by_name_with_zeal(loser_info.deck_name)
-    current_app.logger.debug(f"Winning deck: {winner_deck.name}")
-    current_app.logger.debug(f"Losing deck: {loser_deck.name}")
+
+    # Resolve decks: use name lookup if available, otherwise infer from cards played
+    winner_deck = None
+    loser_deck = None
+    if winner_info.deck_name and winner_info.deck_name != "UNSET":
+        winner_deck = get_deck_by_name_with_zeal(winner_info.deck_name)
+    else:
+        winner_deck = _infer_deck_from_log(lines, winner_name)
+        if winner_deck:
+            current_app.logger.debug(
+                f"Inferred winner deck: {winner_deck.name}"
+            )
+    if loser_info.deck_name and loser_info.deck_name != "UNSET":
+        loser_deck = get_deck_by_name_with_zeal(loser_info.deck_name)
+    else:
+        loser_deck = _infer_deck_from_log(lines, loser_name)
+        if loser_deck:
+            current_app.logger.debug(f"Inferred loser deck: {loser_deck.name}")
+
+    if winner_deck:
+        current_app.logger.debug(f"Winning deck: {winner_deck.name}")
+    if loser_deck:
+        current_app.logger.debug(f"Losing deck: {loser_deck.name}")
+
     winner = username_to_player(winner_name)
     loser = username_to_player(loser_name)
     first_player_obj = winner if first_player == winner_name else loser
@@ -640,17 +684,143 @@ def log_to_game(log: str) -> Game:
         winner=winner_name,
         winner_id=winner.id,
         winner_deck=winner_deck,
-        winner_deck_id=winner_deck.kf_id,
-        winner_deck_name=winner_deck.name,
+        winner_deck_id=winner_deck.kf_id if winner_deck else None,
+        winner_deck_name=winner_deck.name if winner_deck else None,
         winner_keys=winner_info.keys_forged,
         loser=loser_name,
         loser_id=loser.id,
         loser_deck=loser_deck,
-        loser_deck_id=loser_deck.kf_id,
-        loser_deck_name=loser_deck.name,
+        loser_deck_id=loser_deck.kf_id if loser_deck else None,
+        loser_deck_name=loser_deck.name if loser_deck else None,
         loser_keys=loser_info.keys_forged,
     )
     return game
+
+
+def _extract_cards_played(lines: list, player_name: str) -> set:
+    """Return set of card names played by player_name in the log."""
+    cards = set()
+    for line in lines:
+        m = CARD_PLAY_MATCHER.match(line)
+        if m and m.group(1) == player_name:
+            raw = m.group(2)
+            card = ATTACHING_SUFFIX_RE.sub("", raw).strip()
+            cards.add(card)
+    return cards
+
+
+def _find_deck_by_cards(card_names: set) -> Optional["Deck"]:
+    """Find the unique deck containing all given card names. Returns None if ambiguous."""
+    matching_ids = None
+    for name in card_names:
+        ids = set(
+            row[0]
+            for row in db.session.query(CardInDeck.deck_id)
+            .join(PlatonicCard, CardInDeck.platonic_card_id == PlatonicCard.id)
+            .filter(PlatonicCard.card_title == name)
+            .all()
+        )
+        if not ids:
+            continue  # token or unknown card — skip
+        matching_ids = ids if matching_ids is None else matching_ids & ids
+        if matching_ids is not None and len(matching_ids) == 1:
+            break
+    if matching_ids and len(matching_ids) == 1:
+        return Deck.query.get(next(iter(matching_ids)))
+    return None
+
+
+def _infer_deck_from_log(lines: list, player_name: str) -> Optional["Deck"]:
+    """Infer a player's deck from the cards they played."""
+    card_names = _extract_cards_played(lines, player_name)
+    return _find_deck_by_cards(card_names)
+
+
+def _find_deck_for_pod(card_names: list, house_name: str) -> Optional["Deck"]:
+    """Find the unique deck containing cards from house_name that match card_names."""
+    matching_ids = None
+    for name in card_names:
+        ids = set(
+            row[0]
+            for row in db.session.query(CardInDeck.deck_id)
+            .join(PlatonicCard, CardInDeck.platonic_card_id == PlatonicCard.id)
+            .join(PlatonicCardInSet, CardInDeck.card_in_set_id == PlatonicCardInSet.id)
+            .join(KeyforgeHouse, PlatonicCardInSet.kf_house_id == KeyforgeHouse.id)
+            .filter(
+                PlatonicCard.card_title == name,
+                KeyforgeHouse.name == house_name,
+            )
+            .all()
+        )
+        if not ids:
+            continue
+        matching_ids = ids if matching_ids is None else matching_ids & ids
+        if matching_ids is not None and len(matching_ids) == 1:
+            break
+    if matching_ids and len(matching_ids) == 1:
+        return Deck.query.get(next(iter(matching_ids)))
+    return None
+
+
+def _extract_cards_per_player_house(
+    lines: list, player_names: set
+) -> dict:
+    """Return {player_name: {house_name: [card_name, ...]}} from log lines."""
+    current_house = {}
+    result = {p: defaultdict(list) for p in player_names}
+
+    for line in lines:
+        m = HOUSE_CHOICE_MATCHER.match(line)
+        if m:
+            player = m.group(1)
+            if player in player_names:
+                current_house[player] = _normalize_log_house(m.group(2))
+            continue
+        m = HOUSE_MANUAL_MATCHER.match(line)
+        if m:
+            player = m.group(1)
+            if player in player_names:
+                current_house[player] = _normalize_log_house(m.group(2))
+            continue
+        m = CARD_PLAY_MATCHER.match(line)
+        if m:
+            player = m.group(1)
+            if player in player_names and player in current_house:
+                raw = m.group(2)
+                card = ATTACHING_SUFFIX_RE.sub("", raw).strip()
+                result[player][current_house[player]].append(card)
+    return result
+
+
+def infer_alliance_pods(log: str, game: Game) -> dict:
+    """Infer which pod decks were used by each player in an alliance game.
+
+    Returns:
+        {player_name: [{"house": str, "deck_id": str|None, "deck_name": str|None}, ...]}
+    """
+    lines = log.split("\n")
+    player_names = set()
+    if game.winner:
+        player_names.add(game.winner)
+    if game.loser:
+        player_names.add(game.loser)
+
+    cards_per_player_house = _extract_cards_per_player_house(lines, player_names)
+
+    result = {}
+    for player_name, house_cards in cards_per_player_house.items():
+        pods = []
+        for house_name, cards in house_cards.items():
+            deck = _find_deck_for_pod(cards, house_name)
+            pods.append(
+                {
+                    "house": house_name,
+                    "deck_id": deck.kf_id if deck else None,
+                    "deck_name": deck.name if deck else None,
+                }
+            )
+        result[player_name] = pods
+    return result
 
 
 def add_card_to_deck(card_dict: Dict, deck: Deck):
@@ -1017,12 +1187,11 @@ def get_or_create_house(name: str) -> KeyforgeHouse:
 
 def turn_counts_from_logs(game: Game) -> None:
     counts = defaultdict(dict)
-    players = {}
     for i, log in enumerate(game.logs):
         m = HOUSE_CHOICE_MATCHER.match(log.message)
         if m:
             username = m.group(1)
-            house = m.group(2)
+            house = _normalize_log_house(m.group(2))
             player = username_to_player(username)
             count = counts[username].get(house)
             if count is None:
@@ -1041,7 +1210,7 @@ def turn_counts_from_logs(game: Game) -> None:
             # This should be set from last hit on HOUSE_CHOICE_MATCHER
             count.turns -= 1
             username = n.group(1)
-            house = n.group(2)
+            house = _normalize_log_house(n.group(2))
             player = username_to_player(username)
             count = counts[username].get(house)
             if count is None:
