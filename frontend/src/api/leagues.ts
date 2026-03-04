@@ -574,3 +574,15 @@ export async function getLeagueDeckExport(leagueId: number): Promise<DeckExportW
   const { data } = await apiClient.get(`/leagues/${leagueId}/deck-export`);
   return data;
 }
+
+export interface SignupDiscordStatus {
+  user_id: number;
+  discord_username: string | null;
+  in_guild: boolean | null;
+  error: string | null;
+}
+
+export async function getSignupDiscordCheck(leagueId: number): Promise<SignupDiscordStatus[]> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/signup-discord-check`);
+  return data.results;
+}

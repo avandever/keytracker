@@ -368,6 +368,54 @@ def withdraw(league_id):
     return jsonify({"success": True})
 
 
+@blueprint.route("/<int:league_id>/signup-discord-check")
+@login_required
+def signup_discord_check(league_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    guild_id = current_app.config.get("DISCORD_GUILD_ID", "698635177248948316")
+    results = []
+    for s in league.signups:
+        user = s.user
+        if not user.discord_id:
+            results.append(
+                {
+                    "user_id": user.id,
+                    "discord_username": None,
+                    "in_guild": False,
+                    "error": None,
+                }
+            )
+            continue
+        try:
+            guilds = get_discord_guilds_for_user(user)
+            in_guild = any(g["id"] == guild_id for g in guilds)
+            results.append(
+                {
+                    "user_id": user.id,
+                    "discord_username": user.discord_username,
+                    "in_guild": in_guild,
+                    "error": None,
+                }
+            )
+        except Exception:
+            current_app.logger.exception(
+                "Discord guild check failed for user %s", user.id
+            )
+            results.append(
+                {
+                    "user_id": user.id,
+                    "discord_username": user.discord_username,
+                    "in_guild": None,
+                    "error": "check_failed",
+                }
+            )
+    return jsonify({"results": results})
+
+
 # --- Teams ---
 
 

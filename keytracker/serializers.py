@@ -140,6 +140,7 @@ def serialize_user_brief(user) -> dict:
         "avatar_url": user.avatar_url,
         "is_test_user": user.is_test_user,
         "tco_username": tco[0] if tco else None,
+        "discord_username": user.discord_username,
     }
 
 

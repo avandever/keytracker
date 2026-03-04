@@ -118,6 +118,7 @@ export interface UserBrief {
   avatar_url: string | null;
   is_test_user: boolean;
   tco_username: string | null;
+  discord_username: string | null;
 }
 
 export interface TeamMemberInfo {

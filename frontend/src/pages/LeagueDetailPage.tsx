@@ -23,7 +23,8 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
-import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport } from '../api/leagues';
+import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport, getSignupDiscordCheck } from '../api/leagues';
+import type { SignupDiscordStatus } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
 import type { AdminLogEntry, AlliancePodEntry, CompletedMatchDecks, DeckExportPlayerData, DeckExportWeek, KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
@@ -61,6 +62,8 @@ export default function LeagueDetailPage() {
   const [adminLog, setAdminLog] = useState<AdminLogEntry[] | null>(null);
   const [adminLogLoading, setAdminLogLoading] = useState(false);
   const [completedDecks, setCompletedDecks] = useState<Record<number, CompletedMatchDecks>>({});
+  const [discordStatus, setDiscordStatus] = useState<Record<number, SignupDiscordStatus> | null>(null);
+  const [discordStatusLoading, setDiscordStatusLoading] = useState(false);
 
   const refresh = useCallback(() => {
     if (!leagueId) return;
@@ -814,27 +817,70 @@ export default function LeagueDetailPage() {
   );
 
   const renderSignupsTab = () => (
-    <List dense>
-      {league.signups.map((s) => (
-        <ListItem key={s.id}>
-          <ListItemAvatar>
-            <Avatar src={s.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
-              {s.user.name?.[0]}
-            </Avatar>
-          </ListItemAvatar>
-          <ListItemText
-            primary={
-              s.user.tco_username ? (
-                <MuiLink component={RouterLink} to={`/mui/users/${s.user.tco_username}`}>
-                  {s.user.name}
-                </MuiLink>
-              ) : s.user.name
-            }
-            secondary={`#${s.signup_order} - ${s.status}`}
-          />
-        </ListItem>
-      ))}
-    </List>
+    <>
+      {league.is_admin && (
+        <Box sx={{ mb: 2 }}>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={discordStatusLoading}
+            onClick={() => {
+              setDiscordStatusLoading(true);
+              getSignupDiscordCheck(league.id)
+                .then((results) => {
+                  const map: Record<number, SignupDiscordStatus> = {};
+                  results.forEach((r) => { map[r.user_id] = r; });
+                  setDiscordStatus(map);
+                })
+                .catch(() => {})
+                .finally(() => setDiscordStatusLoading(false));
+            }}
+          >
+            {discordStatusLoading ? 'Checking…' : 'Check Discord Server'}
+          </Button>
+        </Box>
+      )}
+      <List dense>
+        {league.signups.map((s) => {
+          const ds = discordStatus?.[s.user.id];
+          return (
+            <ListItem key={s.id}>
+              <ListItemAvatar>
+                <Avatar src={s.user.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
+                  {s.user.name?.[0]}
+                </Avatar>
+              </ListItemAvatar>
+              <ListItemText
+                primary={
+                  <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                    {s.user.tco_username ? (
+                      <MuiLink component={RouterLink} to={`/mui/users/${s.user.tco_username}`}>
+                        {s.user.name}
+                      </MuiLink>
+                    ) : s.user.name}
+                    {s.user.discord_username ? (
+                      <Chip label={`@${s.user.discord_username}`} size="small" sx={{ height: 18, fontSize: '0.65rem' }} />
+                    ) : (
+                      <Chip label="No Discord" size="small" color="warning" sx={{ height: 18, fontSize: '0.65rem' }} />
+                    )}
+                    {ds && (
+                      ds.error ? (
+                        <Chip label="Check failed" size="small" color="default" sx={{ height: 18, fontSize: '0.65rem' }} />
+                      ) : ds.in_guild ? (
+                        <Chip label="In ABR" size="small" color="success" sx={{ height: 18, fontSize: '0.65rem' }} />
+                      ) : (
+                        <Chip label="Not in ABR" size="small" color="error" sx={{ height: 18, fontSize: '0.65rem' }} />
+                      )
+                    )}
+                  </Box>
+                }
+                secondary={`#${s.signup_order} - ${s.status}`}
+              />
+            </ListItem>
+          );
+        })}
+      </List>
+    </>
   );
 
   return (
