@@ -434,7 +434,7 @@ def get_discord_guilds_for_user(user) -> list:
 @blueprint.route("/discord/link")
 @login_required
 def discord_link():
-    redirect_uri = url_for("auth.discord_callback", _external=True)
+    redirect_uri = _app_base_url().rstrip("/") + url_for("auth.discord_callback")
     return oauth.discord.authorize_redirect(redirect_uri)
 
 
