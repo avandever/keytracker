@@ -978,7 +978,7 @@ export default function LeagueDetailPage() {
       )}
 
       {/* Tabbed content */}
-      {weeks.length > 0 ? (
+      {(weeks.length > 0 || showSignups) ? (
         <>
           <Tabs
             value={activeTab}
