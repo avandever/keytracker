@@ -489,6 +489,11 @@ def load_config() -> Dict[str, str]:
         config["PATREON_CLIENT_ID"] = os.environ.get("PATREON_CLIENT_ID", "")
         config["PATREON_CLIENT_SECRET"] = os.environ.get("PATREON_CLIENT_SECRET", "")
         config["PATREON_CAMPAIGN_ID"] = os.environ.get("PATREON_CAMPAIGN_ID", "")
+        config["DISCORD_CLIENT_ID"] = os.environ.get("DISCORD_CLIENT_ID", "")
+        config["DISCORD_CLIENT_SECRET"] = os.environ.get("DISCORD_CLIENT_SECRET", "")
+        config["DISCORD_GUILD_ID"] = os.environ.get(
+            "DISCORD_GUILD_ID", "698635177248948316"
+        )
         config["MAIL_SERVER"] = os.environ.get("MAIL_SERVER", "")
         config["MAIL_PORT"] = int(os.environ.get("MAIL_PORT", "587"))
         config["MAIL_USE_TLS"] = os.environ.get("MAIL_USE_TLS", "true").lower() in (
@@ -515,6 +520,14 @@ def load_config() -> Dict[str, str]:
                 "client_secret", ""
             )
             config["PATREON_CAMPAIGN_ID"] = cparser["patreon"].get("campaign_id", "")
+        if "discord" in cparser:
+            config["DISCORD_CLIENT_ID"] = cparser["discord"].get("client_id", "")
+            config["DISCORD_CLIENT_SECRET"] = cparser["discord"].get(
+                "client_secret", ""
+            )
+            config["DISCORD_GUILD_ID"] = cparser["discord"].get(
+                "guild_id", "698635177248948316"
+            )
         if "email" in cparser:
             config["MAIL_SERVER"] = cparser["email"].get("mail_server", "")
             config["MAIL_PORT"] = int(cparser["email"].get("mail_port", "587"))

@@ -132,12 +132,14 @@ def serialize_deck_detail(deck: Deck) -> dict:
 
 
 def serialize_user_brief(user) -> dict:
+    tco = [t.username for t in (user.tco_usernames or [])]
     return {
         "id": user.id,
         "name": user.name,
         "email": user.email,
         "avatar_url": user.avatar_url,
         "is_test_user": user.is_test_user,
+        "tco_username": tco[0] if tco else None,
     }
 
 

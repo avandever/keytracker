@@ -8,6 +8,8 @@ export interface AuthUser {
   patreon_tier_title: string | null;
   patreon_linked: boolean;
   google_linked: boolean;
+  discord_linked: boolean;
+  discord_username: string | null;
   dok_api_key: string | null;
   tco_usernames: string[];
   is_league_admin: boolean;
@@ -95,6 +97,8 @@ export interface UserStats {
   games_won: number;
   games_lost: number;
   games: GameSummary[];
+  discord_username: string | null;
+  dok_profile_url: string | null;
 }
 
 export interface MyGamesResponse {
@@ -113,6 +117,7 @@ export interface UserBrief {
   email: string;
   avatar_url: string | null;
   is_test_user: boolean;
+  tco_username: string | null;
 }
 
 export interface TeamMemberInfo {

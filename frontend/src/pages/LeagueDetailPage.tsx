@@ -15,6 +15,7 @@ import {
   ListItemText,
   ListItemAvatar,
   Avatar,
+  Link as MuiLink,
   Tab,
   Tabs,
   Dialog,
@@ -822,7 +823,13 @@ export default function LeagueDetailPage() {
             </Avatar>
           </ListItemAvatar>
           <ListItemText
-            primary={s.user.name}
+            primary={
+              s.user.tco_username ? (
+                <MuiLink component={RouterLink} to={`/mui/users/${s.user.tco_username}`}>
+                  {s.user.name}
+                </MuiLink>
+              ) : s.user.name
+            }
             secondary={`#${s.signup_order} - ${s.status}`}
           />
         </ListItem>

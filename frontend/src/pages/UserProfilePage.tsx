@@ -32,10 +32,23 @@ export default function UserProfilePage() {
   return (
     <Container maxWidth="lg" sx={{ mt: 3 }}>
       <Typography variant="h5" gutterBottom>{user.username}</Typography>
-      <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
+      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
         <Chip label={`${user.games_won} Wins`} color="primary" variant="outlined" />
         <Chip label={`${user.games_lost} Losses`} variant="outlined" />
         <Chip label={`${winRate}% Win Rate`} variant="outlined" />
+        {user.discord_username && (
+          <Chip label={`Discord: @${user.discord_username}`} />
+        )}
+        {user.dok_profile_url && (
+          <Chip
+            component="a"
+            href={user.dok_profile_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            label="DoK Collection"
+            clickable
+          />
+        )}
       </Box>
       <Typography variant="h6" sx={{ mb: 1 }}>Games</Typography>
       {user.games.map((game) => (

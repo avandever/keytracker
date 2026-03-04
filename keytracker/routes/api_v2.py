@@ -63,6 +63,8 @@ def auth_me():
                 "patreon_tier_title": current_user.patreon_tier_title,
                 "patreon_linked": current_user.patreon_id is not None,
                 "google_linked": current_user.google_id is not None,
+                "discord_linked": current_user.discord_id is not None,
+                "discord_username": current_user.discord_username,
                 "dok_api_key": current_user.dok_api_key,
                 "tco_usernames": [t.username for t in current_user.tco_usernames],
                 "is_league_admin": current_user.is_league_admin,
@@ -321,12 +323,16 @@ def user_detail(username):
     )
     if games_won + games_lost == 0:
         return jsonify({"error": "User not found"}), 404
+    tco_entry = TcoUsername.query.filter_by(username=username).first()
+    user_obj = tco_entry.user if tco_entry else None
     return jsonify(
         {
             "username": username,
             "games_won": games_won,
             "games_lost": games_lost,
             "games": [serialize_game_summary(g) for g in user_games],
+            "discord_username": user_obj.discord_username if user_obj else None,
+            "dok_profile_url": user_obj.dok_profile_url if user_obj else None,
         }
     )
 

@@ -82,6 +82,21 @@ export default function AccountPage() {
       setAlert({ severity: 'error', message: googleErrorMap[code] || 'An unknown error occurred.' });
       searchParams.delete('google_error');
       setSearchParams(searchParams, { replace: true });
+    } else if (searchParams.get('discord_linked') === 'true') {
+      setAlert({ severity: 'success', message: 'Discord account linked successfully!' });
+      refresh();
+      searchParams.delete('discord_linked');
+      setSearchParams(searchParams, { replace: true });
+    } else if (searchParams.get('discord_error')) {
+      const discordErrorMap: Record<string, string> = {
+        oauth_failed: 'Failed to connect to Discord. Please try again.',
+        identity_failed: 'Failed to retrieve Discord account info.',
+        already_linked: 'This Discord account is already linked to another user.',
+      };
+      const code = searchParams.get('discord_error') || '';
+      setAlert({ severity: 'error', message: discordErrorMap[code] || 'An unknown error occurred.' });
+      searchParams.delete('discord_error');
+      setSearchParams(searchParams, { replace: true });
     }
   }, [searchParams, setSearchParams, refresh]);
 
@@ -212,6 +227,42 @@ export default function AccountPage() {
             <Chip label="Google Linked" sx={(theme) => ({ mb: 1, bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />
             <Box sx={{ mt: 1 }}>
               <Button variant="outlined" size="small" color="error" href="/auth/google/unlink">
+                Unlink
+              </Button>
+            </Box>
+          </>
+        )}
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="h6" gutterBottom>
+          Discord
+        </Typography>
+
+        {!user.discord_linked ? (
+          <>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              Link your Discord account. Required for league signup.
+            </Typography>
+            <Button
+              variant="contained"
+              href="/auth/discord/link"
+              sx={{
+                backgroundColor: '#5865F2',
+                '&:hover': { backgroundColor: '#4752c4' },
+              }}
+            >
+              Link Discord
+            </Button>
+          </>
+        ) : (
+          <>
+            <Chip
+              label={`@${user.discord_username}`}
+              sx={(theme) => ({ mb: 1, bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })}
+            />
+            <Box sx={{ mt: 1 }}>
+              <Button variant="outlined" size="small" color="error" href="/auth/discord/unlink">
                 Unlink
               </Button>
             </Box>

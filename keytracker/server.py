@@ -138,6 +138,30 @@ with app.app_context():
                             "ALTER TABLE tracker_user ADD COLUMN patreon_linked_at DATETIME"
                         )
                     )
+                if "discord_id" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN discord_id VARCHAR(200) UNIQUE"
+                        )
+                    )
+                if "discord_username" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN discord_username VARCHAR(100)"
+                        )
+                    )
+                if "discord_access_token" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN discord_access_token VARCHAR(500)"
+                        )
+                    )
+                if "discord_refresh_token" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_user ADD COLUMN discord_refresh_token VARCHAR(500)"
+                        )
+                    )
                 if "free_membership" not in columns:
                     conn.execute(
                         text(

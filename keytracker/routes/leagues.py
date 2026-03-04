@@ -50,6 +50,8 @@ from keytracker.serializers import (
     serialize_user_brief,
     serialize_admin_log_entry,
 )
+from flask import current_app
+from keytracker.routes.auth import get_discord_guilds_for_user
 import datetime
 import json
 import logging
@@ -293,6 +295,37 @@ def signup(league_id):
                 }
             ),
             400,
+        )
+    if not effective.discord_id:
+        return (
+            jsonify(
+                {
+                    "error": "You must link your Discord account in account settings before signing up for a league."
+                }
+            ),
+            400,
+        )
+    guild_id = current_app.config.get("DISCORD_GUILD_ID", "698635177248948316")
+    try:
+        guilds = get_discord_guilds_for_user(effective)
+        if not any(g["id"] == guild_id for g in guilds):
+            return (
+                jsonify(
+                    {
+                        "error": "You must be a member of the Ancient Bear Republic Discord server (discord.gg/FQbjafZ8) to sign up for a league."
+                    }
+                ),
+                400,
+            )
+    except Exception:
+        current_app.logger.exception("Discord guild membership check failed")
+        return (
+            jsonify(
+                {
+                    "error": "Could not verify Discord membership. Please try again or contact an admin."
+                }
+            ),
+            500,
         )
     existing = LeagueSignup.query.filter_by(
         league_id=league.id, user_id=effective.id

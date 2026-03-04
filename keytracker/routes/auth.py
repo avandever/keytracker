@@ -41,6 +41,18 @@ def init_oauth(app):
             access_token_url="https://www.patreon.com/api/oauth2/token",
             client_kwargs={"scope": "identity identity.memberships"},
         )
+    if app.config.get("DISCORD_CLIENT_ID"):
+        oauth.register(
+            name="discord",
+            client_id=app.config.get("DISCORD_CLIENT_ID"),
+            client_secret=app.config.get("DISCORD_CLIENT_SECRET"),
+            authorize_url="https://discord.com/oauth2/authorize",
+            access_token_url="https://discord.com/api/oauth2/token",
+            client_kwargs={
+                "scope": "identify guilds",
+                "token_endpoint_auth_method": "client_secret_post",
+            },
+        )
 
 
 def patron_required(f):
@@ -361,6 +373,107 @@ def patreon_refresh():
     db.session.commit()
 
     return redirect("/account?patreon_refreshed=true")
+
+
+# --- Discord OAuth ---
+
+
+def _discord_handle(user_data: dict) -> str:
+    disc = user_data.get("discriminator", "0")
+    uname = user_data["username"]
+    return uname if disc == "0" else f"{uname}#{disc}"
+
+
+def _fetch_discord_user(access_token: str) -> dict:
+    resp = http_requests.get(
+        "https://discord.com/api/users/@me",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _fetch_discord_guilds(access_token: str) -> list:
+    resp = http_requests.get(
+        "https://discord.com/api/users/@me/guilds",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _refresh_discord_token(user) -> str:
+    resp = http_requests.post(
+        "https://discord.com/api/oauth2/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": user.discord_refresh_token,
+            "client_id": current_app.config.get("DISCORD_CLIENT_ID"),
+            "client_secret": current_app.config.get("DISCORD_CLIENT_SECRET"),
+        },
+    )
+    resp.raise_for_status()
+    tokens = resp.json()
+    user.discord_access_token = tokens["access_token"]
+    user.discord_refresh_token = tokens["refresh_token"]
+    db.session.commit()
+    return tokens["access_token"]
+
+
+def get_discord_guilds_for_user(user) -> list:
+    """Fetch user's guilds, refreshing token on 401. Returns list of guild dicts."""
+    try:
+        return _fetch_discord_guilds(user.discord_access_token)
+    except Exception:
+        if user.discord_refresh_token:
+            new_token = _refresh_discord_token(user)
+            return _fetch_discord_guilds(new_token)
+        raise
+
+
+@blueprint.route("/discord/link")
+@login_required
+def discord_link():
+    redirect_uri = url_for("auth.discord_callback", _external=True)
+    return oauth.discord.authorize_redirect(redirect_uri)
+
+
+@blueprint.route("/discord/callback")
+@login_required
+def discord_callback():
+    try:
+        token = oauth.discord.authorize_access_token()
+    except Exception:
+        logger.exception("Failed to exchange Discord OAuth code")
+        return redirect("/account?discord_error=oauth_failed")
+    access_token = token["access_token"]
+    refresh_token = token.get("refresh_token")
+    try:
+        user_data = _fetch_discord_user(access_token)
+    except Exception:
+        logger.exception("Failed to fetch Discord user")
+        return redirect("/account?discord_error=identity_failed")
+    discord_id = user_data["id"]
+    existing = User.query.filter_by(discord_id=discord_id).first()
+    if existing and existing.id != current_user.id:
+        return redirect("/account?discord_error=already_linked")
+    current_user.discord_id = discord_id
+    current_user.discord_username = _discord_handle(user_data)
+    current_user.discord_access_token = access_token
+    current_user.discord_refresh_token = refresh_token
+    db.session.commit()
+    return redirect("/account?discord_linked=true")
+
+
+@blueprint.route("/discord/unlink")
+@login_required
+def discord_unlink():
+    current_user.discord_id = None
+    current_user.discord_username = None
+    current_user.discord_access_token = None
+    current_user.discord_refresh_token = None
+    db.session.commit()
+    return redirect("/account")
 
 
 # --- Email/password authentication ---
