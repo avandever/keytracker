@@ -854,7 +854,7 @@ export default function LeagueDetailPage() {
                 primary={
                   <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
                     {s.user.tco_username ? (
-                      <MuiLink component={RouterLink} to={`/mui/users/${s.user.tco_username}`}>
+                      <MuiLink component={RouterLink} to={`/user/${s.user.tco_username}`}>
                         {s.user.name}
                       </MuiLink>
                     ) : s.user.name}
