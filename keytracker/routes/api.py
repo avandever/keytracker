@@ -10,15 +10,18 @@ from keytracker.schema import (
     db,
     Game,
     Log,
+    Player,
 )
 from keytracker.utils import (
     add_dok_deck_from_dict,
     anonymize_game_for_player,
+    BadLog,
     basic_stats_to_game,
     DuplicateGameError,
     get_deck_by_id_with_zeal,
     log_to_game,
-    get_deck_by_id_with_zeal,
+    turn_counts_from_logs,
+    username_to_player,
     GG_ALLIANCE_RESTRICTED_LIST,
     KEY_CHEATS_STRICT,
 )
@@ -87,13 +90,46 @@ def upload_log():
         game_start = datetime.datetime.now()
     else:
         game_start = datetime.datetime.fromisoformat(date.rstrip("Z"))
+
+    crucible_game_id = request.form.get("crucible_game_id")
+    if crucible_game_id:
+        existing = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
+        if existing:
+            return make_response(
+                jsonify(success=True, duplicate=True, game_id=existing.id), 200
+            )
+
     log_text = request.form["log"]
-    game = log_to_game(log_text)
+    try:
+        game = log_to_game(log_text)
+    except BadLog as e:
+        return make_response(jsonify(success=False, error=str(e)), 400)
+
+    # Override deck resolution with KF UUIDs if provided (more reliable than name lookup)
+    winner_deck_id_param = request.form.get("winner_deck_id")
+    loser_deck_id_param = request.form.get("loser_deck_id")
+    if winner_deck_id_param:
+        try:
+            w_deck = get_deck_by_id_with_zeal(winner_deck_id_param)
+            game.winner_deck = w_deck
+            game.winner_deck_id = w_deck.kf_id
+            game.winner_deck_name = w_deck.name
+        except Exception:
+            pass
+    if loser_deck_id_param:
+        try:
+            l_deck = get_deck_by_id_with_zeal(loser_deck_id_param)
+            game.loser_deck = l_deck
+            game.loser_deck_id = l_deck.kf_id
+            game.loser_deck_name = l_deck.name
+        except Exception:
+            pass
+
     game.date = game_start
     db.session.add(game)
     db.session.commit()
     db.session.refresh(game)
-    game.crucible_game_id = f"UNKNOWN-{game.id}"
+    game.crucible_game_id = crucible_game_id if crucible_game_id else f"UNKNOWN-{game.id}"
     db.session.commit()
     for seq, log in enumerate(log_text.split("\n")):
         log_obj = Log(
@@ -108,11 +144,11 @@ def upload_log():
     turn_counts_from_logs(game)
     winner = Player.query.filter_by(username=game.winner).first()
     loser = Player.query.filter_by(username=game.loser).first()
-    if winner.anonymous:
+    if winner and winner.anonymous:
         anonymize_game_for_player(game, winner)
-    if loser.anonymous:
+    if loser and loser.anonymous:
         anonymize_game_for_player(game, loser)
-    return make_response(jsonify(success=True), 201)
+    return make_response(jsonify(success=True, game_id=game.id), 201)
 
 
 @blueprint.route("/api/simple_upload/v1", methods=["POST"])
