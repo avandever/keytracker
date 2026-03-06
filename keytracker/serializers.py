@@ -31,7 +31,7 @@ def serialize_restricted_list_version(v: AllianceRestrictedListVersion) -> dict:
 def serialize_game_summary(game: Game) -> dict:
     return {
         "crucible_game_id": game.crucible_game_id,
-        "date": game.date.isoformat() if game.date else None,
+        "date": game.date.isoformat() + "Z" if game.date else None,
         "winner": game.winner,
         "loser": game.loser,
         "winner_keys": game.winner_keys,
@@ -51,7 +51,7 @@ def serialize_game_summary(game: Game) -> dict:
 def serialize_log(log: Log) -> dict:
     return {
         "message": log.message,
-        "time": log.time.isoformat() if log.time else None,
+        "time": log.time.isoformat() + "Z" if log.time else None,
         "winner_perspective": log.winner_perspective,
     }
 
@@ -169,7 +169,7 @@ def serialize_signup(signup: LeagueSignup) -> dict:
         "signup_order": signup.signup_order,
         "status": signup.status,
         "signed_up_at": (
-            signup.signed_up_at.isoformat() if signup.signed_up_at else None
+            signup.signed_up_at.isoformat() + "Z" if signup.signed_up_at else None
         ),
     }
 
@@ -189,7 +189,7 @@ def serialize_league_summary(league: League) -> dict:
         "is_test": league.is_test,
         "created_by": serialize_user_brief(league.created_by),
         "signup_count": len(league.signups),
-        "created_at": league.created_at.isoformat() if league.created_at else None,
+        "created_at": league.created_at.isoformat() + "Z" if league.created_at else None,
     }
 
 
@@ -597,7 +597,7 @@ def serialize_standalone_match(match: StandaloneMatch, current_user_id=None) -> 
         "sealed_pools_generated": match.sealed_pools_generated,
         "no_keycheat": match.no_keycheat,
         "allowed_sets": match.allowed_sets,
-        "created_at": match.created_at.isoformat() if match.created_at else None,
+        "created_at": match.created_at.isoformat() + "Z" if match.created_at else None,
         "matchup": serialize_player_matchup(match.matchup) if match.matchup else None,
         "creator_selections": [serialize_deck_selection(s) for s in creator_selections],
         "opponent_selections": [
@@ -622,7 +622,7 @@ def serialize_admin_log_entry(entry: LeagueAdminLog) -> dict:
         "user": serialize_user_brief(entry.user),
         "action_type": entry.action_type,
         "details": entry.details,
-        "created_at": entry.created_at.isoformat() if entry.created_at else None,
+        "created_at": entry.created_at.isoformat() + "Z" if entry.created_at else None,
     }
 
 
@@ -640,5 +640,5 @@ def serialize_match_game(game: MatchGame) -> dict:
         "player2_deck_id": game.player2_deck_id,
         "reported_by_id": game.reported_by_id,
         "game_id": game.game_id,
-        "created_at": game.created_at.isoformat() if game.created_at else None,
+        "created_at": game.created_at.isoformat() + "Z" if game.created_at else None,
     }

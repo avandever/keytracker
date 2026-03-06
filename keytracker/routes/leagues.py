@@ -712,7 +712,7 @@ def compute_draft_state(league):
                 "picked_user": (
                     serialize_user_brief(p.picked_user) if p.picked_user else None
                 ),
-                "picked_at": p.picked_at.isoformat() if p.picked_at else None,
+                "picked_at": p.picked_at.isoformat() + "Z" if p.picked_at else None,
             }
         )
         picked_user_ids.add(p.picked_user_id)
