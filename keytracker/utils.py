@@ -669,7 +669,13 @@ def log_to_game(log: str, is_alliance: bool = False) -> Game:
     winner_deck = None
     loser_deck = None
     if winner_info.deck_name and winner_info.deck_name != "UNSET":
-        winner_deck = get_deck_by_name_with_zeal(winner_info.deck_name)
+        try:
+            winner_deck = get_deck_by_name_with_zeal(winner_info.deck_name)
+        except Exception:
+            current_app.logger.debug(
+                f"Could not resolve winner deck by name: {winner_info.deck_name}"
+            )
+            winner_deck = _infer_deck_from_log(lines, winner_name)
     else:
         winner_deck = _infer_deck_from_log(lines, winner_name)
         if winner_deck:
@@ -677,7 +683,13 @@ def log_to_game(log: str, is_alliance: bool = False) -> Game:
                 f"Inferred winner deck: {winner_deck.name}"
             )
     if loser_info.deck_name and loser_info.deck_name != "UNSET":
-        loser_deck = get_deck_by_name_with_zeal(loser_info.deck_name)
+        try:
+            loser_deck = get_deck_by_name_with_zeal(loser_info.deck_name)
+        except Exception:
+            current_app.logger.debug(
+                f"Could not resolve loser deck by name: {loser_info.deck_name}"
+            )
+            loser_deck = _infer_deck_from_log(lines, loser_name)
     else:
         loser_deck = _infer_deck_from_log(lines, loser_name)
         if loser_deck:
