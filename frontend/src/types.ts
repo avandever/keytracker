@@ -25,6 +25,34 @@ export interface TurnTimingEntry {
   timestamp_ms: number;
 }
 
+export interface KeyForgeEvent {
+  turn: number;
+  player: string;
+  key_color: string;
+  amber_paid: number;
+  timestamp_ms: number;
+}
+
+export interface HouseTimingStat {
+  house: string;
+  avg_seconds: number;
+  turn_count: number;
+}
+
+export interface TimingStats {
+  avg_turn_seconds: number;
+  house_breakdown: HouseTimingStat[];
+  turn_count: number;
+  games_sampled: number;
+}
+
+export interface TimingLeaderboardEntry {
+  username: string;
+  avg_turn_seconds: number;
+  turn_count: number;
+  games_sampled: number;
+}
+
 export interface ExtendedGameData {
   submitter_username: string;
   extension_version: string | null;
@@ -32,6 +60,8 @@ export interface ExtendedGameData {
   player2_username: string | null;
   player2_extension_version: string | null;
   player2_turn_timing: TurnTimingEntry[];
+  key_events: KeyForgeEvent[];
+  player2_key_events: KeyForgeEvent[];
   both_perspectives: boolean;
 }
 
@@ -118,6 +148,7 @@ export interface UserStats {
   games: GameSummary[];
   discord_username: string | null;
   dok_profile_url: string | null;
+  timing_stats: TimingStats | null;
 }
 
 export interface MyGamesResponse {

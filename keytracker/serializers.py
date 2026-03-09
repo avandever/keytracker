@@ -33,6 +33,8 @@ def serialize_extended_data(ext: ExtendedGameData) -> dict:
         "player2_username": ext.player2_username,
         "player2_extension_version": ext.player2_extension_version,
         "player2_turn_timing": ext.player2_turn_timing or [],
+        "key_events": ext.key_events or [],
+        "player2_key_events": ext.player2_key_events or [],
         "both_perspectives": ext.both_perspectives,
     }
 

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Container, Typography, CircularProgress, Alert, Box, Chip } from '@mui/material';
+import {
+  Container, Typography, CircularProgress, Alert, Box, Chip,
+  Table, TableHead, TableBody, TableRow, TableCell, LinearProgress,
+} from '@mui/material';
 import { getUser } from '../api/users';
 import type { UserStats } from '../types';
 import GameListing from '../components/GameListing';
@@ -50,6 +53,46 @@ export default function UserProfilePage() {
           />
         )}
       </Box>
+      {user.timing_stats && (() => {
+        const ts = user.timing_stats;
+        const maxAvg = Math.max(...ts.house_breakdown.map((h) => h.avg_seconds), 1);
+        return (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>Turn Timing</Typography>
+            <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+              <Chip label={`Avg ${ts.avg_turn_seconds.toFixed(1)}s / turn`} variant="outlined" />
+              <Chip label={`${ts.turn_count} turns sampled`} variant="outlined" />
+              <Chip label={`${ts.games_sampled} games`} variant="outlined" />
+            </Box>
+            <Table size="small" sx={{ maxWidth: 480 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>House</TableCell>
+                  <TableCell align="right">Avg (s)</TableCell>
+                  <TableCell sx={{ minWidth: 120 }}>Speed</TableCell>
+                  <TableCell align="right">Turns</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {ts.house_breakdown.map((hb) => (
+                  <TableRow key={hb.house}>
+                    <TableCell>{hb.house}</TableCell>
+                    <TableCell align="right">{hb.avg_seconds.toFixed(1)}</TableCell>
+                    <TableCell>
+                      <LinearProgress
+                        variant="determinate"
+                        value={(hb.avg_seconds / maxAvg) * 100}
+                        sx={{ height: 8, borderRadius: 4 }}
+                      />
+                    </TableCell>
+                    <TableCell align="right">{hb.turn_count}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
+        );
+      })()}
       <Typography variant="h6" sx={{ mb: 1 }}>Games</Typography>
       {user.games.map((game) => (
         <GameListing key={game.crucible_game_id} game={game} highlightUser={username} />

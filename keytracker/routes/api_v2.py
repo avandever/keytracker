@@ -309,6 +309,95 @@ def deck_detail(deck_id):
     return jsonify(data)
 
 
+def compute_timing_stats(turn_timing: list) -> dict | None:
+    """Compute average turn duration stats from a turn_timing list.
+
+    Filters out turns shorter than 1s or longer than 600s (10 min) as outliers.
+    Returns None if there are no valid turns.
+    """
+    if not turn_timing:
+        return None
+    house_totals: dict[str, dict] = {}
+    total_seconds = 0.0
+    total_count = 0
+    for i in range(len(turn_timing) - 1):
+        curr = turn_timing[i]
+        nxt = turn_timing[i + 1]
+        delta_ms = nxt.get("timestamp_ms", 0) - curr.get("timestamp_ms", 0)
+        duration_s = delta_ms / 1000.0
+        if duration_s < 1 or duration_s > 600:
+            continue
+        house = curr.get("house", "Unknown")
+        if house not in house_totals:
+            house_totals[house] = {"total_s": 0.0, "count": 0}
+        house_totals[house]["total_s"] += duration_s
+        house_totals[house]["count"] += 1
+        total_seconds += duration_s
+        total_count += 1
+    if total_count == 0:
+        return None
+    house_breakdown = [
+        {
+            "house": h,
+            "avg_seconds": v["total_s"] / v["count"],
+            "turn_count": v["count"],
+        }
+        for h, v in sorted(house_totals.items())
+    ]
+    return {
+        "avg_turn_seconds": total_seconds / total_count,
+        "house_breakdown": house_breakdown,
+        "turn_count": total_count,
+    }
+
+
+def compute_user_timing_stats(username: str) -> dict | None:
+    """Aggregate timing stats across all ExtendedGameData rows for a user."""
+    MIN_TURNS = 5
+    rows = ExtendedGameData.query.filter(
+        (ExtendedGameData.submitter_username == username)
+        | (ExtendedGameData.player2_username == username)
+    ).all()
+    total_seconds = 0.0
+    total_count = 0
+    house_totals: dict[str, dict] = {}
+    games_sampled = 0
+    for row in rows:
+        if row.submitter_username == username:
+            timing = row.turn_timing
+        else:
+            timing = row.player2_turn_timing
+        stats = compute_timing_stats(timing or [])
+        if not stats:
+            continue
+        games_sampled += 1
+        n = stats["turn_count"]
+        total_seconds += stats["avg_turn_seconds"] * n
+        total_count += n
+        for hb in stats["house_breakdown"]:
+            h = hb["house"]
+            if h not in house_totals:
+                house_totals[h] = {"total_s": 0.0, "count": 0}
+            house_totals[h]["total_s"] += hb["avg_seconds"] * hb["turn_count"]
+            house_totals[h]["count"] += hb["turn_count"]
+    if total_count < MIN_TURNS:
+        return None
+    house_breakdown = [
+        {
+            "house": h,
+            "avg_seconds": v["total_s"] / v["count"],
+            "turn_count": v["count"],
+        }
+        for h, v in sorted(house_totals.items())
+    ]
+    return {
+        "avg_turn_seconds": total_seconds / total_count,
+        "house_breakdown": house_breakdown,
+        "turn_count": total_count,
+        "games_sampled": games_sampled,
+    }
+
+
 @blueprint.route("/users/<username>")
 def user_detail(username):
     games_won = Game.query.filter(Game.winner == username).count()
@@ -335,6 +424,7 @@ def user_detail(username):
             "games": [serialize_game_summary(g) for g in user_games],
             "discord_username": user_obj.discord_username if user_obj else None,
             "dok_profile_url": user_obj.dok_profile_url if user_obj else None,
+            "timing_stats": compute_user_timing_stats(username),
         }
     )
 
@@ -657,6 +747,7 @@ def upload_extended():
         return jsonify({"error": "Missing crucible_game_id"}), 400
     submitter_username = (data.get("submitter_username") or "").strip()
     turn_timing = data.get("turn_timing")
+    key_events = data.get("key_events")
     extension_version = (data.get("extension_version") or "").strip() or None
 
     game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
@@ -668,6 +759,8 @@ def upload_extended():
             # Same player re-submitting — update player1 data
             if turn_timing is not None:
                 existing.turn_timing = turn_timing
+            if key_events is not None:
+                existing.key_events = key_events
             if extension_version:
                 existing.extension_version = extension_version
         else:
@@ -675,6 +768,8 @@ def upload_extended():
             existing.player2_username = submitter_username
             if turn_timing is not None:
                 existing.player2_turn_timing = turn_timing
+            if key_events is not None:
+                existing.player2_key_events = key_events
             if extension_version:
                 existing.player2_extension_version = extension_version
         existing.updated_at = datetime.datetime.utcnow()
@@ -688,6 +783,7 @@ def upload_extended():
                 submitter_username=submitter_username,
                 extension_version=extension_version,
                 turn_timing=turn_timing,
+                key_events=key_events,
             )
         )
     db.session.commit()
@@ -701,3 +797,46 @@ def get_extended(crucible_game_id):
         jsonify({"extended_data": serialize_extended_data(ext) if ext else None}),
         200,
     )
+
+
+@blueprint.route("/timing-leaderboard", methods=["GET"])
+def timing_leaderboard():
+    MIN_TURNS = 20
+    rows = ExtendedGameData.query.all()
+
+    # Accumulate per-username totals
+    user_totals: dict[str, dict] = {}
+
+    def _accumulate(uname: str, timing: list | None) -> None:
+        if not uname or not timing:
+            return
+        stats = compute_timing_stats(timing)
+        if not stats:
+            return
+        if uname not in user_totals:
+            user_totals[uname] = {"total_s": 0.0, "count": 0, "games": 0}
+        n = stats["turn_count"]
+        user_totals[uname]["total_s"] += stats["avg_turn_seconds"] * n
+        user_totals[uname]["count"] += n
+        user_totals[uname]["games"] += 1
+
+    for row in rows:
+        _accumulate(row.submitter_username, row.turn_timing)
+        if row.player2_username and row.player2_username != row.submitter_username:
+            _accumulate(row.player2_username, row.player2_turn_timing)
+
+    result = []
+    for uname, totals in user_totals.items():
+        if totals["count"] < MIN_TURNS:
+            continue
+        result.append(
+            {
+                "username": uname,
+                "avg_turn_seconds": totals["total_s"] / totals["count"],
+                "turn_count": totals["count"],
+                "games_sampled": totals["games"],
+            }
+        )
+
+    result.sort(key=lambda x: x["avg_turn_seconds"])
+    return jsonify(result)
