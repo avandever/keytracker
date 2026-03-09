@@ -1619,6 +1619,9 @@ class ExtendedGameData(db.Model):
     submitter_username = db.Column(db.String(100), nullable=False, default="")
     extension_version = db.Column(db.String(20), nullable=True)
     turn_timing = db.Column(db.JSON, nullable=True)
+    player2_username = db.Column(db.String(100), nullable=True)
+    player2_extension_version = db.Column(db.String(20), nullable=True)
+    player2_turn_timing = db.Column(db.JSON, nullable=True)
     created_at = db.Column(
         db.DateTime, nullable=False, default=datetime.datetime.utcnow
     )
@@ -1626,3 +1629,7 @@ class ExtendedGameData(db.Model):
         db.DateTime, nullable=False, default=datetime.datetime.utcnow
     )
     game = db.relationship("Game", backref=db.backref("extended_data", uselist=False))
+
+    @property
+    def both_perspectives(self) -> bool:
+        return self.player2_username is not None

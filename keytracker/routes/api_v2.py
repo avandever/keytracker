@@ -20,6 +20,7 @@ from keytracker.schema import (
 from keytracker.serializers import (
     serialize_deck_detail,
     serialize_deck_summary,
+    serialize_extended_data,
     serialize_game_detail,
     serialize_game_summary,
 )
@@ -663,8 +664,19 @@ def upload_extended():
         crucible_game_id=crucible_game_id
     ).first()
     if existing:
-        if turn_timing is not None:
-            existing.turn_timing = turn_timing
+        if not submitter_username or submitter_username == existing.submitter_username:
+            # Same player re-submitting — update player1 data
+            if turn_timing is not None:
+                existing.turn_timing = turn_timing
+            if extension_version:
+                existing.extension_version = extension_version
+        else:
+            # Different player — fill player2 slot (overwrite if they re-submit)
+            existing.player2_username = submitter_username
+            if turn_timing is not None:
+                existing.player2_turn_timing = turn_timing
+            if extension_version:
+                existing.player2_extension_version = extension_version
         existing.updated_at = datetime.datetime.utcnow()
         if game and not existing.game_id:
             existing.game_id = game.id
@@ -680,3 +692,12 @@ def upload_extended():
         )
     db.session.commit()
     return jsonify({"success": True}), 201
+
+
+@blueprint.route("/games/<crucible_game_id>/extended", methods=["GET"])
+def get_extended(crucible_game_id):
+    ext = ExtendedGameData.query.filter_by(crucible_game_id=crucible_game_id).first()
+    return (
+        jsonify({"extended_data": serialize_extended_data(ext) if ext else None}),
+        200,
+    )

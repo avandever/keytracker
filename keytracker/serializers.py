@@ -1,5 +1,6 @@
 from keytracker.schema import (
     Deck,
+    ExtendedGameData,
     Game,
     Log,
     HouseTurnCounts,
@@ -24,6 +25,18 @@ from keytracker.schema import StandaloneMatch, db
 import json
 
 
+def serialize_extended_data(ext: ExtendedGameData) -> dict:
+    return {
+        "submitter_username": ext.submitter_username,
+        "extension_version": ext.extension_version,
+        "turn_timing": ext.turn_timing or [],
+        "player2_username": ext.player2_username,
+        "player2_extension_version": ext.player2_extension_version,
+        "player2_turn_timing": ext.player2_turn_timing or [],
+        "both_perspectives": ext.both_perspectives,
+    }
+
+
 def serialize_restricted_list_version(v: AllianceRestrictedListVersion) -> dict:
     return {"id": v.id, "version": v.version}
 
@@ -45,6 +58,7 @@ def serialize_game_summary(game: Game) -> dict:
         "winner_aerc_score": game.winner_deck.aerc_score if game.winner_deck else None,
         "loser_aerc_score": game.loser_deck.aerc_score if game.loser_deck else None,
         "first_player": game.insist_first_player,
+        "has_extended_data": game.extended_data is not None,
     }
 
 
@@ -71,6 +85,9 @@ def serialize_game_detail(game: Game) -> dict:
     data["house_turn_counts"] = [
         serialize_house_turn_count(htc) for htc in game.house_turn_counts
     ]
+    data["extended_data"] = (
+        serialize_extended_data(game.extended_data) if game.extended_data else None
+    )
     return data
 
 

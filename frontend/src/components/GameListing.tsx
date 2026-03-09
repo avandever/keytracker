@@ -99,6 +99,9 @@ export default function GameListing({ game, highlightUser, highlightDeckId }: Pr
             color="primary"
             variant="outlined"
           />
+          {game.has_extended_data && (
+            <Chip size="small" label="Timed" variant="outlined" color="info" />
+          )}
           <Typography
             component={RouterLink}
             to={`/game/${game.crucible_game_id}`}

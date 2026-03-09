@@ -14,12 +14,75 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Tooltip,
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { getGame } from '../api/games';
-import type { GameDetail } from '../types';
+import type { GameDetail, TurnTimingEntry } from '../types';
 import { alpha } from '@mui/material/styles';
 import GameLogEntry from '../components/GameLogEntry';
+
+const HOUSE_COLORS: Record<string, string> = {
+  Brobnar: '#e57373',
+  Dis: '#ba68c8',
+  Ekwidon: '#f48fb1',
+  Geistoid: '#b0bec5',
+  Logos: '#64b5f6',
+  Mars: '#81c784',
+  Sanctum: '#fff176',
+  Saurian: '#ffb74d',
+  Shadows: '#90a4ae',
+  'Star Alliance': '#4dd0e1',
+  Unfathomable: '#7986cb',
+  Untamed: '#a5d6a7',
+};
+
+function getHouseColor(house: string): string {
+  return HOUSE_COLORS[house] ?? '#bdbdbd';
+}
+
+function TurnTimeline({ entries }: { entries: TurnTimingEntry[] }) {
+  const sorted = [...entries].sort((a, b) => a.turn - b.turn);
+  return (
+    <Box sx={{ display: 'flex', gap: 0.5, overflowX: 'auto', pb: 1 }}>
+      {sorted.map((entry, i) => {
+        const next = sorted[i + 1];
+        const durationMs = next ? next.timestamp_ms - entry.timestamp_ms : null;
+        const durationSec = durationMs !== null ? Math.round(durationMs / 1000) : null;
+        const houseColor = getHouseColor(entry.house);
+        const tooltipTitle = `${entry.player} — ${entry.house}, Turn ${entry.turn}${durationSec !== null ? `, ${durationSec}s` : ''}`;
+        return (
+          <Tooltip key={i} title={tooltipTitle} arrow>
+            <Box
+              sx={{
+                minWidth: 52,
+                width: 52,
+                bgcolor: houseColor,
+                borderRadius: 1,
+                p: 0.5,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                cursor: 'default',
+                opacity: i % 2 === 0 ? 1 : 0.7,
+              }}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 'bold', lineHeight: 1.2, color: 'rgba(0,0,0,0.7)' }}>
+                T{entry.turn}
+              </Typography>
+              <Typography variant="caption" sx={{ lineHeight: 1.2, fontSize: '0.65rem', color: 'rgba(0,0,0,0.7)', textAlign: 'center' }}>
+                {entry.house.slice(0, 5)}
+              </Typography>
+              <Typography variant="caption" sx={{ lineHeight: 1.2, fontSize: '0.65rem', color: 'rgba(0,0,0,0.6)' }}>
+                {durationSec !== null ? `${durationSec}s` : '—'}
+              </Typography>
+            </Box>
+          </Tooltip>
+        );
+      })}
+    </Box>
+  );
+}
 
 export default function GameDetailPage() {
   const { crucibleGameId } = useParams<{ crucibleGameId: string }>();
@@ -110,6 +173,31 @@ export default function GameDetailPage() {
           </TableContainer>
         </>
       )}
+
+      {game.extended_data && game.extended_data.turn_timing.length > 0 && (() => {
+        const ext = game.extended_data;
+        const p1 = ext.turn_timing;
+        const p2 = ext.player2_turn_timing;
+        // Merge by turn number, preferring the longer array; deduplicate by turn
+        const base = p1.length >= p2.length ? p1 : p2;
+        const other = p1.length >= p2.length ? p2 : p1;
+        const byTurn = new Map<number, TurnTimingEntry>(base.map((e) => [e.turn, e]));
+        other.forEach((e) => { if (!byTurn.has(e.turn)) byTurn.set(e.turn, e); });
+        const merged = Array.from(byTurn.values());
+        return (
+          <>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Turn Timing
+              {ext.both_perspectives && (
+                <Chip size="small" label="Both perspectives" color="info" variant="outlined" sx={{ ml: 1 }} />
+              )}
+            </Typography>
+            <Paper variant="outlined" sx={{ p: 1, mb: 3 }}>
+              <TurnTimeline entries={merged} />
+            </Paper>
+          </>
+        );
+      })()}
 
       <Typography variant="h6" sx={{ mb: 1 }}>Game Log</Typography>
       <Paper variant="outlined" sx={{ maxHeight: 600, overflow: 'auto', p: 1 }}>

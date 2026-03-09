@@ -18,6 +18,23 @@ export interface AuthUser {
   timezone: string | null;
 }
 
+export interface TurnTimingEntry {
+  turn: number;
+  player: string;
+  house: string;
+  timestamp_ms: number;
+}
+
+export interface ExtendedGameData {
+  submitter_username: string;
+  extension_version: string | null;
+  turn_timing: TurnTimingEntry[];
+  player2_username: string | null;
+  player2_extension_version: string | null;
+  player2_turn_timing: TurnTimingEntry[];
+  both_perspectives: boolean;
+}
+
 export interface GameSummary {
   crucible_game_id: string;
   date: string | null;
@@ -34,6 +51,7 @@ export interface GameSummary {
   winner_aerc_score: number | null;
   loser_aerc_score: number | null;
   first_player: string;
+  has_extended_data: boolean;
 }
 
 export interface LogEntry {
@@ -52,6 +70,7 @@ export interface HouseTurnCount {
 export interface GameDetail extends GameSummary {
   logs: LogEntry[];
   house_turn_counts: HouseTurnCount[];
+  extended_data: ExtendedGameData | null;
 }
 
 export interface DeckSummary {
