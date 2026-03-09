@@ -1604,3 +1604,25 @@ class LeagueAdminLog(db.Model):
     league = db.relationship("League")
     week = db.relationship("LeagueWeek")
     user = db.relationship("User")
+
+
+class ExtendedGameData(db.Model):
+    __tablename__ = "extended_game_data"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    crucible_game_id = db.Column(db.String(36), unique=True, nullable=False, index=True)
+    game_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_game.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    submitter_username = db.Column(db.String(100), nullable=False, default="")
+    extension_version = db.Column(db.String(20), nullable=True)
+    turn_timing = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    game = db.relationship("Game", backref=db.backref("extended_data", uselist=False))

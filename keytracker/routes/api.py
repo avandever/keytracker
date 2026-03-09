@@ -8,6 +8,7 @@ from flask import (
 from sqlalchemy import or_
 from keytracker.schema import (
     db,
+    ExtendedGameData,
     Game,
     Log,
     Player,
@@ -129,7 +130,9 @@ def upload_log():
     db.session.add(game)
     db.session.commit()
     db.session.refresh(game)
-    game.crucible_game_id = crucible_game_id if crucible_game_id else f"UNKNOWN-{game.id}"
+    game.crucible_game_id = (
+        crucible_game_id if crucible_game_id else f"UNKNOWN-{game.id}"
+    )
     db.session.commit()
     for seq, log in enumerate(log_text.split("\n")):
         log_obj = Log(
@@ -148,6 +151,14 @@ def upload_log():
         anonymize_game_for_player(game, winner)
     if loser and loser.anonymous:
         anonymize_game_for_player(game, loser)
+    # Link any ExtendedGameData that arrived before the log was submitted
+    if game.crucible_game_id and not game.crucible_game_id.startswith("UNKNOWN-"):
+        ext = ExtendedGameData.query.filter_by(
+            crucible_game_id=game.crucible_game_id
+        ).first()
+        if ext and not ext.game_id:
+            ext.game_id = game.id
+            db.session.commit()
     return make_response(jsonify(success=True, game_id=game.id), 201)
 
 

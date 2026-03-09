@@ -679,9 +679,7 @@ def log_to_game(log: str, is_alliance: bool = False) -> Game:
     else:
         winner_deck = _infer_deck_from_log(lines, winner_name)
         if winner_deck:
-            current_app.logger.debug(
-                f"Inferred winner deck: {winner_deck.name}"
-            )
+            current_app.logger.debug(f"Inferred winner deck: {winner_deck.name}")
     if loser_info.deck_name and loser_info.deck_name != "UNSET":
         try:
             loser_deck = get_deck_by_name_with_zeal(loser_info.deck_name)
@@ -787,9 +785,7 @@ def _find_deck_for_pod(card_names: list, house_name: str) -> Optional["Deck"]:
     return None
 
 
-def _extract_cards_per_player_house(
-    lines: list, player_names: set
-) -> dict:
+def _extract_cards_per_player_house(lines: list, player_names: set) -> dict:
     """Return {player_name: {house_name: [card_name, ...]}} from log lines."""
     current_house = {}
     result = {p: defaultdict(list) for p in player_names}

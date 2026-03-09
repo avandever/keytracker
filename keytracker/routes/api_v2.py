@@ -8,6 +8,7 @@ from flask_login import current_user, login_required
 from keytracker.schema import (
     db,
     Deck,
+    ExtendedGameData,
     Game,
     Log,
     MatchGame,
@@ -438,15 +439,18 @@ def upload_log():
     if is_alliance and not match_game_id:
         pods_data = infer_alliance_pods(log_text, game)
 
-    return jsonify(
-        {
-            "success": True,
-            "crucible_game_id": game.crucible_game_id,
-            "winner_deck_id": game.winner_deck_id,
-            "loser_deck_id": game.loser_deck_id,
-            "pods": pods_data,
-        }
-    ), 201
+    return (
+        jsonify(
+            {
+                "success": True,
+                "crucible_game_id": game.crucible_game_id,
+                "winner_deck_id": game.winner_deck_id,
+                "loser_deck_id": game.loser_deck_id,
+                "pods": pods_data,
+            }
+        ),
+        201,
+    )
 
 
 @blueprint.route("/upload/simple", methods=["POST"])
@@ -642,3 +646,37 @@ def import_dok_alliance():
         return jsonify({"error": f"Failed to fetch alliance deck: {str(e)}"}), 400
 
     return jsonify(result)
+
+
+@blueprint.route("/upload/extended", methods=["POST"])
+def upload_extended():
+    data = request.get_json(silent=True) or {}
+    crucible_game_id = (data.get("crucible_game_id") or "").strip()
+    if not crucible_game_id:
+        return jsonify({"error": "Missing crucible_game_id"}), 400
+    submitter_username = (data.get("submitter_username") or "").strip()
+    turn_timing = data.get("turn_timing")
+    extension_version = (data.get("extension_version") or "").strip() or None
+
+    game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
+    existing = ExtendedGameData.query.filter_by(
+        crucible_game_id=crucible_game_id
+    ).first()
+    if existing:
+        if turn_timing is not None:
+            existing.turn_timing = turn_timing
+        existing.updated_at = datetime.datetime.utcnow()
+        if game and not existing.game_id:
+            existing.game_id = game.id
+    else:
+        db.session.add(
+            ExtendedGameData(
+                crucible_game_id=crucible_game_id,
+                game_id=game.id if game else None,
+                submitter_username=submitter_username,
+                extension_version=extension_version,
+                turn_timing=turn_timing,
+            )
+        )
+    db.session.commit()
+    return jsonify({"success": True}), 201
