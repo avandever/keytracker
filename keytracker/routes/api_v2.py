@@ -306,6 +306,7 @@ def deck_detail(deck_id):
     data["games_won"] = games_won
     data["games_lost"] = games_lost
     data["games"] = [serialize_game_summary(g) for g in deck_games]
+    data["key_stats"] = compute_deck_key_stats(deck)
     return jsonify(data)
 
 
@@ -398,6 +399,125 @@ def compute_user_timing_stats(username: str) -> dict | None:
     }
 
 
+def _get_key_ordinals(all_events: list, username: str) -> list:
+    """Return per-key forging data for a player, sorted by turn (key 1, 2, 3)."""
+    player_events = [e for e in all_events if e.get("player") == username]
+    player_events.sort(key=lambda e: e.get("turn", 0))
+    return [{"turn": e["turn"], "amber_paid": e.get("amber_paid", 0)} for e in player_events]
+
+
+def _merge_key_events(ext: ExtendedGameData) -> list:
+    """Merge p1 and p2 key events, deduplicating by (turn, player, key_color)."""
+    seen = set()
+    merged = []
+    for e in (ext.key_events or []) + (ext.player2_key_events or []):
+        key = (e.get("turn"), e.get("player"), e.get("key_color"))
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(e)
+    return merged
+
+
+def compute_deck_key_stats(deck) -> dict | None:
+    """Aggregate key forging stats per slot (key 1, 2, 3) for a deck."""
+    MIN_SAMPLES = 3
+    winner_games = Game.query.filter_by(winner_deck_dbid=deck.id).all()
+    loser_games = Game.query.filter_by(loser_deck_dbid=deck.id).all()
+
+    slot_totals = [
+        {"turn_total": 0.0, "amber_total": 0.0, "count": 0} for _ in range(3)
+    ]
+    total_keys = 0
+    games_sampled = 0
+
+    for game, player in [(g, g.winner) for g in winner_games] + [
+        (g, g.loser) for g in loser_games
+    ]:
+        if not game.crucible_game_id:
+            continue
+        ext = ExtendedGameData.query.filter_by(
+            crucible_game_id=game.crucible_game_id
+        ).first()
+        if not ext:
+            continue
+        ordinals = _get_key_ordinals(_merge_key_events(ext), player)
+        if not ordinals:
+            continue
+        games_sampled += 1
+        for i, ord_data in enumerate(ordinals[:3]):
+            slot_totals[i]["turn_total"] += ord_data["turn"]
+            slot_totals[i]["amber_total"] += ord_data["amber_paid"]
+            slot_totals[i]["count"] += 1
+            total_keys += 1
+
+    if total_keys == 0:
+        return None
+
+    def slot_stat(s):
+        if s["count"] < MIN_SAMPLES:
+            return None
+        return {
+            "avg_turn": s["turn_total"] / s["count"],
+            "avg_amber": s["amber_total"] / s["count"],
+            "count": s["count"],
+        }
+
+    return {
+        "key_1": slot_stat(slot_totals[0]),
+        "key_2": slot_stat(slot_totals[1]),
+        "key_3": slot_stat(slot_totals[2]),
+        "total_keys": total_keys,
+        "games_sampled": games_sampled,
+    }
+
+
+def compute_player_key_stats(username: str) -> dict | None:
+    """Aggregate key forging stats per slot (key 1, 2, 3) for a player."""
+    MIN_SAMPLES = 3
+    rows = ExtendedGameData.query.filter(
+        (ExtendedGameData.submitter_username == username)
+        | (ExtendedGameData.player2_username == username)
+    ).all()
+
+    slot_totals = [
+        {"turn_total": 0.0, "amber_total": 0.0, "count": 0} for _ in range(3)
+    ]
+    total_keys = 0
+    games_sampled = 0
+
+    for row in rows:
+        ordinals = _get_key_ordinals(_merge_key_events(row), username)
+        if not ordinals:
+            continue
+        games_sampled += 1
+        for i, ord_data in enumerate(ordinals[:3]):
+            slot_totals[i]["turn_total"] += ord_data["turn"]
+            slot_totals[i]["amber_total"] += ord_data["amber_paid"]
+            slot_totals[i]["count"] += 1
+            total_keys += 1
+
+    if total_keys == 0:
+        return None
+
+    def slot_stat(s):
+        if s["count"] < MIN_SAMPLES:
+            return None
+        return {
+            "avg_turn": s["turn_total"] / s["count"],
+            "avg_amber": s["amber_total"] / s["count"],
+            "count": s["count"],
+        }
+
+    return {
+        "key_1": slot_stat(slot_totals[0]),
+        "key_2": slot_stat(slot_totals[1]),
+        "key_3": slot_stat(slot_totals[2]),
+        "total_keys": total_keys,
+        "games_sampled": games_sampled,
+    }
+
+
 @blueprint.route("/users/<username>")
 def user_detail(username):
     games_won = Game.query.filter(Game.winner == username).count()
@@ -425,6 +545,7 @@ def user_detail(username):
             "discord_username": user_obj.discord_username if user_obj else None,
             "dok_profile_url": user_obj.dok_profile_url if user_obj else None,
             "timing_stats": compute_user_timing_stats(username),
+            "key_stats": compute_player_key_stats(username),
         }
     )
 
@@ -750,6 +871,8 @@ def upload_extended():
     key_events = data.get("key_events")
     extension_version = (data.get("extension_version") or "").strip() or None
 
+    turn_snapshots = data.get("turn_snapshots")
+
     game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
     existing = ExtendedGameData.query.filter_by(
         crucible_game_id=crucible_game_id
@@ -761,6 +884,8 @@ def upload_extended():
                 existing.turn_timing = turn_timing
             if key_events is not None:
                 existing.key_events = key_events
+            if turn_snapshots is not None:
+                existing.turn_snapshots = turn_snapshots
             if extension_version:
                 existing.extension_version = extension_version
         else:
@@ -770,6 +895,8 @@ def upload_extended():
                 existing.player2_turn_timing = turn_timing
             if key_events is not None:
                 existing.player2_key_events = key_events
+            if turn_snapshots is not None:
+                existing.player2_turn_snapshots = turn_snapshots
             if extension_version:
                 existing.player2_extension_version = extension_version
         existing.updated_at = datetime.datetime.utcnow()
@@ -784,6 +911,7 @@ def upload_extended():
                 extension_version=extension_version,
                 turn_timing=turn_timing,
                 key_events=key_events,
+                turn_snapshots=turn_snapshots,
             )
         )
     db.session.commit()

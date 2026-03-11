@@ -53,6 +53,53 @@ export interface TimingLeaderboardEntry {
   games_sampled: number;
 }
 
+export interface HandCardSnapshot {
+  id: string;
+  name: string;
+  type: string;
+  house: string;
+  amber: number;
+  can_play: boolean;
+}
+
+export interface BoardCardSnapshot {
+  id: string;
+  name: string;
+  type: string;
+  house: string;
+  power: number;
+  exhausted: boolean;
+  stunned: boolean;
+  taunt: boolean;
+}
+
+export interface TurnSnapshot {
+  turn: number;
+  player: string;
+  house: string;
+  timestamp_ms: number;
+  local_hand: HandCardSnapshot[];
+  boards: Record<string, BoardCardSnapshot[]>;
+  amber: Record<string, number>;
+  deck_size: Record<string, number>;
+  discard_size: Record<string, number>;
+  archive_size: Record<string, number>;
+}
+
+export interface KeySlotStat {
+  avg_turn: number;
+  avg_amber: number;
+  count: number;
+}
+
+export interface KeyStats {
+  key_1: KeySlotStat | null;
+  key_2: KeySlotStat | null;
+  key_3: KeySlotStat | null;
+  total_keys: number;
+  games_sampled: number;
+}
+
 export interface ExtendedGameData {
   submitter_username: string;
   extension_version: string | null;
@@ -62,6 +109,8 @@ export interface ExtendedGameData {
   player2_turn_timing: TurnTimingEntry[];
   key_events: KeyForgeEvent[];
   player2_key_events: KeyForgeEvent[];
+  turn_snapshots: TurnSnapshot[];
+  player2_turn_snapshots: TurnSnapshot[];
   both_perspectives: boolean;
 }
 
@@ -139,6 +188,7 @@ export interface DeckDetail extends DeckSummary {
   games_won: number;
   games_lost: number;
   games: GameSummary[];
+  key_stats: KeyStats | null;
 }
 
 export interface UserStats {
@@ -149,6 +199,7 @@ export interface UserStats {
   discord_username: string | null;
   dok_profile_url: string | null;
   timing_stats: TimingStats | null;
+  key_stats: KeyStats | null;
 }
 
 export interface MyGamesResponse {

@@ -2,11 +2,50 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Container, Typography, CircularProgress, Alert, Box, Chip,
-  Table, TableHead, TableBody, TableRow, TableCell, LinearProgress,
+  Table, TableHead, TableBody, TableRow, TableCell, LinearProgress, Paper,
 } from '@mui/material';
 import { getUser } from '../api/users';
-import type { UserStats } from '../types';
+import type { UserStats, KeyStats } from '../types';
 import GameListing from '../components/GameListing';
+
+function KeyStatsSection({ keyStats }: { keyStats: KeyStats }) {
+  const slots = [
+    { label: 'Key 1', stat: keyStats.key_1 },
+    { label: 'Key 2', stat: keyStats.key_2 },
+    { label: 'Key 3', stat: keyStats.key_3 },
+  ];
+  return (
+    <Box sx={{ mb: 3 }}>
+      <Typography variant="h6" sx={{ mb: 1 }}>Key Stats</Typography>
+      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+        <Chip label={`${keyStats.total_keys} Keys Forged`} variant="outlined" />
+        <Chip label={`${keyStats.games_sampled} Games`} variant="outlined" />
+      </Box>
+      <Paper variant="outlined" sx={{ display: 'inline-block' }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Key</TableCell>
+              <TableCell align="right">Avg Turn</TableCell>
+              <TableCell align="right">Avg Æmber</TableCell>
+              <TableCell align="right">Sampled</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {slots.map(({ label, stat }) => (
+              <TableRow key={label}>
+                <TableCell>{label}</TableCell>
+                <TableCell align="right">{stat ? stat.avg_turn.toFixed(1) : '—'}</TableCell>
+                <TableCell align="right">{stat ? stat.avg_amber.toFixed(1) : '—'}</TableCell>
+                <TableCell align="right">{stat ? stat.count : '—'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Paper>
+    </Box>
+  );
+}
 
 export default function UserProfilePage() {
   const { username } = useParams<{ username: string }>();
@@ -93,6 +132,9 @@ export default function UserProfilePage() {
           </Box>
         );
       })()}
+      {user.key_stats && (
+        <KeyStatsSection keyStats={user.key_stats} />
+      )}
       <Typography variant="h6" sx={{ mb: 1 }}>Games</Typography>
       {user.games.map((game) => (
         <GameListing key={game.crucible_game_id} game={game} highlightUser={username} />

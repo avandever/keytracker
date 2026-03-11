@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { getGame } from '../api/games';
-import type { GameDetail, TurnTimingEntry } from '../types';
+import type { GameDetail, TurnTimingEntry, KeyForgeEvent } from '../types';
 import { alpha } from '@mui/material/styles';
 import GameLogEntry from '../components/GameLogEntry';
 
@@ -37,47 +37,111 @@ const HOUSE_COLORS: Record<string, string> = {
   Untamed: '#a5d6a7',
 };
 
+const KEY_DOT_COLORS: Record<string, string> = {
+  Red: '#ef5350',
+  Yellow: '#fdd835',
+  Blue: '#42a5f5',
+};
+
 function getHouseColor(house: string): string {
   return HOUSE_COLORS[house] ?? '#bdbdbd';
 }
 
-function TurnTimeline({ entries }: { entries: TurnTimingEntry[] }) {
+function VerticalTimeline({
+  entries,
+  keyEvents,
+}: {
+  entries: TurnTimingEntry[];
+  keyEvents: KeyForgeEvent[];
+}) {
   const sorted = [...entries].sort((a, b) => a.turn - b.turn);
+
+  // Map turn number → key events for that turn
+  const keysByTurn = new Map<number, KeyForgeEvent[]>();
+  for (const ke of keyEvents) {
+    if (!keysByTurn.has(ke.turn)) keysByTurn.set(ke.turn, []);
+    keysByTurn.get(ke.turn)!.push(ke);
+  }
+
   return (
-    <Box sx={{ display: 'flex', gap: 0.5, overflowX: 'auto', pb: 1 }}>
+    <Box>
       {sorted.map((entry, i) => {
         const next = sorted[i + 1];
         const durationMs = next ? next.timestamp_ms - entry.timestamp_ms : null;
         const durationSec = durationMs !== null ? Math.round(durationMs / 1000) : null;
         const houseColor = getHouseColor(entry.house);
-        const tooltipTitle = `${entry.player} — ${entry.house}, Turn ${entry.turn}${durationSec !== null ? `, ${durationSec}s` : ''}`;
+        const turnKeys = keysByTurn.get(entry.turn) ?? [];
         return (
-          <Tooltip key={i} title={tooltipTitle} arrow>
-            <Box
+          <Box
+            key={i}
+            sx={{
+              borderLeft: `4px solid ${houseColor}`,
+              pl: 1,
+              py: 0.25,
+              display: 'flex',
+              gap: 0.5,
+              alignItems: 'center',
+              bgcolor: i % 2 !== 0 ? 'action.hover' : 'transparent',
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 'bold', minWidth: 26, color: 'text.secondary', flexShrink: 0 }}
+            >
+              T{entry.turn}
+            </Typography>
+            <Typography
+              variant="caption"
               sx={{
-                minWidth: 52,
-                width: 52,
-                bgcolor: houseColor,
-                borderRadius: 1,
-                p: 0.5,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                cursor: 'default',
-                opacity: i % 2 === 0 ? 1 : 0.7,
+                minWidth: 44,
+                maxWidth: 44,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
-              <Typography variant="caption" sx={{ fontWeight: 'bold', lineHeight: 1.2, color: 'rgba(0,0,0,0.7)' }}>
-                T{entry.turn}
+              {entry.player.slice(0, 7)}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontSize: '0.65rem',
+              }}
+            >
+              {entry.house}
+            </Typography>
+            {durationSec !== null && (
+              <Typography
+                variant="caption"
+                sx={{ color: 'text.secondary', minWidth: 28, textAlign: 'right', fontSize: '0.65rem', flexShrink: 0 }}
+              >
+                {durationSec}s
               </Typography>
-              <Typography variant="caption" sx={{ lineHeight: 1.2, fontSize: '0.65rem', color: 'rgba(0,0,0,0.7)', textAlign: 'center' }}>
-                {entry.house.slice(0, 5)}
-              </Typography>
-              <Typography variant="caption" sx={{ lineHeight: 1.2, fontSize: '0.65rem', color: 'rgba(0,0,0,0.6)' }}>
-                {durationSec !== null ? `${durationSec}s` : '—'}
-              </Typography>
-            </Box>
-          </Tooltip>
+            )}
+            {turnKeys.map((ke, ki) => (
+              <Tooltip
+                key={ki}
+                title={`${ke.player} forged ${ke.key_color} key (${ke.amber_paid} Æ)`}
+                arrow
+              >
+                <Box
+                  sx={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    bgcolor: KEY_DOT_COLORS[ke.key_color] ?? '#bdbdbd',
+                    flexShrink: 0,
+                    cursor: 'default',
+                  }}
+                />
+              </Tooltip>
+            ))}
+          </Box>
         );
       })}
     </Box>
@@ -108,6 +172,33 @@ export default function GameDetailPage() {
   const players = [game.winner, game.loser].sort((a, b) =>
     a === game.first_player ? -1 : b === game.first_player ? 1 : 0
   );
+
+  // Compute timeline data
+  const ext = game.extended_data;
+  let merged: TurnTimingEntry[] = [];
+  let allKeyEvents: KeyForgeEvent[] = [];
+  let hasTimeline = false;
+
+  if (ext && ext.turn_timing.length > 0) {
+    const p1 = ext.turn_timing;
+    const p2 = ext.player2_turn_timing;
+    const base = p1.length >= p2.length ? p1 : p2;
+    const other = p1.length >= p2.length ? p2 : p1;
+    const byTurn = new Map<number, TurnTimingEntry>(base.map((e) => [e.turn, e]));
+    other.forEach((e) => { if (!byTurn.has(e.turn)) byTurn.set(e.turn, e); });
+    merged = Array.from(byTurn.values());
+    hasTimeline = merged.length > 0;
+  }
+
+  if (ext) {
+    const seenKe = new Set<string>();
+    allKeyEvents = [...(ext.key_events ?? []), ...(ext.player2_key_events ?? [])].filter((e) => {
+      const k = `${e.turn}|${e.player}|${e.key_color}`;
+      if (seenKe.has(k)) return false;
+      seenKe.add(k);
+      return true;
+    });
+  }
 
   return (
     <Container maxWidth="lg" sx={{ mt: 3 }}>
@@ -174,37 +265,28 @@ export default function GameDetailPage() {
         </>
       )}
 
-      {game.extended_data && game.extended_data.turn_timing.length > 0 && (() => {
-        const ext = game.extended_data;
-        const p1 = ext.turn_timing;
-        const p2 = ext.player2_turn_timing;
-        // Merge by turn number, preferring the longer array; deduplicate by turn
-        const base = p1.length >= p2.length ? p1 : p2;
-        const other = p1.length >= p2.length ? p2 : p1;
-        const byTurn = new Map<number, TurnTimingEntry>(base.map((e) => [e.turn, e]));
-        other.forEach((e) => { if (!byTurn.has(e.turn)) byTurn.set(e.turn, e); });
-        const merged = Array.from(byTurn.values());
-        return (
-          <>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Turn Timing
-              {ext.both_perspectives && (
-                <Chip size="small" label="Both perspectives" color="info" variant="outlined" sx={{ ml: 1 }} />
+      <Typography variant="h6" sx={{ mb: 1 }}>Game Log</Typography>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+        <Paper variant="outlined" sx={{ flex: '1 1 auto', maxHeight: 600, overflow: 'auto', p: 1 }}>
+          {game.logs.map((log, i) => (
+            <GameLogEntry key={i} message={log.message} />
+          ))}
+        </Paper>
+        {hasTimeline && (
+          <Paper
+            variant="outlined"
+            sx={{ width: 200, maxHeight: 600, overflow: 'auto', p: 1, flexShrink: 0 }}
+          >
+            <Typography variant="subtitle2" gutterBottom>
+              Timeline{' '}
+              {ext!.both_perspectives && (
+                <Chip size="small" label="Both" color="info" variant="outlined" />
               )}
             </Typography>
-            <Paper variant="outlined" sx={{ p: 1, mb: 3 }}>
-              <TurnTimeline entries={merged} />
-            </Paper>
-          </>
-        );
-      })()}
-
-      <Typography variant="h6" sx={{ mb: 1 }}>Game Log</Typography>
-      <Paper variant="outlined" sx={{ maxHeight: 600, overflow: 'auto', p: 1 }}>
-        {game.logs.map((log, i) => (
-          <GameLogEntry key={i} message={log.message} />
-        ))}
-      </Paper>
+            <VerticalTimeline entries={merged} keyEvents={allKeyEvents} />
+          </Paper>
+        )}
+      </Box>
     </Container>
   );
 }

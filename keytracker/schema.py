@@ -1624,6 +1624,8 @@ class ExtendedGameData(db.Model):
     player2_turn_timing = db.Column(db.JSON, nullable=True)
     key_events = db.Column(db.JSON, nullable=True)
     player2_key_events = db.Column(db.JSON, nullable=True)
+    turn_snapshots = db.Column(db.JSON, nullable=True)
+    player2_turn_snapshots = db.Column(db.JSON, nullable=True)
     created_at = db.Column(
         db.DateTime, nullable=False, default=datetime.datetime.utcnow
     )

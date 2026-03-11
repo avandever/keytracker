@@ -35,6 +35,8 @@ def serialize_extended_data(ext: ExtendedGameData) -> dict:
         "player2_turn_timing": ext.player2_turn_timing or [],
         "key_events": ext.key_events or [],
         "player2_key_events": ext.player2_key_events or [],
+        "turn_snapshots": ext.turn_snapshots or [],
+        "player2_turn_snapshots": ext.player2_turn_snapshots or [],
         "both_perspectives": ext.both_perspectives,
     }
 
