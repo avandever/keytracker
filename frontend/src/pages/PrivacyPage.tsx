@@ -122,7 +122,7 @@ export default function PrivacyPage() {
         <Subsection title="Collection data">
           <Bullets
             items={[
-              'If you sync your deck collection (via Master Vault or manual upload), your collection contents may be stored and may be surfaced publicly in deck search or player profile views. We will note clearly in the interface if collection information is being shared.',
+              'If you sync your deck collection (via Master Vault or manual upload), your collection contents may be stored and may be surfaced publicly in deck search or player profile views.',
             ]}
           />
         </Subsection>
@@ -137,8 +137,10 @@ export default function PrivacyPage() {
               </>,
               <>
                 <strong>Cookies and session tokens:</strong> We use session cookies to keep you
-                logged in. These are standard authentication cookies and are not used for
-                advertising or cross-site tracking.
+                logged in. These are standard authentication cookies and are not used by us for
+                advertising or cross-site tracking. Third-party integrations (such as Google
+                reCAPTCHA and Discord OAuth) may set their own cookies; those are governed by
+                their respective privacy policies.
               </>,
             ]}
           />
@@ -149,7 +151,7 @@ export default function PrivacyPage() {
         <Bullets
           items={[
             'Every game uploaded to Bear Tracks is publicly visible at both the individual game level (full log, deck names, result) and the aggregate level (player win rates, deck statistics, timing analytics, key forge averages). There is no option to upload a game privately.',
-            'We periodically publish bulk data dumps containing game and deck statistics. Once a bulk dump has been published, we cannot retroactively remove data from copies others may have downloaded.',
+            'We may periodically publish bulk data dumps containing game and deck statistics. Once a bulk dump has been published, we cannot retroactively remove data from copies others may have downloaded.',
             'By uploading a game — or by using the KeyTracker browser extension which uploads automatically — you are accepting that the game data will be made public.',
           ]}
         />

@@ -8,6 +8,7 @@ import {
   Container,
   Divider,
   FormControl,
+  FormHelperText,
   InputLabel,
   Link,
   MenuItem,
@@ -284,12 +285,14 @@ export default function AccountPage() {
           onChange={(e) => setDokProfileUrl(e.target.value)}
           placeholder="https://decksofkeyforge.com/users/your-username"
           label="DoK Collection URL (My Decks)"
+          helperText="Displayed publicly on your player profile"
           sx={{ mb: 2 }}
         />
         <FormControl fullWidth size="small" sx={{ mb: 2 }}>
           <InputLabel>Country</InputLabel>
           <Select value={country} label="Country" onChange={(e) => setCountry(e.target.value)}>
             <MenuItem value="">-- Select --</MenuItem>
+            {/* prettier-ignore */}
             {[
               'Argentina', 'Australia', 'Austria', 'Belgium', 'Brazil', 'Canada',
               'Chile', 'China', 'Colombia', 'Czech Republic', 'Denmark', 'Finland',
@@ -304,6 +307,7 @@ export default function AccountPage() {
               <MenuItem key={c} value={c}>{c}</MenuItem>
             ))}
           </Select>
+          <FormHelperText>Used for league organization; not displayed publicly</FormHelperText>
         </FormControl>
         <FormControl fullWidth size="small" sx={{ mb: 2 }}>
           <InputLabel>Timezone</InputLabel>
@@ -318,6 +322,7 @@ export default function AccountPage() {
               <MenuItem key={tz} value={tz}>{tz}</MenuItem>
             ))}
           </Select>
+          <FormHelperText>Shared with league admins, captains, and opponents to help schedule matches</FormHelperText>
         </FormControl>
         <Button
           variant="contained"
