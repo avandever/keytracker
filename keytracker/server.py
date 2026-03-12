@@ -274,6 +274,16 @@ app.register_blueprint(api_v2.blueprint)
 app.register_blueprint(leagues.blueprint)
 app.register_blueprint(standalone_bp)
 
+# Google site verification
+@app.route("/googlec64a231070f69e69.html")
+def google_site_verification():
+    from flask import send_from_directory
+    return send_from_directory(
+        os.path.join(os.path.dirname(__file__), "static"),
+        "googlec64a231070f69e69.html"
+    )
+
+
 # Serve React frontend at /
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
