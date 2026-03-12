@@ -274,19 +274,6 @@ app.register_blueprint(api_v2.blueprint)
 app.register_blueprint(leagues.blueprint)
 app.register_blueprint(standalone_bp)
 
-# Jinja2 pages that predate the React frontend and must be served directly
-@app.route("/privacy")
-def privacy():
-    """Privacy policy — served as a Jinja2 template (also linked from the Chrome extension)."""
-    from flask import render_template
-
-    return render_template(
-        "privacy.html",
-        title="Privacy Policy",
-        description="Bear Tracks Privacy Policy",
-    )
-
-
 # Serve React frontend at /
 FRONTEND_DIST = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
