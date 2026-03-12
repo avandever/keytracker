@@ -18,6 +18,7 @@ from keytracker.routes.standalone import standalone_bp
 
 from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
+from keytracker.scripts.anonymize import anonymize_player
 from keytracker.scripts.test_user import test_user
 import sqlalchemy
 from sqlalchemy.exc import (
@@ -297,6 +298,7 @@ def serve_react(path=""):
 app.cli.add_command(collector)
 app.cli.add_command(sealed)
 app.cli.add_command(test_user)
+app.cli.add_command(anonymize_player)
 
 
 def _ensure_nobody_user():
