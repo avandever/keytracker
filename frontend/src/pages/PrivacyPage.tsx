@@ -63,6 +63,10 @@ export default function PrivacyPage() {
 
       <Section title="What data we collect">
         <Subsection title="Game and match data">
+          <Typography variant="body2" sx={{ mb: 1 }} color="text.secondary">
+            The following lists are representative, not exhaustive. As new features are added,
+            additional game-related data may be collected and made public under the same principles.
+          </Typography>
           <Bullets
             items={[
               <>
@@ -91,8 +95,8 @@ export default function PrivacyPage() {
               </>,
               <>
                 <strong>Time zone:</strong> If you set a time zone in your profile, it will be
-                shared with league administrators and team captains to help schedule matches. It
-                is not displayed publicly.
+                shared with league administrators, team captains, and your opponents within a
+                league to help schedule matches. It is not displayed on your public profile.
               </>,
               <>
                 <strong>Discord username:</strong> If you link a Discord account, your Discord
