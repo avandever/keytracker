@@ -2234,8 +2234,6 @@ def sync_collection_from_dok(user) -> dict:
             row.dok_notes = entry.get("notes")
             row.last_synced_at = now
             standard_count += 1
-        if len(entries) < 100:
-            break
         page += 1
 
     # --- Alliance decks (single call, no pagination) ---
