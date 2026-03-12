@@ -166,6 +166,25 @@ export interface DeckSummary {
   token_name?: string | null;
 }
 
+export interface CollectionDeck extends DeckSummary {
+  dok_owned: boolean;
+  dok_wishlist: boolean;
+  dok_funny: boolean;
+  dok_notes: string | null;
+}
+
+export interface AllianceDeckEntry {
+  kf_id: string;
+  name: string;
+  sas_rating: number | null;
+  aerc_score: number | null;
+  pods: { house: string; source_kf_id: string; source_name: string }[] | null;
+  dok_owned: boolean;
+  dok_wishlist: boolean;
+  dok_funny: boolean;
+  dok_url: string;
+}
+
 export interface PodStat {
   house: string;
   sas_rating: number;

@@ -31,6 +31,7 @@ import UserAdminPage from './pages/UserAdminPage';
 import StandaloneMatchesPage from './pages/StandaloneMatchesPage';
 import StandaloneMatchPage from './pages/StandaloneMatchPage';
 import TimingLeaderboardPage from './pages/TimingLeaderboardPage';
+import MyCollectionPage from './pages/MyCollectionPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
@@ -92,6 +93,7 @@ export default function App() {
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/timing" element={<TimingLeaderboardPage />} />
+              <Route path="/collection" element={<RequireAuth><MyCollectionPage /></RequireAuth>} />
               <Route path="/fame" element={<ComingSoonPage title="Hall of Fame" />} />
               <Route path="/leaderboard" element={<ComingSoonPage title="Leaderboard" />} />
             </Route>

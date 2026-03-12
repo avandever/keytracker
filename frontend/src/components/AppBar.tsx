@@ -85,6 +85,9 @@ export default function AppBar() {
               <Button color="inherit" component={RouterLink} to="/my-games" sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
                 My Games
               </Button>
+              <Button color="inherit" component={RouterLink} to="/collection" sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
+                My Collection
+              </Button>
               {user.email === 'andrew.vandever@gmail.com' && (
                 <Button color="inherit" component={RouterLink} to="/admin/users" sx={{ display: { xs: 'none', md: 'inline-flex' } }}>
                   Admin
@@ -158,6 +161,11 @@ export default function AppBar() {
                 <ListItem disablePadding>
                   <ListItemButton onClick={() => handleDrawerNav('/my-games')}>
                     <ListItemText primary="My Games" />
+                  </ListItemButton>
+                </ListItem>
+                <ListItem disablePadding>
+                  <ListItemButton onClick={() => handleDrawerNav('/collection')}>
+                    <ListItemText primary="My Collection" />
                   </ListItemButton>
                 </ListItem>
                 {user.email === 'andrew.vandever@gmail.com' && (

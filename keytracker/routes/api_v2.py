@@ -16,6 +16,8 @@ from keytracker.schema import (
     PlayerDeckSelection,
     TcoUsername,
     User,
+    UserAllianceCollection,
+    UserDeckCollection,
 )
 from keytracker.serializers import (
     serialize_deck_detail,
@@ -38,6 +40,7 @@ from keytracker.utils import (
     parse_house_stats,
     parse_deck_url,
     fetch_dok_alliance,
+    sync_collection_from_dok,
     turn_counts_from_logs,
     username_to_player,
     anonymize_game_for_player,
@@ -45,6 +48,7 @@ from keytracker.utils import (
 from sqlalchemy import or_
 import datetime
 import re
+import requests
 import time
 
 
@@ -403,7 +407,9 @@ def _get_key_ordinals(all_events: list, username: str) -> list:
     """Return per-key forging data for a player, sorted by turn (key 1, 2, 3)."""
     player_events = [e for e in all_events if e.get("player") == username]
     player_events.sort(key=lambda e: e.get("turn", 0))
-    return [{"turn": e["turn"], "amber_paid": e.get("amber_paid", 0)} for e in player_events]
+    return [
+        {"turn": e["turn"], "amber_paid": e.get("amber_paid", 0)} for e in player_events
+    ]
 
 
 def _merge_key_events(ext: ExtendedGameData) -> list:
@@ -967,4 +973,78 @@ def timing_leaderboard():
         )
 
     result.sort(key=lambda x: x["avg_turn_seconds"])
+    return jsonify(result)
+
+
+@blueprint.route("/collection/sync", methods=["POST"])
+@login_required
+def sync_collection():
+    if not current_user.dok_api_key:
+        return (
+            jsonify({"error": "No DoK API key saved. Add one in Account Settings."}),
+            400,
+        )
+    try:
+        result = sync_collection_from_dok(current_user)
+    except requests.HTTPError as e:
+        if e.response.status_code == 401:
+            return (
+                jsonify({"error": "DoK API key rejected (401). Check your key."}),
+                400,
+            )
+        return jsonify({"error": f"DoK API error: {e}"}), 502
+    except Exception as e:
+        current_app.logger.error(
+            "Collection sync failed for user %s: %s", current_user.id, e
+        )
+        return jsonify({"error": str(e)}), 500
+    return jsonify(result)
+
+
+@blueprint.route("/collection", methods=["GET"])
+@login_required
+def get_collection():
+    deck_type = request.args.get("type", "all")
+    page = int(request.args.get("page", 0))
+    per_page = 50
+
+    result = {}
+    if deck_type in ("standard", "all"):
+        rows = (
+            UserDeckCollection.query.filter_by(user_id=current_user.id)
+            .order_by(UserDeckCollection.last_synced_at.desc())
+            .offset(page * per_page)
+            .limit(per_page)
+            .all()
+        )
+        result["standard"] = [
+            {
+                **serialize_deck_summary(row.deck),
+                "dok_owned": row.dok_owned,
+                "dok_wishlist": row.dok_wishlist,
+                "dok_funny": row.dok_funny,
+                "dok_notes": row.dok_notes,
+            }
+            for row in rows
+        ]
+    if deck_type in ("alliance", "all"):
+        arows = (
+            UserAllianceCollection.query.filter_by(user_id=current_user.id)
+            .order_by(UserAllianceCollection.last_synced_at.desc())
+            .all()
+        )
+        result["alliance"] = [
+            {
+                "kf_id": r.alliance_deck.kf_id,
+                "name": r.alliance_deck.name,
+                "sas_rating": r.alliance_deck.sas_rating,
+                "aerc_score": r.alliance_deck.aerc_score,
+                "pods": r.alliance_deck.pods,
+                "dok_owned": r.dok_owned,
+                "dok_wishlist": r.dok_wishlist,
+                "dok_funny": r.dok_funny,
+                "dok_url": f"https://decksofkeyforge.com/alliance-decks/{r.alliance_deck.kf_id}",
+            }
+            for r in arows
+        ]
     return jsonify(result)

@@ -1637,3 +1637,46 @@ class ExtendedGameData(db.Model):
     @property
     def both_perspectives(self) -> bool:
         return self.player2_username is not None
+
+
+class AllianceDeck(db.Model):
+    __tablename__ = "tracker_alliance_deck"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    kf_id = db.Column(db.String(36), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(256))
+    sas_rating = db.Column(db.Integer, nullable=True)
+    aerc_score = db.Column(db.Integer, nullable=True)
+    synergy_rating = db.Column(db.Integer, nullable=True)
+    antisynergy_rating = db.Column(db.Integer, nullable=True)
+    valid_alliance = db.Column(db.Boolean, nullable=True)
+    # JSON: [{"house": "Logos", "source_kf_id": "...", "source_name": "..."}]
+    pods = db.Column(db.JSON, nullable=True)
+    last_synced = db.Column(db.DateTime, nullable=True)
+
+
+class UserDeckCollection(db.Model):
+    __tablename__ = "user_deck_collection"
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), primary_key=True)
+    deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), primary_key=True)
+    dok_owned = db.Column(db.Boolean, default=False, nullable=False)
+    dok_wishlist = db.Column(db.Boolean, default=False, nullable=False)
+    dok_funny = db.Column(db.Boolean, default=False, nullable=False)
+    dok_notes = db.Column(db.Text, nullable=True)
+    last_synced_at = db.Column(db.DateTime, nullable=True)
+    user = db.relationship("User", backref="deck_collection")
+    deck = db.relationship("Deck", backref="collection_entries")
+
+
+class UserAllianceCollection(db.Model):
+    __tablename__ = "user_alliance_collection"
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), primary_key=True)
+    alliance_deck_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_alliance_deck.id"), primary_key=True
+    )
+    dok_owned = db.Column(db.Boolean, default=False, nullable=False)
+    dok_wishlist = db.Column(db.Boolean, default=False, nullable=False)
+    dok_funny = db.Column(db.Boolean, default=False, nullable=False)
+    dok_notes = db.Column(db.Text, nullable=True)
+    last_synced_at = db.Column(db.DateTime, nullable=True)
+    user = db.relationship("User", backref="alliance_collection")
+    alliance_deck = db.relationship("AllianceDeck", backref="collection_entries")

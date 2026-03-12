@@ -8,6 +8,7 @@ import difflib
 import io
 from keytracker.schema import (
     db,
+    AllianceDeck,
     Card,
     CardInDeck,
     Deck,
@@ -28,6 +29,8 @@ from keytracker.schema import (
     PodStats,
     POSSIBLE_LANGUAGES,
     Trait,
+    UserAllianceCollection,
+    UserDeckCollection,
 )
 import operator
 import os
@@ -2158,3 +2161,102 @@ def send_password_reset_email(user, app_base_url: str) -> None:
     )
     mail.send(msg)
     _mail_logger.info("Password reset email sent to %s", user.email)
+
+
+DOK_MY_DECKS_BASE = "https://decksofkeyforge.com/public-api/v1/my-decks"
+DOK_MY_ALLIANCES_URL = "https://decksofkeyforge.com/public-api/v1/my-alliances"
+
+
+def sync_collection_from_dok(user) -> dict:
+    """Sync a user's DoK collection (standard + alliance decks) into the DB.
+
+    Uses user.dok_api_key. Returns {standard_decks: N, alliance_decks: M}.
+    """
+    if not user.dok_api_key:
+        raise ValueError("No DoK API key set")
+
+    headers = {"Api-Key": user.dok_api_key}
+    now = datetime.datetime.utcnow()
+
+    # --- Standard decks (paginated, 100/page) ---
+    standard_count = 0
+    page = 0
+    while True:
+        resp = requests.get(
+            DOK_MY_DECKS_BASE, params={"page": page}, headers=headers, timeout=30
+        )
+        resp.raise_for_status()
+        entries = resp.json()
+        if not entries:
+            break
+        for entry in entries:
+            dok_deck = entry.get("deck", {})
+            kf_id = dok_deck.get("keyforgeId")
+            if not kf_id:
+                continue
+            deck = get_deck_by_id_with_zeal(
+                kf_id,
+                sas_rating=dok_deck.get("sasRating"),
+                aerc_score=dok_deck.get("aercScore"),
+            )
+            row = UserDeckCollection.query.filter_by(
+                user_id=user.id, deck_id=deck.id
+            ).first()
+            if row is None:
+                row = UserDeckCollection(user_id=user.id, deck_id=deck.id)
+                db.session.add(row)
+            row.dok_owned = bool(entry.get("ownedByMe"))
+            row.dok_wishlist = bool(entry.get("wishlist"))
+            row.dok_funny = bool(entry.get("funny"))
+            row.dok_notes = entry.get("notes")
+            row.last_synced_at = now
+            standard_count += 1
+        if len(entries) < 100:
+            break
+        page += 1
+
+    # --- Alliance decks (single call, no pagination) ---
+    resp = requests.get(DOK_MY_ALLIANCES_URL, headers=headers, timeout=30)
+    resp.raise_for_status()
+    alliance_entries = resp.json()
+    alliance_count = 0
+    for entry in alliance_entries:
+        dok_deck = entry.get("deck", {})
+        kf_id = dok_deck.get("keyforgeId")
+        if not kf_id:
+            continue
+        adeck = AllianceDeck.query.filter_by(kf_id=kf_id).first()
+        if adeck is None:
+            adeck = AllianceDeck(kf_id=kf_id)
+            db.session.add(adeck)
+        adeck.name = dok_deck.get("name")
+        adeck.sas_rating = dok_deck.get("sasRating")
+        adeck.aerc_score = dok_deck.get("aercScore")
+        adeck.synergy_rating = dok_deck.get("synergyRating")
+        adeck.antisynergy_rating = dok_deck.get("antisynergyRating")
+        adeck.valid_alliance = dok_deck.get("validAlliance")
+        adeck.pods = [
+            {
+                "house": h.get("house"),
+                "source_kf_id": h.get("keyforgeId"),
+                "source_name": h.get("name"),
+            }
+            for h in dok_deck.get("allianceHouses", [])
+        ]
+        adeck.last_synced = now
+        db.session.flush()
+        arow = UserAllianceCollection.query.filter_by(
+            user_id=user.id, alliance_deck_id=adeck.id
+        ).first()
+        if arow is None:
+            arow = UserAllianceCollection(user_id=user.id, alliance_deck_id=adeck.id)
+            db.session.add(arow)
+        arow.dok_owned = bool(entry.get("ownedByMe"))
+        arow.dok_wishlist = bool(entry.get("wishlist"))
+        arow.dok_funny = bool(entry.get("funny"))
+        arow.dok_notes = entry.get("notes")
+        arow.last_synced_at = now
+        alliance_count += 1
+
+    db.session.commit()
+    return {"standard_decks": standard_count, "alliance_decks": alliance_count}

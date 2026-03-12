@@ -20,7 +20,8 @@ import {
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { updateSettings } from '../api/auth';
-import { useSearchParams } from 'react-router-dom';
+import { syncCollection } from '../api/collection';
+import { useSearchParams, Link as RouterLink } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 
 export default function AccountPage() {
@@ -29,6 +30,7 @@ export default function AccountPage() {
   const [alert, setAlert] = useState<{ severity: 'success' | 'error'; message: string } | null>(null);
   const [dokKey, setDokKey] = useState(user?.dok_api_key || '');
   const [dokSaving, setDokSaving] = useState(false);
+  const [collectionSyncing, setCollectionSyncing] = useState(false);
   const [newTcoName, setNewTcoName] = useState('');
   const [tcoSaving, setTcoSaving] = useState(false);
   const [dokProfileUrl, setDokProfileUrl] = useState(user?.dok_profile_url || '');
@@ -384,6 +386,34 @@ export default function AccountPage() {
         >
           {dokSaving ? 'Saving...' : 'Save'}
         </Button>
+        <Button
+          variant="outlined"
+          size="small"
+          disabled={collectionSyncing || !user?.dok_api_key}
+          sx={{ ml: 1 }}
+          onClick={async () => {
+            setCollectionSyncing(true);
+            try {
+              const res = await syncCollection();
+              setAlert({
+                severity: 'success',
+                message: `Synced ${res.data.standard_decks} standard + ${res.data.alliance_decks} alliance decks. View your collection.`,
+              });
+            } catch (e: any) {
+              setAlert({ severity: 'error', message: e.response?.data?.error || 'Sync failed.' });
+            } finally {
+              setCollectionSyncing(false);
+            }
+          }}
+        >
+          {collectionSyncing ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+          {collectionSyncing ? 'Syncing...' : 'Sync Collection'}
+        </Button>
+        {user?.dok_api_key && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            <RouterLink to="/collection">View My Collection</RouterLink>
+          </Typography>
+        )}
 
         <Divider sx={{ my: 3 }} />
 
