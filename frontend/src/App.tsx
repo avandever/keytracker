@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { BrowserRouter, Routes, Route, Outlet, Link as RouterLink } from 'react-router-dom';
+import { Box, Typography } from '@mui/material';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import { AuthProvider } from './contexts/AuthContext';
 import { TestUserProvider } from './contexts/TestUserContext';
@@ -39,9 +39,17 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function Layout() {
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default', display: 'flex', flexDirection: 'column' }}>
       <AppBar />
-      <Outlet />
+      <Box sx={{ flex: 1 }}>
+        <Outlet />
+      </Box>
+      <Box component="footer" sx={{ py: 2, textAlign: 'center', borderTop: 1, borderColor: 'divider' }}>
+        <Typography variant="caption" color="text.secondary">
+          <RouterLink to="/privacy" style={{ color: 'inherit' }}>Privacy Policy</RouterLink>
+          {' · '}Bear Tracks
+        </Typography>
+      </Box>
     </Box>
   );
 }
