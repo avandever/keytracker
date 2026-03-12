@@ -974,6 +974,29 @@ def get_deck_by_id_with_zeal(deck_id: str, sas_rating=None, aerc_score=None) -> 
     return deck
 
 
+def get_or_create_deck_for_collection(
+    kf_id: str, sas_rating=None, aerc_score=None
+) -> Deck:
+    """Lightweight deck lookup for collection sync.
+
+    Only fetches from Master Vault when the deck is not in the DB yet.
+    Never refreshes SAS scores or card data for existing decks — the
+    caller already has fresh DoK data to store on the collection row.
+    """
+    deck = Deck.query.filter_by(kf_id=kf_id).first()
+    if deck is None:
+        deck = Deck(kf_id=kf_id)
+        refresh_deck_from_mv(deck)
+        if sas_rating is not None and aerc_score is not None:
+            deck.sas_rating = sas_rating
+            deck.aerc_score = aerc_score
+            deck.sas_version = LATEST_SAS_VERSION
+        db.session.add(deck)
+        db.session.commit()
+        db.session.refresh(deck)
+    return deck
+
+
 def loop_loading_missed_sas(batch_size: int, max_set_id: int = 700) -> None:
     q = Deck.query.filter(and_(Deck.expansion < max_set_id, Deck.dok == None))
     query_times = []
@@ -2194,7 +2217,7 @@ def sync_collection_from_dok(user) -> dict:
             kf_id = dok_deck.get("keyforgeId")
             if not kf_id:
                 continue
-            deck = get_deck_by_id_with_zeal(
+            deck = get_or_create_deck_for_collection(
                 kf_id,
                 sas_rating=dok_deck.get("sasRating"),
                 aerc_score=dok_deck.get("aercScore"),

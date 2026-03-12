@@ -106,25 +106,13 @@ def upload_log():
     except BadLog as e:
         return make_response(jsonify(success=False, error=str(e)), 400)
 
-    # Override deck resolution with KF UUIDs if provided (more reliable than name lookup)
+    # Deck UUIDs provided by extension — store them for background enrichment
     winner_deck_id_param = request.form.get("winner_deck_id")
     loser_deck_id_param = request.form.get("loser_deck_id")
     if winner_deck_id_param:
-        try:
-            w_deck = get_deck_by_id_with_zeal(winner_deck_id_param)
-            game.winner_deck = w_deck
-            game.winner_deck_id = w_deck.kf_id
-            game.winner_deck_name = w_deck.name
-        except Exception:
-            pass
+        game.winner_deck_id = winner_deck_id_param
     if loser_deck_id_param:
-        try:
-            l_deck = get_deck_by_id_with_zeal(loser_deck_id_param)
-            game.loser_deck = l_deck
-            game.loser_deck_id = l_deck.kf_id
-            game.loser_deck_name = l_deck.name
-        except Exception:
-            pass
+        game.loser_deck_id = loser_deck_id_param
 
     game.date = game_start
     db.session.add(game)
@@ -159,6 +147,16 @@ def upload_log():
         if ext and not ext.game_id:
             ext.game_id = game.id
             db.session.commit()
+    # Enrich deck data (MV + DoK API calls) in the background to avoid request timeout
+    if winner_deck_id_param or loser_deck_id_param:
+        from keytracker.deck_enrichment import enqueue as enqueue_enrichment
+
+        enqueue_enrichment(
+            current_app._get_current_object(),
+            game.id,
+            winner_deck_id_param,
+            loser_deck_id_param,
+        )
     return make_response(jsonify(success=True, game_id=game.id), 201)
 
 

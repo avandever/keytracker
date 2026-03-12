@@ -1680,3 +1680,20 @@ class UserAllianceCollection(db.Model):
     last_synced_at = db.Column(db.DateTime, nullable=True)
     user = db.relationship("User", backref="alliance_collection")
     alliance_deck = db.relationship("AllianceDeck", backref="collection_entries")
+
+
+class CollectionSyncJob(db.Model):
+    __tablename__ = "collection_sync_job"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False, index=True
+    )
+    # pending / running / done / failed
+    status = db.Column(db.String(16), nullable=False, default="pending")
+    created_at = db.Column(db.DateTime, nullable=False)
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    standard_decks = db.Column(db.Integer, nullable=True)
+    alliance_decks = db.Column(db.Integer, nullable=True)
+    error = db.Column(db.Text, nullable=True)
+    user = db.relationship("User", backref="collection_sync_jobs")

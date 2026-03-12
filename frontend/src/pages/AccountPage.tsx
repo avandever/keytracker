@@ -20,7 +20,7 @@ import {
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
 import { updateSettings } from '../api/auth';
-import { syncCollection } from '../api/collection';
+import { syncCollection, getSyncStatus } from '../api/collection';
 import { useSearchParams, Link as RouterLink } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 
@@ -394,14 +394,28 @@ export default function AccountPage() {
           onClick={async () => {
             setCollectionSyncing(true);
             try {
-              const res = await syncCollection();
-              setAlert({
-                severity: 'success',
-                message: `Synced ${res.data.standard_decks} standard + ${res.data.alliance_decks} alliance decks. View your collection.`,
-              });
+              await syncCollection();
+              // Poll until the job finishes
+              const poll = async (): Promise<void> => {
+                const status = await getSyncStatus();
+                const d = status.data;
+                if (d.status === 'done') {
+                  setAlert({
+                    severity: 'success',
+                    message: `Synced ${d.standard_decks} standard + ${d.alliance_decks} alliance decks. View your collection.`,
+                  });
+                  setCollectionSyncing(false);
+                } else if (d.status === 'failed') {
+                  setAlert({ severity: 'error', message: d.error || 'Sync failed.' });
+                  setCollectionSyncing(false);
+                } else {
+                  setTimeout(poll, 2000);
+                }
+              };
+              setTimeout(poll, 2000);
             } catch (e: any) {
-              setAlert({ severity: 'error', message: e.response?.data?.error || 'Sync failed.' });
-            } finally {
+              const msg = e.response?.data?.error || 'Sync failed.';
+              setAlert({ severity: 'error', message: msg });
               setCollectionSyncing(false);
             }
           }}

@@ -7,6 +7,7 @@ from flask import (
 from flask_login import current_user, login_required
 from keytracker.schema import (
     db,
+    CollectionSyncJob,
     Deck,
     ExtendedGameData,
     Game,
@@ -40,11 +41,11 @@ from keytracker.utils import (
     parse_house_stats,
     parse_deck_url,
     fetch_dok_alliance,
-    sync_collection_from_dok,
     turn_counts_from_logs,
     username_to_player,
     anonymize_game_for_player,
 )
+import keytracker.collection_sync as _collection_sync
 from sqlalchemy import or_
 import datetime
 import re
@@ -984,20 +985,41 @@ def sync_collection():
             jsonify({"error": "No DoK API key saved. Add one in Account Settings."}),
             400,
         )
-    try:
-        result = sync_collection_from_dok(current_user)
-    except requests.HTTPError as e:
-        if e.response.status_code == 401:
-            return (
-                jsonify({"error": "DoK API key rejected (401). Check your key."}),
-                400,
-            )
-        return jsonify({"error": f"DoK API error: {e}"}), 502
-    except Exception as e:
-        current_app.logger.error(
-            "Collection sync failed for user %s: %s", current_user.id, e
-        )
-        return jsonify({"error": str(e)}), 500
+    # Block if a job is already pending or running for this user
+    active = CollectionSyncJob.query.filter(
+        CollectionSyncJob.user_id == current_user.id,
+        CollectionSyncJob.status.in_(["pending", "running"]),
+    ).first()
+    if active:
+        return jsonify({"error": "A sync is already in progress.", "job_id": active.id}), 409
+
+    job = CollectionSyncJob(
+        user_id=current_user.id,
+        status="pending",
+        created_at=datetime.datetime.utcnow(),
+    )
+    db.session.add(job)
+    db.session.commit()
+    _collection_sync.enqueue(current_app._get_current_object(), current_user.id, job.id)
+    return jsonify({"job_id": job.id, "status": "pending"}), 202
+
+
+@blueprint.route("/collection/sync/status", methods=["GET"])
+@login_required
+def sync_collection_status():
+    job = (
+        CollectionSyncJob.query.filter_by(user_id=current_user.id)
+        .order_by(CollectionSyncJob.id.desc())
+        .first()
+    )
+    if not job:
+        return jsonify({"status": "none"}), 200
+    result = {"job_id": job.id, "status": job.status}
+    if job.status == "done":
+        result["standard_decks"] = job.standard_decks
+        result["alliance_decks"] = job.alliance_decks
+    elif job.status == "failed":
+        result["error"] = job.error
     return jsonify(result)
 
 

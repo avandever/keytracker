@@ -411,5 +411,28 @@ if os.getenv("ENABLE_CARD_REFRESHER", "").lower() in ("1", "true", "yes"):
     )
 
 
+from keytracker.deck_enrichment import start_worker as _start_enrichment_worker
+
+_start_enrichment_worker()
+
+
+from keytracker.collection_sync import start_worker as _start_collection_sync_worker  # noqa: E402
+
+# Reset any jobs left in a running/pending state from a previous process crash
+with app.app_context():
+    from keytracker.schema import CollectionSyncJob
+
+    _orphaned = CollectionSyncJob.query.filter(
+        CollectionSyncJob.status.in_(["pending", "running"])
+    ).all()
+    for _j in _orphaned:
+        _j.status = "failed"
+        _j.error = "Server restarted while job was in progress"
+    if _orphaned:
+        db.session.commit()
+
+_start_collection_sync_worker()
+
+
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=True)
