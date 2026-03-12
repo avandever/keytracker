@@ -1027,16 +1027,12 @@ def sync_collection_status():
 @login_required
 def get_collection():
     deck_type = request.args.get("type", "all")
-    page = int(request.args.get("page", 0))
-    per_page = 50
 
     result = {}
     if deck_type in ("standard", "all"):
         rows = (
             UserDeckCollection.query.filter_by(user_id=current_user.id)
             .order_by(UserDeckCollection.last_synced_at.desc())
-            .offset(page * per_page)
-            .limit(per_page)
             .all()
         )
         result["standard"] = [

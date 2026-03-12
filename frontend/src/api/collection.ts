@@ -12,5 +12,5 @@ export const getSyncStatus = () =>
     error?: string;
   }>('/collection/sync/status');
 
-export const getCollection = (page = 0, type: 'standard' | 'alliance' | 'all' = 'all') =>
-  apiClient.get('/collection', { params: { page, type } });
+export const getCollection = (type: 'standard' | 'alliance' | 'all' = 'all') =>
+  apiClient.get('/collection', { params: { type } });
