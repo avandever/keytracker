@@ -1023,28 +1023,48 @@ def sync_collection_status():
     return jsonify(result)
 
 
+_COLLECTION_SORT_COLS = {
+    "name": Deck.name,
+    "sas_rating": Deck.sas_rating,
+    "aerc_score": Deck.aerc_score,
+    "expansion": Deck.expansion,
+}
+
+
 @blueprint.route("/collection", methods=["GET"])
 @login_required
 def get_collection():
-    deck_type = request.args.get("type", "all")
+    deck_type = request.args.get("type", "standard")
+    page = request.args.get("page", 0, type=int)
+    per_page = min(request.args.get("per_page", 50, type=int), 200)
+    sort_field = request.args.get("sort", "name")
+    sort_dir = request.args.get("sort_dir", "asc")
+    search = request.args.get("search", "").strip()
 
     result = {}
     if deck_type in ("standard", "all"):
-        rows = (
-            UserDeckCollection.query.filter_by(user_id=current_user.id)
-            .order_by(UserDeckCollection.last_synced_at.desc())
-            .all()
+        q = (
+            db.session.query(UserDeckCollection, Deck)
+            .join(Deck, UserDeckCollection.deck_id == Deck.id)
+            .filter(UserDeckCollection.user_id == current_user.id)
         )
+        if search:
+            q = q.filter(Deck.name.ilike(f"%{search}%"))
+        sort_col = _COLLECTION_SORT_COLS.get(sort_field, Deck.name)
+        q = q.order_by(sort_col.asc() if sort_dir == "asc" else sort_col.desc())
+        total = q.count()
+        rows = q.offset(page * per_page).limit(per_page).all()
         result["standard"] = [
             {
-                **serialize_deck_summary(row.deck),
+                **serialize_deck_summary(deck),
                 "dok_owned": row.dok_owned,
                 "dok_wishlist": row.dok_wishlist,
                 "dok_funny": row.dok_funny,
                 "dok_notes": row.dok_notes,
             }
-            for row in rows
+            for row, deck in rows
         ]
+        result["standard_total"] = total
     if deck_type in ("alliance", "all"):
         arows = (
             UserAllianceCollection.query.filter_by(user_id=current_user.id)
