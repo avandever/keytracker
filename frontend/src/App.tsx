@@ -1,8 +1,11 @@
-import { BrowserRouter, Routes, Route, Outlet, Link as RouterLink } from 'react-router-dom';
-import { Box, Typography } from '@mui/material';
+import { BrowserRouter, Routes, Route, Outlet, Link as RouterLink, useParams } from 'react-router-dom';
+import { Box, Typography, CircularProgress, Alert, Container } from '@mui/material';
 import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
+import { useState, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { TestUserProvider } from './contexts/TestUserContext';
+import { LeagueIdProvider } from './contexts/LeagueContext';
+import { getLeagueByName } from './api/leagues';
 import AppBar from './components/AppBar';
 import TestUserPicker from './components/TestUserPicker';
 import RequireAuth from './components/RequireAuth';
@@ -37,6 +40,41 @@ import RegisterPage from './pages/RegisterPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+
+function LeagueByIdWrapper() {
+  const { leagueId } = useParams<{ leagueId: string }>();
+  const numericId = parseInt(leagueId!, 10);
+  return (
+    <LeagueIdProvider value={numericId}>
+      <Outlet />
+    </LeagueIdProvider>
+  );
+}
+
+function LeagueByNameWrapper() {
+  const { leagueName } = useParams<{ leagueName: string }>();
+  const [numericId, setNumericId] = useState<number | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const asNum = parseInt(leagueName!, 10);
+    if (!isNaN(asNum) && String(asNum) === leagueName) {
+      setNumericId(asNum);
+      return;
+    }
+    getLeagueByName(leagueName!)
+      .then((league) => setNumericId(league.id))
+      .catch(() => setError('League not found'));
+  }, [leagueName]);
+
+  if (error) return <Container sx={{ mt: 3 }}><Alert severity="error">{error}</Alert></Container>;
+  if (numericId === null) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>;
+  return (
+    <LeagueIdProvider value={numericId}>
+      <Outlet />
+    </LeagueIdProvider>
+  );
+}
 
 function Layout() {
   return (
@@ -78,11 +116,20 @@ export default function App() {
               <Route path="/my-games" element={<RequireAuth><MyGamesPage /></RequireAuth>} />
               <Route path="/leagues" element={<LeagueListPage />} />
               <Route path="/leagues/new" element={<RequireAuth><CreateLeaguePage /></RequireAuth>} />
-              <Route path="/league/:leagueId" element={<LeagueDetailPage />} />
-              <Route path="/league/:leagueId/admin" element={<RequireAuth><LeagueAdminPage /></RequireAuth>} />
-              <Route path="/league/:leagueId/draft" element={<RequireAuth><DraftBoardPage /></RequireAuth>} />
-              <Route path="/league/:leagueId/my-info" element={<RequireAuth><MyLeagueInfoPage /></RequireAuth>} />
-              <Route path="/league/:leagueId/my-team" element={<RequireAuth><MyTeamPage /></RequireAuth>} />
+              <Route path="/league/by_id/:leagueId" element={<LeagueByIdWrapper />}>
+                <Route index element={<LeagueDetailPage />} />
+                <Route path="admin" element={<RequireAuth><LeagueAdminPage /></RequireAuth>} />
+                <Route path="draft" element={<RequireAuth><DraftBoardPage /></RequireAuth>} />
+                <Route path="my-info" element={<RequireAuth><MyLeagueInfoPage /></RequireAuth>} />
+                <Route path="my-team" element={<RequireAuth><MyTeamPage /></RequireAuth>} />
+              </Route>
+              <Route path="/league/:leagueName" element={<LeagueByNameWrapper />}>
+                <Route index element={<LeagueDetailPage />} />
+                <Route path="admin" element={<RequireAuth><LeagueAdminPage /></RequireAuth>} />
+                <Route path="draft" element={<RequireAuth><DraftBoardPage /></RequireAuth>} />
+                <Route path="my-info" element={<RequireAuth><MyLeagueInfoPage /></RequireAuth>} />
+                <Route path="my-team" element={<RequireAuth><MyTeamPage /></RequireAuth>} />
+              </Route>
               <Route path="/admin/users" element={<RequireAuth><UserAdminPage /></RequireAuth>} />
               <Route path="/matches" element={<StandaloneMatchesPage />} />
               <Route path="/matches/:matchId" element={<StandaloneMatchPage />} />

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
   Typography,
@@ -94,7 +94,7 @@ const TOKEN_SETS = new Set([855, 600]);
 const PROPHECY_EXPANSION_ID = 886;
 
 export default function MyTeamPage() {
-  const { leagueId } = useParams<{ leagueId: string }>();
+  const leagueId = useLeagueNumericId();
   const { user } = useAuth();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -144,10 +144,9 @@ export default function MyTeamPage() {
   const [sasRungSelections, setSasRungSelections] = useState<Record<string, number | ''>>({});
 
   const refresh = useCallback(() => {
-    if (!leagueId) return;
     setSealedPools({});
     setTeamSealedPools({});
-    getLeague(parseInt(leagueId, 10))
+    getLeague(leagueId)
       .then((l) => {
         setLeague(l);
         const myTeam = l.teams.find((t) => t.id === l.my_team_id);

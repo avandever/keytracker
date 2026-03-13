@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
+import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
   Typography,
@@ -38,6 +39,10 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 
+function leagueBaseUrl(league: { id: number; url_name?: string | null }) {
+  return league.url_name ? `/league/${league.url_name}` : `/league/by_id/${league.id}`;
+}
+
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
   triad: 'Triad',
@@ -50,7 +55,7 @@ const getChipSx = (color: string) => (theme: any) => {
 };
 
 export default function LeagueDetailPage() {
-  const { leagueId } = useParams<{ leagueId: string }>();
+  const leagueId = useLeagueNumericId();
   const { user } = useAuth();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,8 +71,7 @@ export default function LeagueDetailPage() {
   const [discordStatusLoading, setDiscordStatusLoading] = useState(false);
 
   const refresh = useCallback(() => {
-    if (!leagueId) return;
-    getLeague(parseInt(leagueId, 10))
+    getLeague(leagueId)
       .then(setLeague)
       .catch((e) => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
@@ -77,11 +81,10 @@ export default function LeagueDetailPage() {
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
   const handleSignup = async () => {
-    if (!leagueId) return;
     setSignupDialogOpen(false);
     setActionLoading(true);
     try {
-      await signup(parseInt(leagueId, 10));
+      await signup(leagueId);
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -91,10 +94,9 @@ export default function LeagueDetailPage() {
   };
 
   const handleWithdraw = async () => {
-    if (!leagueId) return;
     setActionLoading(true);
     try {
-      await withdraw(parseInt(leagueId, 10));
+      await withdraw(leagueId);
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -919,22 +921,22 @@ export default function LeagueDetailPage() {
           </Button>
         )}
         {league.is_admin && (
-          <Button variant="outlined" component={RouterLink} to={`/league/${league.id}/admin`}>
+          <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/admin`}>
             Admin
           </Button>
         )}
         {(league.is_admin || league.is_captain) && league.status === 'drafting' && (
-          <Button variant="outlined" component={RouterLink} to={`/league/${league.id}/draft`}>
+          <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/draft`}>
             Draft Board
           </Button>
         )}
         {league.my_team_id && (
           <>
-            <Button variant="outlined" component={RouterLink} to={`/league/${league.id}/my-info`}>
+            <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/my-info`}>
               My Info
             </Button>
             {league.is_captain && (
-              <Button variant="outlined" component={RouterLink} to={`/league/${league.id}/my-team`}>
+              <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/my-team`}>
                 My Team
               </Button>
             )}

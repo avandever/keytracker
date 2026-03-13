@@ -275,6 +275,7 @@ export interface LeagueSummary {
   name: string;
   description: string | null;
   fee_amount: number | null;
+  url_name: string | null;
   team_size: number;
   num_teams: number;
   status: string;

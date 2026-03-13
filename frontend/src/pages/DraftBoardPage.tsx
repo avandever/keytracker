@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
   Typography,
@@ -30,7 +30,7 @@ import { useTestUser } from '../contexts/TestUserContext';
 import type { DraftState } from '../types';
 
 export default function DraftBoardPage() {
-  const { leagueId } = useParams<{ leagueId: string }>();
+  const leagueId = useLeagueNumericId();
   const { user } = useAuth();
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,8 +39,7 @@ export default function DraftBoardPage() {
   const intervalRef = useRef<number | null>(null);
 
   const refresh = useCallback(() => {
-    if (!leagueId) return;
-    getDraft(parseInt(leagueId, 10))
+    getDraft(leagueId)
       .then(setDraft)
       .catch((e) => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
@@ -55,11 +54,10 @@ export default function DraftBoardPage() {
   }, [refresh]);
 
   const handlePick = async (userId: number) => {
-    if (!leagueId) return;
     setPickLoading(true);
     setError('');
     try {
-      const updated = await makePick(parseInt(leagueId, 10), userId);
+      const updated = await makePick(leagueId, userId);
       setDraft(updated);
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);

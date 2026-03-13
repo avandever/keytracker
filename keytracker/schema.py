@@ -890,6 +890,7 @@ class League(db.Model):
     status = db.Column(db.String(20), nullable=False, default=LeagueStatus.SETUP.value)
     week_bonus_points = db.Column(db.Integer, nullable=False, default=2)
     is_test = db.Column(db.Boolean, default=False, nullable=False)
+    url_name = db.Column(db.String(100), nullable=True, unique=True, index=True)
     created_by_id = db.Column(
         db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
     )

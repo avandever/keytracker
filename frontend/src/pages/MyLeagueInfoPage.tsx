@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
   Typography,
@@ -57,7 +57,7 @@ const TOKEN_SETS = new Set([855, 600]);
 const PROPHECY_EXPANSION_ID = 886;
 
 export default function MyLeagueInfoPage() {
-  const { leagueId } = useParams<{ leagueId: string }>();
+  const leagueId = useLeagueNumericId();
   const { user } = useAuth();
   const { testUserId } = useTestUser();
   const effectiveUserId = testUserId ?? user?.id;
@@ -101,10 +101,9 @@ export default function MyLeagueInfoPage() {
 
   const refreshCountRef = useRef(0);
   const refresh = useCallback(() => {
-    if (!leagueId) return;
     setSealedPools({});
     const count = ++refreshCountRef.current;
-    getLeague(parseInt(leagueId, 10))
+    getLeague(leagueId)
       .then((l) => {
         if (count === refreshCountRef.current) {
           setLeague(l);

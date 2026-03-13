@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
   Typography,
@@ -104,7 +105,7 @@ const STATUS_COLORS: Record<string, 'default' | 'info' | 'warning' | 'success'> 
 };
 
 export default function LeagueAdminPage() {
-  const { leagueId } = useParams<{ leagueId: string }>();
+  const leagueId = useLeagueNumericId();
   const navigate = useNavigate();
   useAuth();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
@@ -115,6 +116,7 @@ export default function LeagueAdminPage() {
   // Settings form
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editUrlName, setEditUrlName] = useState('');
   const [editFee, setEditFee] = useState('');
   const [editTeamSize, setEditTeamSize] = useState('');
   const [editNumTeams, setEditNumTeams] = useState('');
@@ -182,13 +184,13 @@ export default function LeagueAdminPage() {
   const [pairingEdits, setPairingEdits] = useState<Record<number, { player1_id: number; player2_id: number }>>({});
 
   const refresh = useCallback(() => {
-    if (!leagueId) return;
-    getLeague(parseInt(leagueId, 10))
+    getLeague(leagueId)
       .then((l) => {
         setLeague(l);
         setWeekNames(Object.fromEntries((l.weeks || []).map((w) => [w.id, w.name || ''])));
         setEditName(l.name);
         setEditDescription(l.description || '');
+        setEditUrlName(l.url_name || '');
         setEditFee(l.fee_amount != null ? String(l.fee_amount) : '');
         setEditTeamSize(String(l.team_size));
         setEditNumTeams(String(l.num_teams));
@@ -234,6 +236,7 @@ export default function LeagueAdminPage() {
     try {
       const payload: Parameters<typeof updateLeague>[1] = {
         week_bonus_points: parseInt(editBonusPoints, 10) || 0,
+        url_name: editUrlName.trim() || null,
       };
       if (isSetup) {
         payload.name = editName;
@@ -746,6 +749,7 @@ export default function LeagueAdminPage() {
                     </>
                   )}
                   <TextField label="Bonus Points Per Week Win" value={editBonusPoints} onChange={(e) => setEditBonusPoints(e.target.value)} type="number" inputProps={{ min: '0' }} helperText="Extra points awarded to the week winner (default: 2)" />
+                  <TextField label="League URL Name" value={editUrlName} onChange={(e) => setEditUrlName(e.target.value)} helperText={`Optional. Sets the URL: /league/${editUrlName || '<name>'}`} />
                   <Button variant="contained" onClick={handleSaveSettings}>Save Settings</Button>
                 </Box>
               </CardContent>

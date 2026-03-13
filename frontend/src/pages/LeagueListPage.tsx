@@ -61,7 +61,7 @@ export default function LeagueListPage() {
       )}
       {leagues.map((league) => (
         <Card key={league.id} sx={{ mb: 2 }}>
-          <CardActionArea component={RouterLink} to={`/league/${league.id}`}>
+          <CardActionArea component={RouterLink} to={league.url_name ? `/league/${league.url_name}` : `/league/by_id/${league.id}`}>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>

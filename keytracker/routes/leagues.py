@@ -165,6 +165,14 @@ def create_league():
     return jsonify(serialize_league_detail(league)), 201
 
 
+@blueprint.route("/by-name/<string:url_name>", methods=["GET"])
+def get_league_by_name(url_name):
+    league = League.query.filter_by(url_name=url_name).first()
+    if not league:
+        return jsonify({"error": "League not found"}), 404
+    return get_league(league.id)
+
+
 @blueprint.route("/<int:league_id>", methods=["GET"])
 def get_league(league_id):
     league, err = _get_league_or_404(league_id)
@@ -214,6 +222,15 @@ def update_league(league_id):
             and data["week_bonus_points"] >= 0
         ):
             league.week_bonus_points = data["week_bonus_points"]
+    if "url_name" in data:
+        raw = (data["url_name"] or "").strip() or None
+        if raw is not None:
+            conflict = League.query.filter(
+                League.url_name == raw, League.id != league.id
+            ).first()
+            if conflict:
+                return jsonify({"error": "That name is already in use"}), 409
+        league.url_name = raw
     if league.status != LeagueStatus.SETUP.value:
         db.session.commit()
         db.session.refresh(league)

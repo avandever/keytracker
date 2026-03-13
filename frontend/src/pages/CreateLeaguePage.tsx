@@ -46,7 +46,7 @@ export default function CreateLeaguePage() {
         num_teams: parseInt(numTeams, 10),
         is_test: isTest,
       });
-      navigate(`/league/${league.id}`);
+      navigate(league.url_name ? `/league/${league.url_name}` : `/league/by_id/${league.id}`);
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
     } finally {

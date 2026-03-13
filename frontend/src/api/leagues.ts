@@ -40,6 +40,11 @@ export async function getLeague(leagueId: number): Promise<LeagueDetail> {
   return data;
 }
 
+export async function getLeagueByName(urlName: string): Promise<LeagueDetail> {
+  const { data } = await apiClient.get(`/leagues/by-name/${encodeURIComponent(urlName)}`);
+  return data;
+}
+
 export async function updateLeague(
   leagueId: number,
   payload: Partial<{
@@ -49,6 +54,7 @@ export async function updateLeague(
     team_size: number;
     num_teams: number;
     week_bonus_points: number;
+    url_name: string | null;
   }>,
 ): Promise<LeagueDetail> {
   const { data } = await apiClient.put(`/leagues/${leagueId}`, payload);
