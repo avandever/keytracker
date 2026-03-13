@@ -1280,8 +1280,8 @@ def create_week(league_id):
         return err
     if not _is_league_admin(league, get_effective_user()):
         return jsonify({"error": "Admin access required"}), 403
-    if league.status not in (LeagueStatus.ACTIVE.value, LeagueStatus.PLAYOFFS.value):
-        return jsonify({"error": "League must be active"}), 400
+    if league.status == LeagueStatus.COMPLETED.value:
+        return jsonify({"error": "Cannot add weeks to a completed league"}), 400
 
     data = request.get_json(silent=True) or {}
     format_type = data.get("format_type", "")

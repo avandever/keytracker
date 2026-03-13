@@ -17,7 +17,6 @@ import DecksSearchPage from './pages/DecksSearchPage';
 import UserSearchPage from './pages/UserSearchPage';
 import UserProfilePage from './pages/UserProfilePage';
 import UploadLogPage from './pages/UploadLogPage';
-import UploadSimplePage from './pages/UploadSimplePage';
 import CsvToPodsPage from './pages/CsvToPodsPage';
 import PrivacyPage from './pages/PrivacyPage';
 import ComingSoonPage from './pages/ComingSoonPage';
@@ -110,7 +109,6 @@ export default function App() {
               <Route path="/user" element={<UserSearchPage />} />
               <Route path="/user/:username" element={<UserProfilePage />} />
               <Route path="/upload" element={<RequireAuth><UploadLogPage /></RequireAuth>} />
-              <Route path="/upload_simple" element={<RequireAuth><UploadSimplePage /></RequireAuth>} />
               <Route path="/csv_to_pods" element={<RequireAuth><CsvToPodsPage /></RequireAuth>} />
               <Route path="/account" element={<AccountPage />} />
               <Route path="/my-games" element={<RequireAuth><MyGamesPage /></RequireAuth>} />

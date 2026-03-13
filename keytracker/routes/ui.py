@@ -371,32 +371,6 @@ def upload_post():
     )
 
 
-@blueprint.route("/upload_simple", methods=["GET"])
-def upload_simple():
-    """Manual game upload page with just simple options"""
-    return render_template(
-        "upload_simple.html",
-        title="Simple Game Upload",
-    )
-
-
-@blueprint.route("/upload_simple", methods=["POST"])
-def upload_simple_post():
-    """Manual game upload page with just simple options"""
-    game = basic_stats_to_game(**request.form)
-    existing_game = Game.query.filter_by(crucible_game_id=game.crucible_game_id).first()
-    if existing_game is None:
-        logger.debug(f"Confirmed no existing record for {game.crucible_game_id}")
-        db.session.add(game)
-        db.session.commit()
-        return redirect(url_for("ui.game", crucible_game_id=game.crucible_game_id))
-    else:
-        flash(f"A game with name '{game.crucible_game_id}' already exists")
-        return render_template(
-            "upload_simple.html",
-            title="Simple Game Upload",
-        )
-
 
 @blueprint.route("/login")
 def login():

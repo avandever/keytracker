@@ -24,6 +24,34 @@ import { syncCollection, getSyncStatus } from '../api/collection';
 import { useSearchParams, Link as RouterLink } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
 
+function buildTimezoneOptions(): { value: string; label: string; offsetMin: number }[] {
+  const now = new Date();
+  const zones = Intl.supportedValuesOf('timeZone');
+  return zones
+    .map((tz) => {
+      const fmt = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz,
+        timeZoneName: 'short',
+      });
+      const parts = fmt.formatToParts(now);
+      const abbr = parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+
+      const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+      const tzDate = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+      const offsetMin = Math.round((tzDate.getTime() - utcDate.getTime()) / 60000);
+      const sign = offsetMin >= 0 ? '+' : '-';
+      const abs = Math.abs(offsetMin);
+      const h = Math.floor(abs / 60).toString().padStart(2, '0');
+      const m = (abs % 60).toString().padStart(2, '0');
+      const utcStr = `UTC${sign}${h}:${m}`;
+
+      return { value: tz, label: `${tz} — ${abbr} (${utcStr})`, offsetMin };
+    })
+    .sort((a, b) => a.offsetMin - b.offsetMin || a.value.localeCompare(b.value));
+}
+
+const TIMEZONE_OPTIONS = buildTimezoneOptions();
+
 export default function AccountPage() {
   const { user, loading, refresh } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -328,13 +356,11 @@ export default function AccountPage() {
           <InputLabel>Timezone</InputLabel>
           <Select value={timezone} label="Timezone" onChange={(e) => setTimezone(e.target.value)}>
             <MenuItem value="">-- Select --</MenuItem>
-            {[
-              'NZST (UTC+12)', 'AEST (UTC+10)', 'JST (UTC+9)', 'CST-Asia (UTC+8)',
-              'IST (UTC+5:30)', 'EET (UTC+2)', 'CET (UTC+1)', 'GMT (UTC+0)',
-              'BRT (UTC-3)', 'EDT (UTC-4)', 'EST (UTC-5)', 'CDT (UTC-5)', 'CST (UTC-6)', 'MDT (UTC-6)', 'MST (UTC-7)',
-              'PDT (UTC-7)', 'PST (UTC-8)', 'AKST (UTC-9)', 'HST (UTC-10)',
-            ].map((tz) => (
-              <MenuItem key={tz} value={tz}>{tz}</MenuItem>
+            {timezone && !TIMEZONE_OPTIONS.find((o) => o.value === timezone) && (
+              <MenuItem value={timezone}>{timezone} (legacy)</MenuItem>
+            )}
+            {TIMEZONE_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
             ))}
           </Select>
           <FormHelperText>Shared with league admins, captains, and opponents to help schedule matches</FormHelperText>

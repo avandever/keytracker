@@ -26,9 +26,8 @@ const NAV_LINKS = [
   { label: 'Decks', to: '/decks' },
   { label: 'Players', to: '/user' },
   { label: 'Leagues', to: '/leagues' },
-  { label: 'Matches', to: '/matches' },
+  { label: 'Quick Match', to: '/matches' },
   { label: 'Upload', to: '/upload' },
-  { label: 'Simple Upload', to: '/upload_simple' },
   { label: 'CSV Pods', to: '/csv_to_pods' },
 ];
 

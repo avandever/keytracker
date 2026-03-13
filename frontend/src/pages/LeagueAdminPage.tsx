@@ -945,15 +945,12 @@ export default function LeagueAdminPage() {
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">Weeks ({league.weeks?.length || 0})</Typography>
-              {isActive && (
+              {league.status !== 'completed' && (
                 <Button variant="contained" size="small" onClick={() => setWeekDialogOpen(true)}>
                   Add Week
                 </Button>
               )}
             </Box>
-            {!isActive && (league.weeks || []).length === 0 && (
-              <Typography color="text.secondary">Weeks can be added after the draft is complete.</Typography>
-            )}
             {(league.weeks || []).map((week) => (
               <Box key={week.id} sx={{ mb: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                 <ListItemButton onClick={() => toggleWeekExpanded(week.id)} sx={{ py: 1 }}>

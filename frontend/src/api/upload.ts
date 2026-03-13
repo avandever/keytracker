@@ -5,11 +5,6 @@ export async function uploadLog(log: string, date?: string): Promise<{ success: 
   return data;
 }
 
-export async function uploadSimple(gameData: Record<string, string>): Promise<{ success: boolean; crucible_game_id: string }> {
-  const { data } = await apiClient.post('/upload/simple', gameData);
-  return data;
-}
-
 export async function uploadCsvPods(file: File, maxDecks: number = 1000): Promise<unknown> {
   const formData = new FormData();
   formData.append('decks_csv', file);
