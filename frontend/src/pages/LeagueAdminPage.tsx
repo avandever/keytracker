@@ -726,6 +726,7 @@ export default function LeagueAdminPage() {
         sx={{ mb: 2 }}
         variant="scrollable"
         scrollButtons="auto"
+        allowScrollButtonsMobile
       >
         {tabLabels.map((label, i) => <Tab key={i} label={label} />)}
       </Tabs>

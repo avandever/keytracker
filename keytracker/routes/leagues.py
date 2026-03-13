@@ -308,7 +308,7 @@ def signup(league_id):
         return (
             jsonify(
                 {
-                    "error": "You must set your DoK profile URL and timezone in your account settings before signing up for a league."
+                    "error": "You must set your DoK Collection URL and timezone in your account settings before signing up for a league."
                 }
             ),
             400,
@@ -317,7 +317,7 @@ def signup(league_id):
         return (
             jsonify(
                 {
-                    "error": "Your DoK profile URL must start with https://decksofkeyforge.com."
+                    "error": "Your DoK Collection URL must start with https://decksofkeyforge.com."
                 }
             ),
             400,

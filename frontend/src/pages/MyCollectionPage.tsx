@@ -109,7 +109,7 @@ export default function MyCollectionPage() {
         </Alert>
       ) : (
         <>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 2 }}>
             <Tab label={`Standard Decks (${total})`} />
             <Tab label={`Alliance Decks (${alliance.length})`} />
           </Tabs>

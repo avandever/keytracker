@@ -1019,6 +1019,7 @@ export default function LeagueDetailPage() {
             sx={{ mb: 2 }}
             variant="scrollable"
             scrollButtons="auto"
+            allowScrollButtonsMobile
           >
             {tabs.map((label, i) => (
               <Tab key={i} label={label} />

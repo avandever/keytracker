@@ -193,7 +193,7 @@ export default function AccountPage() {
           </Typography>
         </Box>
 
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} centered sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab label="My Info" />
           <Tab label="Integrations" />
         </Tabs>
