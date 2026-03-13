@@ -14,6 +14,8 @@ import {
   MenuItem,
   Paper,
   Select,
+  Tab,
+  Tabs,
   TextField,
   Typography,
   CircularProgress,
@@ -65,6 +67,7 @@ export default function AccountPage() {
   const [country, setCountry] = useState(user?.country || '');
   const [timezone, setTimezone] = useState(user?.timezone || '');
   const [profileSaving, setProfileSaving] = useState(false);
+  const [tab, setTab] = useState(0);
   const [mailingLine1, setMailingLine1] = useState(user?.mailing_address_line1 || '');
   const [mailingLine2, setMailingLine2] = useState(user?.mailing_address_line2 || '');
   const [mailingCity, setMailingCity] = useState(user?.mailing_city || '');
@@ -175,146 +178,29 @@ export default function AccountPage() {
           {alert.message}
         </Alert>
       )}
-      <Paper sx={{ p: 4, textAlign: 'center' }}>
-        <Avatar
-          src={user.avatar_url || undefined}
-          alt={user.name}
-          sx={{ width: 80, height: 80, mx: 'auto', mb: 2 }}
-        />
-        <Typography variant="h5" gutterBottom>
-          {user.name}
-        </Typography>
-        <Typography color="text.secondary" gutterBottom>
-          {user.email}
-        </Typography>
+      <Paper sx={{ textAlign: 'center' }}>
+        <Box sx={{ pt: 4, pb: 2, px: 4 }}>
+          <Avatar
+            src={user.avatar_url || undefined}
+            alt={user.name}
+            sx={{ width: 80, height: 80, mx: 'auto', mb: 2 }}
+          />
+          <Typography variant="h5" gutterBottom>
+            {user.name}
+          </Typography>
+          <Typography color="text.secondary" gutterBottom>
+            {user.email}
+          </Typography>
+        </Box>
 
-        <Divider sx={{ my: 3 }} />
+        <Tabs value={tab} onChange={(_, v) => setTab(v)} centered sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tab label="My Info" />
+          <Tab label="Integrations" />
+        </Tabs>
 
-        <Typography variant="h6" gutterBottom>
-          Patreon
-        </Typography>
-
-        {!user.patreon_linked ? (
-          <>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
-              Link your Patreon account to access supporter features.
-            </Typography>
-            <Button
-              variant="contained"
-              href="/auth/patreon/link"
-              sx={{
-                backgroundColor: '#FF424D',
-                '&:hover': { backgroundColor: '#e03640' },
-              }}
-            >
-              Link Patreon
-            </Button>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              Not a patron yet?{' '}
-              <Link href="https://www.patreon.com/AV8R772" target="_blank" rel="noopener noreferrer">
-                Support Bear Tracks on Patreon
-              </Link>
-            </Typography>
-          </>
-        ) : (
-          <>
-            {user.is_patron ? (
-              <>
-                <Chip
-                  label={user.patreon_tier_title || 'Active Patron'}
-                  color="success"
-                  sx={{ mb: 1 }}
-                />
-                <Typography color="text.secondary" sx={{ mt: 1, mb: 2 }}>
-                  Thank you for your support!
-                </Typography>
-              </>
-            ) : (
-              <>
-                <Chip label="Patreon Linked" sx={{ mb: 1 }} />
-                <Typography color="text.secondary" sx={{ mt: 1, mb: 2 }}>
-                  No active membership found. If you recently subscribed, try refreshing.{' '}
-                  <Link href="https://www.patreon.com/AV8R772" target="_blank" rel="noopener noreferrer">
-                    Support Bear Tracks on Patreon
-                  </Link>
-                </Typography>
-              </>
-            )}
-            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-              <Button variant="outlined" size="small" href="/auth/patreon/refresh">
-                Refresh Status
-              </Button>
-              <Button variant="outlined" size="small" color="error" href="/auth/patreon/unlink">
-                Unlink
-              </Button>
-            </Box>
-          </>
-        )}
-
-        <Divider sx={{ my: 3 }} />
-
-        <Typography variant="h6" gutterBottom>
-          Google
-        </Typography>
-
-        {!user.google_linked ? (
-          <>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
-              Link your Google account to enable Google sign-in.
-            </Typography>
-            <Button variant="contained" href="/auth/google/link">
-              Link Google Account
-            </Button>
-          </>
-        ) : (
-          <>
-            <Chip label="Google Linked" sx={(theme) => ({ mb: 1, bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />
-            <Box sx={{ mt: 1 }}>
-              <Button variant="outlined" size="small" color="error" href="/auth/google/unlink">
-                Unlink
-              </Button>
-            </Box>
-          </>
-        )}
-
-        <Divider sx={{ my: 3 }} />
-
-        <Typography variant="h6" gutterBottom>
-          Discord
-        </Typography>
-
-        {!user.discord_linked ? (
-          <>
-            <Typography color="text.secondary" sx={{ mb: 2 }}>
-              Link your Discord account. Required for league signup.
-            </Typography>
-            <Button
-              variant="contained"
-              href="/auth/discord/link"
-              sx={{
-                backgroundColor: '#5865F2',
-                '&:hover': { backgroundColor: '#4752c4' },
-              }}
-            >
-              Link Discord
-            </Button>
-          </>
-        ) : (
-          <>
-            <Chip
-              label={`@${user.discord_username}`}
-              sx={(theme) => ({ mb: 1, bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })}
-            />
-            <Box sx={{ mt: 1 }}>
-              <Button variant="outlined" size="small" color="error" href="/auth/discord/unlink">
-                Unlink
-              </Button>
-            </Box>
-          </>
-        )}
-
-        <Divider sx={{ my: 3 }} />
-
+        {/* My Info tab */}
+        {tab === 0 && (
+        <Box sx={{ p: 4 }}>
         <Typography variant="h6" gutterBottom>
           League Profile
         </Typography>
@@ -451,6 +337,140 @@ export default function AccountPage() {
         >
           {mailingSaving ? 'Saving...' : 'Save Address'}
         </Button>
+
+        <Divider sx={{ my: 3 }} />
+
+        <Button variant="outlined" href="/auth/logout?next=/">
+          Sign Out
+        </Button>
+        </Box>
+        )}
+
+        {/* Integrations tab */}
+        {tab === 1 && (
+        <Box sx={{ p: 4 }}>
+        <Typography variant="h6" gutterBottom>
+          Patreon
+        </Typography>
+
+        {!user.patreon_linked ? (
+          <>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              Link your Patreon account to access supporter features.
+            </Typography>
+            <Button
+              variant="contained"
+              href="/auth/patreon/link"
+              sx={{
+                backgroundColor: '#FF424D',
+                '&:hover': { backgroundColor: '#e03640' },
+              }}
+            >
+              Link Patreon
+            </Button>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Not a patron yet?{' '}
+              <Link href="https://www.patreon.com/AV8R772" target="_blank" rel="noopener noreferrer">
+                Support Bear Tracks on Patreon
+              </Link>
+            </Typography>
+          </>
+        ) : (
+          <>
+            {user.is_patron ? (
+              <>
+                <Chip
+                  label={user.patreon_tier_title || 'Active Patron'}
+                  color="success"
+                  sx={{ mb: 1 }}
+                />
+                <Typography color="text.secondary" sx={{ mt: 1, mb: 2 }}>
+                  Thank you for your support!
+                </Typography>
+              </>
+            ) : (
+              <>
+                <Chip label="Patreon Linked" sx={{ mb: 1 }} />
+                <Typography color="text.secondary" sx={{ mt: 1, mb: 2 }}>
+                  No active membership found. If you recently subscribed, try refreshing.{' '}
+                  <Link href="https://www.patreon.com/AV8R772" target="_blank" rel="noopener noreferrer">
+                    Support Bear Tracks on Patreon
+                  </Link>
+                </Typography>
+              </>
+            )}
+            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
+              <Button variant="outlined" size="small" href="/auth/patreon/refresh">
+                Refresh Status
+              </Button>
+              <Button variant="outlined" size="small" color="error" href="/auth/patreon/unlink">
+                Unlink
+              </Button>
+            </Box>
+          </>
+        )}
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="h6" gutterBottom>
+          Google
+        </Typography>
+
+        {!user.google_linked ? (
+          <>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              Link your Google account to enable Google sign-in.
+            </Typography>
+            <Button variant="contained" href="/auth/google/link">
+              Link Google Account
+            </Button>
+          </>
+        ) : (
+          <>
+            <Chip label="Google Linked" sx={(theme) => ({ mb: 1, bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />
+            <Box sx={{ mt: 1 }}>
+              <Button variant="outlined" size="small" color="error" href="/auth/google/unlink">
+                Unlink
+              </Button>
+            </Box>
+          </>
+        )}
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="h6" gutterBottom>
+          Discord
+        </Typography>
+
+        {!user.discord_linked ? (
+          <>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              Link your Discord account. Required for league signup.
+            </Typography>
+            <Button
+              variant="contained"
+              href="/auth/discord/link"
+              sx={{
+                backgroundColor: '#5865F2',
+                '&:hover': { backgroundColor: '#4752c4' },
+              }}
+            >
+              Link Discord
+            </Button>
+          </>
+        ) : (
+          <>
+            <Chip
+              label={`@${user.discord_username}`}
+              sx={(theme) => ({ mb: 1, bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })}
+            />
+            <Box sx={{ mt: 1 }}>
+              <Button variant="outlined" size="small" color="error" href="/auth/discord/unlink">
+                Unlink
+              </Button>
+            </Box>
+          </>
+        )}
 
         <Divider sx={{ my: 3 }} />
 
@@ -611,14 +631,9 @@ export default function AccountPage() {
           </Button>
         </Box>
 
-        <Divider sx={{ my: 3 }} />
+        </Box>
+        )}
 
-        <Button
-          variant="outlined"
-          href="/auth/logout?next=/"
-        >
-          Sign Out
-        </Button>
       </Paper>
     </Container>
   );

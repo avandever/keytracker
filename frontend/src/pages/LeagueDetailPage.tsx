@@ -909,7 +909,18 @@ export default function LeagueDetailPage() {
       </Box>
 
       {/* Action buttons */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+        {user && (league.status === 'setup' || league.status === 'drafting') && (() => {
+          if (!league.is_signed_up) {
+            return <Chip label="Not Signed Up" />;
+          }
+          const capacity = league.num_teams * league.team_size;
+          const mySignup = league.signups.find((s) => s.user.id === user.id);
+          const isWaitlist = mySignup ? mySignup.signup_order > capacity : false;
+          return isWaitlist
+            ? <Chip label="Waitlist" color="warning" />
+            : <Chip label="Signed Up" color="success" />;
+        })()}
         {user && league.status === 'setup' && !league.is_signed_up && (
           <Button variant="contained" onClick={() => setSignupDialogOpen(true)} disabled={actionLoading}>
             Sign Up
