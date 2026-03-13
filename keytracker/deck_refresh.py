@@ -42,16 +42,16 @@ def _refresh(deck_id: int, user_dok_api_key: str | None):
     if len(deck.pod_stats) == 0 and len(deck.cards_from_assoc) >= 36:
         try:
             calculate_pod_stats(deck)
+            db.session.commit()
         except Exception:
             logger.exception("Pod stats failed for deck %s", deck_id)
 
     if not deck.dok or deck.dok.last_refresh is None:
         try:
             update_sas_scores(deck, dok_api_key=user_dok_api_key)
+            db.session.commit()
         except Exception:
             logger.exception("SAS update failed for deck %s", deck_id)
-
-    db.session.commit()
 
 
 def start_worker():
