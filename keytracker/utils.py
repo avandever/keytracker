@@ -2081,15 +2081,15 @@ def run_background_collector(app, stop_event=None):
 
 def _expected_card_count(expansion_id):
     """Return the (min, max) inclusive card count for a given expansion ID."""
-    if expansion_id == 892:   # Martian Civil War
+    if expansion_id == 892:  # Martian Civil War
         return (13, 13)
-    if expansion_id == 886:   # Prophetic Visions
+    if expansion_id == 886:  # Prophetic Visions
         return (40, 40)
     if expansion_id in (496, 600, 855, 918):  # DT, WoE, ToC, CC
         return (37, 37)
-    if expansion_id == 601:   # Unchained 2022 — 36 base, 37 with token
+    if expansion_id == 601:  # Unchained 2022 — 36 base, 37 with token
         return (36, 37)
-    return (36, 36)           # all other sets
+    return (36, 36)  # all other sets
 
 
 def run_background_card_refresher(app, stop_event=None):
@@ -2159,8 +2159,10 @@ def run_background_card_refresher(app, stop_event=None):
                         continue
                 else:
                     good_decks_in_a_row += 1
-                    if good_decks_in_a_row % 100 = 0:
-                        logger.info(f"background_deck_refresher has seen {good_decks_in_a_row} good decks in a row.")
+                    if good_decks_in_a_row % 100 == 0:
+                        logger.info(
+                            f"background_deck_refresher has seen {good_decks_in_a_row} good decks in a row."
+                        )
 
                 if len(deck.pod_stats) == 0 and len(deck.cards_from_assoc) >= min_cards:
                     calculate_pod_stats(deck)
