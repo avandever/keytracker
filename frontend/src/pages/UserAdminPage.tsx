@@ -20,7 +20,7 @@ import {
   DialogActions,
   TablePagination,
 } from '@mui/material';
-import { listUsers, deleteUser, toggleFreeMembership } from '../api/admin';
+import { listUsers, deleteUser, toggleFreeMembership, toggleImpersonation } from '../api/admin';
 import type { AdminUser } from '../api/admin';
 import { useAuth } from '../contexts/AuthContext';
 import { alpha } from '@mui/material/styles';
@@ -84,6 +84,17 @@ export default function UserAdminPage() {
     }
   };
 
+  const handleToggleImpersonation = async (userId: number) => {
+    setError('');
+    try {
+      const res = await toggleImpersonation(userId);
+      setSuccess(`Test user picker ${res.show_test_user_picker ? 'enabled' : 'disabled'}`);
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   return (
     <Container maxWidth="lg" sx={{ mt: 3 }}>
       <Typography variant="h4" gutterBottom>User Admin</Typography>
@@ -118,6 +129,7 @@ export default function UserAdminPage() {
                       {u.free_membership && <Chip label="Free Member" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />}
                       {u.is_league_admin && <Chip label="League Admin" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />}
                       {u.is_test_user && <Chip label="Test" size="small" />}
+                      {u.show_test_user_picker && <Chip label="Can Impersonate" size="small" color="secondary" />}
                     </Box>
                   </TableCell>
                   <TableCell>
@@ -128,6 +140,14 @@ export default function UserAdminPage() {
                         onClick={() => handleToggleMembership(u.id)}
                       >
                         {u.free_membership ? 'Revoke Free' : 'Grant Free'}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        onClick={() => handleToggleImpersonation(u.id)}
+                      >
+                        {u.show_test_user_picker ? 'Disable Impersonation' : 'Enable Impersonation'}
                       </Button>
                       <Button
                         size="small"

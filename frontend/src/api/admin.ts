@@ -9,6 +9,7 @@ export interface AdminUser {
   is_patron: boolean;
   is_test_user: boolean;
   is_league_admin: boolean;
+  show_test_user_picker: boolean;
 }
 
 export interface AdminUsersResponse {
@@ -29,5 +30,10 @@ export async function deleteUser(userId: number): Promise<void> {
 
 export async function toggleFreeMembership(userId: number): Promise<{ free_membership: boolean }> {
   const { data } = await apiClient.post(`/admin/users/${userId}/free-membership`);
+  return data;
+}
+
+export async function toggleImpersonation(userId: number): Promise<{ show_test_user_picker: boolean }> {
+  const { data } = await apiClient.post(`/admin/users/${userId}/impersonation`);
   return data;
 }

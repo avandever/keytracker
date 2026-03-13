@@ -19,15 +19,15 @@ export default function TestUserPicker() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!user?.is_league_admin) return;
+    if (!user?.show_test_user_picker) return;
     setLoading(true);
     listTestUsers()
       .then(setTestUsers)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [user?.is_league_admin]);
+  }, [user?.show_test_user_picker]);
 
-  if (!user?.is_league_admin) return null;
+  if (!user?.show_test_user_picker) return null;
   if (loading && testUsers.length === 0) return null;
 
   return (

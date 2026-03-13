@@ -784,10 +784,17 @@ class User(UserMixin, db.Model):
     free_membership = db.Column(db.Boolean, default=False, nullable=False)
     is_league_admin = db.Column(db.Boolean, default=False, nullable=False)
     is_test_user = db.Column(db.Boolean, default=False, nullable=False)
+    show_test_user_picker = db.Column(db.Boolean, default=False, nullable=False)
     dok_api_key = db.Column(db.String(36), nullable=True)
     dok_profile_url = db.Column(db.String(500), nullable=True)
     country = db.Column(db.String(100), nullable=True)
     timezone = db.Column(db.String(100), nullable=True)
+    mailing_address_line1 = db.Column(db.String(200), nullable=True)
+    mailing_address_line2 = db.Column(db.String(200), nullable=True)
+    mailing_city = db.Column(db.String(100), nullable=True)
+    mailing_state = db.Column(db.String(100), nullable=True)
+    mailing_postal_code = db.Column(db.String(20), nullable=True)
+    mailing_country = db.Column(db.String(100), nullable=True)
     tco_usernames = db.relationship(
         "TcoUsername", back_populates="user", cascade="all, delete-orphan"
     )

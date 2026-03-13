@@ -13,9 +13,16 @@ export interface AuthUser {
   dok_api_key: string | null;
   tco_usernames: string[];
   is_league_admin: boolean;
+  show_test_user_picker: boolean;
   dok_profile_url: string | null;
   country: string | null;
   timezone: string | null;
+  mailing_address_line1: string | null;
+  mailing_address_line2: string | null;
+  mailing_city: string | null;
+  mailing_state: string | null;
+  mailing_postal_code: string | null;
+  mailing_country: string | null;
 }
 
 export interface TurnTimingEntry {

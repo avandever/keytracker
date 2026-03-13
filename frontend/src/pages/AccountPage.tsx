@@ -37,6 +37,13 @@ export default function AccountPage() {
   const [country, setCountry] = useState(user?.country || '');
   const [timezone, setTimezone] = useState(user?.timezone || '');
   const [profileSaving, setProfileSaving] = useState(false);
+  const [mailingLine1, setMailingLine1] = useState(user?.mailing_address_line1 || '');
+  const [mailingLine2, setMailingLine2] = useState(user?.mailing_address_line2 || '');
+  const [mailingCity, setMailingCity] = useState(user?.mailing_city || '');
+  const [mailingState, setMailingState] = useState(user?.mailing_state || '');
+  const [mailingPostal, setMailingPostal] = useState(user?.mailing_postal_code || '');
+  const [mailingCountry, setMailingCountry] = useState(user?.mailing_country || '');
+  const [mailingSaving, setMailingSaving] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -44,6 +51,12 @@ export default function AccountPage() {
       setDokProfileUrl(user.dok_profile_url || '');
       setCountry(user.country || '');
       setTimezone(user.timezone || '');
+      setMailingLine1(user.mailing_address_line1 || '');
+      setMailingLine2(user.mailing_address_line2 || '');
+      setMailingCity(user.mailing_city || '');
+      setMailingState(user.mailing_state || '');
+      setMailingPostal(user.mailing_postal_code || '');
+      setMailingCountry(user.mailing_country || '');
     }
   }, [user]);
 
@@ -348,6 +361,69 @@ export default function AccountPage() {
           }}
         >
           {profileSaving ? 'Saving...' : 'Save Profile'}
+        </Button>
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="h6" gutterBottom>
+          Mailing Address
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Used for physical prize delivery. Not shared publicly.
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 2 }}>
+          <TextField
+            fullWidth size="small" label="Address Line 1"
+            value={mailingLine1} onChange={(e) => setMailingLine1(e.target.value)}
+          />
+          <TextField
+            fullWidth size="small" label="Address Line 2"
+            value={mailingLine2} onChange={(e) => setMailingLine2(e.target.value)}
+          />
+          <Box sx={{ display: 'flex', gap: 1.5 }}>
+            <TextField
+              fullWidth size="small" label="City"
+              value={mailingCity} onChange={(e) => setMailingCity(e.target.value)}
+            />
+            <TextField
+              sx={{ width: 180 }} size="small" label="State / Province"
+              value={mailingState} onChange={(e) => setMailingState(e.target.value)}
+            />
+            <TextField
+              sx={{ width: 140 }} size="small" label="Postal Code"
+              value={mailingPostal} onChange={(e) => setMailingPostal(e.target.value)}
+            />
+          </Box>
+          <TextField
+            fullWidth size="small" label="Country"
+            value={mailingCountry} onChange={(e) => setMailingCountry(e.target.value)}
+          />
+        </Box>
+        <Button
+          variant="contained"
+          size="small"
+          disabled={mailingSaving}
+          onClick={async () => {
+            setMailingSaving(true);
+            try {
+              await updateSettings({
+                mailing_address_line1: mailingLine1,
+                mailing_address_line2: mailingLine2,
+                mailing_city: mailingCity,
+                mailing_state: mailingState,
+                mailing_postal_code: mailingPostal,
+                mailing_country: mailingCountry,
+              });
+              await refresh();
+              setAlert({ severity: 'success', message: 'Mailing address saved.' });
+            } catch (e: any) {
+              setAlert({ severity: 'error', message: e.response?.data?.error || 'Save failed.' });
+            } finally {
+              setMailingSaving(false);
+            }
+          }}
+        >
+          {mailingSaving ? 'Saving...' : 'Save Address'}
         </Button>
 
         <Divider sx={{ my: 3 }} />

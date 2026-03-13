@@ -75,9 +75,16 @@ def auth_me():
                 "dok_api_key": current_user.dok_api_key,
                 "tco_usernames": [t.username for t in current_user.tco_usernames],
                 "is_league_admin": current_user.is_league_admin,
+                "show_test_user_picker": current_user.show_test_user_picker,
                 "dok_profile_url": current_user.dok_profile_url,
                 "country": current_user.country,
                 "timezone": current_user.timezone,
+                "mailing_address_line1": current_user.mailing_address_line1,
+                "mailing_address_line2": current_user.mailing_address_line2,
+                "mailing_city": current_user.mailing_city,
+                "mailing_state": current_user.mailing_state,
+                "mailing_postal_code": current_user.mailing_postal_code,
+                "mailing_country": current_user.mailing_country,
             }
         )
     return jsonify({"error": "Not authenticated"}), 401
@@ -125,6 +132,17 @@ def auth_settings():
     if "timezone" in data:
         val = (data["timezone"] or "").strip()
         current_user.timezone = val if val else None
+    for field in (
+        "mailing_address_line1",
+        "mailing_address_line2",
+        "mailing_city",
+        "mailing_state",
+        "mailing_postal_code",
+        "mailing_country",
+    ):
+        if field in data:
+            val = (data[field] or "").strip()
+            setattr(current_user, field, val if val else None)
     if "tco_usernames" in data:
         names = data["tco_usernames"]
         if not isinstance(names, list):
@@ -154,9 +172,16 @@ def auth_settings():
             "dok_api_key": current_user.dok_api_key,
             "tco_usernames": [t.username for t in current_user.tco_usernames],
             "is_league_admin": current_user.is_league_admin,
+            "show_test_user_picker": current_user.show_test_user_picker,
             "dok_profile_url": current_user.dok_profile_url,
             "country": current_user.country,
             "timezone": current_user.timezone,
+            "mailing_address_line1": current_user.mailing_address_line1,
+            "mailing_address_line2": current_user.mailing_address_line2,
+            "mailing_city": current_user.mailing_city,
+            "mailing_state": current_user.mailing_state,
+            "mailing_postal_code": current_user.mailing_postal_code,
+            "mailing_country": current_user.mailing_country,
         }
     )
 
@@ -751,6 +776,7 @@ def admin_list_users():
                     "is_patron": u.is_patron,
                     "is_test_user": u.is_test_user,
                     "is_league_admin": u.is_league_admin,
+                    "show_test_user_picker": u.show_test_user_picker,
                 }
                 for u in users
             ],
@@ -787,6 +813,19 @@ def admin_toggle_free_membership(user_id):
     user.free_membership = not user.free_membership
     db.session.commit()
     return jsonify({"success": True, "free_membership": user.free_membership}), 200
+
+
+@blueprint.route("/admin/users/<int:user_id>/impersonation", methods=["POST"])
+@login_required
+def admin_toggle_impersonation(user_id):
+    if current_user.email != ADMIN_EMAIL:
+        return jsonify({"error": "Admin access required"}), 403
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    user.show_test_user_picker = not user.show_test_user_picker
+    db.session.commit()
+    return jsonify({"success": True, "show_test_user_picker": user.show_test_user_picker}), 200
 
 
 @blueprint.route("/alliance-restricted-list-versions", methods=["GET"])
