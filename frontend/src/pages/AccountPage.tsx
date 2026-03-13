@@ -331,8 +331,8 @@ export default function AccountPage() {
             {[
               'NZST (UTC+12)', 'AEST (UTC+10)', 'JST (UTC+9)', 'CST-Asia (UTC+8)',
               'IST (UTC+5:30)', 'EET (UTC+2)', 'CET (UTC+1)', 'GMT (UTC+0)',
-              'BRT (UTC-3)', 'EST (UTC-5)', 'CST (UTC-6)', 'MST (UTC-7)',
-              'PST (UTC-8)', 'AKST (UTC-9)', 'HST (UTC-10)',
+              'BRT (UTC-3)', 'EDT (UTC-4)', 'EST (UTC-5)', 'CDT (UTC-5)', 'CST (UTC-6)', 'MDT (UTC-6)', 'MST (UTC-7)',
+              'PDT (UTC-7)', 'PST (UTC-8)', 'AKST (UTC-9)', 'HST (UTC-10)',
             ].map((tz) => (
               <MenuItem key={tz} value={tz}>{tz}</MenuItem>
             ))}
