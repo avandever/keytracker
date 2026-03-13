@@ -1048,7 +1048,7 @@ def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
     return deck
 
 
-def update_sas_scores(deck: Deck) -> bool:
+def update_sas_scores(deck: Deck, dok_api_key: str = None) -> bool:
     """Returns True if update occurred."""
     if (
         (deck.sas_version or 0) >= LATEST_SAS_VERSION
@@ -1058,7 +1058,8 @@ def update_sas_scores(deck: Deck) -> bool:
     ):
         return False
     url = os.path.join(DOK_DECK_BASE, deck.kf_id)
-    response = requests.get(url, headers=DOK_HEADERS)
+    headers = {"Api-Key": dok_api_key} if dok_api_key else DOK_HEADERS
+    response = requests.get(url, headers=headers)
     data = response.json()
     try:
         deck.sas_rating = data["deck"]["sasRating"]
@@ -2203,6 +2204,7 @@ def sync_collection_from_dok(user) -> dict:
 
     # --- Standard decks (paginated, 100/page) ---
     standard_count = 0
+    needs_refresh = []
     page = 0
     while True:
         resp = requests.get(
@@ -2234,6 +2236,13 @@ def sync_collection_from_dok(user) -> dict:
             row.dok_notes = entry.get("notes")
             row.last_synced_at = now
             standard_count += 1
+            if (
+                len(deck.cards_from_assoc) < 36
+                or len(deck.pod_stats) == 0
+                or not deck.dok
+                or deck.dok.last_refresh is None
+            ):
+                needs_refresh.append(deck.id)
         page += 1
 
     # --- Alliance decks (single call, no pagination) ---
@@ -2280,4 +2289,8 @@ def sync_collection_from_dok(user) -> dict:
         alliance_count += 1
 
     db.session.commit()
-    return {"standard_decks": standard_count, "alliance_decks": alliance_count}
+    return {
+        "standard_decks": standard_count,
+        "alliance_decks": alliance_count,
+        "refresh_deck_ids": needs_refresh,
+    }

@@ -417,6 +417,7 @@ _start_enrichment_worker()
 
 
 from keytracker.collection_sync import start_worker as _start_collection_sync_worker  # noqa: E402
+from keytracker.deck_refresh import start_worker as _start_deck_refresh_worker  # noqa: E402
 
 # Reset any jobs left in a running/pending state from a previous process crash
 with app.app_context():
@@ -432,6 +433,7 @@ with app.app_context():
         db.session.commit()
 
 _start_collection_sync_worker()
+_start_deck_refresh_worker()
 
 
 if __name__ == "__main__":

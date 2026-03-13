@@ -26,8 +26,10 @@ def _worker():
 
 
 def _run_sync(user_id: int, job_id: int):
+    from flask import current_app
     from keytracker.schema import db, CollectionSyncJob, User
     from keytracker.utils import sync_collection_from_dok
+    import keytracker.deck_refresh as deck_refresh
 
     job = CollectionSyncJob.query.get(job_id)
     if not job:
@@ -42,6 +44,14 @@ def _run_sync(user_id: int, job_id: int):
         job.status = "done"
         job.standard_decks = result["standard_decks"]
         job.alliance_decks = result["alliance_decks"]
+        app = current_app._get_current_object()
+        for deck_id in result.get("refresh_deck_ids", []):
+            deck_refresh.enqueue(app, deck_id, user.dok_api_key)
+        logger.info(
+            "Enqueued %d decks for refresh (user %s)",
+            len(result.get("refresh_deck_ids", [])),
+            user_id,
+        )
     except Exception as e:
         logger.exception("Collection sync error for user %s", user_id)
         job.status = "failed"
