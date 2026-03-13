@@ -110,7 +110,10 @@ export default function LeagueDetailPage() {
   if (!league) return null;
 
   const weeks = league.weeks || [];
-  const showSignups = league.is_admin || league.is_captain;
+  const userIsCaptain = user != null && league.teams.some((t) =>
+    t.members.some((m) => m.user.id === user.id && m.is_captain)
+  );
+  const showSignups = league.is_admin || userIsCaptain;
   const tabs = [
     'Standings',
     'Player Standings',
@@ -911,15 +914,16 @@ export default function LeagueDetailPage() {
       {/* Action buttons */}
       <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
         {user && (league.status === 'setup' || league.status === 'drafting') && (() => {
+          const chipSx = { pointerEvents: 'none' as const };
           if (!league.is_signed_up) {
-            return <Chip label="Not Signed Up" />;
+            return <Chip label="Not Signed Up" variant="outlined" sx={chipSx} />;
           }
           const capacity = league.num_teams * league.team_size;
           const mySignup = league.signups.find((s) => s.user.id === user.id);
           const isWaitlist = mySignup ? mySignup.signup_order > capacity : false;
           return isWaitlist
-            ? <Chip label="Waitlist" color="warning" />
-            : <Chip label="Signed Up" color="success" />;
+            ? <Chip label="Waitlist" color="warning" variant="outlined" sx={chipSx} />
+            : <Chip label="Signed Up" color="success" variant="outlined" sx={chipSx} />;
         })()}
         {user && league.status === 'setup' && !league.is_signed_up && (
           <Button variant="contained" onClick={() => setSignupDialogOpen(true)} disabled={actionLoading}>
@@ -927,12 +931,12 @@ export default function LeagueDetailPage() {
           </Button>
         )}
         {user && league.status === 'setup' && league.is_signed_up && (
-          <Button variant="outlined" color="warning" onClick={handleWithdraw} disabled={actionLoading}>
+          <Button variant="contained" color="warning" onClick={handleWithdraw} disabled={actionLoading}>
             Withdraw
           </Button>
         )}
         {league.is_admin && (
-          <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/admin`}>
+          <Button variant="contained" component={RouterLink} to={`${leagueBaseUrl(league)}/admin`}>
             Admin
           </Button>
         )}
