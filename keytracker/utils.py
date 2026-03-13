@@ -2080,13 +2080,19 @@ def run_background_collector(app, stop_event=None):
 
 
 def run_background_card_refresher(app, stop_event=None):
-    """Background thread that finds decks with no cards, fetches them from MV,
-    and calculates pod stats."""
+    """Background thread that finds decks with fewer than 36 cards, fetches them
+    from MV, and calculates pod stats.
+
+    Uses a forward-scanning cursor (min_deck_id) so already-fixed decks are not
+    re-scanned until a full pass completes. When no incomplete deck is found above
+    the cursor the cursor resets to 0 and the thread sleeps before the next pass.
+    """
     import logging
     import socket
+    from sqlalchemy import func, select
 
     logger = logging.getLogger("card_refresher")
-    NO_WORK_SLEEP = 300  # 5 minutes when no empty decks remain
+    NO_WORK_SLEEP = 300  # 5 minutes between full passes
 
     lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     try:
@@ -2096,20 +2102,36 @@ def run_background_card_refresher(app, stop_event=None):
         return
 
     logger.info("Background card refresher started")
+    min_deck_id = 0
 
     while stop_event is None or not stop_event.is_set():
         try:
             with app.app_context():
-                deck = Deck.query.filter(~Deck.cards_from_assoc.any()).first()
+                card_count_subq = (
+                    select(func.count())
+                    .where(CardInDeck.deck_id == Deck.id)
+                    .correlate(Deck)
+                    .scalar_subquery()
+                )
+                deck = (
+                    Deck.query.filter(Deck.id > min_deck_id, card_count_subq < 36)
+                    .order_by(Deck.id)
+                    .first()
+                )
                 if deck is None:
-                    logger.info(f"No decks without cards, sleeping {NO_WORK_SLEEP}s")
+                    logger.info(
+                        f"No incomplete decks above id={min_deck_id}, "
+                        f"resetting cursor and sleeping {NO_WORK_SLEEP}s"
+                    )
+                    min_deck_id = 0
                     time.sleep(NO_WORK_SLEEP)
                     continue
                 logger.info(f"Refreshing deck {deck.kf_id} ({deck.name})")
                 refresh_deck_from_mv(deck)
                 calculate_pod_stats(deck)
                 db.session.commit()
-                logger.info(f"Refreshed deck {deck.kf_id}")
+                min_deck_id = deck.id
+                logger.info(f"Refreshed deck {deck.kf_id}, cursor now {min_deck_id}")
         except Exception:
             logger.exception("Background card refresher error, sleeping 60s")
             time.sleep(60)
