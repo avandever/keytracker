@@ -304,29 +304,22 @@ def signup(league_id):
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Signups only during setup"}), 400
     effective = get_effective_user()
-    if not effective.dok_profile_url or not effective.timezone:
-        return (
-            jsonify(
-                {
-                    "error": "You must set your DoK Collection URL and timezone in your account settings before signing up for a league."
-                }
-            ),
-            400,
-        )
-    if not effective.dok_profile_url.startswith("https://decksofkeyforge.com"):
-        return (
-            jsonify(
-                {
-                    "error": "Your DoK Collection URL must start with https://decksofkeyforge.com."
-                }
-            ),
-            400,
-        )
+    missing = []
+    if not effective.dok_profile_url:
+        missing.append("DoK Collection URL")
+    elif not effective.dok_profile_url.startswith("https://decksofkeyforge.com"):
+        missing.append("a valid DoK Collection URL (must start with https://decksofkeyforge.com)")
+    if not effective.timezone:
+        missing.append("timezone")
     if not effective.discord_id:
+        missing.append("Discord account linked")
+    if missing:
+        items = ", ".join(missing)
         return (
             jsonify(
                 {
-                    "error": "You must link your Discord account in account settings before signing up for a league."
+                    "error": f"Before signing up, please set the following in your account settings: {items}.",
+                    "needs_profile": True,
                 }
             ),
             400,

@@ -60,6 +60,7 @@ export default function LeagueDetailPage() {
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [errorNeedsProfile, setErrorNeedsProfile] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [signupDialogOpen, setSignupDialogOpen] = useState(false);
@@ -83,11 +84,13 @@ export default function LeagueDetailPage() {
   const handleSignup = async () => {
     setSignupDialogOpen(false);
     setActionLoading(true);
+    setErrorNeedsProfile(false);
     try {
       await signup(leagueId);
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
+      setErrorNeedsProfile(!!e.response?.data?.needs_profile);
     } finally {
       setActionLoading(false);
     }
@@ -890,7 +893,14 @@ export default function LeagueDetailPage() {
 
   return (
     <Container maxWidth="md" sx={{ mt: 3 }}>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+          {errorNeedsProfile && (
+            <> <MuiLink component={RouterLink} to="/account" color="inherit" sx={{ fontWeight: 600 }}>Go to account settings →</MuiLink></>
+          )}
+        </Alert>
+      )}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
