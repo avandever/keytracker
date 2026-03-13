@@ -2079,20 +2079,32 @@ def run_background_collector(app, stop_event=None):
             time.sleep(60)
 
 
-def run_background_card_refresher(app, stop_event=None):
-    """Background thread that finds decks with fewer than 36 cards, fetches them
-    from MV, and calculates pod stats.
+def _expected_card_count(expansion_id):
+    """Return the (min, max) inclusive card count for a given expansion ID."""
+    if expansion_id == 892:   # Martian Civil War
+        return (13, 13)
+    if expansion_id == 886:   # Prophetic Visions
+        return (40, 40)
+    if expansion_id in (496, 600, 855, 918):  # DT, WoE, ToC, CC
+        return (37, 37)
+    if expansion_id == 601:   # Unchained 2022 — 36 base, 37 with token
+        return (36, 37)
+    return (36, 36)           # all other sets
 
-    Uses a forward-scanning cursor (min_deck_id) so already-fixed decks are not
-    re-scanned until a full pass completes. When no incomplete deck is found above
-    the cursor the cursor resets to 0 and the thread sleeps before the next pass.
+
+def run_background_card_refresher(app, stop_event=None):
+    """One-time forward scan through all decks, fixing incorrect card counts and
+    missing pod stats.
+
+    Uses GlobalVariable 'one_time_scan_last_id' as a persistent cursor so the
+    scan survives server restarts. Once no deck is found above the cursor the
+    scan is considered complete and the thread exits.
     """
     import logging
     import socket
-    from sqlalchemy import func, select
 
     logger = logging.getLogger("card_refresher")
-    NO_WORK_SLEEP = 300  # 5 minutes between full passes
+    GVAR_NAME = "one_time_scan_last_id"
 
     lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     try:
@@ -2101,37 +2113,45 @@ def run_background_card_refresher(app, stop_event=None):
         logger.info("Another process already running the card refresher, skipping")
         return
 
-    logger.info("Background card refresher started")
-    min_deck_id = 0
+    logger.info("Background card refresher started (one-time scan)")
 
     while stop_event is None or not stop_event.is_set():
         try:
             with app.app_context():
-                card_count_subq = (
-                    select(func.count())
-                    .where(CardInDeck.deck_id == Deck.id)
-                    .correlate(Deck)
-                    .scalar_subquery()
-                )
-                deck = (
-                    Deck.query.filter(Deck.id > min_deck_id, card_count_subq < 36)
-                    .order_by(Deck.id)
-                    .first()
-                )
+                gvar = GlobalVariable.query.filter_by(name=GVAR_NAME).first()
+                if gvar is None:
+                    gvar = GlobalVariable(name=GVAR_NAME, value_int=0)
+                    db.session.add(gvar)
+                    db.session.commit()
+
+                last_id = gvar.value_int or 0
+                deck = Deck.query.filter(Deck.id > last_id).order_by(Deck.id).first()
+
                 if deck is None:
                     logger.info(
-                        f"No incomplete decks above id={min_deck_id}, "
-                        f"resetting cursor and sleeping {NO_WORK_SLEEP}s"
+                        f"One-time card scan complete (last_id={last_id}). "
+                        "Thread exiting."
                     )
-                    min_deck_id = 0
-                    time.sleep(NO_WORK_SLEEP)
-                    continue
-                logger.info(f"Refreshing deck {deck.kf_id} ({deck.name})")
-                refresh_deck_from_mv(deck)
-                calculate_pod_stats(deck)
+                    return
+
+                card_count = len(deck.cards_from_assoc)
+                min_cards, max_cards = _expected_card_count(deck.expansion)
+                needs_mv_refresh = not (min_cards <= card_count <= max_cards)
+
+                if needs_mv_refresh:
+                    logger.info(
+                        f"Deck {deck.kf_id} ({deck.name}) has {card_count} cards "
+                        f"(expected {min_cards}-{max_cards}), refreshing from MV"
+                    )
+                    refresh_deck_from_mv(deck)
+                    db.session.flush()
+
+                if len(deck.pod_stats) == 0 and len(deck.cards_from_assoc) >= min_cards:
+                    calculate_pod_stats(deck)
+
+                gvar.value_int = deck.id
                 db.session.commit()
-                min_deck_id = deck.id
-                logger.info(f"Refreshed deck {deck.kf_id}, cursor now {min_deck_id}")
+
         except Exception:
             logger.exception("Background card refresher error, sleeping 60s")
             time.sleep(60)
