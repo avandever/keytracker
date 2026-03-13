@@ -458,7 +458,12 @@ export default function AccountPage() {
           Decks of Keyforge
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
-          Enter your personal DoK API key to enable enhanced deck lookups.
+          Enter your personal DoK API key to enable enhanced deck lookups. Find yours on the{' '}
+          <Link href="https://decksofkeyforge.com/about/sellers-and-devs" target="_blank" rel="noopener noreferrer">
+            DoK Sellers &amp; Devs page
+          </Link>
+          . "You may provide this to other sites for them to sync your DoK deck list with their site, but you should
+          only give it to sites or tools you trust."
         </Typography>
         <TextField
           fullWidth
