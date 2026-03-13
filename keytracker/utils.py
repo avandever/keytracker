@@ -2114,6 +2114,7 @@ def run_background_card_refresher(app, stop_event=None):
         return
 
     logger.info("Background card refresher started (one-time scan)")
+    good_decks_in_a_row = 0
 
     while stop_event is None or not stop_event.is_set():
         try:
@@ -2142,7 +2143,9 @@ def run_background_card_refresher(app, stop_event=None):
                     logger.info(
                         f"Deck {deck.kf_id} ({deck.name}) has {card_count} cards "
                         f"(expected {min_cards}-{max_cards}), refreshing from MV"
+                        f" after {good_decks_in_a_row} good decks in a row"
                     )
+                    good_decks_in_a_row = 0
                     try:
                         refresh_deck_from_mv(deck)
                         db.session.flush()
@@ -2154,6 +2157,10 @@ def run_background_card_refresher(app, stop_event=None):
                         db.session.rollback()
                         time.sleep(30)
                         continue
+                else:
+                    good_decks_in_a_row += 1
+                    if good_decks_in_a_row % 100 = 0:
+                        logger.info(f"background_deck_refresher has seen {good_decks_in_a_row} good decks in a row.")
 
                 if len(deck.pod_stats) == 0 and len(deck.cards_from_assoc) >= min_cards:
                     calculate_pod_stats(deck)

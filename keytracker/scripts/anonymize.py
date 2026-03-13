@@ -20,10 +20,14 @@ def anonymize_player(username):
     with current_app.app_context():
         player = Player.query.filter_by(username=username).first()
         if player is None:
-            raise click.ClickException(f"No Player record found for username '{username}'.")
+            raise click.ClickException(
+                f"No Player record found for username '{username}'."
+            )
 
         if player.username == "anonymous":
-            raise click.ClickException("Cannot anonymize the 'anonymous' placeholder player.")
+            raise click.ClickException(
+                "Cannot anonymize the 'anonymous' placeholder player."
+            )
 
         if player.anonymous:
             click.echo(
@@ -33,7 +37,9 @@ def anonymize_player(username):
         else:
             player.anonymous = True
             db.session.commit()
-            click.echo(f"Marked '{username}' as anonymous (future uploads will be redirected).")
+            click.echo(
+                f"Marked '{username}' as anonymous (future uploads will be redirected)."
+            )
 
         try:
             anonymize_all_games_for_player(player)

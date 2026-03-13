@@ -160,7 +160,6 @@ def upload_log():
     return make_response(jsonify(success=True, game_id=game.id), 201)
 
 
-
 @blueprint.route("/api/delete_game/v1/<game_id>", methods=["GET"])
 def delete_game(game_id):
     game = Game.query.filter_by(crucible_game_id=game_id).one()

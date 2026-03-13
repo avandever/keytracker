@@ -59,7 +59,5 @@ def _enrich(game_id, winner_deck_id, loser_deck_id):
 
 
 def start_worker():
-    t = threading.Thread(
-        target=_worker, daemon=True, name="deck-enrichment-worker"
-    )
+    t = threading.Thread(target=_worker, daemon=True, name="deck-enrichment-worker")
     t.start()

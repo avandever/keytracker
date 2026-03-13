@@ -26,7 +26,11 @@ def _worker():
 
 def _refresh(deck_id: int, user_dok_api_key: str | None):
     from keytracker.schema import db, Deck
-    from keytracker.utils import calculate_pod_stats, refresh_deck_from_mv, update_sas_scores
+    from keytracker.utils import (
+        calculate_pod_stats,
+        refresh_deck_from_mv,
+        update_sas_scores,
+    )
 
     deck = Deck.query.get(deck_id)
     if not deck:

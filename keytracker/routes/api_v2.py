@@ -825,7 +825,10 @@ def admin_toggle_impersonation(user_id):
         return jsonify({"error": "User not found"}), 404
     user.show_test_user_picker = not user.show_test_user_picker
     db.session.commit()
-    return jsonify({"success": True, "show_test_user_picker": user.show_test_user_picker}), 200
+    return (
+        jsonify({"success": True, "show_test_user_picker": user.show_test_user_picker}),
+        200,
+    )
 
 
 @blueprint.route("/alliance-restricted-list-versions", methods=["GET"])
@@ -1030,7 +1033,10 @@ def sync_collection():
         CollectionSyncJob.status.in_(["pending", "running"]),
     ).first()
     if active:
-        return jsonify({"error": "A sync is already in progress.", "job_id": active.id}), 409
+        return (
+            jsonify({"error": "A sync is already in progress.", "job_id": active.id}),
+            409,
+        )
 
     job = CollectionSyncJob(
         user_id=current_user.id,

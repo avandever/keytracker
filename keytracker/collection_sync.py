@@ -20,7 +20,9 @@ def _worker():
             with app.app_context():
                 _run_sync(user_id, job_id)
         except Exception:
-            logger.exception("Collection sync failed for user %s job %s", user_id, job_id)
+            logger.exception(
+                "Collection sync failed for user %s job %s", user_id, job_id
+            )
         finally:
             _queue.task_done()
 
