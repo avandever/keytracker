@@ -205,7 +205,7 @@ export default function AccountPage() {
           League Profile
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
-          Required for league signup. Set your DoK profile, country, and timezone.
+          DoK Collection URL and Timezone are required for league signup. Discord (on the Integrations tab) is also required.
         </Typography>
         <TextField
           fullWidth
@@ -214,12 +214,12 @@ export default function AccountPage() {
           onChange={(e) => setDokProfileUrl(e.target.value)}
           placeholder="https://decksofkeyforge.com/users/your-username"
           label="DoK Collection URL (My Decks)"
-          helperText="Displayed publicly on your player profile"
+          helperText="Required for league signup. Displayed publicly on your player profile."
           sx={{ mb: 2 }}
         />
         <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-          <InputLabel>Country</InputLabel>
-          <Select value={country} label="Country" onChange={(e) => setCountry(e.target.value)}>
+          <InputLabel>Country (optional)</InputLabel>
+          <Select value={country} label="Country (optional)" onChange={(e) => setCountry(e.target.value)}>
             <MenuItem value="">-- Select --</MenuItem>
             {/* prettier-ignore */}
             {[
@@ -236,7 +236,7 @@ export default function AccountPage() {
               <MenuItem key={c} value={c}>{c}</MenuItem>
             ))}
           </Select>
-          <FormHelperText>Used for league organization; not displayed publicly</FormHelperText>
+          <FormHelperText>Optional. Used for league organization; not displayed publicly.</FormHelperText>
         </FormControl>
         <FormControl fullWidth size="small" sx={{ mb: 2 }}>
           <InputLabel>Timezone</InputLabel>
@@ -249,7 +249,7 @@ export default function AccountPage() {
               <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
             ))}
           </Select>
-          <FormHelperText>Shared with league admins, captains, and opponents to help schedule matches</FormHelperText>
+          <FormHelperText>Required for league signup. Shared with admins, captains, and opponents to help schedule matches.</FormHelperText>
         </FormControl>
         <Button
           variant="contained"
@@ -278,10 +278,10 @@ export default function AccountPage() {
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="h6" gutterBottom>
-          Mailing Address
+          Mailing Address <Typography component="span" variant="caption" color="text.secondary">(optional)</Typography>
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
-          Used for physical prize delivery. Not shared publicly.
+          Used for physical prize delivery if you win prizes. Not shared publicly.
         </Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 2 }}>
           <TextField
@@ -350,7 +350,7 @@ export default function AccountPage() {
         {tab === 1 && (
         <Box sx={{ p: 4 }}>
         <Typography variant="h6" gutterBottom>
-          Patreon
+          Patreon <Typography component="span" variant="caption" color="text.secondary">(optional)</Typography>
         </Typography>
 
         {!user.patreon_linked ? (
@@ -413,7 +413,7 @@ export default function AccountPage() {
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="h6" gutterBottom>
-          Google
+          Google <Typography component="span" variant="caption" color="text.secondary">(optional)</Typography>
         </Typography>
 
         {!user.google_linked ? (
@@ -439,13 +439,13 @@ export default function AccountPage() {
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="h6" gutterBottom>
-          Discord
+          Discord <Typography component="span" variant="caption" color="primary">(required for leagues)</Typography>
         </Typography>
 
         {!user.discord_linked ? (
           <>
             <Typography color="text.secondary" sx={{ mb: 2 }}>
-              Link your Discord account. Required for league signup.
+              Link your Discord account to sign up for leagues.
             </Typography>
             <Button
               variant="contained"
@@ -475,7 +475,7 @@ export default function AccountPage() {
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="h6" gutterBottom>
-          Decks of Keyforge
+          Decks of Keyforge <Typography component="span" variant="caption" color="text.secondary">(optional)</Typography>
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
           Enter your personal DoK API key to enable enhanced deck lookups. Find yours on the{' '}
@@ -559,7 +559,7 @@ export default function AccountPage() {
         <Divider sx={{ my: 3 }} />
 
         <Typography variant="h6" gutterBottom>
-          TCO Usernames
+          TCO Usernames <Typography component="span" variant="caption" color="text.secondary">(optional)</Typography>
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
           Link your Crucible Online usernames to track your games.
