@@ -432,7 +432,7 @@ class MVApi:
             return response
 
 
-mv_api = MVApi(15.0)
+mv_api = MVApi(5.0)
 
 
 class CantAnonymize(Exception):
@@ -2143,8 +2143,17 @@ def run_background_card_refresher(app, stop_event=None):
                         f"Deck {deck.kf_id} ({deck.name}) has {card_count} cards "
                         f"(expected {min_cards}-{max_cards}), refreshing from MV"
                     )
-                    refresh_deck_from_mv(deck)
-                    db.session.flush()
+                    try:
+                        refresh_deck_from_mv(deck)
+                        db.session.flush()
+                    except Exception:
+                        logger.exception(
+                            "MV refresh failed for deck %s, sleeping 30s before retry",
+                            deck.kf_id,
+                        )
+                        db.session.rollback()
+                        time.sleep(30)
+                        continue
 
                 if len(deck.pod_stats) == 0 and len(deck.cards_from_assoc) >= min_cards:
                     calculate_pod_stats(deck)
