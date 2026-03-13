@@ -49,7 +49,6 @@ from sqlalchemy.exc import (
 )
 from sqlalchemy.orm import Query
 from flask import current_app
-import logging
 import json
 import time
 import threading
@@ -2011,10 +2010,9 @@ def fix_pcis_house(pcis: PlatonicCardInSet) -> None:
 
 def run_background_collector(app, stop_event=None):
     """Background thread that continuously scrapes deck pages from Master Vault."""
-    import logging
     import socket
 
-    logger = logging.getLogger("collector")
+    logger = app.logger
     CAUGHT_UP_SLEEP = 300  # 5 minutes
 
     # Use an abstract Unix socket as a cross-process lock so only one
@@ -2100,10 +2098,9 @@ def run_background_card_refresher(app, stop_event=None):
     scan survives server restarts. Once no deck is found above the cursor the
     scan is considered complete and the thread exits.
     """
-    import logging
     import socket
 
-    logger = logging.getLogger("card_refresher")
+    logger = app.logger
     GVAR_NAME = "one_time_scan_last_id"
 
     lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
@@ -2175,7 +2172,6 @@ def run_background_card_refresher(app, stop_event=None):
             time.sleep(60)
 
 
-_mail_logger = logging.getLogger("keytracker.mail")
 
 
 def _log_mail_config() -> None:
@@ -2183,7 +2179,7 @@ def _log_mail_config() -> None:
     from flask import current_app
 
     cfg = current_app.config
-    _mail_logger.info(
+    current_app.logger.info(
         "SMTP config — server=%s port=%s use_tls=%s username=%s sender=%s",
         cfg.get("MAIL_SERVER"),
         cfg.get("MAIL_PORT"),
@@ -2203,7 +2199,7 @@ def send_verification_email(user, app_base_url: str) -> None:
     verify_url = (
         f"{app_base_url.rstrip('/')}/auth/verify-email/{user.email_verification_token}"
     )
-    _mail_logger.info("Sending verification email to %s", user.email)
+    current_app.logger.info("Sending verification email to %s", user.email)
     msg = Message(
         subject="Verify your Bear Tracks email",
         recipients=[user.email],
@@ -2217,7 +2213,7 @@ def send_verification_email(user, app_base_url: str) -> None:
         ),
     )
     mail.send(msg)
-    _mail_logger.info("Verification email sent to %s", user.email)
+    current_app.logger.info("Verification email sent to %s", user.email)
 
 
 def send_password_reset_email(user, app_base_url: str) -> None:
@@ -2230,7 +2226,7 @@ def send_password_reset_email(user, app_base_url: str) -> None:
     reset_url = (
         f"{app_base_url.rstrip('/')}/reset-password?token={user.password_reset_token}"
     )
-    _mail_logger.info("Sending password reset email to %s", user.email)
+    current_app.logger.info("Sending password reset email to %s", user.email)
     msg = Message(
         subject="Reset your Bear Tracks password",
         recipients=[user.email],
@@ -2244,7 +2240,7 @@ def send_password_reset_email(user, app_base_url: str) -> None:
         ),
     )
     mail.send(msg)
-    _mail_logger.info("Password reset email sent to %s", user.email)
+    current_app.logger.info("Password reset email sent to %s", user.email)
 
 
 DOK_MY_DECKS_BASE = "https://decksofkeyforge.com/public-api/v1/my-decks"
