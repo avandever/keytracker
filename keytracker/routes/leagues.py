@@ -563,11 +563,7 @@ def assign_captain(league_id, team_id):
             jsonify({"error": "User must be signed up to be assigned as captain"}),
             400,
         )
-    # Remove existing captain
-    TeamMember.query.filter_by(team_id=team.id, is_captain=True).update(
-        {"is_captain": False}
-    )
-    # Add or update member
+    # Add or update member as captain (does not remove existing captains)
     member = TeamMember.query.filter_by(team_id=team.id, user_id=user_id).first()
     if member:
         member.is_captain = True
@@ -579,6 +575,28 @@ def assign_captain(league_id, team_id):
         ).delete(synchronize_session="fetch")
         member = TeamMember(team_id=team.id, user_id=user_id, is_captain=True)
         db.session.add(member)
+    db.session.commit()
+    db.session.refresh(team)
+    return jsonify(serialize_team_detail(team))
+
+
+@blueprint.route(
+    "/<int:league_id>/teams/<int:team_id>/captain/<int:user_id>", methods=["DELETE"]
+)
+@login_required
+def remove_captain(league_id, team_id, user_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    team = db.session.get(Team, team_id)
+    if not team or team.league_id != league.id:
+        return jsonify({"error": "Team not found"}), 404
+    member = TeamMember.query.filter_by(team_id=team.id, user_id=user_id).first()
+    if not member or not member.is_captain:
+        return jsonify({"error": "User is not a captain of this team"}), 404
+    member.is_captain = False
     db.session.commit()
     db.session.refresh(team)
     return jsonify(serialize_team_detail(team))

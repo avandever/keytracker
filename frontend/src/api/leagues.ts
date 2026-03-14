@@ -121,6 +121,17 @@ export async function assignCaptain(
   return data;
 }
 
+export async function removeCaptain(
+  leagueId: number,
+  teamId: number,
+  userId: number,
+): Promise<TeamDetail> {
+  const { data } = await apiClient.delete(
+    `/leagues/${leagueId}/teams/${teamId}/captain/${userId}`,
+  );
+  return data;
+}
+
 export async function reassignMember(
   leagueId: number,
   teamId: number,

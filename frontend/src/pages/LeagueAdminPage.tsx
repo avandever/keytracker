@@ -44,6 +44,7 @@ import {
   createTeam,
   deleteTeam,
   assignCaptain,
+  removeCaptain,
   reassignMember,
   startDraft,
   createWeek,
@@ -63,6 +64,8 @@ import {
   editMatchup,
   regenerateSealedPools,
   getRestrictedListVersions,
+  addAdmin,
+  removeAdmin,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -121,6 +124,9 @@ export default function LeagueAdminPage() {
   const [editTeamSize, setEditTeamSize] = useState('');
   const [editNumTeams, setEditNumTeams] = useState('');
   const [editBonusPoints, setEditBonusPoints] = useState('2');
+
+  // Co-admin management
+  const [newAdminUserId, setNewAdminUserId] = useState('');
 
   // Team creation
   const [newTeamName, setNewTeamName] = useState('');
@@ -220,15 +226,41 @@ export default function LeagueAdminPage() {
   let teamsIdx: number;
   let signupsIdx: number;
   let weeksIdx: number;
+  const settingsIdx = 3;
   if (draftComplete) {
     weeksIdx = 0; teamsIdx = 1; signupsIdx = 2;
   } else {
     teamsIdx = 0; signupsIdx = 1; weeksIdx = 2;
   }
-  const tabLabels = ['', '', ''];
+  const tabLabels = ['', '', '', 'Settings'];
   tabLabels[teamsIdx] = 'Teams';
   tabLabels[signupsIdx] = `Signups (${league.signups.length})`;
   tabLabels[weeksIdx] = `Weeks (${league.weeks?.length || 0})`;
+
+  const handleAddAdmin = async () => {
+    const uid = parseInt(newAdminUserId, 10);
+    if (!uid) return;
+    setError('');
+    try {
+      await addAdmin(league.id, uid);
+      setNewAdminUserId('');
+      refresh();
+      setSuccess('Co-admin added');
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleRemoveAdmin = async (userId: number) => {
+    setError('');
+    try {
+      await removeAdmin(league.id, userId);
+      refresh();
+      setSuccess('Co-admin removed');
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
 
   const handleSaveSettings = async () => {
     setError('');
@@ -281,6 +313,16 @@ export default function LeagueAdminPage() {
     setError('');
     try {
       await assignCaptain(league.id, teamId, userId);
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleRemoveCaptain = async (teamId: number, userId: number) => {
+    setError('');
+    try {
+      await removeCaptain(league.id, teamId, userId);
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -748,29 +790,6 @@ export default function LeagueAdminPage() {
       {/* Teams tab */}
       {activeTab === teamsIdx && (
         <>
-          {/* League settings */}
-          {(isSetup || isActive) && (
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>League Settings</Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {isSetup && (
-                    <>
-                      <TextField label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-                      <TextField label="Description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} multiline rows={2} />
-                      <TextField label="Entry Fee" value={editFee} onChange={(e) => setEditFee(e.target.value)} type="number" inputProps={{ step: '0.01', min: '0' }} />
-                      <TextField label="Team Size" value={editTeamSize} onChange={(e) => setEditTeamSize(e.target.value)} type="number" inputProps={{ min: '2' }} />
-                      <TextField label="Number of Teams" value={editNumTeams} onChange={(e) => setEditNumTeams(e.target.value)} type="number" inputProps={{ min: '2' }} />
-                    </>
-                  )}
-                  <TextField label="Bonus Points Per Week Win" value={editBonusPoints} onChange={(e) => setEditBonusPoints(e.target.value)} type="number" inputProps={{ min: '0' }} helperText="Extra points awarded to the week winner (default: 2)" />
-                  <TextField label="League URL Name" value={editUrlName} onChange={(e) => setEditUrlName(e.target.value)} helperText={`Optional. Sets the URL: /league/${editUrlName || '<name>'}`} />
-                  <Button variant="contained" onClick={handleSaveSettings}>Save Settings</Button>
-                </Box>
-              </CardContent>
-            </Card>
-          )}
-
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>Teams ({league.teams.length}/{league.num_teams})</Typography>
@@ -786,7 +805,7 @@ export default function LeagueAdminPage() {
                 </Box>
               )}
               {league.teams.map((team) => {
-                const captain = team.members.find((m) => m.is_captain);
+                const captains = team.members.filter((m) => m.is_captain);
                 return (
                   <Box key={team.id} sx={{ mb: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -797,17 +816,24 @@ export default function LeagueAdminPage() {
                         </IconButton>
                       )}
                     </Box>
-                    {captain && (
-                      <Typography variant="body2" color="text.secondary">
-                        Captain: {captain.user.name}
-                      </Typography>
+                    {captains.length > 0 && (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                        {captains.map((c) => (
+                          <Chip
+                            key={c.user.id}
+                            size="small"
+                            label={`Captain: ${c.user.name}`}
+                            onDelete={isSetup ? () => handleRemoveCaptain(team.id, c.user.id) : undefined}
+                          />
+                        ))}
+                      </Box>
                     )}
                     <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
                       <FormControl size="small" sx={{ minWidth: 200 }}>
-                        <InputLabel>{captain ? 'Reassign Captain' : 'Assign Captain'}</InputLabel>
+                        <InputLabel>{captains.length > 0 ? 'Add Co-Captain' : 'Assign Captain'}</InputLabel>
                         <Select
                           value={captainSelections[team.id] || ''}
-                          label={captain ? 'Reassign Captain' : 'Assign Captain'}
+                          label={captains.length > 0 ? 'Add Co-Captain' : 'Assign Captain'}
                           onChange={(e) => setCaptainSelections({ ...captainSelections, [team.id]: e.target.value as number })}
                         >
                           {league.signups
@@ -836,7 +862,7 @@ export default function LeagueAdminPage() {
                                 </Avatar>
                               </ListItemAvatar>
                               <ListItemText
-                                primary={`${m.user.name}${m.is_captain ? ' (Captain)' : ''}`}
+                                primary={`${m.user.name}${m.is_captain ? (captains.length > 1 ? ' (Co-Captain)' : ' (Captain)') : ''}`}
                               />
                               {!isReassigning ? (
                                 <Button
@@ -892,9 +918,71 @@ export default function LeagueAdminPage() {
             </CardContent>
           </Card>
 
-          {/* Delete league button - test leagues only */}
+        </>
+      )}
+
+      {/* Settings tab */}
+      {activeTab === settingsIdx && (
+        <>
+          {(isSetup || isActive) && (
+            <Card sx={{ mb: 3 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>League Settings</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {isSetup && (
+                    <>
+                      <TextField label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                      <TextField label="Description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} multiline rows={2} />
+                      <TextField label="Entry Fee" value={editFee} onChange={(e) => setEditFee(e.target.value)} type="number" inputProps={{ step: '0.01', min: '0' }} />
+                      <TextField label="Team Size" value={editTeamSize} onChange={(e) => setEditTeamSize(e.target.value)} type="number" inputProps={{ min: '2' }} />
+                      <TextField label="Number of Teams" value={editNumTeams} onChange={(e) => setEditNumTeams(e.target.value)} type="number" inputProps={{ min: '2' }} />
+                    </>
+                  )}
+                  <TextField label="Bonus Points Per Week Win" value={editBonusPoints} onChange={(e) => setEditBonusPoints(e.target.value)} type="number" inputProps={{ min: '0' }} helperText="Extra points awarded to the week winner (default: 2)" />
+                  <TextField label="League URL Name" value={editUrlName} onChange={(e) => setEditUrlName(e.target.value)} helperText={`Optional. Sets the URL: /league/${editUrlName || '<name>'}`} />
+                  <Button variant="contained" onClick={handleSaveSettings}>Save Settings</Button>
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>Co-Admins</Typography>
+              <List dense>
+                {league.admins.map((admin) => (
+                  <ListItem key={admin.id}
+                    secondaryAction={
+                      <IconButton edge="end" size="small" onClick={() => handleRemoveAdmin(admin.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    }
+                  >
+                    <ListItemAvatar>
+                      <Avatar src={admin.avatar_url || undefined} sx={{ width: 28, height: 28 }}>
+                        {admin.name?.[0]}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText primary={admin.name} secondary={`User ID: ${admin.id}`} />
+                  </ListItem>
+                ))}
+              </List>
+              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                <TextField
+                  label="User ID"
+                  value={newAdminUserId}
+                  onChange={(e) => setNewAdminUserId(e.target.value)}
+                  size="small"
+                  type="number"
+                  sx={{ width: 120 }}
+                />
+                <Button variant="contained" onClick={handleAddAdmin}>Add Co-Admin</Button>
+              </Box>
+            </CardContent>
+          </Card>
+
           {league.is_test && (
-            <Box sx={{ mt: 3, mb: 3 }}>
+            <Box sx={{ mt: 1, mb: 3 }}>
               <Button variant="outlined" color="error" onClick={() => setDeleteLeagueDialogOpen(true)}>
                 Delete League
               </Button>
