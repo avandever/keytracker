@@ -63,6 +63,7 @@ export default function AccountPage() {
   const [collectionSyncing, setCollectionSyncing] = useState(false);
   const [newTcoName, setNewTcoName] = useState('');
   const [tcoSaving, setTcoSaving] = useState(false);
+  const [displayName, setDisplayName] = useState(user?.name || '');
   const [dokProfileUrl, setDokProfileUrl] = useState(user?.dok_profile_url || '');
   const [country, setCountry] = useState(user?.country || '');
   const [timezone, setTimezone] = useState(user?.timezone || '');
@@ -79,6 +80,7 @@ export default function AccountPage() {
   useEffect(() => {
     if (user) {
       setDokKey(user.dok_api_key || '');
+      setDisplayName(user.name || '');
       setDokProfileUrl(user.dok_profile_url || '');
       setCountry(user.country || '');
       setTimezone(user.timezone || '');
@@ -209,6 +211,17 @@ export default function AccountPage() {
         </Typography>
         <TextField
           fullWidth
+          required
+          size="small"
+          label="Display Name"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          helperText="Your public name shown in leagues and standings. Max 50 characters."
+          inputProps={{ maxLength: 55 }}
+          sx={{ mb: 2 }}
+        />
+        <TextField
+          fullWidth
           size="small"
           value={dokProfileUrl}
           onChange={(e) => setDokProfileUrl(e.target.value)}
@@ -259,6 +272,7 @@ export default function AccountPage() {
             setProfileSaving(true);
             try {
               await updateSettings({
+                name: displayName,
                 dok_profile_url: dokProfileUrl,
                 country,
                 timezone,

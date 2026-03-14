@@ -4,6 +4,7 @@ from flask import (
     jsonify,
     request,
 )
+from better_profanity import profanity
 from flask_login import current_user, login_required
 from keytracker.schema import (
     db,
@@ -100,6 +101,15 @@ UUID4_RE = re.compile(
 @login_required
 def auth_settings():
     data = request.get_json(silent=True) or {}
+    if "name" in data:
+        val = (data["name"] or "").strip()
+        if not val:
+            return jsonify({"error": "Display name cannot be empty."}), 400
+        if len(val) > 50:
+            return jsonify({"error": "Display name must be 50 characters or fewer."}), 400
+        if profanity.contains_profanity(val):
+            return jsonify({"error": "Display name contains inappropriate language."}), 400
+        current_user.name = val
     if "dok_api_key" in data:
         val = (data["dok_api_key"] or "").strip()
         if val == "":
