@@ -129,19 +129,20 @@ export default function LeagueDetailPage() {
     t.members.some((m) => m.user.id === user.id && m.is_captain)
   );
   const showSignups = league.is_admin || userIsCaptain;
+  // Team rosters are hidden from non-admins/non-captains while the draft is in progress
+  const showTeamLists = league.is_admin || league.is_captain || league.status !== 'drafting';
   const tabs = [
     'Standings',
-    'Player Standings',
-    'Teams',
+    ...(showTeamLists ? ['Player Standings', 'Teams'] : []),
     ...(showSignups ? [`Signups (${league.signups.length})`] : []),
     ...weeks.map((w) => w.name || `Week ${w.week_number}`),
     'Admin Log',
   ];
   // tab index offsets
-  const playerStandingsIdx = 1;
-  const teamsIdx = 2;
-  const signupsIdx = showSignups ? 3 : null;
-  const weekStartIdx = 3 + (showSignups ? 1 : 0);
+  const playerStandingsIdx = showTeamLists ? 1 : null;
+  const teamsIdx = showTeamLists ? 2 : null;
+  const signupsIdx = showSignups ? 1 + (showTeamLists ? 2 : 0) : null;
+  const weekStartIdx = 1 + (showTeamLists ? 2 : 0) + (showSignups ? 1 : 0);
   const adminLogIdx = tabs.length - 1;
 
   const computeMatchWins = (playerId: number, targetWeeks: LeagueWeek[]): number => {

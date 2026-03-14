@@ -174,12 +174,12 @@ def serialize_team_member(member: TeamMember) -> dict:
     }
 
 
-def serialize_team_detail(team: Team) -> dict:
+def serialize_team_detail(team: Team, hide_members: bool = False) -> dict:
     return {
         "id": team.id,
         "name": team.name,
         "order_number": team.order_number,
-        "members": [serialize_team_member(m) for m in team.members],
+        "members": [] if hide_members else [serialize_team_member(m) for m in team.members],
     }
 
 
@@ -217,10 +217,12 @@ def serialize_league_summary(league: League) -> dict:
     }
 
 
-def serialize_league_detail(league: League, viewer=None) -> dict:
+def serialize_league_detail(
+    league: League, viewer=None, hide_team_members: bool = False
+) -> dict:
     data = serialize_league_summary(league)
     data["teams"] = [
-        serialize_team_detail(t)
+        serialize_team_detail(t, hide_members=hide_team_members)
         for t in sorted(league.teams, key=lambda t: t.order_number)
     ]
     data["signups"] = [

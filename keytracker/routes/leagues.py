@@ -180,14 +180,12 @@ def get_league(league_id):
         return err
     effective = get_effective_user()
     viewer = effective if current_user.is_authenticated else None
-    data = serialize_league_detail(league, viewer=viewer)
     if current_user.is_authenticated:
-        data["is_admin"] = _is_league_admin(league, effective)
+        is_admin = _is_league_admin(league, effective)
         signup = LeagueSignup.query.filter_by(
             league_id=league.id, user_id=effective.id
         ).first()
-        data["is_signed_up"] = signup is not None
-        # Find user's team membership
+        is_signed_up = signup is not None
         member = (
             TeamMember.query.join(Team)
             .filter(
@@ -196,13 +194,23 @@ def get_league(league_id):
             )
             .first()
         )
-        data["my_team_id"] = member.team_id if member else None
-        data["is_captain"] = member.is_captain if member else False
+        my_team_id = member.team_id if member else None
+        is_captain = member.is_captain if member else False
     else:
-        data["is_admin"] = False
-        data["is_signed_up"] = False
-        data["my_team_id"] = None
-        data["is_captain"] = False
+        is_admin = False
+        is_signed_up = False
+        my_team_id = None
+        is_captain = False
+    hide_team_members = (
+        league.status == LeagueStatus.DRAFTING.value and not (is_admin or is_captain)
+    )
+    data = serialize_league_detail(
+        league, viewer=viewer, hide_team_members=hide_team_members
+    )
+    data["is_admin"] = is_admin
+    data["is_signed_up"] = is_signed_up
+    data["my_team_id"] = my_team_id
+    data["is_captain"] = is_captain
     return jsonify(data)
 
 
@@ -443,8 +451,18 @@ def list_teams(league_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
+    effective = get_effective_user() if current_user.is_authenticated else None
+    is_admin = effective and _is_league_admin(league, effective)
+    is_captain = effective and TeamMember.query.join(Team).filter(
+        Team.league_id == league.id,
+        TeamMember.user_id == effective.id,
+        TeamMember.is_captain.is_(True),
+    ).first() is not None
+    hide_members = (
+        league.status == LeagueStatus.DRAFTING.value and not (is_admin or is_captain)
+    )
     teams = sorted(league.teams, key=lambda t: t.order_number)
-    return jsonify([serialize_team_detail(t) for t in teams])
+    return jsonify([serialize_team_detail(t, hide_members=hide_members) for t in teams])
 
 
 @blueprint.route("/<int:league_id>/teams", methods=["POST"])
