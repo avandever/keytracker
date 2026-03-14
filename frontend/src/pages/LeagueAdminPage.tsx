@@ -716,7 +716,21 @@ export default function LeagueAdminPage() {
 
   return (
     <Container maxWidth="md" sx={{ mt: 3 }}>
-      <Typography variant="h4" gutterBottom>Admin: {league.name}</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+        <Typography variant="h4">Admin: {league.name}</Typography>
+        {isSetup && (() => {
+          const hasEnoughSignups = league.signups.length >= league.num_teams * league.team_size;
+          return (
+            <Tooltip title={!hasEnoughSignups ? `Need ${league.num_teams * league.team_size} signups (${league.signups.length} so far)` : ''}>
+              <span>
+                <Button variant="contained" color="warning" disabled={!hasEnoughSignups} onClick={() => setDraftDialogOpen(true)}>
+                  Start Draft
+                </Button>
+              </span>
+            </Tooltip>
+          );
+        })()}
+      </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
@@ -877,36 +891,6 @@ export default function LeagueAdminPage() {
               })}
             </CardContent>
           </Card>
-
-          {/* Start draft */}
-          {isSetup && (
-            <Box sx={{ mb: 3 }}>
-              {(() => {
-                const hasEnoughSignups =
-                  league.signups.length >= league.num_teams * league.team_size;
-                return (
-                  <Tooltip
-                    title={
-                      !hasEnoughSignups
-                        ? `Need ${league.num_teams * league.team_size} signups (${league.signups.length} so far)`
-                        : ""
-                    }
-                  >
-                    <span>
-                      <Button
-                        variant="contained"
-                        color="warning"
-                        disabled={!hasEnoughSignups}
-                        onClick={() => setDraftDialogOpen(true)}
-                      >
-                        Start Draft
-                      </Button>
-                    </span>
-                  </Tooltip>
-                );
-              })()}
-            </Box>
-          )}
 
           {/* Delete league button - test leagues only */}
           {league.is_test && (

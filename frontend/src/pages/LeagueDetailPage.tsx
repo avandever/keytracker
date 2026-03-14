@@ -23,8 +23,9 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Tooltip,
 } from '@mui/material';
-import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport, getSignupDiscordCheck } from '../api/leagues';
+import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport, getSignupDiscordCheck, startDraft } from '../api/leagues';
 import type { SignupDiscordStatus } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -64,6 +65,7 @@ export default function LeagueDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [signupDialogOpen, setSignupDialogOpen] = useState(false);
+  const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
   const [adminLog, setAdminLog] = useState<AdminLogEntry[] | null>(null);
   const [adminLogLoading, setAdminLogLoading] = useState(false);
@@ -105,6 +107,16 @@ export default function LeagueDetailPage() {
       setError(e.response?.data?.error || e.message);
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleStartDraft = async () => {
+    setDraftDialogOpen(false);
+    try {
+      await startDraft(leagueId);
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
     }
   };
 
@@ -950,6 +962,18 @@ export default function LeagueDetailPage() {
             Admin
           </Button>
         )}
+        {league.is_admin && league.status === 'setup' && (() => {
+          const hasEnoughSignups = league.signups.length >= league.num_teams * league.team_size;
+          return (
+            <Tooltip title={!hasEnoughSignups ? `Need ${league.num_teams * league.team_size} signups (${league.signups.length} so far)` : ''}>
+              <span>
+                <Button variant="contained" color="warning" disabled={!hasEnoughSignups} onClick={() => setDraftDialogOpen(true)}>
+                  Start Draft
+                </Button>
+              </span>
+            </Tooltip>
+          );
+        })()}
         {(league.is_admin || league.is_captain) && league.status === 'drafting' && (
           <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/draft`}>
             Draft Board
@@ -1050,6 +1074,20 @@ export default function LeagueDetailPage() {
         </>
       )}
 
+
+      <Dialog open={draftDialogOpen} onClose={() => setDraftDialogOpen(false)}>
+        <DialogTitle>Start Draft?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This will transition the league to drafting mode. Make sure all teams have captains assigned.
+            Players beyond available draft spots will be waitlisted.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDraftDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleStartDraft} variant="contained" color="warning">Start Draft</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={signupDialogOpen} onClose={() => setSignupDialogOpen(false)}>
         <DialogTitle>Confirm Signup</DialogTitle>
