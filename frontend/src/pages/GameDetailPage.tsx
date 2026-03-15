@@ -217,20 +217,46 @@ function TurnDetailPanel({
   );
 }
 
-// Slice game.logs into per-turn segments using the "TURN N - ..." markers.
-const TURN_LOG_RE = /^TURN (\d+) - /;
+// Slice game.logs into per-turn segments.
+// Extension-reconstructed logs don't have "TURN N -" markers, but every turn
+// starts with "X chooses Y as their active house this turn". We pair each such
+// line (in order) with the corresponding TurnTimingEntry (sorted by turn number).
+const HOUSE_CHOICE_RE = /^.* chooses .* as their active house this turn/;
 
-function buildTurnLogSlices(logs: LogEntry[]): Map<number, LogEntry[]> {
-  const boundaries: { turn: number; idx: number }[] = [];
+function buildTurnLogSlices(
+  logs: LogEntry[],
+  sortedEntries: TurnTimingEntry[],
+): Map<number, LogEntry[]> {
+  // Also support explicit "TURN N - ..." markers (logs from full Crucible log files).
+  const TURN_MARKER_RE = /^TURN (\d+) - /;
+
+  // Try explicit markers first.
+  const markerBoundaries: { turn: number; idx: number }[] = [];
   for (let i = 0; i < logs.length; i++) {
-    const m = TURN_LOG_RE.exec(logs[i].message);
-    if (m) boundaries.push({ turn: parseInt(m[1]), idx: i });
+    const m = TURN_MARKER_RE.exec(logs[i].message);
+    if (m) markerBoundaries.push({ turn: parseInt(m[1]), idx: i });
+  }
+  if (markerBoundaries.length > 0) {
+    const slices = new Map<number, LogEntry[]>();
+    for (let b = 0; b < markerBoundaries.length; b++) {
+      const { turn, idx } = markerBoundaries[b];
+      const end = b + 1 < markerBoundaries.length ? markerBoundaries[b + 1].idx : logs.length;
+      slices.set(turn, logs.slice(idx, end));
+    }
+    return slices;
+  }
+
+  // Fall back: use "chooses house" lines paired with sorted TurnTimingEntries.
+  const choiceIndices: number[] = [];
+  for (let i = 0; i < logs.length; i++) {
+    if (HOUSE_CHOICE_RE.test(logs[i].message)) choiceIndices.push(i);
   }
   const slices = new Map<number, LogEntry[]>();
-  for (let b = 0; b < boundaries.length; b++) {
-    const { turn, idx } = boundaries[b];
-    const end = b + 1 < boundaries.length ? boundaries[b + 1].idx : logs.length;
-    slices.set(turn, logs.slice(idx, end));
+  for (let t = 0; t < sortedEntries.length && t < choiceIndices.length; t++) {
+    const turn = sortedEntries[t].turn;
+    const start = choiceIndices[t];
+    const end = t + 1 < choiceIndices.length ? choiceIndices[t + 1] : logs.length;
+    slices.set(turn, logs.slice(start, end));
   }
   return slices;
 }
@@ -256,7 +282,7 @@ function VerticalTimeline({
     keysByTurn.get(ke.turn)!.push(ke);
   }
 
-  const turnLogSlices = buildTurnLogSlices(logs);
+  const turnLogSlices = buildTurnLogSlices(logs, sorted);
 
   return (
     <Box>
@@ -499,11 +525,13 @@ export default function GameDetailPage() {
             expandedTurns={expandedTurns}
             onToggleTurn={onToggleTurn}
           />
-          {/* Log entries not assigned to any turn (pre-game lines before TURN 1) */}
+          {/* Pre-game log lines (deck bring, flip, initial draw — before turn 1) */}
           {(() => {
-            const firstTurnIdx = game.logs.findIndex((l) => TURN_LOG_RE.test(l.message));
-            if (firstTurnIdx <= 0) return null;
-            const preGame = game.logs.slice(0, firstTurnIdx);
+            const firstIdx = game.logs.findIndex(
+              (l) => /^TURN \d+ - /.test(l.message) || HOUSE_CHOICE_RE.test(l.message)
+            );
+            if (firstIdx <= 0) return null;
+            const preGame = game.logs.slice(0, firstIdx);
             return (
               <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
                 {preGame.map((log, i) => <GameLogEntry key={i} message={log.message} />)}
