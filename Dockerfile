@@ -22,5 +22,6 @@ COPY --from=frontend-build /frontend/dist /tracker/frontend/dist
 EXPOSE 3001 3443
 ENV HTTP_PORT=3001
 ENV HTTPS_PORT=3443
+ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["/tracker/start.sh"]
 # CMD ["bash", "start.sh"]
