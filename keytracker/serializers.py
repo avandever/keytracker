@@ -92,6 +92,15 @@ def serialize_game_detail(game: Game) -> dict:
     data["extended_data"] = (
         serialize_extended_data(game.extended_data) if game.extended_data else None
     )
+    card_images: dict[str, str] = {}
+    for deck in [game.winner_deck, game.loser_deck]:
+        if deck:
+            for cid in deck.cards_from_assoc:
+                title = cid.card_title
+                img = cid.front_image
+                if title and img:
+                    card_images[title] = img
+    data["card_images"] = card_images
     return data
 
 

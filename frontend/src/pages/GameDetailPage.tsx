@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Container,
@@ -161,7 +161,7 @@ function TurnDetailPanel({
           <Box key={p}>
             <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{p}</Typography>
             <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-              {snap.amber[p] ?? 0}Æ · {snap.discard_size[p] ?? 0} disc
+              {snap.amber[p] ?? 0}Æ · {snap.discard_size[p] ?? 0} discard
               {snap.deck_size[p] ? ` · ${snap.deck_size[p]} deck` : ''}
               {snap.archive_size[p] ? ` · ${snap.archive_size[p]} arch` : ''}
             </Typography>
@@ -261,9 +261,24 @@ function buildTurnLogSlices(
   return slices;
 }
 
+function LogList({ logs, cardImages, sortedCardNames, pl = 6 }: {
+  logs: LogEntry[];
+  cardImages: Record<string, string>;
+  sortedCardNames: string[];
+  pl?: number;
+}) {
+  return (
+    <Box sx={{ pl }}>
+      {logs.map((log, i) => (
+        <GameLogEntry key={i} message={log.message} cardImages={cardImages} sortedCardNames={sortedCardNames} />
+      ))}
+    </Box>
+  );
+}
+
 function VerticalTimeline({
   entries, keyEvents, snapshots, players, localHandPlayer,
-  logs, expandedTurns, onToggleTurn,
+  logs, cardImages, sortedCardNames, expandedTurns, onToggleTurn,
 }: {
   entries: TurnTimingEntry[];
   keyEvents: KeyForgeEvent[];
@@ -271,6 +286,8 @@ function VerticalTimeline({
   players: string[];
   localHandPlayer: string;
   logs: LogEntry[];
+  cardImages: Record<string, string>;
+  sortedCardNames: string[];
   expandedTurns: Set<number>;
   onToggleTurn: (turn: number) => void;
 }) {
@@ -284,8 +301,58 @@ function VerticalTimeline({
 
   const turnLogSlices = buildTurnLogSlices(logs, sorted);
 
+  // Pre-game lines (before turn 1) shown as a T0 row.
+  const firstTurnLogIdx = logs.findIndex(
+    (l) => HOUSE_CHOICE_RE.test(l.message) || /^TURN \d+ - /.test(l.message)
+  );
+  const preGameLogs = firstTurnLogIdx > 0 ? logs.slice(0, firstTurnLogIdx) : [];
+  const isT0Expanded = expandedTurns.has(0);
+
+  const renderTurnRow = (
+    label: string,
+    houseColor: string,
+    rowIndex: number,
+    isExpanded: boolean,
+    isExpandable: boolean,
+    onToggle: () => void,
+    extra?: React.ReactNode,
+  ) => (
+    <Box
+      onClick={() => isExpandable && onToggle()}
+      sx={{
+        borderLeft: `4px solid ${houseColor}`,
+        pl: 1, py: 0.25,
+        display: 'flex', gap: 0.5, alignItems: 'center',
+        bgcolor: isExpanded
+          ? alpha(houseColor, 0.18)
+          : rowIndex % 2 !== 0
+            ? 'action.hover'
+            : 'transparent',
+        cursor: isExpandable ? 'pointer' : 'default',
+        '&:hover': isExpandable ? { bgcolor: alpha(houseColor, 0.12) } : {},
+      }}
+    >
+      <Typography variant="caption" sx={{ fontWeight: 'bold', minWidth: 26, color: 'text.secondary', flexShrink: 0 }}>
+        {label}
+      </Typography>
+      {extra}
+    </Box>
+  );
+
   return (
     <Box>
+      {/* T0: pre-game lines */}
+      {preGameLogs.length > 0 && (
+        <Box>
+          {renderTurnRow('T0', '#9e9e9e', 0, isT0Expanded, true, () => onToggleTurn(0))}
+          {isT0Expanded && (
+            <Box sx={{ borderLeft: '4px solid #9e9e9e', bgcolor: alpha('#9e9e9e', 0.05) }}>
+              <LogList logs={preGameLogs} cardImages={cardImages} sortedCardNames={sortedCardNames} />
+            </Box>
+          )}
+        </Box>
+      )}
+
       {sorted.map((entry, i) => {
         const next = sorted[i + 1];
         const durationMs = next ? next.timestamp_ms - entry.timestamp_ms : null;
@@ -302,51 +369,42 @@ function VerticalTimeline({
           ? players.map((p) => snap.amber[p] ?? 0).join('/')
           : null;
 
+        const rowExtra = (
+          <>
+            <Typography variant="caption" sx={{ minWidth: 44, maxWidth: 44, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {entry.player.slice(0, 7)}
+            </Typography>
+            <Typography variant="caption" sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.65rem' }}>
+              {normalizeHouse(entry.house)}
+            </Typography>
+            {amberStr !== null && (
+              <Typography variant="caption" sx={{ color: '#f9a825', fontSize: '0.6rem', flexShrink: 0 }}>
+                {amberStr}Æ
+              </Typography>
+            )}
+            {durationSec !== null && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 28, textAlign: 'right', fontSize: '0.65rem', flexShrink: 0 }}>
+                {durationSec}s
+              </Typography>
+            )}
+            {turnKeys.map((ke, ki) => (
+              <Tooltip key={ki} title={`${ke.player} forged ${ke.key_color} key (${ke.amber_paid} Æ)`} arrow>
+                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: KEY_DOT_COLORS[ke.key_color] ?? '#bdbdbd', flexShrink: 0, cursor: 'default' }} />
+              </Tooltip>
+            ))}
+          </>
+        );
+
         return (
           <Box key={i}>
-            {/* Turn row */}
-            <Box
-              onClick={() => isExpandable && onToggleTurn(entry.turn)}
-              sx={{
-                borderLeft: `4px solid ${houseColor}`,
-                pl: 1, py: 0.25,
-                display: 'flex', gap: 0.5, alignItems: 'center',
-                bgcolor: isExpanded
-                  ? alpha(houseColor, 0.18)
-                  : i % 2 !== 0
-                    ? 'action.hover'
-                    : 'transparent',
-                cursor: isExpandable ? 'pointer' : 'default',
-                '&:hover': isExpandable ? { bgcolor: alpha(houseColor, 0.12) } : {},
-              }}
-            >
-              <Typography variant="caption" sx={{ fontWeight: 'bold', minWidth: 26, color: 'text.secondary', flexShrink: 0 }}>
-                T{entry.turn}
-              </Typography>
-              <Typography variant="caption" sx={{ minWidth: 44, maxWidth: 44, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {entry.player.slice(0, 7)}
-              </Typography>
-              <Typography variant="caption" sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.65rem' }}>
-                {normalizeHouse(entry.house)}
-              </Typography>
-              {amberStr !== null && (
-                <Typography variant="caption" sx={{ color: '#f9a825', fontSize: '0.6rem', flexShrink: 0 }}>
-                  {amberStr}Æ
-                </Typography>
-              )}
-              {durationSec !== null && (
-                <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 28, textAlign: 'right', fontSize: '0.65rem', flexShrink: 0 }}>
-                  {durationSec}s
-                </Typography>
-              )}
-              {turnKeys.map((ke, ki) => (
-                <Tooltip key={ki} title={`${ke.player} forged ${ke.key_color} key (${ke.amber_paid} Æ)`} arrow>
-                  <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: KEY_DOT_COLORS[ke.key_color] ?? '#bdbdbd', flexShrink: 0, cursor: 'default' }} />
-                </Tooltip>
-              ))}
-            </Box>
+            {renderTurnRow(
+              `T${entry.turn}`, houseColor,
+              i + (preGameLogs.length > 0 ? 1 : 0),
+              isExpanded, isExpandable,
+              () => onToggleTurn(entry.turn),
+              rowExtra,
+            )}
 
-            {/* Expanded content: board/hand state then log */}
             {isExpanded && (
               <Box sx={{ borderLeft: `4px solid ${houseColor}`, bgcolor: alpha(houseColor, 0.05) }}>
                 {snap && (
@@ -356,10 +414,8 @@ function VerticalTimeline({
                   />
                 )}
                 {logSlice.length > 0 && (
-                  <Box sx={{ borderTop: snap ? `1px solid ${alpha(houseColor, 0.3)}` : undefined, pt: snap ? 0.5 : 0, pl: 3 }}>
-                    {logSlice.map((log, li) => (
-                      <GameLogEntry key={li} message={log.message} />
-                    ))}
+                  <Box sx={{ borderTop: snap ? `1px solid ${alpha(houseColor, 0.3)}` : undefined, pt: snap ? 0.5 : 0 }}>
+                    <LogList logs={logSlice} cardImages={cardImages} sortedCardNames={sortedCardNames} />
                   </Box>
                 )}
               </Box>
@@ -405,6 +461,10 @@ export default function GameDetailPage() {
   const players = [game.winner, game.loser].sort((a, b) =>
     a === game.first_player ? -1 : b === game.first_player ? 1 : 0
   );
+
+  // Sort card names longest-first so multi-word names match before substrings.
+  const cardImages = game.card_images ?? {};
+  const sortedCardNames = Object.keys(cardImages).sort((a, b) => b.length - a.length);
 
   const ext = game.extended_data;
   let merged: TurnTimingEntry[] = [];
@@ -522,22 +582,11 @@ export default function GameDetailPage() {
             players={players}
             localHandPlayer={localHandPlayer}
             logs={game.logs}
+            cardImages={cardImages}
+            sortedCardNames={sortedCardNames}
             expandedTurns={expandedTurns}
             onToggleTurn={onToggleTurn}
           />
-          {/* Pre-game log lines (deck bring, flip, initial draw — before turn 1) */}
-          {(() => {
-            const firstIdx = game.logs.findIndex(
-              (l) => /^TURN \d+ - /.test(l.message) || HOUSE_CHOICE_RE.test(l.message)
-            );
-            if (firstIdx <= 0) return null;
-            const preGame = game.logs.slice(0, firstIdx);
-            return (
-              <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
-                {preGame.map((log, i) => <GameLogEntry key={i} message={log.message} />)}
-              </Box>
-            );
-          })()}
         </Paper>
       )}
 
@@ -547,7 +596,7 @@ export default function GameDetailPage() {
           <Typography variant="h6" sx={{ mb: 1 }}>Game Log</Typography>
           <Paper variant="outlined" sx={{ maxHeight: 600, overflow: 'auto', p: 1, mb: 3 }}>
             {game.logs.map((log, i) => (
-              <GameLogEntry key={i} message={log.message} />
+              <GameLogEntry key={i} message={log.message} cardImages={cardImages} sortedCardNames={sortedCardNames} />
             ))}
           </Paper>
         </>

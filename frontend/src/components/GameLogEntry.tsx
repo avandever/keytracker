@@ -1,4 +1,4 @@
-import { Typography } from '@mui/material';
+import { Typography, Tooltip, Box } from '@mui/material';
 
 const SYSTEM_PATTERNS = [
   /^.* brings .* to The Crucible/,
@@ -58,12 +58,45 @@ function categorize(message: string): CategoryStyle {
   return { color: '#333', bg: 'transparent' };
 }
 
-interface Props {
-  message: string;
+// Split a message into alternating plain-text / card-name segments.
+// Returns an array of { text, cardImage? } parts.
+function splitByCardNames(
+  message: string,
+  sortedNames: string[],
+  cardImages: Record<string, string>,
+): { text: string; cardImage?: string }[] {
+  if (sortedNames.length === 0) return [{ text: message }];
+
+  const pattern = new RegExp(
+    '(' + sortedNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')',
+    'g',
+  );
+
+  const parts: { text: string; cardImage?: string }[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(message)) !== null) {
+    if (match.index > last) parts.push({ text: message.slice(last, match.index) });
+    parts.push({ text: match[1], cardImage: cardImages[match[1]] });
+    last = match.index + match[1].length;
+  }
+  if (last < message.length) parts.push({ text: message.slice(last) });
+  return parts;
 }
 
-export default function GameLogEntry({ message }: Props) {
+interface Props {
+  message: string;
+  cardImages?: Record<string, string>;
+  sortedCardNames?: string[];
+}
+
+export default function GameLogEntry({ message, cardImages, sortedCardNames }: Props) {
   const style = categorize(message);
+  const parts =
+    cardImages && sortedCardNames && sortedCardNames.length > 0
+      ? splitByCardNames(message, sortedCardNames, cardImages)
+      : null;
+
   return (
     <Typography
       variant="body2"
@@ -79,7 +112,34 @@ export default function GameLogEntry({ message }: Props) {
         wordBreak: 'break-word',
       }}
     >
-      {message}
+      {parts
+        ? parts.map((part, i) =>
+            part.cardImage ? (
+              <Tooltip
+                key={i}
+                arrow
+                title={
+                  <Box component="img" src={part.cardImage} alt={part.text}
+                    sx={{ width: 200, height: 'auto', display: 'block', borderRadius: 1 }}
+                  />
+                }
+              >
+                <Box
+                  component="span"
+                  sx={{
+                    borderBottom: '1px dotted currentColor',
+                    cursor: 'help',
+                    '&:hover': { opacity: 0.75 },
+                  }}
+                >
+                  {part.text}
+                </Box>
+              </Tooltip>
+            ) : (
+              <span key={i}>{part.text}</span>
+            )
+          )
+        : message}
     </Typography>
   );
 }

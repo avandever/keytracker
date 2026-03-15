@@ -160,6 +160,7 @@ export interface GameDetail extends GameSummary {
   logs: LogEntry[];
   house_turn_counts: HouseTurnCount[];
   extended_data: ExtendedGameData | null;
+  card_images: Record<string, string>;
 }
 
 export interface DeckSummary {
