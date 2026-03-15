@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { getGame } from '../api/games';
-import type { GameDetail, TurnTimingEntry, KeyForgeEvent } from '../types';
+import type { GameDetail, TurnTimingEntry, KeyForgeEvent, TurnSnapshot } from '../types';
 import { alpha } from '@mui/material/styles';
 import GameLogEntry from '../components/GameLogEntry';
 
@@ -43,20 +43,168 @@ const KEY_DOT_COLORS: Record<string, string> = {
   Blue: '#42a5f5',
 };
 
+function normalizeHouse(h: string): string {
+  if (!h) return '';
+  if (h.toLowerCase() === 'staralliance') return 'Star Alliance';
+  return h.charAt(0).toUpperCase() + h.slice(1).toLowerCase();
+}
+
 function getHouseColor(house: string): string {
-  return HOUSE_COLORS[house] ?? '#bdbdbd';
+  return HOUSE_COLORS[normalizeHouse(house)] ?? '#bdbdbd';
+}
+
+// Detail panel shown below the timeline when a turn is selected.
+function TurnDetailPanel({
+  snap,
+  players,
+}: {
+  snap: TurnSnapshot;
+  players: string[];
+}) {
+  const playerList = players.length > 0 ? players : Object.keys(snap.boards);
+
+  return (
+    <Box sx={{ p: 1.5 }}>
+      {/* Amber + discard counts per player */}
+      <Box sx={{ display: 'flex', gap: 3, mb: 1.5, flexWrap: 'wrap' }}>
+        {playerList.map((p) => (
+          <Box key={p}>
+            <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
+              {p}
+            </Typography>
+            <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
+              {snap.amber[p] ?? 0}Æ &nbsp;·&nbsp; {snap.discard_size[p] ?? 0} disc
+              {snap.deck_size[p] ? ` · ${snap.deck_size[p]} deck` : ''}
+              {snap.archive_size[p] ? ` · ${snap.archive_size[p]} arch` : ''}
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+
+      {/* Board state — both players */}
+      {playerList.map((p) => {
+        const board = snap.boards[p] ?? [];
+        return (
+          <Box key={p} sx={{ mb: 1 }}>
+            <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+              {p} board ({board.length})
+            </Typography>
+            {board.length > 0 ? (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.25 }}>
+                {board.map((c, i) => {
+                  const hc = getHouseColor(c.house);
+                  const label = [
+                    c.name,
+                    c.power ? `${c.power}` : '',
+                    c.exhausted ? 'X' : '',
+                    c.stunned ? 'stun' : '',
+                    c.taunt ? 'taunt' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ');
+                  return (
+                    <Tooltip key={i} title={label} arrow>
+                      <Box
+                        sx={{
+                          bgcolor: alpha(hc, 0.2),
+                          border: `1px solid ${hc}`,
+                          borderRadius: 1,
+                          px: 0.75,
+                          py: 0.25,
+                          fontSize: '0.65rem',
+                          maxWidth: 110,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          opacity: c.exhausted ? 0.55 : 1,
+                          cursor: 'default',
+                          fontStyle: c.stunned ? 'italic' : 'normal',
+                        }}
+                      >
+                        {c.name}
+                        {c.power ? (
+                          <Box component="span" sx={{ ml: 0.5, opacity: 0.7 }}>
+                            {c.power}
+                          </Box>
+                        ) : null}
+                      </Box>
+                    </Tooltip>
+                  );
+                })}
+              </Box>
+            ) : (
+              <Typography variant="caption" sx={{ color: 'text.disabled', ml: 1 }}>
+                empty
+              </Typography>
+            )}
+          </Box>
+        );
+      })}
+
+      {/* Local player hand */}
+      {snap.local_hand.length > 0 && (
+        <Box sx={{ mt: 0.5 }}>
+          <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
+            Hand ({snap.local_hand.length})
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.25 }}>
+            {snap.local_hand.map((c, i) => {
+              const hc = getHouseColor(c.house);
+              return (
+                <Tooltip
+                  key={i}
+                  title={`${c.name} · ${normalizeHouse(c.house)}${c.amber ? ` · ${c.amber}Æ` : ''}`}
+                  arrow
+                >
+                  <Box
+                    sx={{
+                      bgcolor: alpha(hc, 0.2),
+                      border: `1px solid ${hc}`,
+                      borderRadius: 1,
+                      px: 0.75,
+                      py: 0.25,
+                      fontSize: '0.65rem',
+                      maxWidth: 110,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      cursor: 'default',
+                    }}
+                  >
+                    {c.name}
+                    {c.amber ? (
+                      <Box component="span" sx={{ ml: 0.5, opacity: 0.7 }}>
+                        {c.amber}Æ
+                      </Box>
+                    ) : null}
+                  </Box>
+                </Tooltip>
+              );
+            })}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  );
 }
 
 function VerticalTimeline({
   entries,
   keyEvents,
+  snapshots,
+  players,
+  selectedTurn,
+  onSelectTurn,
 }: {
   entries: TurnTimingEntry[];
   keyEvents: KeyForgeEvent[];
+  snapshots: Map<number, TurnSnapshot>;
+  players: string[];
+  selectedTurn: number | null;
+  onSelectTurn: (turn: number | null) => void;
 }) {
   const sorted = [...entries].sort((a, b) => a.turn - b.turn);
 
-  // Map turn number → key events for that turn
   const keysByTurn = new Map<number, KeyForgeEvent[]>();
   for (const ke of keyEvents) {
     if (!keysByTurn.has(ke.turn)) keysByTurn.set(ke.turn, []);
@@ -71,76 +219,118 @@ function VerticalTimeline({
         const durationSec = durationMs !== null ? Math.round(durationMs / 1000) : null;
         const houseColor = getHouseColor(entry.house);
         const turnKeys = keysByTurn.get(entry.turn) ?? [];
+        const snap = snapshots.get(entry.turn);
+        const isSelected = selectedTurn === entry.turn;
+
+        // Compact amber summary: "3/5" using player order
+        const amberStr = snap
+          ? players.map((p) => snap.amber[p] ?? 0).join('/')
+          : null;
+
         return (
-          <Box
-            key={i}
-            sx={{
-              borderLeft: `4px solid ${houseColor}`,
-              pl: 1,
-              py: 0.25,
-              display: 'flex',
-              gap: 0.5,
-              alignItems: 'center',
-              bgcolor: i % 2 !== 0 ? 'action.hover' : 'transparent',
-            }}
-          >
-            <Typography
-              variant="caption"
-              sx={{ fontWeight: 'bold', minWidth: 26, color: 'text.secondary', flexShrink: 0 }}
-            >
-              T{entry.turn}
-            </Typography>
-            <Typography
-              variant="caption"
+          <Box key={i}>
+            <Box
+              onClick={() => onSelectTurn(isSelected ? null : entry.turn)}
               sx={{
-                minWidth: 44,
-                maxWidth: 44,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
+                borderLeft: `4px solid ${houseColor}`,
+                pl: 1,
+                py: 0.25,
+                display: 'flex',
+                gap: 0.5,
+                alignItems: 'center',
+                bgcolor: isSelected
+                  ? alpha(houseColor, 0.18)
+                  : i % 2 !== 0
+                    ? 'action.hover'
+                    : 'transparent',
+                cursor: snap ? 'pointer' : 'default',
+                '&:hover': snap ? { bgcolor: alpha(houseColor, 0.12) } : {},
               }}
             >
-              {entry.player.slice(0, 7)}
-            </Typography>
-            <Typography
-              variant="caption"
-              sx={{
-                flex: 1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                fontSize: '0.65rem',
-              }}
-            >
-              {entry.house}
-            </Typography>
-            {durationSec !== null && (
               <Typography
                 variant="caption"
-                sx={{ color: 'text.secondary', minWidth: 28, textAlign: 'right', fontSize: '0.65rem', flexShrink: 0 }}
+                sx={{ fontWeight: 'bold', minWidth: 26, color: 'text.secondary', flexShrink: 0 }}
               >
-                {durationSec}s
+                T{entry.turn}
               </Typography>
-            )}
-            {turnKeys.map((ke, ki) => (
-              <Tooltip
-                key={ki}
-                title={`${ke.player} forged ${ke.key_color} key (${ke.amber_paid} Æ)`}
-                arrow
+              <Typography
+                variant="caption"
+                sx={{
+                  minWidth: 44,
+                  maxWidth: 44,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
               >
-                <Box
+                {entry.player.slice(0, 7)}
+              </Typography>
+              <Typography
+                variant="caption"
+                sx={{
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  fontSize: '0.65rem',
+                }}
+              >
+                {normalizeHouse(entry.house)}
+              </Typography>
+              {amberStr !== null && (
+                <Typography
+                  variant="caption"
+                  sx={{ color: '#f9a825', fontSize: '0.6rem', flexShrink: 0 }}
+                >
+                  {amberStr}Æ
+                </Typography>
+              )}
+              {durationSec !== null && (
+                <Typography
+                  variant="caption"
                   sx={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    bgcolor: KEY_DOT_COLORS[ke.key_color] ?? '#bdbdbd',
+                    color: 'text.secondary',
+                    minWidth: 28,
+                    textAlign: 'right',
+                    fontSize: '0.65rem',
                     flexShrink: 0,
-                    cursor: 'default',
                   }}
-                />
-              </Tooltip>
-            ))}
+                >
+                  {durationSec}s
+                </Typography>
+              )}
+              {turnKeys.map((ke, ki) => (
+                <Tooltip
+                  key={ki}
+                  title={`${ke.player} forged ${ke.key_color} key (${ke.amber_paid} Æ)`}
+                  arrow
+                >
+                  <Box
+                    sx={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      bgcolor: KEY_DOT_COLORS[ke.key_color] ?? '#bdbdbd',
+                      flexShrink: 0,
+                      cursor: 'default',
+                    }}
+                  />
+                </Tooltip>
+              ))}
+            </Box>
+
+            {/* Inline detail panel for selected turn */}
+            {isSelected && snap && (
+              <Box
+                sx={{
+                  borderLeft: `4px solid ${houseColor}`,
+                  bgcolor: alpha(houseColor, 0.07),
+                }}
+              >
+                <TurnDetailPanel snap={snap} players={players} />
+              </Box>
+            )}
           </Box>
         );
       })}
@@ -153,6 +343,7 @@ export default function GameDetailPage() {
   const [game, setGame] = useState<GameDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedTurn, setSelectedTurn] = useState<number | null>(null);
 
   useEffect(() => {
     if (!crucibleGameId) return;
@@ -173,11 +364,11 @@ export default function GameDetailPage() {
     a === game.first_player ? -1 : b === game.first_player ? 1 : 0
   );
 
-  // Compute timeline data
   const ext = game.extended_data;
   let merged: TurnTimingEntry[] = [];
   let allKeyEvents: KeyForgeEvent[] = [];
   let hasTimeline = false;
+  const snapshotsByTurn = new Map<number, TurnSnapshot>();
 
   if (ext && ext.turn_timing.length > 0) {
     const p1 = ext.turn_timing;
@@ -198,6 +389,16 @@ export default function GameDetailPage() {
       seenKe.add(k);
       return true;
     });
+
+    // Merge turn snapshots: prefer the perspective with more hand data
+    const s1 = ext.turn_snapshots ?? [];
+    const s2 = ext.player2_turn_snapshots ?? [];
+    const base = s1.length >= s2.length ? s1 : s2;
+    const other = s1.length >= s2.length ? s2 : s1;
+    for (const snap of base) snapshotsByTurn.set(snap.turn, snap);
+    for (const snap of other) {
+      if (!snapshotsByTurn.has(snap.turn)) snapshotsByTurn.set(snap.turn, snap);
+    }
   }
 
   return (
@@ -275,15 +476,25 @@ export default function GameDetailPage() {
         {hasTimeline && (
           <Paper
             variant="outlined"
-            sx={{ width: 200, maxHeight: 600, overflow: 'auto', p: 1, flexShrink: 0 }}
+            sx={{ width: 260, maxHeight: 600, overflow: 'auto', p: 1, flexShrink: 0 }}
           >
             <Typography variant="subtitle2" gutterBottom>
               Timeline{' '}
               {ext!.both_perspectives && (
                 <Chip size="small" label="Both" color="info" variant="outlined" />
               )}
+              {snapshotsByTurn.size > 0 && (
+                <Chip size="small" label="Snapshots" color="success" variant="outlined" sx={{ ml: 0.5 }} />
+              )}
             </Typography>
-            <VerticalTimeline entries={merged} keyEvents={allKeyEvents} />
+            <VerticalTimeline
+              entries={merged}
+              keyEvents={allKeyEvents}
+              snapshots={snapshotsByTurn}
+              players={players}
+              selectedTurn={selectedTurn}
+              onSelectTurn={setSelectedTurn}
+            />
           </Paper>
         )}
       </Box>
