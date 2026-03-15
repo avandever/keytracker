@@ -67,6 +67,7 @@ export interface HandCardSnapshot {
   house: string;
   amber: number;
   can_play: boolean;
+  enhancements?: string[];
 }
 
 export interface BoardCardSnapshot {
@@ -78,6 +79,7 @@ export interface BoardCardSnapshot {
   exhausted: boolean;
   stunned: boolean;
   taunt: boolean;
+  enhancements?: string[];
 }
 
 export interface TurnSnapshot {

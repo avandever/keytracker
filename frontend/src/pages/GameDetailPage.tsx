@@ -53,6 +53,25 @@ function getHouseColor(house: string): string {
   return HOUSE_COLORS[normalizeHouse(house)] ?? '#bdbdbd';
 }
 
+// Map Crucible enhancement type names to compact display labels.
+const ENHANCEMENT_LABELS: Record<string, string> = {
+  amber: 'Æ',
+  capture: 'C',
+  damage: 'D',
+  draw: 'R',
+};
+function enhancementLabel(type: string): string {
+  return ENHANCEMENT_LABELS[type.toLowerCase()] ?? normalizeHouse(type).charAt(0).toUpperCase();
+}
+function formatEnhancements(enhancements: string[]): string {
+  // Group by type and render counts: e.g. ['amber','amber','damage'] → '+2Æ +D'
+  const counts: Record<string, number> = {};
+  for (const e of enhancements) counts[e] = (counts[e] ?? 0) + 1;
+  return Object.entries(counts)
+    .map(([t, n]) => `+${n > 1 ? n : ''}${enhancementLabel(t)}`)
+    .join(' ');
+}
+
 // Detail panel shown below the timeline when a turn is selected.
 function TurnDetailPanel({
   snap,
@@ -112,6 +131,7 @@ function TurnDetailPanel({
                     c.exhausted ? 'exhausted' : '',
                     c.stunned ? 'stunned' : '',
                     c.taunt ? 'taunt' : '',
+                    c.enhancements?.length ? `enhancements: ${c.enhancements.join(', ')}` : '',
                     isNew ? 'played this turn' : '',
                   ]
                     .filter(Boolean)
@@ -141,6 +161,11 @@ function TurnDetailPanel({
                             {c.power}
                           </Box>
                         ) : null}
+                        {c.enhancements?.length ? (
+                          <Box component="span" sx={{ ml: 0.5, opacity: 0.8, color: '#ffd54f', fontWeight: 'bold' }}>
+                            {formatEnhancements(c.enhancements)}
+                          </Box>
+                        ) : null}
                       </Box>
                     </Tooltip>
                   );
@@ -168,7 +193,7 @@ function TurnDetailPanel({
               return (
                 <Tooltip
                   key={i}
-                  title={`${c.name} · ${normalizeHouse(c.house)}${c.amber ? ` · ${c.amber}Æ` : ''}${isNew ? ' · drawn this turn' : ''}`}
+                  title={`${c.name} · ${normalizeHouse(c.house)}${c.amber ? ` · ${c.amber}Æ` : ''}${c.enhancements?.length ? ` · enhancements: ${c.enhancements.join(', ')}` : ''}${isNew ? ' · drawn this turn' : ''}`}
                   arrow
                 >
                   <Box
@@ -190,6 +215,11 @@ function TurnDetailPanel({
                     {c.amber ? (
                       <Box component="span" sx={{ ml: 0.5, opacity: 0.7 }}>
                         {c.amber}Æ
+                      </Box>
+                    ) : null}
+                    {c.enhancements?.length ? (
+                      <Box component="span" sx={{ ml: 0.5, opacity: 0.8, color: '#ffd54f', fontWeight: 'bold' }}>
+                        {formatEnhancements(c.enhancements)}
                       </Box>
                     ) : null}
                   </Box>
