@@ -56,12 +56,21 @@ function getHouseColor(house: string): string {
 // Detail panel shown below the timeline when a turn is selected.
 function TurnDetailPanel({
   snap,
+  prevSnap,
   players,
 }: {
   snap: TurnSnapshot;
+  prevSnap: TurnSnapshot | undefined;
   players: string[];
 }) {
   const playerList = players.length > 0 ? players : Object.keys(snap.boards);
+
+  // Card IDs present in previous snapshot — used to mark newly arrived cards.
+  const prevHandIds = new Set(prevSnap?.local_hand.map((c) => c.id) ?? []);
+  const prevBoardIds: Record<string, Set<string>> = {};
+  for (const p of playerList) {
+    prevBoardIds[p] = new Set(prevSnap?.boards[p]?.map((c) => c.id) ?? []);
+  }
 
   return (
     <Box sx={{ p: 1.5 }}>
@@ -84,6 +93,7 @@ function TurnDetailPanel({
       {/* Board state — both players */}
       {playerList.map((p) => {
         const board = snap.boards[p] ?? [];
+        const newIds = prevBoardIds[p] ?? new Set();
         return (
           <Box key={p} sx={{ mb: 1 }}>
             <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
@@ -93,12 +103,14 @@ function TurnDetailPanel({
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.25 }}>
                 {board.map((c, i) => {
                   const hc = getHouseColor(c.house);
+                  const isNew = prevSnap !== undefined && !newIds.has(c.id);
                   const label = [
                     c.name,
                     c.power ? `${c.power}` : '',
-                    c.exhausted ? 'X' : '',
-                    c.stunned ? 'stun' : '',
+                    c.exhausted ? 'exhausted' : '',
+                    c.stunned ? 'stunned' : '',
                     c.taunt ? 'taunt' : '',
+                    isNew ? 'played this turn' : '',
                   ]
                     .filter(Boolean)
                     .join(' · ');
@@ -106,8 +118,8 @@ function TurnDetailPanel({
                     <Tooltip key={i} title={label} arrow>
                       <Box
                         sx={{
-                          bgcolor: alpha(hc, 0.2),
-                          border: `1px solid ${hc}`,
+                          bgcolor: alpha(hc, isNew ? 0.4 : 0.15),
+                          border: `${isNew ? 2 : 1}px solid ${hc}`,
                           borderRadius: 1,
                           px: 0.75,
                           py: 0.25,
@@ -150,16 +162,17 @@ function TurnDetailPanel({
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.25 }}>
             {snap.local_hand.map((c, i) => {
               const hc = getHouseColor(c.house);
+              const isNew = prevSnap !== undefined && !prevHandIds.has(c.id);
               return (
                 <Tooltip
                   key={i}
-                  title={`${c.name} · ${normalizeHouse(c.house)}${c.amber ? ` · ${c.amber}Æ` : ''}`}
+                  title={`${c.name} · ${normalizeHouse(c.house)}${c.amber ? ` · ${c.amber}Æ` : ''}${isNew ? ' · drawn this turn' : ''}`}
                   arrow
                 >
                   <Box
                     sx={{
-                      bgcolor: alpha(hc, 0.2),
-                      border: `1px solid ${hc}`,
+                      bgcolor: alpha(hc, isNew ? 0.4 : 0.15),
+                      border: `${isNew ? 2 : 1}px solid ${hc}`,
                       borderRadius: 1,
                       px: 0.75,
                       py: 0.25,
@@ -220,6 +233,7 @@ function VerticalTimeline({
         const houseColor = getHouseColor(entry.house);
         const turnKeys = keysByTurn.get(entry.turn) ?? [];
         const snap = snapshots.get(entry.turn);
+        const prevSnap = i > 0 ? snapshots.get(sorted[i - 1].turn) : undefined;
         const isSelected = selectedTurn === entry.turn;
 
         // Compact amber summary: "3/5" using player order
@@ -328,7 +342,7 @@ function VerticalTimeline({
                   bgcolor: alpha(houseColor, 0.07),
                 }}
               >
-                <TurnDetailPanel snap={snap} players={players} />
+                <TurnDetailPanel snap={snap} prevSnap={prevSnap} players={players} />
               </Box>
             )}
           </Box>
