@@ -21,7 +21,8 @@ from keytracker.schema import (
     LeagueAdminLog,
     EXPANSION_ID_TO_ABBR,
 )
-from keytracker.schema import StandaloneMatch, db
+from keytracker.schema import StandaloneMatch, CardInDeck, PlatonicCard, PlatonicCardInSet, db
+from sqlalchemy import select
 import json
 
 
@@ -92,14 +93,18 @@ def serialize_game_detail(game: Game) -> dict:
     data["extended_data"] = (
         serialize_extended_data(game.extended_data) if game.extended_data else None
     )
-    card_images: dict[str, str] = {}
-    for deck in [game.winner_deck, game.loser_deck]:
-        if deck:
-            for cid in deck.cards_from_assoc:
-                title = cid.card_title
-                img = cid.front_image
-                if title and img:
-                    card_images[title] = img
+    deck_ids = [d.id for d in [game.winner_deck, game.loser_deck] if d]
+    if deck_ids:
+        rows = db.session.execute(
+            select(PlatonicCard.card_title, PlatonicCardInSet.front_image)
+            .join(CardInDeck, CardInDeck.platonic_card_id == PlatonicCard.id)
+            .join(PlatonicCardInSet, CardInDeck.card_in_set_id == PlatonicCardInSet.id)
+            .where(CardInDeck.deck_id.in_(deck_ids))
+            .where(PlatonicCardInSet.front_image.isnot(None))
+        ).all()
+        card_images = {title: img for title, img in rows if title}
+    else:
+        card_images = {}
     data["card_images"] = card_images
     return data
 
