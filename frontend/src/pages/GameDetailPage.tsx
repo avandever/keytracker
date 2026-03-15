@@ -356,7 +356,7 @@ function VerticalTimeline({
                   />
                 )}
                 {logSlice.length > 0 && (
-                  <Box sx={{ borderTop: snap ? `1px solid ${alpha(houseColor, 0.3)}` : undefined, pt: snap ? 0.5 : 0 }}>
+                  <Box sx={{ borderTop: snap ? `1px solid ${alpha(houseColor, 0.3)}` : undefined, pt: snap ? 0.5 : 0, pl: 3 }}>
                     {logSlice.map((log, li) => (
                       <GameLogEntry key={li} message={log.message} />
                     ))}
