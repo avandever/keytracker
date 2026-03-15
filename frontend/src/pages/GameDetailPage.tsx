@@ -409,13 +409,16 @@ export default function GameDetailPage() {
       return true;
     });
 
-    // Merge turn snapshots: prefer the perspective with more hand data
+    // Merge turn snapshots: prefer the perspective with more hand data.
+    // submitter_username is the player whose local_hand is recorded in turn_snapshots;
+    // player2_username is the same for player2_turn_snapshots.
     const s1 = ext.turn_snapshots ?? [];
     const s2 = ext.player2_turn_snapshots ?? [];
-    const useS1 = s1.length >= s2.length;
-    const base = useS1 ? s1 : s2;
-    const other = useS1 ? s2 : s1;
-    localHandPlayer = useS1 ? ext.submitter_username : (ext.player2_username ?? '');
+    const base = s1.length >= s2.length ? s1 : s2;
+    const other = s1.length >= s2.length ? s2 : s1;
+    localHandPlayer = s1.length >= s2.length
+      ? ext.submitter_username
+      : (ext.player2_username ?? '');
     for (const snap of base) snapshotsByTurn.set(snap.turn, snap);
     for (const snap of other) {
       if (!snapshotsByTurn.has(snap.turn)) snapshotsByTurn.set(snap.turn, snap);
