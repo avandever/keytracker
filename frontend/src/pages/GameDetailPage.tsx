@@ -58,10 +58,12 @@ function TurnDetailPanel({
   snap,
   prevSnap,
   players,
+  localHandPlayer,
 }: {
   snap: TurnSnapshot;
   prevSnap: TurnSnapshot | undefined;
   players: string[];
+  localHandPlayer: string;
 }) {
   const playerList = players.length > 0 ? players : Object.keys(snap.boards);
 
@@ -157,7 +159,7 @@ function TurnDetailPanel({
       {snap.local_hand.length > 0 && (
         <Box sx={{ mt: 0.5 }}>
           <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
-            Hand ({snap.local_hand.length})
+            {localHandPlayer ? `${localHandPlayer} hand` : 'Hand'} ({snap.local_hand.length})
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.25 }}>
             {snap.local_hand.map((c, i) => {
@@ -206,6 +208,7 @@ function VerticalTimeline({
   keyEvents,
   snapshots,
   players,
+  localHandPlayer,
   selectedTurn,
   onSelectTurn,
 }: {
@@ -213,6 +216,7 @@ function VerticalTimeline({
   keyEvents: KeyForgeEvent[];
   snapshots: Map<number, TurnSnapshot>;
   players: string[];
+  localHandPlayer: string;
   selectedTurn: number | null;
   onSelectTurn: (turn: number | null) => void;
 }) {
@@ -342,7 +346,7 @@ function VerticalTimeline({
                   bgcolor: alpha(houseColor, 0.07),
                 }}
               >
-                <TurnDetailPanel snap={snap} prevSnap={prevSnap} players={players} />
+                <TurnDetailPanel snap={snap} prevSnap={prevSnap} players={players} localHandPlayer={localHandPlayer} />
               </Box>
             )}
           </Box>
@@ -382,6 +386,7 @@ export default function GameDetailPage() {
   let merged: TurnTimingEntry[] = [];
   let allKeyEvents: KeyForgeEvent[] = [];
   let hasTimeline = false;
+  let localHandPlayer = '';
   const snapshotsByTurn = new Map<number, TurnSnapshot>();
 
   if (ext && ext.turn_timing.length > 0) {
@@ -407,8 +412,10 @@ export default function GameDetailPage() {
     // Merge turn snapshots: prefer the perspective with more hand data
     const s1 = ext.turn_snapshots ?? [];
     const s2 = ext.player2_turn_snapshots ?? [];
-    const base = s1.length >= s2.length ? s1 : s2;
-    const other = s1.length >= s2.length ? s2 : s1;
+    const useS1 = s1.length >= s2.length;
+    const base = useS1 ? s1 : s2;
+    const other = useS1 ? s2 : s1;
+    localHandPlayer = useS1 ? ext.submitter_username : (ext.player2_username ?? '');
     for (const snap of base) snapshotsByTurn.set(snap.turn, snap);
     for (const snap of other) {
       if (!snapshotsByTurn.has(snap.turn)) snapshotsByTurn.set(snap.turn, snap);
@@ -506,6 +513,7 @@ export default function GameDetailPage() {
               keyEvents={allKeyEvents}
               snapshots={snapshotsByTurn}
               players={players}
+              localHandPlayer={localHandPlayer}
               selectedTurn={selectedTurn}
               onSelectTurn={setSelectedTurn}
             />
