@@ -103,6 +103,7 @@ export default function App() {
             <Route element={<Layout />}>
               <Route path="/" element={<HomePage />} />
               <Route path="/game/:crucibleGameId" element={<GameDetailPage />} />
+              <Route path="/games/:crucibleGameId" element={<GameDetailPage />} />
               <Route path="/games" element={<GamesSearchPage />} />
               <Route path="/deck/:deckId" element={<DeckDetailPage />} />
               <Route path="/decks" element={<DecksSearchPage />} />

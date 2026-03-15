@@ -248,7 +248,13 @@ def games_mine():
 def games_recent():
     limit = request.args.get("limit", 5, type=int)
     limit = min(limit, 50)
-    games = Game.query.order_by(Game.date.desc()).limit(limit).all()
+    games = (
+        Game.query
+        .filter(db.or_(Game.winner_keys > 0, Game.loser_keys > 0))
+        .order_by(Game.date.desc())
+        .limit(limit)
+        .all()
+    )
     return jsonify([serialize_game_summary(g) for g in games])
 
 
@@ -282,9 +288,12 @@ def games_search():
     return jsonify([serialize_game_summary(g) for g in games])
 
 
-@blueprint.route("/games/<crucible_game_id>")
-def game_detail(crucible_game_id):
-    game = Game.query.filter_by(crucible_game_id=crucible_game_id).first()
+@blueprint.route("/games/<game_id>")
+def game_detail(game_id):
+    if game_id.isdigit():
+        game = Game.query.get(int(game_id))
+    else:
+        game = Game.query.filter_by(crucible_game_id=game_id).first()
     if game is None:
         return jsonify({"error": "Game not found"}), 404
     return jsonify(serialize_game_detail(game))
