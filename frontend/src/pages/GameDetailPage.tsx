@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { getGame } from '../api/games';
-import type { GameDetail, TurnTimingEntry, KeyForgeEvent, TurnSnapshot } from '../types';
+import type { GameDetail, LogEntry, TurnTimingEntry, KeyForgeEvent, TurnSnapshot } from '../types';
 import { alpha } from '@mui/material/styles';
 import GameLogEntry from '../components/GameLogEntry';
 
@@ -121,20 +121,16 @@ function CardChip({
           fontStyle: stunned ? 'italic' : 'normal',
         }}
       >
-        {/* Primary house */}
         <img src={houseIconUrl(normalH)} alt={normalH} width={11} height={11} style={{ display: 'block', flexShrink: 0 }} />
-        {/* House enhancement pips */}
         {houseEnhPips.map((h, i) => (
           <img key={i} src={houseIconUrl(h)} alt={normalizeHouse(h)} width={11} height={11} style={{ display: 'block', flexShrink: 0 }} />
         ))}
-        {/* Bonus pips */}
         {PIP_ORDER.flatMap((t) => {
           const count = t === 'amber' ? totalAmber : (pipCounts[t] ?? 0);
           return Array.from({ length: count }, (_, i) => (
             <img key={`${t}${i}`} src={PIP_URLS[t]} alt={t} width={11} height={11} style={{ display: 'block', flexShrink: 0 }} />
           ));
         })}
-        {/* Name (+ power for creatures) */}
         <Box component="span" sx={{ ml: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>
           {name}
           {power ? <Box component="span" sx={{ ml: 0.5, opacity: 0.7 }}>{power}</Box> : null}
@@ -144,21 +140,13 @@ function CardChip({
   );
 }
 
-// Detail panel shown below the timeline when a turn is selected.
 function TurnDetailPanel({
-  snap,
-  prevSnap,
-  players,
-  localHandPlayer,
+  snap, prevSnap, players, localHandPlayer,
 }: {
-  snap: TurnSnapshot;
-  prevSnap: TurnSnapshot | undefined;
-  players: string[];
-  localHandPlayer: string;
+  snap: TurnSnapshot; prevSnap: TurnSnapshot | undefined;
+  players: string[]; localHandPlayer: string;
 }) {
   const playerList = players.length > 0 ? players : Object.keys(snap.boards);
-
-  // Card IDs present in previous snapshot — used to mark newly arrived cards.
   const prevHandIds = new Set(prevSnap?.local_hand.map((c) => c.id) ?? []);
   const prevBoardIds: Record<string, Set<string>> = {};
   for (const p of playerList) {
@@ -166,16 +154,14 @@ function TurnDetailPanel({
   }
 
   return (
-    <Box sx={{ p: 1.5 }}>
-      {/* Amber + discard counts per player */}
-      <Box sx={{ display: 'flex', gap: 3, mb: 1.5, flexWrap: 'wrap' }}>
+    <Box sx={{ px: 1.5, pt: 1, pb: 0.5 }}>
+      {/* Amber + counts per player */}
+      <Box sx={{ display: 'flex', gap: 3, mb: 1, flexWrap: 'wrap' }}>
         {playerList.map((p) => (
           <Box key={p}>
-            <Typography variant="caption" sx={{ fontWeight: 'bold' }}>
-              {p}
-            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 'bold' }}>{p}</Typography>
             <Typography variant="caption" sx={{ display: 'block', color: 'text.secondary' }}>
-              {snap.amber[p] ?? 0}Æ &nbsp;·&nbsp; {snap.discard_size[p] ?? 0} disc
+              {snap.amber[p] ?? 0}Æ · {snap.discard_size[p] ?? 0} disc
               {snap.deck_size[p] ? ` · ${snap.deck_size[p]} deck` : ''}
               {snap.archive_size[p] ? ` · ${snap.archive_size[p]} arch` : ''}
             </Typography>
@@ -188,7 +174,7 @@ function TurnDetailPanel({
         const board = snap.boards[p] ?? [];
         const newIds = prevBoardIds[p] ?? new Set();
         return (
-          <Box key={p} sx={{ mb: 1 }}>
+          <Box key={p} sx={{ mb: 0.75 }}>
             <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
               {p} board ({board.length})
             </Typography>
@@ -204,9 +190,7 @@ function TurnDetailPanel({
                 ))}
               </Box>
             ) : (
-              <Typography variant="caption" sx={{ color: 'text.disabled', ml: 1 }}>
-                empty
-              </Typography>
+              <Typography variant="caption" sx={{ color: 'text.disabled', ml: 1 }}>empty</Typography>
             )}
           </Box>
         );
@@ -214,7 +198,7 @@ function TurnDetailPanel({
 
       {/* Local player hand */}
       {snap.local_hand.length > 0 && (
-        <Box sx={{ mt: 0.5 }}>
+        <Box sx={{ mb: 0.75 }}>
           <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'text.secondary' }}>
             {localHandPlayer ? `${localHandPlayer} hand` : 'Hand'} ({snap.local_hand.length})
           </Typography>
@@ -233,22 +217,36 @@ function TurnDetailPanel({
   );
 }
 
+// Slice game.logs into per-turn segments using the "TURN N - ..." markers.
+const TURN_LOG_RE = /^TURN (\d+) - /;
+
+function buildTurnLogSlices(logs: LogEntry[]): Map<number, LogEntry[]> {
+  const boundaries: { turn: number; idx: number }[] = [];
+  for (let i = 0; i < logs.length; i++) {
+    const m = TURN_LOG_RE.exec(logs[i].message);
+    if (m) boundaries.push({ turn: parseInt(m[1]), idx: i });
+  }
+  const slices = new Map<number, LogEntry[]>();
+  for (let b = 0; b < boundaries.length; b++) {
+    const { turn, idx } = boundaries[b];
+    const end = b + 1 < boundaries.length ? boundaries[b + 1].idx : logs.length;
+    slices.set(turn, logs.slice(idx, end));
+  }
+  return slices;
+}
+
 function VerticalTimeline({
-  entries,
-  keyEvents,
-  snapshots,
-  players,
-  localHandPlayer,
-  selectedTurn,
-  onSelectTurn,
+  entries, keyEvents, snapshots, players, localHandPlayer,
+  logs, expandedTurns, onToggleTurn,
 }: {
   entries: TurnTimingEntry[];
   keyEvents: KeyForgeEvent[];
   snapshots: Map<number, TurnSnapshot>;
   players: string[];
   localHandPlayer: string;
-  selectedTurn: number | null;
-  onSelectTurn: (turn: number | null) => void;
+  logs: LogEntry[];
+  expandedTurns: Set<number>;
+  onToggleTurn: (turn: number) => void;
 }) {
   const sorted = [...entries].sort((a, b) => a.turn - b.turn);
 
@@ -257,6 +255,8 @@ function VerticalTimeline({
     if (!keysByTurn.has(ke.turn)) keysByTurn.set(ke.turn, []);
     keysByTurn.get(ke.turn)!.push(ke);
   }
+
+  const turnLogSlices = buildTurnLogSlices(logs);
 
   return (
     <Box>
@@ -268,115 +268,74 @@ function VerticalTimeline({
         const turnKeys = keysByTurn.get(entry.turn) ?? [];
         const snap = snapshots.get(entry.turn);
         const prevSnap = i > 0 ? snapshots.get(sorted[i - 1].turn) : undefined;
-        const isSelected = selectedTurn === entry.turn;
+        const logSlice = turnLogSlices.get(entry.turn) ?? [];
+        const isExpanded = expandedTurns.has(entry.turn);
+        const isExpandable = !!(snap || logSlice.length > 0);
 
-        // Compact amber summary: "3/5" using player order
         const amberStr = snap
           ? players.map((p) => snap.amber[p] ?? 0).join('/')
           : null;
 
         return (
           <Box key={i}>
+            {/* Turn row */}
             <Box
-              onClick={() => onSelectTurn(isSelected ? null : entry.turn)}
+              onClick={() => isExpandable && onToggleTurn(entry.turn)}
               sx={{
                 borderLeft: `4px solid ${houseColor}`,
-                pl: 1,
-                py: 0.25,
-                display: 'flex',
-                gap: 0.5,
-                alignItems: 'center',
-                bgcolor: isSelected
+                pl: 1, py: 0.25,
+                display: 'flex', gap: 0.5, alignItems: 'center',
+                bgcolor: isExpanded
                   ? alpha(houseColor, 0.18)
                   : i % 2 !== 0
                     ? 'action.hover'
                     : 'transparent',
-                cursor: snap ? 'pointer' : 'default',
-                '&:hover': snap ? { bgcolor: alpha(houseColor, 0.12) } : {},
+                cursor: isExpandable ? 'pointer' : 'default',
+                '&:hover': isExpandable ? { bgcolor: alpha(houseColor, 0.12) } : {},
               }}
             >
-              <Typography
-                variant="caption"
-                sx={{ fontWeight: 'bold', minWidth: 26, color: 'text.secondary', flexShrink: 0 }}
-              >
+              <Typography variant="caption" sx={{ fontWeight: 'bold', minWidth: 26, color: 'text.secondary', flexShrink: 0 }}>
                 T{entry.turn}
               </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  minWidth: 44,
-                  maxWidth: 44,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
+              <Typography variant="caption" sx={{ minWidth: 44, maxWidth: 44, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>
                 {entry.player.slice(0, 7)}
               </Typography>
-              <Typography
-                variant="caption"
-                sx={{
-                  flex: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  fontSize: '0.65rem',
-                }}
-              >
+              <Typography variant="caption" sx={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.65rem' }}>
                 {normalizeHouse(entry.house)}
               </Typography>
               {amberStr !== null && (
-                <Typography
-                  variant="caption"
-                  sx={{ color: '#f9a825', fontSize: '0.6rem', flexShrink: 0 }}
-                >
+                <Typography variant="caption" sx={{ color: '#f9a825', fontSize: '0.6rem', flexShrink: 0 }}>
                   {amberStr}Æ
                 </Typography>
               )}
               {durationSec !== null && (
-                <Typography
-                  variant="caption"
-                  sx={{
-                    color: 'text.secondary',
-                    minWidth: 28,
-                    textAlign: 'right',
-                    fontSize: '0.65rem',
-                    flexShrink: 0,
-                  }}
-                >
+                <Typography variant="caption" sx={{ color: 'text.secondary', minWidth: 28, textAlign: 'right', fontSize: '0.65rem', flexShrink: 0 }}>
                   {durationSec}s
                 </Typography>
               )}
               {turnKeys.map((ke, ki) => (
-                <Tooltip
-                  key={ki}
-                  title={`${ke.player} forged ${ke.key_color} key (${ke.amber_paid} Æ)`}
-                  arrow
-                >
-                  <Box
-                    sx={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      bgcolor: KEY_DOT_COLORS[ke.key_color] ?? '#bdbdbd',
-                      flexShrink: 0,
-                      cursor: 'default',
-                    }}
-                  />
+                <Tooltip key={ki} title={`${ke.player} forged ${ke.key_color} key (${ke.amber_paid} Æ)`} arrow>
+                  <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: KEY_DOT_COLORS[ke.key_color] ?? '#bdbdbd', flexShrink: 0, cursor: 'default' }} />
                 </Tooltip>
               ))}
             </Box>
 
-            {/* Inline detail panel for selected turn */}
-            {isSelected && snap && (
-              <Box
-                sx={{
-                  borderLeft: `4px solid ${houseColor}`,
-                  bgcolor: alpha(houseColor, 0.07),
-                }}
-              >
-                <TurnDetailPanel snap={snap} prevSnap={prevSnap} players={players} localHandPlayer={localHandPlayer} />
+            {/* Expanded content: board/hand state then log */}
+            {isExpanded && (
+              <Box sx={{ borderLeft: `4px solid ${houseColor}`, bgcolor: alpha(houseColor, 0.05) }}>
+                {snap && (
+                  <TurnDetailPanel
+                    snap={snap} prevSnap={prevSnap}
+                    players={players} localHandPlayer={localHandPlayer}
+                  />
+                )}
+                {logSlice.length > 0 && (
+                  <Box sx={{ borderTop: snap ? `1px solid ${alpha(houseColor, 0.3)}` : undefined, pt: snap ? 0.5 : 0 }}>
+                    {logSlice.map((log, li) => (
+                      <GameLogEntry key={li} message={log.message} />
+                    ))}
+                  </Box>
+                )}
               </Box>
             )}
           </Box>
@@ -391,7 +350,16 @@ export default function GameDetailPage() {
   const [game, setGame] = useState<GameDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedTurn, setSelectedTurn] = useState<number | null>(null);
+  const [expandedTurns, setExpandedTurns] = useState<Set<number>>(new Set());
+
+  const onToggleTurn = (turn: number) => {
+    setExpandedTurns((prev) => {
+      const next = new Set(prev);
+      if (next.has(turn)) next.delete(turn);
+      else next.add(turn);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!crucibleGameId) return;
@@ -439,9 +407,6 @@ export default function GameDetailPage() {
       return true;
     });
 
-    // Merge turn snapshots: prefer the perspective with more hand data.
-    // submitter_username is the player whose local_hand is recorded in turn_snapshots;
-    // player2_username is the same for player2_turn_snapshots.
     const s1 = ext.turn_snapshots ?? [];
     const s2 = ext.player2_turn_snapshots ?? [];
     const base = s1.length >= s2.length ? s1 : s2;
@@ -468,11 +433,7 @@ export default function GameDetailPage() {
       <Box sx={{ display: 'flex', gap: 4, mb: 3, flexWrap: 'wrap' }}>
         <Box>
           <Typography variant="subtitle2">{game.winner}'s Deck</Typography>
-          <Typography
-            component={RouterLink}
-            to={`/deck/${game.winner_deck_id}`}
-            sx={{ color: 'primary.main', textDecoration: 'none' }}
-          >
+          <Typography component={RouterLink} to={`/deck/${game.winner_deck_id}`} sx={{ color: 'primary.main', textDecoration: 'none' }}>
             {game.winner_deck_name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -481,11 +442,7 @@ export default function GameDetailPage() {
         </Box>
         <Box>
           <Typography variant="subtitle2">{game.loser}'s Deck</Typography>
-          <Typography
-            component={RouterLink}
-            to={`/deck/${game.loser_deck_id}`}
-            sx={{ color: 'primary.main', textDecoration: 'none' }}
-          >
+          <Typography component={RouterLink} to={`/deck/${game.loser_deck_id}`} sx={{ color: 'primary.main', textDecoration: 'none' }}>
             {game.loser_deck_name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -520,39 +477,53 @@ export default function GameDetailPage() {
         </>
       )}
 
-      <Typography variant="h6" sx={{ mb: 1 }}>Game Log</Typography>
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-        <Paper variant="outlined" sx={{ flex: '1 1 auto', maxHeight: 600, overflow: 'auto', p: 1 }}>
-          {game.logs.map((log, i) => (
-            <GameLogEntry key={i} message={log.message} />
-          ))}
+      {/* Unified timeline — full width, log segments embedded in expanded turns */}
+      {hasTimeline && (
+        <Paper variant="outlined" sx={{ mb: 3 }}>
+          <Box sx={{ px: 1.5, py: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="subtitle2">Game Log</Typography>
+            {ext!.both_perspectives && (
+              <Chip size="small" label="Both perspectives" color="info" variant="outlined" />
+            )}
+            {snapshotsByTurn.size > 0 && (
+              <Chip size="small" label="Snapshots" color="success" variant="outlined" />
+            )}
+          </Box>
+          <VerticalTimeline
+            entries={merged}
+            keyEvents={allKeyEvents}
+            snapshots={snapshotsByTurn}
+            players={players}
+            localHandPlayer={localHandPlayer}
+            logs={game.logs}
+            expandedTurns={expandedTurns}
+            onToggleTurn={onToggleTurn}
+          />
+          {/* Log entries not assigned to any turn (pre-game lines before TURN 1) */}
+          {(() => {
+            const firstTurnIdx = game.logs.findIndex((l) => TURN_LOG_RE.test(l.message));
+            if (firstTurnIdx <= 0) return null;
+            const preGame = game.logs.slice(0, firstTurnIdx);
+            return (
+              <Box sx={{ borderTop: '1px solid', borderColor: 'divider' }}>
+                {preGame.map((log, i) => <GameLogEntry key={i} message={log.message} />)}
+              </Box>
+            );
+          })()}
         </Paper>
-        {hasTimeline && (
-          <Paper
-            variant="outlined"
-            sx={{ width: 260, maxHeight: 600, overflow: 'auto', p: 1, flexShrink: 0 }}
-          >
-            <Typography variant="subtitle2" gutterBottom>
-              Timeline{' '}
-              {ext!.both_perspectives && (
-                <Chip size="small" label="Both" color="info" variant="outlined" />
-              )}
-              {snapshotsByTurn.size > 0 && (
-                <Chip size="small" label="Snapshots" color="success" variant="outlined" sx={{ ml: 0.5 }} />
-              )}
-            </Typography>
-            <VerticalTimeline
-              entries={merged}
-              keyEvents={allKeyEvents}
-              snapshots={snapshotsByTurn}
-              players={players}
-              localHandPlayer={localHandPlayer}
-              selectedTurn={selectedTurn}
-              onSelectTurn={setSelectedTurn}
-            />
+      )}
+
+      {/* Fallback: plain game log when no timeline data */}
+      {!hasTimeline && game.logs.length > 0 && (
+        <>
+          <Typography variant="h6" sx={{ mb: 1 }}>Game Log</Typography>
+          <Paper variant="outlined" sx={{ maxHeight: 600, overflow: 'auto', p: 1, mb: 3 }}>
+            {game.logs.map((log, i) => (
+              <GameLogEntry key={i} message={log.message} />
+            ))}
           </Paper>
-        )}
-      </Box>
+        </>
+      )}
     </Container>
   );
 }
