@@ -53,23 +53,95 @@ function getHouseColor(house: string): string {
   return HOUSE_COLORS[normalizeHouse(house)] ?? '#bdbdbd';
 }
 
-// Map Crucible enhancement type names to compact display labels.
-const ENHANCEMENT_LABELS: Record<string, string> = {
-  amber: 'Æ',
-  capture: 'C',
-  damage: 'D',
-  draw: 'R',
+const S3_HOUSE_BASE = 'https://mastervault-storage-prod.s3.amazonaws.com/media/houses';
+const HOUSE_FILE_OVERRIDES: Record<string, string> = {
+  Geistoid: 'KF_Geistoid',
+  Ekwidon: 'Ekwidon200',
+  'Star Alliance': 'Star_Alliance',
 };
-function enhancementLabel(type: string): string {
-  return ENHANCEMENT_LABELS[type.toLowerCase()] ?? normalizeHouse(type).charAt(0).toUpperCase();
+function houseIconUrl(house: string): string {
+  const n = normalizeHouse(house);
+  return `${S3_HOUSE_BASE}/${HOUSE_FILE_OVERRIDES[n] ?? n}.png`;
 }
-function formatEnhancements(enhancements: string[]): string {
-  // Group by type and render counts: e.g. ['amber','amber','damage'] → '+2Æ +D'
-  const counts: Record<string, number> = {};
-  for (const e of enhancements) counts[e] = (counts[e] ?? 0) + 1;
-  return Object.entries(counts)
-    .map(([t, n]) => `+${n > 1 ? n : ''}${enhancementLabel(t)}`)
-    .join(' ');
+
+const PIP_URLS: Record<string, string> = {
+  amber:   'https://www.keyforgegame.com/images/66f2f00f12feac4368785f6543cfd0b9.png',
+  capture: 'https://www.keyforgegame.com/images/18062375103883be1757f1ec09e56c36.png',
+  damage:  'https://www.keyforgegame.com/images/4ef12ff91e76087f3e207fbb0698bb63.png',
+  draw:    'https://www.keyforgegame.com/images/2ccf3cd9faf3a670c1c19cb67b44fde2.png',
+  discard: 'https://www.keyforgegame.com/images/833fdc87b48b2102c8dc43a93fd13347.png',
+};
+const BONUS_PIP_TYPES = new Set(['amber', 'capture', 'damage', 'draw', 'discard']);
+const PIP_ORDER = ['amber', 'capture', 'damage', 'draw', 'discard'] as const;
+
+function CardChip({
+  name, house, amber = 0, enhancements, power, exhausted, stunned, taunt, isNew, isBoard,
+}: {
+  name: string; house: string; amber?: number; enhancements?: string[];
+  power?: number; exhausted?: boolean; stunned?: boolean; taunt?: boolean;
+  isNew?: boolean; isBoard?: boolean;
+}) {
+  const hc = getHouseColor(house);
+  const normalH = normalizeHouse(house);
+
+  const houseEnhPips = (enhancements ?? []).filter((e) => !BONUS_PIP_TYPES.has(e.toLowerCase()));
+  const pipCounts: Record<string, number> = {};
+  for (const e of enhancements ?? []) {
+    const t = e.toLowerCase();
+    if (BONUS_PIP_TYPES.has(t)) pipCounts[t] = (pipCounts[t] ?? 0) + 1;
+  }
+  const totalAmber = amber + (pipCounts.amber ?? 0);
+
+  const tooltip = [
+    name,
+    normalH,
+    houseEnhPips.map((h) => `+${normalizeHouse(h)}`).join(', '),
+    totalAmber ? `${totalAmber}Æ` : '',
+    pipCounts.capture ? `${pipCounts.capture} capture` : '',
+    pipCounts.damage  ? `${pipCounts.damage} damage`  : '',
+    pipCounts.draw    ? `${pipCounts.draw} draw`    : '',
+    pipCounts.discard ? `${pipCounts.discard} discard` : '',
+    power             ? `power ${power}` : '',
+    exhausted         ? 'exhausted' : '',
+    stunned           ? 'stunned'   : '',
+    taunt             ? 'taunt'     : '',
+    isNew             ? (isBoard ? 'played this turn' : 'drawn this turn') : '',
+  ].filter(Boolean).join(' · ');
+
+  return (
+    <Tooltip title={tooltip} arrow>
+      <Box
+        sx={{
+          display: 'inline-flex', alignItems: 'center', gap: '2px',
+          bgcolor: alpha(hc, isNew ? 0.4 : 0.2),
+          border: `${isNew ? 2 : 1}px solid ${hc}`,
+          borderRadius: 1, px: 0.5, py: '2px',
+          fontSize: '0.65rem', cursor: 'default',
+          opacity: exhausted ? 0.55 : 1,
+          fontStyle: stunned ? 'italic' : 'normal',
+        }}
+      >
+        {/* Primary house */}
+        <img src={houseIconUrl(normalH)} alt={normalH} width={11} height={11} style={{ display: 'block', flexShrink: 0 }} />
+        {/* House enhancement pips */}
+        {houseEnhPips.map((h, i) => (
+          <img key={i} src={houseIconUrl(h)} alt={normalizeHouse(h)} width={11} height={11} style={{ display: 'block', flexShrink: 0 }} />
+        ))}
+        {/* Bonus pips */}
+        {PIP_ORDER.flatMap((t) => {
+          const count = t === 'amber' ? totalAmber : (pipCounts[t] ?? 0);
+          return Array.from({ length: count }, (_, i) => (
+            <img key={`${t}${i}`} src={PIP_URLS[t]} alt={t} width={11} height={11} style={{ display: 'block', flexShrink: 0 }} />
+          ));
+        })}
+        {/* Name (+ power for creatures) */}
+        <Box component="span" sx={{ ml: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>
+          {name}
+          {power ? <Box component="span" sx={{ ml: 0.5, opacity: 0.7 }}>{power}</Box> : null}
+        </Box>
+      </Box>
+    </Tooltip>
+  );
 }
 
 // Detail panel shown below the timeline when a turn is selected.
@@ -122,54 +194,14 @@ function TurnDetailPanel({
             </Typography>
             {board.length > 0 ? (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.25 }}>
-                {board.map((c, i) => {
-                  const hc = getHouseColor(c.house);
-                  const isNew = prevSnap !== undefined && !newIds.has(c.id);
-                  const label = [
-                    c.name,
-                    c.power ? `${c.power}` : '',
-                    c.exhausted ? 'exhausted' : '',
-                    c.stunned ? 'stunned' : '',
-                    c.taunt ? 'taunt' : '',
-                    c.enhancements?.length ? `enhancements: ${c.enhancements.join(', ')}` : '',
-                    isNew ? 'played this turn' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' · ');
-                  return (
-                    <Tooltip key={i} title={label} arrow>
-                      <Box
-                        sx={{
-                          bgcolor: alpha(hc, isNew ? 0.4 : 0.15),
-                          border: `${isNew ? 2 : 1}px solid ${hc}`,
-                          borderRadius: 1,
-                          px: 0.75,
-                          py: 0.25,
-                          fontSize: '0.65rem',
-                          maxWidth: 110,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          opacity: c.exhausted ? 0.55 : 1,
-                          cursor: 'default',
-                          fontStyle: c.stunned ? 'italic' : 'normal',
-                        }}
-                      >
-                        {c.name}
-                        {c.power ? (
-                          <Box component="span" sx={{ ml: 0.5, opacity: 0.7 }}>
-                            {c.power}
-                          </Box>
-                        ) : null}
-                        {c.enhancements?.length ? (
-                          <Box component="span" sx={{ ml: 0.5, opacity: 0.8, color: '#ffd54f', fontWeight: 'bold' }}>
-                            {formatEnhancements(c.enhancements)}
-                          </Box>
-                        ) : null}
-                      </Box>
-                    </Tooltip>
-                  );
-                })}
+                {board.map((c, i) => (
+                  <CardChip
+                    key={i} name={c.name} house={c.house} amber={c.amber}
+                    enhancements={c.enhancements} power={c.power}
+                    exhausted={c.exhausted} stunned={c.stunned} taunt={c.taunt}
+                    isNew={prevSnap !== undefined && !newIds.has(c.id)} isBoard
+                  />
+                ))}
               </Box>
             ) : (
               <Typography variant="caption" sx={{ color: 'text.disabled', ml: 1 }}>
@@ -187,45 +219,13 @@ function TurnDetailPanel({
             {localHandPlayer ? `${localHandPlayer} hand` : 'Hand'} ({snap.local_hand.length})
           </Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.25 }}>
-            {snap.local_hand.map((c, i) => {
-              const hc = getHouseColor(c.house);
-              const isNew = prevSnap !== undefined && !prevHandIds.has(c.id);
-              return (
-                <Tooltip
-                  key={i}
-                  title={`${c.name} · ${normalizeHouse(c.house)}${c.amber ? ` · ${c.amber}Æ` : ''}${c.enhancements?.length ? ` · enhancements: ${c.enhancements.join(', ')}` : ''}${isNew ? ' · drawn this turn' : ''}`}
-                  arrow
-                >
-                  <Box
-                    sx={{
-                      bgcolor: alpha(hc, isNew ? 0.4 : 0.15),
-                      border: `${isNew ? 2 : 1}px solid ${hc}`,
-                      borderRadius: 1,
-                      px: 0.75,
-                      py: 0.25,
-                      fontSize: '0.65rem',
-                      maxWidth: 110,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      cursor: 'default',
-                    }}
-                  >
-                    {c.name}
-                    {c.amber ? (
-                      <Box component="span" sx={{ ml: 0.5, opacity: 0.7 }}>
-                        {c.amber}Æ
-                      </Box>
-                    ) : null}
-                    {c.enhancements?.length ? (
-                      <Box component="span" sx={{ ml: 0.5, opacity: 0.8, color: '#ffd54f', fontWeight: 'bold' }}>
-                        {formatEnhancements(c.enhancements)}
-                      </Box>
-                    ) : null}
-                  </Box>
-                </Tooltip>
-              );
-            })}
+            {snap.local_hand.map((c, i) => (
+              <CardChip
+                key={i} name={c.name} house={c.house} amber={c.amber}
+                enhancements={c.enhancements}
+                isNew={prevSnap !== undefined && !prevHandIds.has(c.id)}
+              />
+            ))}
           </Box>
         </Box>
       )}

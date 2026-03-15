@@ -76,6 +76,7 @@ export interface BoardCardSnapshot {
   type: string;
   house: string;
   power: number;
+  amber: number;
   exhausted: boolean;
   stunned: boolean;
   taunt: boolean;
