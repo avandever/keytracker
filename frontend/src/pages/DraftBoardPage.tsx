@@ -125,7 +125,12 @@ export default function DraftBoardPage() {
                   {round.picks.map((slot) => (
                     <TableCell key={slot.team_id} align="center">
                       {slot.pick?.picked_user ? (
-                        <Chip label={slot.pick.picked_user.name} size="small" />
+                        <Chip
+                          label={slot.pick.picked_user.discord_username
+                            ? `${slot.pick.picked_user.name} (@${slot.pick.picked_user.discord_username})`
+                            : slot.pick.picked_user.name}
+                          size="small"
+                        />
                       ) : (
                         <Typography variant="body2" color="text.secondary">-</Typography>
                       )}
@@ -157,7 +162,10 @@ export default function DraftBoardPage() {
                         {p.name?.[0]}
                       </Avatar>
                     </ListItemAvatar>
-                    <ListItemText primary={p.name} />
+                    <ListItemText
+                      primary={p.name}
+                      secondary={p.discord_username ? `@${p.discord_username}` : undefined}
+                    />
                     {isMyPick && (
                       <Button size="small" variant="outlined" disabled={pickLoading}>
                         Pick
