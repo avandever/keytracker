@@ -75,11 +75,11 @@ const BONUS_PIP_TYPES = new Set(['amber', 'capture', 'damage', 'draw', 'discard'
 const PIP_ORDER = ['amber', 'capture', 'damage', 'draw', 'discard'] as const;
 
 function CardChip({
-  name, house, amber = 0, enhancements, power, exhausted, stunned, taunt, isNew, isBoard,
+  name, house, amber = 0, enhancements, power, exhausted, stunned, taunt, isNew, isBoard, cardImage,
 }: {
   name: string; house: string; amber?: number; enhancements?: string[];
   power?: number; exhausted?: boolean; stunned?: boolean; taunt?: boolean;
-  isNew?: boolean; isBoard?: boolean;
+  isNew?: boolean; isBoard?: boolean; cardImage?: string;
 }) {
   const hc = getHouseColor(house);
   const normalH = normalizeHouse(house);
@@ -92,7 +92,7 @@ function CardChip({
   }
   const totalAmber = amber + (pipCounts.amber ?? 0);
 
-  const tooltip = [
+  const textSummary = [
     name,
     normalH,
     houseEnhPips.map((h) => `+${normalizeHouse(h)}`).join(', '),
@@ -108,8 +108,16 @@ function CardChip({
     isNew             ? (isBoard ? 'played this turn' : 'drawn this turn') : '',
   ].filter(Boolean).join(' · ');
 
+  const tooltipContent = cardImage ? (
+    <Box>
+      <Box component="img" src={cardImage} alt={name}
+        sx={{ width: 200, height: 'auto', display: 'block', borderRadius: 1, mb: 0.5 }} />
+      <Box sx={{ fontSize: '0.7rem' }}>{textSummary}</Box>
+    </Box>
+  ) : textSummary;
+
   return (
-    <Tooltip title={tooltip} arrow>
+    <Tooltip title={tooltipContent} arrow>
       <Box
         sx={{
           display: 'inline-flex', alignItems: 'center', gap: '2px',
@@ -141,10 +149,11 @@ function CardChip({
 }
 
 function TurnDetailPanel({
-  snap, prevSnap, players, localHandPlayer,
+  snap, prevSnap, players, localHandPlayer, cardImages,
 }: {
   snap: TurnSnapshot; prevSnap: TurnSnapshot | undefined;
   players: string[]; localHandPlayer: string;
+  cardImages: Record<string, string>;
 }) {
   const playerList = players.length > 0 ? players : Object.keys(snap.boards);
   const prevHandIds = new Set(prevSnap?.local_hand.map((c) => c.id) ?? []);
@@ -186,6 +195,7 @@ function TurnDetailPanel({
                     enhancements={c.enhancements} power={c.power}
                     exhausted={c.exhausted} stunned={c.stunned} taunt={c.taunt}
                     isNew={prevSnap !== undefined && !newIds.has(c.id)} isBoard
+                    cardImage={cardImages[c.name]}
                   />
                 ))}
               </Box>
@@ -208,6 +218,7 @@ function TurnDetailPanel({
                 key={i} name={c.name} house={c.house} amber={c.amber}
                 enhancements={c.enhancements}
                 isNew={prevSnap !== undefined && !prevHandIds.has(c.id)}
+                cardImage={cardImages[c.name]}
               />
             ))}
           </Box>
@@ -411,6 +422,7 @@ function VerticalTimeline({
                   <TurnDetailPanel
                     snap={snap} prevSnap={prevSnap}
                     players={players} localHandPlayer={localHandPlayer}
+                    cardImages={cardImages}
                   />
                 )}
                 {logSlice.length > 0 && (
