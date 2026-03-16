@@ -985,11 +985,9 @@ export default function LeagueDetailPage() {
             <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/my-info`}>
               My Info
             </Button>
-            {league.is_captain && (
-              <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/my-team`}>
-                My Team
-              </Button>
-            )}
+            <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/my-team`}>
+              My Team
+            </Button>
           </>
         )}
       </Box>
