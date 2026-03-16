@@ -87,7 +87,7 @@ def mv_deck_proxy(kf_id):
                 "losses": 0,
                 "bonus_icons": bonus_icons,
                 "_links": {
-                    "houses": list(seen_houses.values()),
+                    "houses": list(seen_houses.keys()),
                     "cards": [c["id"] for c in cards_linked],
                 },
             },
