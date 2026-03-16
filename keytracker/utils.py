@@ -157,8 +157,9 @@ def _normalize_log_house(name: str) -> str:
 MV_API_BASE = "https://www.keyforgegame.com/api/decks"
 
 DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
-DOK_DECK_BASE = "https://decksofkeyforge.com/public-api/v3/decks"
-DOK_ALLIANCE_BASE = "https://decksofkeyforge.com/api/alliance-decks/with-synergies"
+_DOK_BASE = os.environ.get("DOK_BASE_URL", "https://decksofkeyforge.com")
+DOK_DECK_BASE = f"{_DOK_BASE}/public-api/v3/decks"
+DOK_ALLIANCE_BASE = f"{_DOK_BASE}/api/alliance-decks/with-synergies"
 LATEST_SAS_VERSION = 43
 SAS_MAX_AGE_DAYS = 60
 SAS_TD = datetime.timedelta(days=SAS_MAX_AGE_DAYS)
@@ -2243,8 +2244,8 @@ def send_password_reset_email(user, app_base_url: str) -> None:
     current_app.logger.info("Password reset email sent to %s", user.email)
 
 
-DOK_MY_DECKS_BASE = "https://decksofkeyforge.com/public-api/v1/my-decks"
-DOK_MY_ALLIANCES_URL = "https://decksofkeyforge.com/public-api/v1/my-alliances"
+DOK_MY_DECKS_BASE = f"{_DOK_BASE}/public-api/v1/my-decks"
+DOK_MY_ALLIANCES_URL = f"{_DOK_BASE}/public-api/v1/my-alliances"
 
 
 def sync_collection_from_dok(user) -> dict:
