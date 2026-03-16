@@ -801,7 +801,20 @@ class User(UserMixin, db.Model):
 
     @property
     def is_member(self):
-        return bool(self.is_patron) or bool(self.free_membership)
+        if bool(self.is_patron) or bool(self.free_membership):
+            return True
+        active_statuses = [LeagueStatus.ACTIVE.value, LeagueStatus.PLAYOFFS.value]
+        membership = (
+            db.session.query(TeamMember)
+            .join(TeamMember.team)
+            .join(Team.league)
+            .filter(
+                TeamMember.user_id == self.id,
+                League.status.in_(active_statuses),
+            )
+            .first()
+        )
+        return membership is not None
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
