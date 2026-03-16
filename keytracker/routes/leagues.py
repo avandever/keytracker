@@ -4312,6 +4312,71 @@ def submit_nordic_action(league_id, matchup_id):
     return jsonify(serialize_player_matchup(pm))
 
 
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/tertiate-purge", methods=["POST"]
+)
+@login_required
+def submit_tertiate_purge(league_id, matchup_id):
+    """Submit a secret house purge choice in Tertiate format."""
+    from keytracker.schema import TertiateHousePurge as TertiateHousePurgeModel
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.TERTIATE.value:
+        return jsonify({"error": "Only for Tertiate format"}), 400
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    if not pm.player1_started or not pm.player2_started:
+        return jsonify({"error": "Both players must start the match before choosing"}), 400
+
+    # Check not already submitted
+    existing = TertiateHousePurgeModel.query.filter_by(
+        player_matchup_id=pm.id, choosing_user_id=effective.id
+    ).first()
+    if existing:
+        return jsonify({"error": "You have already submitted your purge choice"}), 400
+
+    data = request.get_json(silent=True) or {}
+    purged_house = (data.get("purged_house") or "").strip()
+    if not purged_house:
+        return jsonify({"error": "purged_house is required"}), 400
+
+    # Validate: the chosen house must be in the opponent's deck
+    opponent_id = pm.player2_id if effective.id == pm.player1_id else pm.player1_id
+    opponent_sel = PlayerDeckSelection.query.filter_by(
+        week_id=week.id, user_id=opponent_id, slot_number=1
+    ).first()
+    if not opponent_sel or not opponent_sel.deck:
+        return jsonify({"error": "Opponent has not selected a deck"}), 400
+
+    opponent_houses = {ps.house for ps in opponent_sel.deck.pod_stats if ps.house != "Archon Power"}
+    if purged_house not in opponent_houses:
+        return jsonify({"error": f"'{purged_house}' is not a house in the opponent's deck"}), 400
+
+    purge = TertiateHousePurgeModel(
+        player_matchup_id=pm.id,
+        choosing_user_id=effective.id,
+        purged_house=purged_house,
+    )
+    db.session.add(purge)
+    db.session.commit()
+
+    return jsonify(serialize_player_matchup(pm))
+
+
 # --- Match flow ---
 
 

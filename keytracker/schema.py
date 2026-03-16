@@ -854,6 +854,7 @@ class WeekFormat(PyEnum):
     EXCHANGE = "exchange"
     NORDIC_HEXAD = "nordic_hexad"
     MOIRAI = "moirai"
+    TERTIATE = "tertiate"
 
 
 class WeekStatus(PyEnum):
@@ -1193,6 +1194,11 @@ class PlayerMatchup(db.Model):
         back_populates="player_matchup",
         cascade="all, delete-orphan",
     )
+    tertiate_purge_choices = db.relationship(
+        "TertiateHousePurge",
+        back_populates="player_matchup",
+        cascade="all, delete-orphan",
+    )
 
 
 class FeatureDesignation(db.Model):
@@ -1463,6 +1469,37 @@ class MoiraiAssignment(db.Model):
             "assigning_user_id",
             "game_number",
             name="uq_moirai_assignment",
+        ),
+    )
+
+
+class TertiateHousePurge(db.Model):
+    """
+    Records a player's secret house purge choice in Tertiate format.
+    Each player chooses one house from the OPPONENT's deck to purge (all 12 cards removed).
+    Reveal: when len(purges) == 2 (both players submitted).
+    """
+
+    __tablename__ = "tertiate_house_purge"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_matchup.id"), nullable=False
+    )
+    choosing_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    purged_house = db.Column(db.Text, nullable=False)
+
+    player_matchup = db.relationship(
+        "PlayerMatchup", back_populates="tertiate_purge_choices"
+    )
+    choosing_user = db.relationship("User", foreign_keys=[choosing_user_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "player_matchup_id",
+            "choosing_user_id",
+            name="uq_tertiate_house_purge",
         ),
     )
 

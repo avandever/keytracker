@@ -603,3 +603,16 @@ export async function getSignupDiscordCheck(leagueId: number): Promise<SignupDis
   const { data } = await apiClient.get(`/leagues/${leagueId}/signup-discord-check`);
   return data.results;
 }
+
+
+export async function submitTertiatePurge(
+  leagueId: number,
+  matchupId: number,
+  purgedHouse: string,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/tertiate-purge`,
+    { purged_house: purgedHouse },
+  );
+  return data;
+}

@@ -547,6 +547,21 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
     else:
         data["moirai_assignments"] = None
 
+    # Tertiate: reveal purge choices only after both players have submitted
+    tertiate_purges_raw = getattr(pm, "tertiate_purge_choices", [])
+    data["tertiate_purge_choices_count"] = len(tertiate_purges_raw)
+    data["tertiate_purge_choices"] = (
+        [
+            {
+                "choosing_user_id": p.choosing_user_id,
+                "purged_house": p.purged_house,
+            }
+            for p in tertiate_purges_raw
+        ]
+        if len(tertiate_purges_raw) == 2
+        else []
+    )
+
     return data
 
 

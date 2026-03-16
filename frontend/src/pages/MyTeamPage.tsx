@@ -47,6 +47,7 @@ import {
   submitCurationDeck,
   removeCurationDeck,
   submitSteals,
+  submitTertiatePurge,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
@@ -73,6 +74,7 @@ const FORMAT_LABELS: Record<string, string> = {
   exchange: 'Exchange',
   nordic_hexad: 'Nordic Hexad',
   moirai: 'Moirai',
+  tertiate: 'Tertiate',
 };
 
 function getSasLadderRanges(maxes: number[]): [number, number | null][] {
@@ -142,6 +144,9 @@ export default function MyTeamPage() {
 
   // SAS Ladder: rung selections keyed by `${weekId}-${userId}`
   const [sasRungSelections, setSasRungSelections] = useState<Record<string, number | ''>>({});
+
+  // Tertiate: house purge selections keyed by matchup id
+  const [tertiateHouseSelections, setTertiateHouseSelections] = useState<Record<number, string>>({});
 
   const refresh = useCallback(() => {
     setSealedPools({});
@@ -1590,6 +1595,101 @@ export default function MyTeamPage() {
                               })}
                             </Box>
                           )}
+
+                          {/* Tertiate: show opponent deck + house purge UI */}
+                          {week.format_type === 'tertiate' && (week.status === 'published' || week.status === 'completed') && (() => {
+                            const isInMatchup = pm.player1.id === user?.id || pm.player2.id === user?.id;
+                            const opponentId = pm.player1.id === user?.id ? pm.player2.id : pm.player1.id;
+                            const opponentSel = week.deck_selections.find((ds) => ds.user_id === opponentId && ds.slot_number === 1);
+                            const purges = pm.tertiate_purge_choices || [];
+                            const myPurge = purges.find((p) => p.choosing_user_id === user?.id);
+                            const opponentPurge = purges.find((p) => p.choosing_user_id === opponentId);
+                            const bothRevealed = purges.length === 2;
+                            const bothStarted = pm.player1_started && pm.player2_started;
+                            const opponentHouses = opponentSel?.deck?.houses || [];
+                            const houseSelectKey = pm.id;
+                            return (
+                              <Box sx={{ ml: 2, mt: 1 }}>
+                                {/* Show opponent deck to viewer */}
+                                {isInMatchup && opponentSel?.deck && (
+                                  <Box sx={{ mb: 1 }}>
+                                    <Typography variant="caption" color="text.secondary">Opponent's deck (you choose a house to purge):</Typography>
+                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
+                                      {opponentSel.deck.houses && <HouseIcons houses={opponentSel.deck.houses} />}
+                                      <Typography variant="body2">{opponentSel.deck.name}</Typography>
+                                      {opponentSel.deck.sas_rating != null && <Chip label={`SAS: ${opponentSel.deck.sas_rating}`} size="small" variant="outlined" />}
+                                      <Link href={opponentSel.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                                      <Link href={opponentSel.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                                    </Box>
+                                  </Box>
+                                )}
+                                {/* Purge selection — only for participants, only after both started, only if not yet submitted */}
+                                {isInMatchup && bothStarted && !myPurge && !bothRevealed && opponentHouses.length > 0 && (
+                                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+                                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                                      <InputLabel>Purge house</InputLabel>
+                                      <Select
+                                        label="Purge house"
+                                        value={tertiateHouseSelections[houseSelectKey] || ''}
+                                        onChange={(e) => setTertiateHouseSelections((prev) => ({ ...prev, [houseSelectKey]: e.target.value }))}
+                                      >
+                                        {opponentHouses.map((h) => <MenuItem key={h} value={h}>{h}</MenuItem>)}
+                                      </Select>
+                                    </FormControl>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      color="error"
+                                      disabled={!tertiateHouseSelections[houseSelectKey]}
+                                      onClick={async () => {
+                                        const house = tertiateHouseSelections[houseSelectKey];
+                                        if (!house) return;
+                                        try {
+                                          const updated = await submitTertiatePurge(leagueId, pm.id, house);
+                                          setLeague((prev) => {
+                                            if (!prev) return prev;
+                                            return {
+                                              ...prev,
+                                              weeks: prev.weeks.map((w) => w.id === week.id ? {
+                                                ...w,
+                                                matchups: w.matchups.map((wm2) => ({
+                                                  ...wm2,
+                                                  player_matchups: wm2.player_matchups.map((pm2) => pm2.id === pm.id ? updated : pm2),
+                                                })),
+                                              } : w),
+                                            };
+                                          });
+                                        } catch {
+                                          setError('Failed to submit purge choice');
+                                        }
+                                      }}
+                                    >
+                                      Lock In
+                                    </Button>
+                                  </Box>
+                                )}
+                                {/* Waiting state */}
+                                {isInMatchup && bothStarted && myPurge && !bothRevealed && (
+                                  <Typography variant="body2" color="text.secondary">Waiting for opponent to choose...</Typography>
+                                )}
+                                {/* Reveal */}
+                                {bothRevealed && (
+                                  <Box>
+                                    {purges.map((p) => {
+                                      const chooser = p.choosing_user_id === pm.player1.id ? pm.player1 : pm.player2;
+                                      const victimId = p.choosing_user_id === pm.player1.id ? pm.player2.id : pm.player1.id;
+                                      const victimSel = week.deck_selections.find((ds) => ds.user_id === victimId && ds.slot_number === 1);
+                                      return (
+                                        <Typography key={p.choosing_user_id} variant="body2">
+                                          {chooser.name} purged <strong>{p.purged_house}</strong> from {victimSel?.deck?.name || 'opponent deck'}
+                                        </Typography>
+                                      );
+                                    })}
+                                  </Box>
+                                )}
+                              </Box>
+                            );
+                          })()}
                         </Box>
                       );
                     })}

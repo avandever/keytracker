@@ -1208,6 +1208,7 @@ export default function LeagueAdminPage() {
                 <MenuItem value="thief">Thief</MenuItem>
                 <MenuItem value="sas_ladder">SAS Ladder</MenuItem>
                 <MenuItem value="reversal">Reversal</MenuItem>
+                <MenuItem value="tertiate">Tertiate</MenuItem>
               </Select>
               {editingWeekId !== null && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
