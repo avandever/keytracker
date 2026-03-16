@@ -419,24 +419,43 @@ def house_stats_to_csv(pods: List[CsvPod]) -> IO:
 
 
 class MVApi:
-    def __init__(self, seconds_per_call: float = 5.0):
-        self.lock_sync = threading.Lock()
-        self.last_call_time = 0.0
+    def __init__(self, seconds_per_call: float = 5.0, domain_rates: Dict[str, float] = None):
         self.seconds_per_call = seconds_per_call
+        self.domain_rates = domain_rates or {}
+        self._state_lock = threading.Lock()
+        self._domain_state: Dict[str, tuple] = {}  # domain -> (lock, [last_call_time])
+
+    def _get_domain_state(self, url: str) -> tuple:
+        from urllib.parse import urlparse
+        domain = urlparse(url).netloc
+        with self._state_lock:
+            if domain not in self._domain_state:
+                rate = self.domain_rates.get(domain, self.seconds_per_call)
+                self._domain_state[domain] = (threading.Lock(), [0.0], rate)
+            return self._domain_state[domain]
 
     def callMVSync(self, *args, **kwargs):
-        with self.lock_sync:
-            time_since_last_call = time.time() - self.last_call_time
-            time_to_sleep = max(0.0, self.seconds_per_call - time_since_last_call)
+        url = args[0]
+        lock, last_call, rate = self._get_domain_state(url)
+        with lock:
+            time_since_last_call = time.time() - last_call[0]
+            time_to_sleep = max(0.0, rate - time_since_last_call)
             current_app.logger.debug(f"Sleeping {time_to_sleep} before calling mv api")
             time.sleep(time_to_sleep)
-            self.last_call_time = time.time()
+            last_call[0] = time.time()
             current_app.logger.debug(f"Calling {args}, {kwargs}")
             response = requests.get(*args, **kwargs)
             return response
 
 
-mv_api = MVApi(15.0)
+mv_api = MVApi(
+    seconds_per_call=15.0,
+    domain_rates={
+        # Our own proxy and the AWS caching proxy have no meaningful rate limit
+        "localhost:3001": 0.0,
+        "mvproxy.us-west-2.elasticbeanstalk.com": 0.0,
+    },
+)
 
 
 class CantAnonymize(Exception):
