@@ -1029,10 +1029,7 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
     deck_url = os.path.join(MV_SINGLE_DECK_BASE, deck.kf_id)
-    response = mv_api.callMVSync(
-        deck_url,
-        params={"links": "cards"},
-    )
+    response = mv_api.callMVSync(deck_url)
     all_data = response.json()
     if "data" not in all_data:
         current_app.logger.error(
