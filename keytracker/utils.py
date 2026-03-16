@@ -155,6 +155,10 @@ def _normalize_log_house(name: str) -> str:
 
 
 MV_API_BASE = "https://www.keyforgegame.com/api/decks"
+# Base URL for single-deck fetches. Override with MV_SINGLE_DECK_BASE to use a
+# caching proxy (e.g. http://mvproxy.us-west-2.elasticbeanstalk.com/api/master-vault/decks).
+# The collector page-scraping always uses MV_API_BASE directly.
+MV_SINGLE_DECK_BASE = os.environ.get("MV_SINGLE_DECK_BASE", MV_API_BASE)
 
 DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 _DOK_BASE = os.environ.get("DOK_BASE_URL", "https://decksofkeyforge.com")
@@ -1024,7 +1028,7 @@ def loop_loading_missed_sas(batch_size: int, max_set_id: int = 700) -> None:
 def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
-    deck_url = os.path.join(MV_API_BASE, deck.kf_id)
+    deck_url = os.path.join(MV_SINGLE_DECK_BASE, deck.kf_id)
     response = mv_api.callMVSync(
         deck_url,
         params={"links": "cards"},
