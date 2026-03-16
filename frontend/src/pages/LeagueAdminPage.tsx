@@ -20,6 +20,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Autocomplete,
   IconButton,
   Dialog,
   DialogTitle,
@@ -1190,32 +1191,52 @@ export default function LeagueAdminPage() {
               onChange={(e) => setWeekName(e.target.value)}
               placeholder="e.g. Round 1, Finals, etc."
             />
-            <FormControl fullWidth>
-              <InputLabel>Format</InputLabel>
-              <Select value={weekFormat} label="Format" disabled={editingWeekId !== null} onChange={(e) => {
-                const fmt = e.target.value;
-                setWeekFormat(fmt);
-                if (fmt === 'triad') setWeekBestOf('3');
-                else if (fmt === 'alliance') setWeekBestOf('1');
-              }}>
-                <MenuItem value="archon_standard">Archon Standard</MenuItem>
-                <MenuItem value="triad">Triad</MenuItem>
-                <MenuItem value="sealed_archon">Sealed Archon</MenuItem>
-                <MenuItem value="sealed_alliance">Sealed Alliance</MenuItem>
-                <MenuItem value="team_sealed">Team Sealed</MenuItem>
-                <MenuItem value="team_sealed_alliance">Team Sealed Alliance</MenuItem>
-                <MenuItem value="alliance">Alliance</MenuItem>
-                <MenuItem value="thief">Thief</MenuItem>
-                <MenuItem value="sas_ladder">SAS Ladder</MenuItem>
-                <MenuItem value="reversal">Reversal</MenuItem>
-                <MenuItem value="tertiate">Tertiate</MenuItem>
-              </Select>
-              {editingWeekId !== null && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                  Format cannot be changed after creation
-                </Typography>
-              )}
-            </FormControl>
+            {(() => {
+              const formatOptions = [
+                { value: 'archon_standard', label: 'Archon Standard' },
+                { value: 'triad', label: 'Triad' },
+                { value: 'sealed_archon', label: 'Sealed Archon' },
+                { value: 'sealed_alliance', label: 'Sealed Alliance' },
+                { value: 'team_sealed', label: 'Team Sealed' },
+                { value: 'team_sealed_alliance', label: 'Team Sealed Alliance' },
+                { value: 'alliance', label: 'Alliance' },
+                { value: 'thief', label: 'Thief' },
+                { value: 'sas_ladder', label: 'SAS Ladder' },
+                { value: 'reversal', label: 'Reversal' },
+                { value: 'tertiate', label: 'Tertiate' },
+                { value: 'triad_short', label: 'Triad Short' },
+                { value: 'oubliette', label: 'Oubliette' },
+                { value: 'adaptive_short', label: 'Adaptive Short' },
+                { value: 'exchange', label: 'Exchange' },
+                { value: 'nordic_hexad', label: 'Nordic Hexad' },
+                { value: 'moirai', label: 'Moirai' },
+                { value: 'adaptive', label: 'Adaptive' },
+              ];
+              const selectedOption = formatOptions.find((o) => o.value === weekFormat) ?? null;
+              return (
+                <Box>
+                  <Autocomplete
+                    options={formatOptions}
+                    getOptionLabel={(o) => o.label}
+                    value={selectedOption}
+                    disabled={editingWeekId !== null}
+                    onChange={(_, newVal) => {
+                      const fmt = newVal?.value ?? 'archon_standard';
+                      setWeekFormat(fmt);
+                      if (fmt === 'triad') setWeekBestOf('3');
+                      else if (fmt === 'alliance') setWeekBestOf('1');
+                    }}
+                    isOptionEqualToValue={(o, v) => o.value === v.value}
+                    renderInput={(params) => <TextField {...params} label="Format" />}
+                  />
+                  {editingWeekId !== null && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                      Format cannot be changed after creation
+                    </Typography>
+                  )}
+                </Box>
+              );
+            })()}
             <FormControl fullWidth>
               <InputLabel>Best of</InputLabel>
               <Select
