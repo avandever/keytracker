@@ -19,6 +19,7 @@ import {
   Checkbox,
   FormControlLabel,
   Link,
+  Autocomplete,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
@@ -55,6 +56,8 @@ import type {
 } from '../types';
 import type { SealedPoolEntry } from '../api/leagues';
 import { alpha } from '@mui/material/styles';
+import useMyCollection from '../hooks/useMyCollection';
+import { filterCollectionForConstraints } from '../utils/collectionFilter';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon',
@@ -92,6 +95,7 @@ export default function StandaloneMatchPage() {
   // Deck selection state
   const [deckUrl, setDeckUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const { decks: collectionDecks } = useMyCollection();
   const [sealedDeckId, setSealedDeckId] = useState<number | ''>('');
 
   // Sealed Alliance selection state
@@ -883,17 +887,49 @@ export default function StandaloneMatchPage() {
                           <Button size="small" color="error" onClick={() => handleRemoveDeck(slot)}>Remove</Button>
                         </Box>
                       ) : (
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <TextField
-                            size="small"
-                            label="Deck URL or ID"
-                            value={deckUrl}
-                            onChange={(e) => setDeckUrl(e.target.value)}
-                            sx={{ minWidth: 300 }}
-                          />
-                          <Button variant="contained" onClick={() => handleDeckSubmit(slot)} disabled={submitting}>
-                            Submit
-                          </Button>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          {(() => {
+                            const filtered = filterCollectionForConstraints(collectionDecks, {
+                              allowed_sets: match.allowed_sets,
+                              max_sas: match.max_sas,
+                              sas_floor: match.sas_floor,
+                            });
+                            if (filtered.length === 0) return null;
+                            return (
+                              <Autocomplete
+                                options={filtered}
+                                getOptionLabel={(d) => `${d.name}${d.sas_rating != null ? ` (SAS ${d.sas_rating})` : ''}`}
+                                renderOption={(props, d) => (
+                                  <li {...props} key={d.kf_id}>
+                                    <Box>
+                                      <Typography variant="body2">{d.name}</Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        {d.expansion_name}{d.sas_rating != null ? ` · SAS ${d.sas_rating}` : ''}
+                                      </Typography>
+                                    </Box>
+                                  </li>
+                                )}
+                                onChange={(_, d) => { if (d) setDeckUrl(d.mv_url); }}
+                                size="small"
+                                sx={{ minWidth: 300 }}
+                                renderInput={(params) => (
+                                  <TextField {...params} label="Pick from your collection" size="small" />
+                                )}
+                              />
+                            );
+                          })()}
+                          <Box sx={{ display: 'flex', gap: 1 }}>
+                            <TextField
+                              size="small"
+                              label="Deck URL or ID"
+                              value={deckUrl}
+                              onChange={(e) => setDeckUrl(e.target.value)}
+                              sx={{ minWidth: 300 }}
+                            />
+                            <Button variant="contained" onClick={() => handleDeckSubmit(slot)} disabled={submitting}>
+                              Submit
+                            </Button>
+                          </Box>
                         </Box>
                       )}
                     </Box>

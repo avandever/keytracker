@@ -24,6 +24,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Autocomplete,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -56,6 +57,8 @@ import { useAuth } from '../contexts/AuthContext';
 import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
 import type { SealedPoolEntry, TeamSealedPoolEntry } from '../api/leagues';
 import { alpha } from '@mui/material/styles';
+import useMyCollection from '../hooks/useMyCollection';
+import { filterCollectionForConstraints } from '../utils/collectionFilter';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
@@ -147,6 +150,8 @@ export default function MyTeamPage() {
 
   // Tertiate: house purge selections keyed by matchup id
   const [tertiateHouseSelections, setTertiateHouseSelections] = useState<Record<number, string>>({});
+
+  const { decks: collectionDecks } = useMyCollection();
 
   const refresh = useCallback(() => {
     setSealedPools({});
@@ -578,6 +583,11 @@ export default function MyTeamPage() {
     // Normal URL input for non-sealed formats
     const urlKey = `${week.id}-${userId}-${slotNumber}`;
     const isReversal = week.format_type === 'reversal';
+    const filteredCollection = filterCollectionForConstraints(collectionDecks, {
+      allowed_sets: week.allowed_sets,
+      max_sas: week.max_sas,
+      sas_floor: week.sas_floor,
+    });
     return (
       <Box sx={{ ml: 4, mt: 0.5 }}>
         {isReversal && (
@@ -585,25 +595,49 @@ export default function MyTeamPage() {
             Submit the deck your opponent will play
           </Typography>
         )}
+        {filteredCollection.length > 0 && (
+          <Autocomplete
+            options={filteredCollection}
+            getOptionLabel={(d) => `${d.name}${d.sas_rating != null ? ` (SAS ${d.sas_rating})` : ''}`}
+            renderOption={(props, d) => (
+              <li {...props} key={d.kf_id}>
+                <Box>
+                  <Typography variant="body2">{d.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {d.expansion_name}{d.sas_rating != null ? ` · SAS ${d.sas_rating}` : ''}
+                  </Typography>
+                </Box>
+              </li>
+            )}
+            onChange={(_, d) => {
+              if (d) setTeammateDeckUrls((prev) => ({ ...prev, [urlKey]: d.mv_url }));
+            }}
+            size="small"
+            sx={{ mb: 0.5 }}
+            renderInput={(params) => (
+              <TextField {...params} label="Pick from your collection" size="small" />
+            )}
+          />
+        )}
         <Box sx={{ display: 'flex', gap: 1 }}>
-        <TextField
-          label="Deck URL"
-          value={teammateDeckUrls[urlKey] || ''}
-          onChange={(e) => setTeammateDeckUrls((prev) => ({
-            ...prev,
-            [urlKey]: e.target.value,
-          }))}
-          size="small"
-          fullWidth
-          placeholder="https://decksofkeyforge.com/decks/..."
-        />
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={() => handleSubmitDeck(week.id, userId, slotNumber)}
-        >
-          Submit
-        </Button>
+          <TextField
+            label="Deck URL"
+            value={teammateDeckUrls[urlKey] || ''}
+            onChange={(e) => setTeammateDeckUrls((prev) => ({
+              ...prev,
+              [urlKey]: e.target.value,
+            }))}
+            size="small"
+            fullWidth
+            placeholder="https://decksofkeyforge.com/decks/..."
+          />
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => handleSubmitDeck(week.id, userId, slotNumber)}
+          >
+            Submit
+          </Button>
         </Box>
       </Box>
     );

@@ -1100,7 +1100,7 @@ _COLLECTION_SORT_COLS = {
 def get_collection():
     deck_type = request.args.get("type", "standard")
     page = request.args.get("page", 0, type=int)
-    per_page = min(request.args.get("per_page", 50, type=int), 200)
+    per_page = min(request.args.get("per_page", 50, type=int), 2000)
     sort_field = request.args.get("sort", "name")
     sort_dir = request.args.get("sort_dir", "asc")
     search = request.args.get("search", "").strip()
