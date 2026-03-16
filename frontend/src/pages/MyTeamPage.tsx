@@ -572,8 +572,15 @@ export default function MyTeamPage() {
 
     // Normal URL input for non-sealed formats
     const urlKey = `${week.id}-${userId}-${slotNumber}`;
+    const isReversal = week.format_type === 'reversal';
     return (
-      <Box sx={{ display: 'flex', gap: 1, ml: 4, mt: 0.5 }}>
+      <Box sx={{ ml: 4, mt: 0.5 }}>
+        {isReversal && (
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+            Submit the deck your opponent will play
+          </Typography>
+        )}
+        <Box sx={{ display: 'flex', gap: 1 }}>
         <TextField
           label="Deck URL"
           value={teammateDeckUrls[urlKey] || ''}
@@ -592,6 +599,7 @@ export default function MyTeamPage() {
         >
           Submit
         </Button>
+        </Box>
       </Box>
     );
   };
@@ -1500,6 +1508,31 @@ export default function MyTeamPage() {
                     <CombinedSas selections={selections} />
                   </Box>
                 )}
+
+                {/* Reversal: show the deck this player will actually play (opponent's selection) */}
+                {week.format_type === 'reversal' && (week.status === 'published' || week.status === 'completed') && (() => {
+                  const myMatchup = week.matchups.flatMap((wm) => wm.player_matchups).find(
+                    (pm) => pm.player1.id === m.user.id || pm.player2.id === m.user.id
+                  );
+                  if (!myMatchup) return null;
+                  const opponentId = myMatchup.player1.id === m.user.id ? myMatchup.player2.id : myMatchup.player1.id;
+                  const opponentSel = week.deck_selections.find((ds) => ds.user_id === opponentId && ds.slot_number === 1);
+                  if (!opponentSel?.deck) return null;
+                  return (
+                    <Box sx={{ ml: 4, mt: 0.5, p: 1, border: 1, borderColor: 'info.main', borderRadius: 1 }}>
+                      <Typography variant="caption" color="info.main">Deck they will play:</Typography>
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
+                        {opponentSel.deck.houses && <HouseIcons houses={opponentSel.deck.houses} />}
+                        <Typography variant="body2">{opponentSel.deck.name}</Typography>
+                        {opponentSel.deck.sas_rating != null && (
+                          <Chip label={`SAS: ${opponentSel.deck.sas_rating}`} size="small" variant="outlined" />
+                        )}
+                        <Link href={opponentSel.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                        <Link href={opponentSel.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                      </Box>
+                    </Box>
+                  );
+                })()}
               </Box>
             );
           })}
