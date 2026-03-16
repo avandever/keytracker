@@ -25,6 +25,7 @@ import {
   Checkbox,
   FormControlLabel,
   Link,
+  Autocomplete,
 } from '@mui/material';
 import {
   getLeague,
@@ -52,6 +53,8 @@ import type {
   DeckSelectionInfo,
 } from '../types';
 import { alpha } from '@mui/material/styles';
+import useMyCollection from '../hooks/useMyCollection';
+import { filterCollectionForConstraints } from '../utils/collectionFilter';
 
 const TOKEN_SETS = new Set([855, 600]);
 const PROPHECY_EXPANSION_ID = 886;
@@ -71,6 +74,7 @@ export default function MyLeagueInfoPage() {
   // Deck selection
   const [deckUrl, setDeckUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const { decks: collectionDecks } = useMyCollection();
 
   // Game reporting
   const [reportWinnerId, setReportWinnerId] = useState<number | ''>('');
@@ -461,25 +465,55 @@ export default function MyLeagueInfoPage() {
             {canSelectDeck && mySelections.length < maxSlots &&
               week.format_type !== 'sealed_archon' &&
               week.format_type !== 'sealed_alliance' &&
-              week.format_type !== 'thief' && (
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                <TextField
-                  label="Deck URL or ID"
-                  value={deckUrl}
-                  onChange={(e) => setDeckUrl(e.target.value)}
-                  size="small"
-                  fullWidth
-                  placeholder="https://decksofkeyforge.com/decks/..."
-                />
-                <Button
-                  variant="contained"
-                  onClick={() => handleSubmitDeck(week.id, mySelections.length + 1)}
-                  disabled={submitting || !deckUrl.trim()}
-                >
-                  Submit
-                </Button>
-              </Box>
-            )}
+              week.format_type !== 'thief' && (() => {
+              const filteredCollection = filterCollectionForConstraints(collectionDecks, {
+                allowed_sets: week.allowed_sets,
+                max_sas: week.max_sas,
+                sas_floor: week.sas_floor,
+              });
+              return (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  {filteredCollection.length > 0 && (
+                    <Autocomplete
+                      options={filteredCollection}
+                      getOptionLabel={(d) => `${d.name}${d.sas_rating != null ? ` (SAS ${d.sas_rating})` : ''}`}
+                      renderOption={(props, d) => (
+                        <li {...props} key={d.kf_id}>
+                          <Box>
+                            <Typography variant="body2">{d.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {d.expansion_name}{d.sas_rating != null ? ` · SAS ${d.sas_rating}` : ''}
+                            </Typography>
+                          </Box>
+                        </li>
+                      )}
+                      onChange={(_, d) => { if (d) setDeckUrl(d.mv_url); }}
+                      size="small"
+                      renderInput={(params) => (
+                        <TextField {...params} label="Pick from your collection" size="small" />
+                      )}
+                    />
+                  )}
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <TextField
+                      label="Deck URL or ID"
+                      value={deckUrl}
+                      onChange={(e) => setDeckUrl(e.target.value)}
+                      size="small"
+                      fullWidth
+                      placeholder="https://decksofkeyforge.com/decks/..."
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={() => handleSubmitDeck(week.id, mySelections.length + 1)}
+                      disabled={submitting || !deckUrl.trim()}
+                    >
+                      Submit
+                    </Button>
+                  </Box>
+                </Box>
+              );
+            })()}
 
             {/* Sealed Archon: always show pool, show dropdown only when selecting */}
             {week.format_type === 'sealed_archon' && (() => {
