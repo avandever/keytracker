@@ -972,27 +972,36 @@ def make_pick(league_id):
     if user_id not in available_ids:
         return jsonify({"error": "Player not available"}), 400
 
-    # Create the pick
-    pick = DraftPick(
-        league_id=league.id,
-        round_number=state["current_round"],
-        pick_number=state["current_pick"],
-        team_id=current_team_data["id"],
-        picked_user_id=user_id,
-    )
-    db.session.add(pick)
+    def _do_pick(s, uid):
+        pick = DraftPick(
+            league_id=league.id,
+            round_number=s["current_round"],
+            pick_number=s["current_pick"],
+            team_id=s["current_team"]["id"],
+            picked_user_id=uid,
+        )
+        db.session.add(pick)
+        db.session.add(
+            TeamMember(
+                team_id=s["current_team"]["id"],
+                user_id=uid,
+                is_captain=False,
+            )
+        )
+        db.session.flush()
 
-    # Add to team
-    member = TeamMember(
-        team_id=current_team_data["id"],
-        user_id=user_id,
-        is_captain=False,
-    )
-    db.session.add(member)
-    db.session.flush()
+    _do_pick(state, user_id)
 
-    # Check if draft is now complete
+    # Auto-assign when only one choice remains
     new_state = compute_draft_state(league)
+    while (
+        not new_state["is_complete"]
+        and new_state["current_team"]
+        and len(new_state["available_players"]) == 1
+    ):
+        _do_pick(new_state, new_state["available_players"][0]["id"])
+        new_state = compute_draft_state(league)
+
     if new_state["is_complete"]:
         league.status = LeagueStatus.ACTIVE.value
 
