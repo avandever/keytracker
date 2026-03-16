@@ -449,7 +449,7 @@ class MVApi:
 
 
 mv_api = MVApi(
-    seconds_per_call=15.0,
+    seconds_per_call=20.0,
     domain_rates={
         # Our own proxy and the AWS caching proxy have no meaningful rate limit
         "localhost:3001": 0.0,
