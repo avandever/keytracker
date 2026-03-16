@@ -11,6 +11,8 @@ from flask import Blueprint, jsonify
 
 from keytracker.schema import Deck
 
+_CREATURE_TYPES = {"Creature", "Token Creature", "Gigantic Creature Art", "Gigantic Creature Base"}
+
 mv_proxy_bp = Blueprint("mv_proxy_bp", __name__)
 
 
@@ -59,8 +61,8 @@ def mv_deck_proxy(kf_id):
                 "front_image": card.front_image or "",
                 "card_text": card.card_text or "",
                 "amber": card.amber or 0,
-                "power": str(card.power) if card.power is not None else None,
-                "armor": str(card.armor) if card.armor is not None else None,
+                "power": str(card.power) if card.card_type in _CREATURE_TYPES else None,
+                "armor": str(card.armor) if card.card_type in _CREATURE_TYPES else None,
                 "rarity": card.rarity or "",
                 "flavor_text": card.flavor_text,
                 "card_number": card.card_number or "",
