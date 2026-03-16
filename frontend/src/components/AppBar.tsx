@@ -27,6 +27,7 @@ const NAV_LINKS = [
   { label: 'Players', to: '/user' },
   { label: 'Leagues', to: '/leagues' },
   { label: 'Quick Match', to: '/matches' },
+  { label: 'Auction', to: '/auctions' },
   { label: 'Upload', to: '/upload' },
   { label: 'CSV Pods', to: '/csv_to_pods' },
 ];

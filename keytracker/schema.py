@@ -1742,6 +1742,116 @@ class UserAllianceCollection(db.Model):
     alliance_deck = db.relationship("AllianceDeck", backref="collection_entries")
 
 
+class AuctionStatus(PyEnum):
+    SETUP = "setup"
+    DECK_SUBMISSION = "deck_submission"
+    AUCTION = "auction"
+    COMPLETED = "completed"
+
+
+class Auction(db.Model):
+    __tablename__ = "tracker_auction"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    creator_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    passphrase = db.Column(db.String(30), nullable=False, unique=True)
+    status = db.Column(
+        db.Enum(AuctionStatus), nullable=False, default=AuctionStatus.SETUP
+    )
+    player_order = db.Column(db.JSON, nullable=True)
+    active_deck_id = db.Column(
+        db.Integer,
+        db.ForeignKey(
+            "tracker_auction_deck.id",
+            use_alter=True,
+            name="fk_auction_active_deck",
+        ),
+        nullable=True,
+    )
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+
+    creator = db.relationship("User", foreign_keys=[creator_id])
+    participants = db.relationship("AuctionParticipant", back_populates="auction")
+    decks = db.relationship(
+        "AuctionDeck",
+        primaryjoin="Auction.id == AuctionDeck.auction_id",
+        back_populates="auction",
+    )
+    active_deck = db.relationship(
+        "AuctionDeck",
+        foreign_keys=[active_deck_id],
+        post_update=True,
+    )
+
+
+class AuctionParticipant(db.Model):
+    __tablename__ = "tracker_auction_participant"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    auction_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_auction.id"), nullable=False
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    joined_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+
+    auction = db.relationship("Auction", back_populates="participants")
+    user = db.relationship("User")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "auction_id", "user_id", name="uq_auction_participant"
+        ),
+    )
+
+
+class AuctionDeck(db.Model):
+    __tablename__ = "tracker_auction_deck"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    auction_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_auction.id"), nullable=False
+    )
+    brought_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), nullable=True)
+    assigned_to_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=True
+    )
+    chains_bid = db.Column(db.Integer, nullable=False, default=0)
+
+    auction = db.relationship(
+        "Auction", foreign_keys=[auction_id], back_populates="decks"
+    )
+    brought_by = db.relationship("User", foreign_keys=[brought_by_user_id])
+    deck = db.relationship("Deck", foreign_keys=[deck_id])
+    assigned_to = db.relationship("User", foreign_keys=[assigned_to_user_id])
+    bids = db.relationship("AuctionBid", back_populates="auction_deck")
+
+
+class AuctionBid(db.Model):
+    __tablename__ = "tracker_auction_bid"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    auction_deck_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_auction_deck.id"), nullable=False
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    chains = db.Column(db.Integer, nullable=True)  # null = pass
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+
+    auction_deck = db.relationship("AuctionDeck", back_populates="bids")
+    user = db.relationship("User")
+
+    __table_args__ = (
+        db.UniqueConstraint("auction_deck_id", "user_id", name="uq_auction_bid"),
+    )
+
+
 class CollectionSyncJob(db.Model):
     __tablename__ = "collection_sync_job"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

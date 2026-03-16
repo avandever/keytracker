@@ -630,3 +630,49 @@ export interface CsvPod {
   on_market: boolean;
   price: string;
 }
+
+export type AuctionStatus = 'setup' | 'deck_submission' | 'auction' | 'completed';
+
+export interface AuctionParticipantInfo {
+  user_id: number;
+  username: string;
+  has_submitted: boolean;
+}
+
+export interface AuctionDeckInfo {
+  id: number;
+  brought_by_user_id: number;
+  deck: DeckSummary | null;
+  has_submitted: boolean;
+  assigned_to_user_id: number | null;
+  chains_bid: number;
+  bids: AuctionBidInfo[];
+}
+
+export interface AuctionBidInfo {
+  user_id: number;
+  username: string;
+  chains: number | null;
+}
+
+export interface AuctionDetail {
+  id: number;
+  status: AuctionStatus;
+  creator_id: number;
+  passphrase?: string | null;
+  player_order: number[];
+  participants: AuctionParticipantInfo[];
+  decks: AuctionDeckInfo[];
+  active_deck_id: number | null;
+  active_deck_bids: AuctionBidInfo[];
+  current_picker_id: number | null;
+  current_bidder_id: number | null;
+}
+
+export interface DeckCardEntry {
+  card_title: string;
+  card_type: string;
+  front_image: string | null;
+  is_maverick: boolean;
+  is_anomaly: boolean;
+}

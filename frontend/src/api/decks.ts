@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { DeckSummary, DeckDetail } from '../types';
+import type { DeckSummary, DeckDetail, DeckCardEntry } from '../types';
 
 export async function searchDecks(params: Record<string, string | undefined>): Promise<DeckSummary[]> {
   const filtered = Object.fromEntries(
@@ -13,4 +13,10 @@ export async function getDeck(deckId: string, username?: string): Promise<DeckDe
   const params = username ? { username } : {};
   const { data } = await apiClient.get(`/decks/${deckId}`, { params });
   return data;
+}
+
+export async function getDeckCards(kfId: string): Promise<Record<string, DeckCardEntry[]>> {
+  const res = await fetch(`/api/v2/decks/${kfId}/cards`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
 }

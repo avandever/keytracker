@@ -34,6 +34,8 @@ import StandaloneMatchesPage from './pages/StandaloneMatchesPage';
 import StandaloneMatchPage from './pages/StandaloneMatchPage';
 import TimingLeaderboardPage from './pages/TimingLeaderboardPage';
 import MyCollectionPage from './pages/MyCollectionPage';
+import AuctionListPage from './pages/AuctionListPage';
+import AuctionPage from './pages/AuctionPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
@@ -140,6 +142,8 @@ export default function App() {
               <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/timing" element={<TimingLeaderboardPage />} />
               <Route path="/collection" element={<RequireAuth><MyCollectionPage /></RequireAuth>} />
+              <Route path="/auctions" element={<RequireAuth><AuctionListPage /></RequireAuth>} />
+              <Route path="/auctions/:auctionId" element={<AuctionPage />} />
               <Route path="/fame" element={<ComingSoonPage title="Hall of Fame" />} />
               <Route path="/leaderboard" element={<ComingSoonPage title="Leaderboard" />} />
             </Route>

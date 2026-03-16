@@ -15,6 +15,7 @@ from keytracker.routes import (
     leagues,
 )
 from keytracker.routes.standalone import standalone_bp
+from keytracker.routes.auction import auction_bp
 
 from keytracker.scripts.collector import collector
 from keytracker.scripts.sealed import sealed
@@ -273,6 +274,7 @@ app.register_blueprint(api.blueprint)
 app.register_blueprint(api_v2.blueprint)
 app.register_blueprint(leagues.blueprint)
 app.register_blueprint(standalone_bp)
+app.register_blueprint(auction_bp)
 
 
 # Google site verification

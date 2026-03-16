@@ -359,6 +359,51 @@ def deck_detail(deck_id):
     return jsonify(data)
 
 
+@blueprint.route("/decks/<deck_id>/cards")
+def get_deck_cards(deck_id):
+    """Return cards grouped by house for a given deck (by kf_id)."""
+    from keytracker.schema import CardInDeck, PlatonicCard
+    from sqlalchemy.orm import joinedload as jl
+
+    deck = Deck.query.filter_by(kf_id=deck_id).first()
+    if not deck:
+        return jsonify({"error": "Deck not found"}), 404
+
+    cards = (
+        db.session.query(CardInDeck)
+        .options(jl(CardInDeck.platonic_card), jl(CardInDeck.card_in_set))
+        .filter_by(deck_id=deck.id)
+        .all()
+    )
+
+    houses = {}
+    for c in cards:
+        pc = c.platonic_card
+        if not pc:
+            continue
+        card_type = c.card_type or ""
+        house_val = c.house
+        house = (
+            "Other"
+            if card_type == "Token Creature"
+            else (house_val.value if hasattr(house_val, "value") else (house_val or "Other"))
+        )
+        front_image = c.front_image
+        entry = {
+            "card_title": pc.card_title,
+            "card_type": card_type,
+            "front_image": front_image,
+            "is_maverick": bool(c.is_maverick),
+            "is_anomaly": bool(c.is_anomaly),
+        }
+        houses.setdefault(house, []).append(entry)
+
+    for h in houses:
+        houses[h].sort(key=lambda x: x["card_title"])
+
+    return jsonify(houses)
+
+
 def compute_timing_stats(turn_timing: list) -> dict | None:
     """Compute average turn duration stats from a turn_timing list.
 

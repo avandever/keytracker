@@ -693,3 +693,100 @@ def serialize_match_game(game: MatchGame) -> dict:
         "game_id": game.game_id,
         "created_at": game.created_at.isoformat() + "Z" if game.created_at else None,
     }
+
+
+def serialize_auction_bid(bid) -> dict:
+    return {
+        "user_id": bid.user_id,
+        "username": bid.user.username if bid.user else None,
+        "chains": bid.chains,
+    }
+
+
+def serialize_auction_deck(adeck, reveal_decks=False) -> dict:
+    has_submitted = adeck.deck_id is not None
+    show_deck = reveal_decks or adeck.assigned_to_user_id is not None
+    return {
+        "id": adeck.id,
+        "brought_by_user_id": adeck.brought_by_user_id,
+        "has_submitted": has_submitted,
+        "deck": serialize_deck_summary(adeck.deck) if (show_deck and adeck.deck) else None,
+        "assigned_to_user_id": adeck.assigned_to_user_id,
+        "chains_bid": adeck.chains_bid,
+        "bids": [serialize_auction_bid(b) for b in (adeck.bids or [])],
+    }
+
+
+def serialize_auction_detail(auction, viewer_id=None) -> dict:
+    from keytracker.schema import AuctionStatus
+
+    status = auction.status
+    participant_ids = {p.user_id for p in auction.participants}
+    viewer_has_submitted = False
+    if viewer_id and viewer_id in participant_ids:
+        my_deck = next(
+            (d for d in auction.decks if d.brought_by_user_id == viewer_id), None
+        )
+        viewer_has_submitted = my_deck is not None and my_deck.deck_id is not None
+
+    reveal_decks = status in (AuctionStatus.AUCTION, AuctionStatus.COMPLETED) or viewer_has_submitted
+
+    # current_picker_id
+    assigned_ids = {d.assigned_to_user_id for d in auction.decks if d.assigned_to_user_id}
+    order = auction.player_order or [p.user_id for p in auction.participants]
+    current_picker_id = None
+    for uid in order:
+        if uid not in assigned_ids:
+            current_picker_id = uid
+            break
+
+    # current_bidder_id
+    current_bidder_id = None
+    if auction.active_deck_id:
+        active_deck = next(
+            (d for d in auction.decks if d.id == auction.active_deck_id), None
+        )
+        if active_deck:
+            bid_user_ids = {b.user_id for b in active_deck.bids}
+            for uid in order:
+                if uid == current_picker_id:
+                    continue
+                if uid not in bid_user_ids:
+                    current_bidder_id = uid
+                    break
+
+    # active_deck_bids
+    active_deck_bids = []
+    if auction.active_deck_id:
+        active_deck = next(
+            (d for d in auction.decks if d.id == auction.active_deck_id), None
+        )
+        if active_deck:
+            active_deck_bids = [serialize_auction_bid(b) for b in active_deck.bids]
+
+    participants_out = []
+    for p in auction.participants:
+        my_deck = next(
+            (d for d in auction.decks if d.brought_by_user_id == p.user_id), None
+        )
+        participants_out.append(
+            {
+                "user_id": p.user_id,
+                "username": p.user.username if p.user else None,
+                "has_submitted": my_deck is not None and my_deck.deck_id is not None,
+            }
+        )
+
+    return {
+        "id": auction.id,
+        "status": status.value,
+        "creator_id": auction.creator_id,
+        "passphrase": auction.passphrase if viewer_id == auction.creator_id else None,
+        "player_order": order,
+        "participants": participants_out,
+        "decks": [serialize_auction_deck(d, reveal_decks=reveal_decks) for d in auction.decks],
+        "active_deck_id": auction.active_deck_id,
+        "active_deck_bids": active_deck_bids,
+        "current_picker_id": current_picker_id,
+        "current_bidder_id": current_bidder_id,
+    }
