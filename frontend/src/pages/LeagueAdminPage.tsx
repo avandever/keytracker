@@ -1308,11 +1308,25 @@ export default function LeagueAdminPage() {
             )}
             {availableSets.length > 0 && (
               <Box>
-                <Typography variant="subtitle2" gutterBottom>
-                  {weekFormat === 'sealed_alliance'
-                    ? `Set (required)${weekAllowedSets.length > 0 ? ` — ${availableSets.find((s) => s.number === weekAllowedSets[0])?.shortname || weekAllowedSets[0]}` : ''}`
-                    : `Allowed Sets ${weekAllowedSets.length > 0 ? `(${weekAllowedSets.length} selected)` : '(all)'}`}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Typography variant="subtitle2">
+                    {weekFormat === 'sealed_alliance'
+                      ? `Set (required)${weekAllowedSets.length > 0 ? ` — ${availableSets.find((s) => s.number === weekAllowedSets[0])?.shortname || weekAllowedSets[0]}` : ''}`
+                      : `Allowed Sets ${weekAllowedSets.length > 0 ? `(${weekAllowedSets.length} selected)` : '(all)'}`}
+                  </Typography>
+                  {weekFormat !== 'sealed_alliance' && (
+                    <>
+                      <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5, py: 0 }}
+                        onClick={() => setWeekAllowedSets(availableSets.map((s) => s.number))}>
+                        All
+                      </Button>
+                      <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5, py: 0 }}
+                        onClick={() => setWeekAllowedSets([])}>
+                        None
+                      </Button>
+                    </>
+                  )}
+                </Box>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   {availableSets.map((s) => (
                     <Chip
