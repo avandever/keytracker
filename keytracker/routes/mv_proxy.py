@@ -76,24 +76,27 @@ def mv_deck_proxy(kf_id):
         )
 
     response = {
-        "data": {
-            "id": deck.kf_id,
-            "name": deck.name,
-            "expansion": deck.expansion,
-            "power_level": 0,
-            "chains": 0,
-            "wins": 0,
-            "losses": 0,
-            "bonus_icons": bonus_icons,
-            "_links": {
-                "houses": list(seen_houses.values()),
-                "cards": [c["id"] for c in cards_linked],
+        "deck": {
+            "data": {
+                "id": deck.kf_id,
+                "name": deck.name,
+                "expansion": deck.expansion,
+                "power_level": 0,
+                "chains": 0,
+                "wins": 0,
+                "losses": 0,
+                "bonus_icons": bonus_icons,
+                "_links": {
+                    "houses": list(seen_houses.values()),
+                    "cards": [c["id"] for c in cards_linked],
+                },
+            },
+            "_linked": {
+                "houses": houses_linked,
+                "cards": cards_linked,
             },
         },
-        "_linked": {
-            "houses": houses_linked,
-            "cards": cards_linked,
-        },
+        "error": None,
     }
 
     return jsonify(response)

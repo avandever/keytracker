@@ -2,7 +2,7 @@
 Regression test for the MV API proxy endpoint.
 
 The stored fixture (tests/fixtures/mv_deck_6e477f65.json) is a real response
-from the Master Vault API captured at the time the proxy was implemented.
+from the AWS MV proxy captured at the time the proxy was implemented.
 The test builds a mock Deck from that fixture, calls the proxy, and asserts
 that the response matches the fixture on all fields that DoK uses for scoring.
 """
@@ -36,8 +36,9 @@ def _build_mock_deck(mv_data):
     the given MV fixture.  Power/armor are stored as ints internally (0 for
     non-creatures); traits are a list of SimpleNamespace(name=...) objects.
     """
-    deck_data = mv_data["data"]
-    cards_by_id = {c["id"]: c for c in mv_data["_linked"]["cards"]}
+    payload = mv_data["deck"]
+    deck_data = payload["data"]
+    cards_by_id = {c["id"]: c for c in payload["_linked"]["cards"]}
     card_id_list = deck_data["_links"]["cards"]
     bi_lookup = {
         b["card_id"]: b["bonus_icons"] for b in deck_data.get("bonus_icons", [])
@@ -102,21 +103,24 @@ def test_mv_proxy_matches_fixture(client, mv_fixture):
 
     assert resp.status_code == 200
     result = resp.get_json()
-    mv = mv_fixture
+    assert result["error"] is None
+
+    r_payload = result["deck"]
+    mv_payload = mv_fixture["deck"]
 
     # --- deck-level fields ---
-    assert result["data"]["id"] == mv["data"]["id"]
-    assert result["data"]["name"] == mv["data"]["name"]
-    assert result["data"]["expansion"] == mv["data"]["expansion"]
+    assert r_payload["data"]["id"] == mv_payload["data"]["id"]
+    assert r_payload["data"]["name"] == mv_payload["data"]["name"]
+    assert r_payload["data"]["expansion"] == mv_payload["data"]["expansion"]
 
     # --- card ID lists match (order-insensitive) ---
-    assert sorted(result["data"]["_links"]["cards"]) == sorted(
-        mv["data"]["_links"]["cards"]
+    assert sorted(r_payload["data"]["_links"]["cards"]) == sorted(
+        mv_payload["data"]["_links"]["cards"]
     )
 
     # --- per-card fields ---
-    result_cards = {c["id"]: c for c in result["_linked"]["cards"]}
-    mv_cards = {c["id"]: c for c in mv["_linked"]["cards"]}
+    result_cards = {c["id"]: c for c in r_payload["_linked"]["cards"]}
+    mv_cards = {c["id"]: c for c in mv_payload["_linked"]["cards"]}
     assert set(result_cards) == set(mv_cards), "card ID sets differ"
 
     for card_id, mv_card in mv_cards.items():
@@ -144,17 +148,17 @@ def test_mv_proxy_matches_fixture(client, mv_fixture):
     # --- bonus icons ---
     result_bi = {
         b["card_id"]: sorted(b["bonus_icons"])
-        for b in result["data"].get("bonus_icons", [])
+        for b in r_payload["data"].get("bonus_icons", [])
     }
     mv_bi = {
         b["card_id"]: sorted(b["bonus_icons"])
-        for b in mv["data"].get("bonus_icons", [])
+        for b in mv_payload["data"].get("bonus_icons", [])
     }
     assert result_bi == mv_bi, "bonus_icons mismatch"
 
     # --- houses ---
-    result_house_names = {h["name"] for h in result["_linked"]["houses"]}
-    mv_house_names = {h["name"] for h in mv["_linked"]["houses"]}
+    result_house_names = {h["name"] for h in r_payload["_linked"]["houses"]}
+    mv_house_names = {h["name"] for h in mv_payload["_linked"]["houses"]}
     assert result_house_names == mv_house_names, "house names mismatch"
 
 

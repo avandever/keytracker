@@ -1050,12 +1050,13 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     deck_url = os.path.join(MV_SINGLE_DECK_BASE, deck.kf_id)
     response = mv_api.callMVSync(deck_url)
     all_data = response.json()
-    if "data" not in all_data:
+    deck_payload = all_data.get("deck") or all_data
+    if "data" not in deck_payload:
         current_app.logger.error(
-            f"No data in response from mv on {deck_url}: {response.json()}"
+            f"No data in response from mv on {deck_url}: {all_data}"
         )
-    data = all_data["data"]
-    card_json = all_data["_linked"]["cards"]
+    data = deck_payload["data"]
+    card_json = deck_payload["_linked"]["cards"]
     card_details = {c["id"]: c for c in card_json}
     add_one_deck_v2(data, card_details, deck=deck)
 
