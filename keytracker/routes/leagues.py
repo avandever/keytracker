@@ -2794,7 +2794,7 @@ def _check_deck_cross_week_conflicts(league, week, deck, target_team):
 )
 @login_required
 def submit_deck_selection(league_id, week_id):
-    from keytracker.utils import get_deck_by_id_with_zeal
+    from keytracker.utils import get_deck_by_id_with_zeal, update_sas_scores
 
     league, err = _get_league_or_404(league_id)
     if err:
@@ -3037,6 +3037,18 @@ def submit_deck_selection(league_id, week_id):
                 )
         except (json.JSONDecodeError, TypeError):
             pass
+
+    # Refresh SAS from DoK before any SAS constraint checks
+    has_sas_constraint = (
+        week.max_sas is not None
+        or week.sas_floor is not None
+        or week.format_type == WeekFormat.SAS_LADDER.value
+    )
+    if has_sas_constraint:
+        try:
+            update_sas_scores(deck)
+        except Exception as e:
+            logger.warning("Failed to refresh SAS for deck %s: %s", deck.kf_id, e)
 
     # Validate max SAS / sas floor
     if week.max_sas is not None or week.sas_floor is not None:
