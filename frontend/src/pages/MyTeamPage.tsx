@@ -1603,7 +1603,6 @@ export default function MyTeamPage() {
                             const opponentSel = week.deck_selections.find((ds) => ds.user_id === opponentId && ds.slot_number === 1);
                             const purges = pm.tertiate_purge_choices || [];
                             const myPurge = purges.find((p) => p.choosing_user_id === user?.id);
-                            const opponentPurge = purges.find((p) => p.choosing_user_id === opponentId);
                             const bothRevealed = purges.length === 2;
                             const bothStarted = pm.player1_started && pm.player2_started;
                             const opponentHouses = opponentSel?.deck?.houses || [];

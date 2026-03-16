@@ -263,6 +263,7 @@ export default function StandaloneMatchPage() {
     feature_designations: [],
     sas_ladder_maxes: null,
     sas_ladder_feature_rung: null,
+    sas_floor: match.sas_floor,
   };
 
   const isSealed = match.format_type === 'sealed_archon' || match.format_type === 'sealed_alliance';
