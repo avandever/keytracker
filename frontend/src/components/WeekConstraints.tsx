@@ -20,6 +20,9 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
   if (week.max_sas) {
     chips.push(<Chip key="max-sas" label={`Max SAS: ${week.max_sas}`} size={size} variant="outlined" />);
   }
+  if (week.sas_floor) {
+    chips.push(<Chip key="sas-floor" label={`SAS Floor: ${week.sas_floor}`} size={size} variant="outlined" />);
+  }
   if (week.combined_max_sas) {
     chips.push(<Chip key="combined-sas" label={`Combined Max SAS: ${week.combined_max_sas}`} size={size} variant="outlined" />);
   }

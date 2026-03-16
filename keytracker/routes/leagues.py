@@ -1396,6 +1396,7 @@ def create_week(league_id):
         best_of_n=best_of_n,
         allowed_sets=allowed_sets_json,
         max_sas=data.get("max_sas"),
+        sas_floor=data.get("sas_floor"),
         combined_max_sas=data.get("combined_max_sas"),
         set_diversity=data.get("set_diversity"),
         house_diversity=data.get("house_diversity"),
@@ -1503,6 +1504,8 @@ def update_week(league_id, week_id):
             week.allowed_sets = None
     if "max_sas" in data:
         week.max_sas = data["max_sas"]
+    if "sas_floor" in data:
+        week.sas_floor = data["sas_floor"]
     if "combined_max_sas" in data:
         week.combined_max_sas = data["combined_max_sas"]
     if "set_diversity" in data:
@@ -3035,13 +3038,20 @@ def submit_deck_selection(league_id, week_id):
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # Validate max SAS
-    if week.max_sas is not None:
+    # Validate max SAS / sas floor
+    if week.max_sas is not None or week.sas_floor is not None:
         sas = deck.sas_rating
-        if sas and sas > week.max_sas:
+        if week.max_sas is not None and sas and sas > week.max_sas:
             return (
                 jsonify(
                     {"error": f"Deck SAS ({sas}) exceeds max SAS ({week.max_sas})"}
+                ),
+                400,
+            )
+        if week.sas_floor is not None and sas and sas < week.sas_floor:
+            return (
+                jsonify(
+                    {"error": f"Deck SAS ({sas}) is below the SAS floor ({week.sas_floor})"}
                 ),
                 400,
             )

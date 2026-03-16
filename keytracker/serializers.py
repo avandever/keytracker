@@ -21,7 +21,7 @@ from keytracker.schema import (
     LeagueAdminLog,
     EXPANSION_ID_TO_ABBR,
 )
-from keytracker.schema import StandaloneMatch, CardInDeck, PlatonicCard, PlatonicCardInSet, db
+from keytracker.schema import StandaloneMatch, PlatonicCard, PlatonicCardInSet, db
 from sqlalchemy import select
 import json
 
@@ -93,18 +93,12 @@ def serialize_game_detail(game: Game) -> dict:
     data["extended_data"] = (
         serialize_extended_data(game.extended_data) if game.extended_data else None
     )
-    deck_ids = [d.id for d in [game.winner_deck, game.loser_deck] if d]
-    if deck_ids:
-        rows = db.session.execute(
-            select(PlatonicCard.card_title, PlatonicCardInSet.front_image)
-            .join(CardInDeck, CardInDeck.platonic_card_id == PlatonicCard.id)
-            .join(PlatonicCardInSet, CardInDeck.card_in_set_id == PlatonicCardInSet.id)
-            .where(CardInDeck.deck_id.in_(deck_ids))
-            .where(PlatonicCardInSet.front_image.isnot(None))
-        ).all()
-        card_images = {title: img for title, img in rows if title}
-    else:
-        card_images = {}
+    rows = db.session.execute(
+        select(PlatonicCard.card_title, PlatonicCardInSet.front_image)
+        .join(PlatonicCardInSet, PlatonicCardInSet.card_id == PlatonicCard.id)
+        .where(PlatonicCardInSet.front_image.isnot(None))
+    ).all()
+    card_images = {title: img for title, img in rows if title}
     data["card_images"] = card_images
     return data
 
@@ -296,6 +290,7 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "best_of_n": week.best_of_n,
         "allowed_sets": allowed_sets,
         "max_sas": week.max_sas,
+        "sas_floor": week.sas_floor,
         "combined_max_sas": week.combined_max_sas,
         "set_diversity": week.set_diversity,
         "house_diversity": week.house_diversity,
@@ -630,6 +625,7 @@ def serialize_standalone_match(match: StandaloneMatch, current_user_id=None) -> 
         "best_of_n": match.best_of_n,
         "is_public": match.is_public,
         "max_sas": match.max_sas,
+        "sas_floor": match.sas_floor,
         "combined_max_sas": match.combined_max_sas,
         "set_diversity": match.set_diversity,
         "house_diversity": match.house_diversity,

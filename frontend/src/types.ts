@@ -389,6 +389,7 @@ export interface LeagueWeek {
   best_of_n: number;
   allowed_sets: number[] | null;
   max_sas: number | null;
+  sas_floor: number | null;
   combined_max_sas: number | null;
   set_diversity: boolean | null;
   house_diversity: boolean | null;
@@ -530,6 +531,7 @@ export interface StandaloneMatch {
   best_of_n: number;
   is_public: boolean;
   max_sas: number | null;
+  sas_floor: number | null;
   combined_max_sas: number | null;
   set_diversity: boolean;
   house_diversity: boolean;

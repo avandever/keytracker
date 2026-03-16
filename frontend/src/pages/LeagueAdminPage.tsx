@@ -148,6 +148,7 @@ export default function LeagueAdminPage() {
   const [weekFormat, setWeekFormat] = useState('archon_standard');
   const [weekBestOf, setWeekBestOf] = useState('1');
   const [weekMaxSas, setWeekMaxSas] = useState('');
+  const [weekSasFloor, setWeekSasFloor] = useState('');
   const [weekAllowedSets, setWeekAllowedSets] = useState<number[]>([]);
   // Triad-specific
   const [weekCombinedMaxSas, setWeekCombinedMaxSas] = useState('');
@@ -362,6 +363,7 @@ export default function LeagueAdminPage() {
     setWeekFormat('archon_standard');
     setWeekBestOf('1');
     setWeekMaxSas('');
+    setWeekSasFloor('');
     setWeekAllowedSets([]);
     setWeekCombinedMaxSas('');
     setWeekSetDiversity(false);
@@ -379,6 +381,7 @@ export default function LeagueAdminPage() {
     setWeekFormat(week.format_type);
     setWeekBestOf(String(week.best_of_n));
     setWeekMaxSas(week.max_sas != null ? String(week.max_sas) : '');
+    setWeekSasFloor(week.sas_floor != null ? String(week.sas_floor) : '');
     setWeekAllowedSets(week.allowed_sets || []);
     setWeekCombinedMaxSas(week.combined_max_sas != null ? String(week.combined_max_sas) : '');
     setWeekSetDiversity(week.set_diversity || false);
@@ -403,6 +406,7 @@ export default function LeagueAdminPage() {
       name: weekName.trim() || null,
       best_of_n: parseInt(weekBestOf, 10) || 1,
       max_sas: weekMaxSas ? parseInt(weekMaxSas, 10) : null,
+      sas_floor: weekSasFloor ? parseInt(weekSasFloor, 10) : null,
       allowed_sets: weekAllowedSets.length > 0 ? weekAllowedSets : null,
       combined_max_sas: weekCombinedMaxSas ? parseInt(weekCombinedMaxSas, 10) : null,
       set_diversity: weekSetDiversity || false,
@@ -1232,6 +1236,12 @@ export default function LeagueAdminPage() {
               label="Max SAS (optional)"
               value={weekMaxSas}
               onChange={(e) => setWeekMaxSas(e.target.value)}
+              type="number"
+            />
+            <TextField
+              label="SAS Floor (optional)"
+              value={weekSasFloor}
+              onChange={(e) => setWeekSasFloor(e.target.value)}
               type="number"
             />
             {weekFormat === 'triad' && (

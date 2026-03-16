@@ -1010,6 +1010,7 @@ class LeagueWeek(db.Model):
     best_of_n = db.Column(db.Integer, nullable=False, default=1)
     allowed_sets = db.Column(db.Text, nullable=True)
     max_sas = db.Column(db.Integer, nullable=True)
+    sas_floor = db.Column(db.Integer, nullable=True)
     # Triad-specific
     combined_max_sas = db.Column(db.Integer, nullable=True)
     set_diversity = db.Column(db.Boolean, nullable=True)
@@ -1085,6 +1086,7 @@ class StandaloneMatch(db.Model):
     best_of_n = db.Column(db.Integer, nullable=False, default=1)
     is_public = db.Column(db.Boolean, nullable=False, default=False)
     max_sas = db.Column(db.Integer, nullable=True)
+    sas_floor = db.Column(db.Integer, nullable=True)
     combined_max_sas = db.Column(db.Integer, nullable=True)
     set_diversity = db.Column(db.Boolean, nullable=False, default=False)
     house_diversity = db.Column(db.Boolean, nullable=False, default=False)
