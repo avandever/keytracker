@@ -1578,8 +1578,24 @@ def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
     dok.action_count = get_snake_or_camel(data, "action_count")
     dok.upgrade_count = get_snake_or_camel(data, "upgrade_count")
     dok.creature_count = get_snake_or_camel(data, "creature_count")
+    synergy_details = get_snake_or_camel(data, "synergy_details")
+    if synergy_details:
+        _update_pod_sas_from_synergy_details(deck, synergy_details)
     if not skip_commit:
         db.session.commit()
+
+
+def _update_pod_sas_from_synergy_details(deck: Deck, synergy_details: list) -> None:
+    """Populate PodStats.sas_rating from synergyDetails returned by the local DoK API."""
+    house_sas: dict[str, float] = {}
+    for item in synergy_details:
+        house = item.get("house")
+        if not house:
+            continue
+        house_sas[house] = house_sas.get(house, 0.0) + item.get("aercScore", 0.0) * item.get("copies", 1)
+    for pod in deck.pod_stats:
+        if pod.house in house_sas:
+            pod.sas_rating = round(house_sas[pod.house])
 
 
 def calculate_pod_stats(deck: Deck) -> None:

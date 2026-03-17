@@ -274,11 +274,31 @@ def upsert_traits_and_synergies(cur, eci_id: str, traits: list, synergies: list)
     return count
 
 
+def _card_slug(card: dict) -> str:
+    """Derive the card_title_url slug from an API card object.
+
+    The API stores slugs in the nested expansion card's 'cardTitleUrl' field.
+    Fall back to stripping the filename from the top-level image URL.
+    """
+    expansions = card.get("expansions") or []
+    if expansions:
+        slug = expansions[0]["card"].get("cardTitleUrl")
+        if slug:
+            return slug
+    url = card.get("cardTitleUrl", "")
+    return url.rstrip("/").split("/")[-1].replace(".png", "")
+
+
 def backfill(cards: list) -> None:
     conn = psycopg2.connect(DOK_PG_DSN)
     conn.autocommit = False
     cur = conn.cursor()
     now = datetime.now(timezone.utc)
+
+    # Build slug → local dok_card.id mapping (the DB dump may use different
+    # numeric IDs than the API, so we match by slug, not by API id).
+    cur.execute("SELECT id, card_title_url FROM dok_card")
+    slug_to_local_id = {row[1]: row[0] for row in cur.fetchall()}
 
     eci_inserted = 0
     eci_updated = 0
@@ -287,18 +307,18 @@ def backfill(cards: list) -> None:
     skipped_no_eci = 0
 
     for card in cards:
-        dok_card_id = card["id"]
         eci = card.get("extraCardInfo")
         if not eci:
             skipped_no_eci += 1
             continue
 
-        cur.execute("SELECT id FROM dok_card WHERE id = %s", (dok_card_id,))
-        if cur.fetchone() is None:
+        slug = _card_slug(card)
+        local_id = slug_to_local_id.get(slug)
+        if local_id is None:
             skipped_no_dok_card += 1
             continue
 
-        eci_id, existed = upsert_extra_card_info(cur, dok_card_id, eci, now)
+        eci_id, existed = upsert_extra_card_info(cur, local_id, eci, now)
         if existed:
             eci_updated += 1
         else:
