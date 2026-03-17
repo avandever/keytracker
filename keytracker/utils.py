@@ -2164,12 +2164,13 @@ def run_background_collector(
     stop_event=None,
     gvar_name: str = "highest_mv_page_scraped",
     lock_name: str = "\0keytracker_collector_lock",
+    caught_up_sleep: int = 300,
 ):
     """Background thread that continuously scrapes deck pages from Master Vault."""
     import socket
 
     logger = app.logger
-    CAUGHT_UP_SLEEP = 300  # 5 minutes
+    CAUGHT_UP_SLEEP = caught_up_sleep
 
     # Use an abstract Unix socket as a cross-process lock so only one
     # gunicorn worker runs the collector. The socket is automatically

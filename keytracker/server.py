@@ -411,6 +411,7 @@ if os.getenv("ENABLE_COLLECTOR_V2", "").lower() in ("1", "true", "yes"):
         kwargs={
             "gvar_name": "highest_mv_page_scraped_v2",
             "lock_name": "\0keytracker_collector_lock_v2",
+            "caught_up_sleep": 0,
         },
         daemon=True,
     )
