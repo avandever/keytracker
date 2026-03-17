@@ -164,6 +164,34 @@ DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 _DOK_BASE = os.environ.get("DOK_BASE_URL", "https://decksofkeyforge.com")
 DOK_DECK_BASE = f"{_DOK_BASE}/public-api/v3/decks"
 DOK_ALLIANCE_BASE = f"{_DOK_BASE}/api/alliance-decks/with-synergies"
+TRY_LOCAL_DOK_FOR_DECK_BASE_DATA = os.environ.get(
+    "TRY_LOCAL_DOK_FOR_DECK_BASE_DATA", ""
+).lower() in ("1", "true", "yes")
+LOCAL_DOK_URL = os.environ.get("LOCAL_DOK_URL", "http://localhost:5000")
+
+# Maps DoK expansion enum name → MV integer expansion ID
+_DOK_EXPANSION_TO_INT = {
+    "CALL_OF_THE_ARCHONS": 341,
+    "AGE_OF_ASCENSION": 435,
+    "WORLDS_COLLIDE": 452,
+    "ANOMALY_EXPANSION": 453,
+    "MASS_MUTATION": 479,
+    "DARK_TIDINGS": 496,
+    "WINDS_OF_EXCHANGE": 600,
+    "UNCHAINED_2022": 601,
+    "VAULT_MASTERS_2023": 609,
+    "GRIM_REMINDERS": 700,
+    "MENAGERIE_2024": 722,
+    "VAULT_MASTERS_2024": 737,
+    "AEMBER_SKIES": 800,
+    "TOKENS_OF_CHANGE": 855,
+    "MORE_MUTATION": 874,
+    "PROPHETIC_VISIONS": 886,
+    "MARTIAN_CIVIL_WAR": 892,
+    "DISCOVERY": 907,
+    "CRUCIBLE_CLASH": 918,
+    "VAULT_MASTERS_2025": 939,
+}
 LATEST_SAS_VERSION = 43
 SAS_MAX_AGE_DAYS = 60
 SAS_TD = datetime.timedelta(days=SAS_MAX_AGE_DAYS)
@@ -1044,9 +1072,105 @@ def loop_loading_missed_sas(batch_size: int, max_set_id: int = 700) -> None:
                 current_app.logger.info(f"{count} left in this batch")
 
 
+def _try_add_deck_from_local_dok(deck: Deck) -> bool:
+    """Try to populate deck card data from local DoK's search-result-with-cards endpoint.
+
+    Looks up each card's PlatonicCardInSet by (card_title, expansion, house).
+    Returns True on success; False if the caller should fall back to the MV proxy.
+    """
+    try:
+        url = f"{LOCAL_DOK_URL}/api/decks/search-result-with-cards/{deck.kf_id}"
+        resp = requests.get(url, timeout=30)
+        if resp.status_code != 200:
+            current_app.logger.debug(
+                f"Local DoK search-result-with-cards returned {resp.status_code} "
+                f"for {deck.kf_id}"
+            )
+            return False
+        data = resp.json()
+    except Exception as e:
+        current_app.logger.warning(
+            f"Local DoK request failed for deck {deck.kf_id}: {e}"
+        )
+        return False
+
+    expansion_str = data.get("expansion")
+    expansion_int = _DOK_EXPANSION_TO_INT.get(expansion_str)
+    if expansion_int is None:
+        current_app.logger.warning(
+            f"Unknown DoK expansion {expansion_str!r} for deck {deck.kf_id}"
+        )
+        return False
+
+    # Resolve all cards before mutating anything (fail-fast before any DB writes).
+    cards_to_create = []
+    for house_entry in data.get("housesAndCards", []):
+        house_name = house_entry["house"]
+        for card_data in house_entry["cards"]:
+            title = card_data["cardTitle"]
+            # Find matching PlatonicCardInSet by title + expansion, preferring the
+            # record whose house matches the deck house (handles mavericks correctly).
+            candidates = (
+                PlatonicCardInSet.query.join(
+                    PlatonicCard, PlatonicCardInSet.card_id == PlatonicCard.id
+                )
+                .filter(
+                    PlatonicCard.card_title == title,
+                    PlatonicCardInSet.expansion == expansion_int,
+                )
+                .all()
+            )
+            pcis = next((p for p in candidates if p.house == house_name), None)
+            if pcis is None and len(candidates) == 1:
+                pcis = candidates[0]
+            if pcis is None:
+                current_app.logger.debug(
+                    f"PlatonicCardInSet not found for {title!r} "
+                    f"exp={expansion_int} house={house_name}; "
+                    f"falling back to MV proxy for {deck.kf_id}"
+                )
+                return False
+            cards_to_create.append((pcis, card_data))
+
+    deck.name = data["name"]
+    deck.expansion = expansion_int
+
+    for pcis, card_data in cards_to_create:
+        is_enhanced = card_data.get("enhanced", False)
+        card = CardInDeck(
+            platonic_card=pcis.card,
+            card_in_set=pcis,
+            deck=deck,
+            is_enhanced=is_enhanced,
+            enhanced_amber=card_data.get("bonusAember", 0) if is_enhanced else 0,
+            enhanced_capture=card_data.get("bonusCapture", 0) if is_enhanced else 0,
+            enhanced_draw=card_data.get("bonusDraw", 0) if is_enhanced else 0,
+            enhanced_damage=card_data.get("bonusDamage", 0) if is_enhanced else 0,
+            enhanced_discard=card_data.get("bonusDiscard", 0) if is_enhanced else 0,
+            enhanced_houses=len(card_data.get("bonusHouses", [])) if is_enhanced else 0,
+            is_legacy=check_is_legacy(pcis.card, deck),
+        )
+        db.session.add(card)
+        for bonus_house in (card_data.get("bonusHouses", []) if is_enhanced else []):
+            db.session.add(
+                HouseEnhancement(
+                    card=card,
+                    kf_house=get_house_for_enhancement(bonus_house.lower()),
+                )
+            )
+
+    db.session.commit()
+    current_app.logger.info(
+        f"Populated deck {deck.kf_id!r} ({data['name']!r}) from local DoK"
+    )
+    return True
+
+
 def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if card_cache is None:
         card_cache = {}
+    if TRY_LOCAL_DOK_FOR_DECK_BASE_DATA and _try_add_deck_from_local_dok(deck):
+        return
     deck_url = os.path.join(MV_SINGLE_DECK_BASE, deck.kf_id)
     response = mv_api.callMVSync(deck_url)
     all_data = response.json()

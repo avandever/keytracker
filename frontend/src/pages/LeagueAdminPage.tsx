@@ -868,6 +868,7 @@ export default function LeagueAdminPage() {
                               </ListItemAvatar>
                               <ListItemText
                                 primary={`${m.user.name}${m.is_captain ? (captains.length > 1 ? ' (Co-Captain)' : ' (Captain)') : ''}`}
+                                secondary={m.user.discord_username ? `Discord: ${m.user.discord_username}` : undefined}
                               />
                               {!isReassigning ? (
                                 <Button
