@@ -1172,7 +1172,11 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     if TRY_LOCAL_DOK_FOR_DECK_BASE_DATA and _try_add_deck_from_local_dok(deck):
         return
     deck_url = os.path.join(MV_SINGLE_DECK_BASE, deck.kf_id)
-    response = mv_api.callMVSync(deck_url)
+    if "keyforgegame.com" in MV_SINGLE_DECK_BASE:
+        params = {"links": "cards,notes"}
+    else:
+        params = {}
+    response = mv_api.callMVSync(deck_url, params=params)
     all_data = response.json()
     deck_payload = all_data.get("deck") or all_data
     if "data" not in deck_payload:
