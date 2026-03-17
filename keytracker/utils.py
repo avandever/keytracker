@@ -1756,7 +1756,7 @@ def get_decks_from_page_v2(
             existing_deck = id_to_existing_deck.get(deck_json["id"])
             add_one_deck_v2(deck_json, card_details, add_decks_cache, existing_deck)
             add_decks_cache["seen_deck_ids"].add(deck_json["id"])
-    if update_highest_page and reverse and len(decks) == page_size:
+    if update_highest_page and reverse:
         highest_page = GlobalVariable.query.filter_by(
             name=gvar_name
         ).first()
