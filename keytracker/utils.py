@@ -2021,7 +2021,6 @@ def add_cards_v2_new(
                 raise MissingEnhancements(
                     f"Could not pair enhancements in {deck.kf_id}"
                 )
-        db.session.commit()
 
 
 def check_is_legacy(pc: PlatonicCard, deck: Deck) -> bool:
