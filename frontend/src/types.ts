@@ -264,6 +264,7 @@ export interface TeamDetail {
   id: number;
   name: string;
   order_number: number;
+  allow_peer_deck_entry: boolean;
   members: TeamMemberInfo[];
 }
 

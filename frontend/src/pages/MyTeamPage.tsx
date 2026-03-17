@@ -30,6 +30,7 @@ import {
   DialogContent,
   DialogActions,
   Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import {
   getLeague,
@@ -236,8 +237,18 @@ export default function MyTeamPage() {
     setError('');
     setSuccess('');
     try {
-      await updateTeam(league.id, myTeam.id, editName);
+      await updateTeam(league.id, myTeam.id, { name: editName });
       setSuccess('Team name updated');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleTogglePeerDeckEntry = async () => {
+    setError('');
+    try {
+      await updateTeam(league.id, myTeam.id, { allow_peer_deck_entry: !myTeam.allow_peer_deck_entry });
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -802,6 +813,7 @@ export default function MyTeamPage() {
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">{week.name || `Week ${week.week_number}`}</Typography>
             <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" variant="outlined" />
+            <Chip label={`Bo${week.best_of_n}`} size="small" variant="outlined" />
             <Chip label={week.status.replace('_', ' ')} size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
             <WeekConstraints week={week} sets={sets} />
           </Box>
@@ -1095,7 +1107,7 @@ export default function MyTeamPage() {
 
           {myTeam.members.map((m) => {
             const isMe = m.user.id === user.id;
-            const canEditMember = isWeekEditable && (isMe || isCaptain);
+            const canEditMember = isWeekEditable && (isMe || isCaptain || myTeam.allow_peer_deck_entry);
             const selections = getMemberSelections(week, m.user.id);
             return (
               <Box key={m.id} sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
@@ -1437,7 +1449,7 @@ export default function MyTeamPage() {
                   const ranges = getSasLadderRanges(week.sas_ladder_maxes || []);
                   const assignment = (week.sas_ladder_assignments || []).find((a) => a.user_id === m.user.id);
                   const isFeature = assignment != null && week.sas_ladder_feature_rung === assignment.rung_number;
-                  const canAssign = isWeekEditable && (isMe || isCaptain);
+                  const canAssign = isWeekEditable && (isMe || isCaptain || myTeam.allow_peer_deck_entry);
                   const selKey = `${week.id}-${m.user.id}`;
 
                   const rungChip = assignment
@@ -1798,7 +1810,22 @@ export default function MyTeamPage() {
 
           <Card sx={{ mb: 3 }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom>Members</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography variant="h6">Members</Typography>
+                {isCaptain && (
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={myTeam.allow_peer_deck_entry}
+                        onChange={handleTogglePeerDeckEntry}
+                        size="small"
+                      />
+                    }
+                    label={<Typography variant="body2">Allow teammates to set decks for each other</Typography>}
+                    labelPlacement="start"
+                  />
+                )}
+              </Box>
               <List>
                 {myTeam.members.map((m) => (
                   <ListItem key={m.id}>
@@ -1836,7 +1863,13 @@ export default function MyTeamPage() {
                 const owners = myTeam.members
                   .map((m) => m.user.dok_profile_url)
                   .filter(Boolean)
-                  .map((url) => url!.split('/').pop())
+                  .map((url) => {
+                    try {
+                      return new URL(url!).searchParams.get('owner') ?? url!.split('/').pop();
+                    } catch {
+                      return url!.split('/').pop();
+                    }
+                  })
                   .filter(Boolean);
                 if (owners.length === 0) return null;
                 const href =

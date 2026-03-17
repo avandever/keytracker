@@ -96,9 +96,9 @@ export async function createTeam(
 export async function updateTeam(
   leagueId: number,
   teamId: number,
-  name: string,
+  updates: { name?: string; allow_peer_deck_entry?: boolean },
 ): Promise<TeamDetail> {
-  const { data } = await apiClient.put(`/leagues/${leagueId}/teams/${teamId}`, { name });
+  const { data } = await apiClient.put(`/leagues/${leagueId}/teams/${teamId}`, updates);
   return data;
 }
 

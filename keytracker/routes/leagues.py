@@ -514,6 +514,8 @@ def update_team(league_id, team_id):
     name = (data.get("name") or "").strip()
     if name:
         team.name = name
+    if "allow_peer_deck_entry" in data:
+        team.allow_peer_deck_entry = bool(data["allow_peer_deck_entry"])
     db.session.commit()
     return jsonify(serialize_team_detail(team))
 

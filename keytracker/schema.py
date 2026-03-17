@@ -532,6 +532,7 @@ class DokDeck(db.Model):
     action_count = db.Column(db.Integer)
     upgrade_count = db.Column(db.Integer)
     creature_count = db.Column(db.Integer)
+    prod_dok_id = db.Column(db.BigInteger, nullable=True)
     last_refresh = db.Column(
         db.DateTime,
         default=func.now(),
@@ -906,6 +907,7 @@ class League(db.Model):
     week_bonus_points = db.Column(db.Integer, nullable=False, default=2)
     is_test = db.Column(db.Boolean, default=False, nullable=False)
     url_name = db.Column(db.String(100), nullable=True, unique=True, index=True)
+    dok_tag_id = db.Column(db.BigInteger, nullable=True)
     created_by_id = db.Column(
         db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
     )
@@ -952,6 +954,7 @@ class Team(db.Model):
     )
     name = db.Column(db.String(200), nullable=False)
     order_number = db.Column(db.Integer, nullable=False)
+    allow_peer_deck_entry = db.Column(db.Boolean, default=False, nullable=False, server_default="0")
     league = db.relationship("League", back_populates="teams")
     members = db.relationship(
         "TeamMember", back_populates="team", cascade="all, delete-orphan"

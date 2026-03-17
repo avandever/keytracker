@@ -188,6 +188,7 @@ def serialize_team_detail(team: Team, hide_members: bool = False) -> dict:
         "id": team.id,
         "name": team.name,
         "order_number": team.order_number,
+        "allow_peer_deck_entry": bool(team.allow_peer_deck_entry),
         "members": [] if hide_members else [serialize_team_member(m) for m in team.members],
     }
 
