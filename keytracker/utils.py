@@ -161,7 +161,8 @@ MV_API_BASE = "https://www.keyforgegame.com/api/decks"
 MV_SINGLE_DECK_BASE = os.environ.get("MV_SINGLE_DECK_BASE", MV_API_BASE)
 
 DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
-_DOK_BASE = os.environ.get("DOK_BASE_URL", "https://decksofkeyforge.com")
+PROD_DOK_BASE = "https://decksofkeyforge.com"
+_DOK_BASE = os.environ.get("DOK_BASE_URL", PROD_DOK_BASE)
 DOK_DECK_BASE = f"{_DOK_BASE}/public-api/v3/decks"
 DOK_ALLIANCE_BASE = f"{_DOK_BASE}/api/alliance-decks/with-synergies"
 TRY_LOCAL_DOK_FOR_DECK_BASE_DATA = os.environ.get(
@@ -1214,7 +1215,7 @@ def update_sas_scores(deck: Deck, dok_api_key: str = None) -> bool:
         deck.sas_rating = data["deck"]["sasRating"]
         deck.aerc_score = data["deck"]["aercScore"]
         deck.sas_version = data["sasVersion"]
-        add_dok_deck_from_dict(**data["deck"])
+        add_dok_deck_from_dict(save_prod_id=(_DOK_BASE == PROD_DOK_BASE), **data["deck"])
     except KeyError:
         current_app.logger.exception(f"Failed getting dok data for {deck.kf_id}")
         current_app.logger.debug(f"Received text:\n{response.text}")
@@ -1547,7 +1548,7 @@ def get_snake_or_camel(obj: Dict[str, Any], key: str) -> Optional[str]:
     return obj.get(new_key)
 
 
-def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
+def add_dok_deck_from_dict(skip_commit: bool = False, save_prod_id: bool = False, **data: Dict) -> None:
     deck_id = get_snake_or_camel(data, "keyforge_id")
     deck = Deck.query.filter_by(kf_id=deck_id).first()
     # This is a bit redundant to get_deck_by_id_with_zeal, but necessary to avoid an
@@ -1578,6 +1579,10 @@ def add_dok_deck_from_dict(skip_commit: bool = False, **data: Dict) -> None:
     dok.action_count = get_snake_or_camel(data, "action_count")
     dok.upgrade_count = get_snake_or_camel(data, "upgrade_count")
     dok.creature_count = get_snake_or_camel(data, "creature_count")
+    if save_prod_id:
+        prod_id = data.get("id")
+        if prod_id is not None:
+            dok.prod_dok_id = int(prod_id)
     synergy_details = get_snake_or_camel(data, "synergy_details")
     if synergy_details:
         _update_pod_sas_from_synergy_details(deck, synergy_details)
@@ -2440,8 +2445,8 @@ def send_password_reset_email(user, app_base_url: str) -> None:
     current_app.logger.info("Password reset email sent to %s", user.email)
 
 
-DOK_MY_DECKS_BASE = f"{_DOK_BASE}/public-api/v1/my-decks"
-DOK_MY_ALLIANCES_URL = f"{_DOK_BASE}/public-api/v1/my-alliances"
+DOK_MY_DECKS_BASE = f"{PROD_DOK_BASE}/public-api/v1/my-decks"
+DOK_MY_ALLIANCES_URL = f"{PROD_DOK_BASE}/public-api/v1/my-alliances"
 
 
 def sync_collection_from_dok(user) -> dict:
@@ -2488,6 +2493,9 @@ def sync_collection_from_dok(user) -> dict:
             row.dok_funny = bool(entry.get("funny"))
             row.dok_notes = entry.get("notes")
             row.last_synced_at = now
+            prod_id = dok_deck.get("id")
+            if prod_id is not None and deck.dok is not None:
+                deck.dok.prod_dok_id = int(prod_id)
             standard_count += 1
             if (
                 len(deck.cards_from_assoc) < 36
