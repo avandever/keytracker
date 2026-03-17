@@ -402,6 +402,24 @@ if os.getenv("ENABLE_COLLECTOR", "").lower() in ("1", "true", "yes"):
     logging.getLogger("collector").info("Background collector thread launched")
 
 
+if os.getenv("ENABLE_COLLECTOR_V2", "").lower() in ("1", "true", "yes"):
+    import threading
+
+    collector_v2_thread = threading.Thread(
+        target=utils.run_background_collector,
+        args=(app,),
+        kwargs={
+            "gvar_name": "highest_mv_page_scraped_v2",
+            "lock_name": "\0keytracker_collector_lock_v2",
+        },
+        daemon=True,
+    )
+    collector_v2_thread.start()
+    logging.getLogger("collector_v2").info(
+        "Background collector v2 thread launched"
+    )
+
+
 if os.getenv("ENABLE_CARD_REFRESHER", "").lower() in ("1", "true", "yes"):
     import threading
 

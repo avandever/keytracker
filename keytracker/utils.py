@@ -1698,6 +1698,7 @@ def get_decks_from_page_v2(
     add_decks_cache=None,
     tries: int = 5,
     update_highest_page: bool = False,
+    gvar_name: str = "highest_mv_page_scraped",
 ) -> int:
     # MV api will not return more than 25, so don't try
     page_size = 25
@@ -1757,7 +1758,7 @@ def get_decks_from_page_v2(
             add_decks_cache["seen_deck_ids"].add(deck_json["id"])
     if update_highest_page and reverse and len(decks) == page_size:
         highest_page = GlobalVariable.query.filter_by(
-            name="highest_mv_page_scraped"
+            name=gvar_name
         ).first()
         if page > highest_page.value_int:
             highest_page.value_int = page
@@ -2158,7 +2159,12 @@ def fix_pcis_house(pcis: PlatonicCardInSet) -> None:
     db.session.commit()
 
 
-def run_background_collector(app, stop_event=None):
+def run_background_collector(
+    app,
+    stop_event=None,
+    gvar_name: str = "highest_mv_page_scraped",
+    lock_name: str = "\0keytracker_collector_lock",
+):
     """Background thread that continuously scrapes deck pages from Master Vault."""
     import socket
 
@@ -2170,7 +2176,7 @@ def run_background_collector(app, stop_event=None):
     # released when the process exits.
     lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     try:
-        lock_socket.bind("\0keytracker_collector_lock")
+        lock_socket.bind(lock_name)
     except OSError:
         logger.info("Another process already running the collector, skipping")
         return
@@ -2187,15 +2193,13 @@ def run_background_collector(app, stop_event=None):
         try:
             with app.app_context():
                 highest_page_var = GlobalVariable.query.filter_by(
-                    name="highest_mv_page_scraped"
+                    name=gvar_name
                 ).first()
                 if highest_page_var is None:
-                    logger.error(
-                        "GlobalVariable 'highest_mv_page_scraped' not found, "
-                        "sleeping 60s"
-                    )
-                    time.sleep(60)
-                    continue
+                    highest_page_var = GlobalVariable(name=gvar_name, value_int=0)
+                    db.session.add(highest_page_var)
+                    db.session.commit()
+                    logger.info(f"Created GlobalVariable '{gvar_name}' at 0")
 
                 page = highest_page_var.value_int + 1
                 logger.info(f"Fetching page {page}")
@@ -2205,6 +2209,7 @@ def run_background_collector(app, stop_event=None):
                     reverse=True,
                     add_decks_cache=add_decks_cache,
                     update_highest_page=True,
+                    gvar_name=gvar_name,
                 )
 
                 if new_decks == 0:
