@@ -1832,6 +1832,24 @@ export default function MyTeamPage() {
                   </ListItem>
                 ))}
               </List>
+              {(() => {
+                const owners = myTeam.members
+                  .map((m) => m.user.dok_profile_url)
+                  .filter(Boolean)
+                  .map((url) => url!.split('/').pop())
+                  .filter(Boolean);
+                if (owners.length === 0) return null;
+                const href =
+                  'https://decksofkeyforge.com/decks?' +
+                  owners.map((o) => `owners=${encodeURIComponent(o!)}`).join('&');
+                return (
+                  <Box sx={{ mt: 1 }}>
+                    <Link href={href} target="_blank" rel="noopener noreferrer">
+                      View team collection on DoK
+                    </Link>
+                  </Box>
+                );
+              })()}
             </CardContent>
           </Card>
         </>

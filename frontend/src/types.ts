@@ -250,6 +250,7 @@ export interface UserBrief {
   is_test_user: boolean;
   tco_username: string | null;
   discord_username: string | null;
+  dok_profile_url: string | null;
 }
 
 export interface TeamMemberInfo {
