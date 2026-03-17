@@ -2615,7 +2615,7 @@ def run_background_pod_stats_backfill(app, stop_event=None, batch_sleep: float =
         _time.sleep(batch_sleep)
 
 
-def run_background_sas_backfill(app, stop_event=None, batch_sleep: float = 1.0):
+def run_background_sas_backfill(app, stop_event=None, batch_sleep: float = 0.0):
     """Background thread: finds decks with outdated SAS data and refreshes them.
 
     Processes decks whose sas_version < LATEST_SAS_VERSION or that have no DokDeck
@@ -2680,5 +2680,3 @@ def run_background_sas_backfill(app, stop_event=None, batch_sleep: float = 1.0):
                 db.session.commit()
         except Exception:
             logger.exception("SAS backfill outer loop error")
-
-        _time.sleep(batch_sleep)
