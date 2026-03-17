@@ -358,6 +358,7 @@ class PlatonicCard(db.Model):
     house = association_proxy("kf_house", "name")
     expansions = db.relationship("PlatonicCardInSet", back_populates="card")
     is_non_deck = db.Column(db.Boolean, default=False)
+    source_expansion = db.Column(db.Integer, nullable=True)
 
     def __repr__(self) -> str:
         return f"<PlatonicCard({self.card_title})>"

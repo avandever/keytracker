@@ -2075,7 +2075,37 @@ def update_platonic_info(
     card_json,
     override: CardSetHouseOverride = None,
 ) -> None:
-    # Double-check that platonic card info is right
+    incoming_expansion = card_json["expansion"]
+    house = get_or_create_house(card_json["house"])
+
+    # Always update card-in-set fields (they are set-specific)
+    card_in_set.kf_house = house
+    card_in_set.expansion = incoming_expansion
+    card_in_set.card_number = card_json["card_number"]
+    card_in_set.is_anomaly = card_json["is_anomaly"]
+    card_in_set.front_image = card_json["front_image"]
+    if (
+        card_in_set.kf_rarity is None
+        or card_in_set.kf_rarity.name != card_json["rarity"]
+    ):
+        rarity = KeyforgeRarity.query.filter_by(name=card_json["rarity"]).first()
+        if rarity is None:
+            rarity = KeyforgeRarity(name=card_json["rarity"])
+            db.session.add(rarity)
+        card_in_set.kf_rarity = rarity
+
+    # Only overwrite PlatonicCard fields if this set is at least as new as what
+    # we previously wrote (higher expansion number = newer set).
+    if (
+        platonic_card.source_expansion is not None
+        and incoming_expansion < platonic_card.source_expansion
+    ):
+        current_app.logger.debug(
+            f"Skipping PlatonicCard update for '{platonic_card.card_title}': "
+            f"incoming expansion {incoming_expansion} < stored {platonic_card.source_expansion}"
+        )
+        return
+
     if card_json["traits"]:
         trait_strs = card_json["traits"].split(" • ")
         if {t.name for t in platonic_card.traits} != set(trait_strs):
@@ -2091,7 +2121,7 @@ def update_platonic_info(
         platonic_card.traits.clear()
     if (
         platonic_card.kf_card_type is None
-        or platonic_card.kf_card_type != card_json["card_type"]
+        or platonic_card.kf_card_type.name != card_json["card_type"]
     ):
         card_type = KeyforgeCardType.query.filter_by(
             name=card_json["card_type"]
@@ -2106,8 +2136,6 @@ def update_platonic_info(
     platonic_card.power = normalize_stat(card_json["power"])
     platonic_card.armor = normalize_stat(card_json["armor"])
     platonic_card.flavor_text = card_json["flavor_text"]
-    house = get_or_create_house(card_json["house"])
-    card_in_set.kf_house = house
     # Don't set platonic card house for mavericks, anomalies, or revenants
     if not any(
         [
@@ -2123,20 +2151,7 @@ def update_platonic_info(
         else:
             platonic_card.kf_house = get_or_create_house(override.house)
     platonic_card.is_non_deck = card_json["is_non_deck"]
-    # Double-check that card in set info is right
-    card_in_set.expansion = card_json["expansion"]
-    card_in_set.card_number = card_json["card_number"]
-    card_in_set.is_anomaly = card_json["is_anomaly"]
-    card_in_set.front_image = card_json["front_image"]
-    if (
-        card_in_set.kf_rarity is None
-        or card_in_set.kf_rarity.name != card_json["rarity"]
-    ):
-        rarity = KeyforgeRarity.query.filter_by(name=card_json["rarity"]).first()
-        if rarity is None:
-            rarity = KeyforgeRarity(name=card_json["rarity"])
-            db.session.add(rarity)
-        card_in_set.kf_rarity = rarity
+    platonic_card.source_expansion = incoming_expansion
 
 
 def fix_mavericks(expansion: int) -> int:
