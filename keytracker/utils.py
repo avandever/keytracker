@@ -2165,6 +2165,8 @@ def run_background_collector(
     gvar_name: str = "highest_mv_page_scraped",
     lock_name: str = "\0keytracker_collector_lock",
     caught_up_sleep: int = 300,
+    exit_near_gvar: str = None,
+    exit_near_margin: int = 10,
 ):
     """Background thread that continuously scrapes deck pages from Master Vault."""
     import socket
@@ -2201,6 +2203,19 @@ def run_background_collector(
                     db.session.add(highest_page_var)
                     db.session.commit()
                     logger.info(f"Created GlobalVariable '{gvar_name}' at 0")
+
+                if exit_near_gvar is not None:
+                    ref_var = GlobalVariable.query.filter_by(
+                        name=exit_near_gvar
+                    ).first()
+                    if ref_var is not None and highest_page_var.value_int >= ref_var.value_int - exit_near_margin:
+                        logger.info(
+                            f"Collector '{gvar_name}' reached within "
+                            f"{exit_near_margin} of '{exit_near_gvar}' "
+                            f"({highest_page_var.value_int} >= "
+                            f"{ref_var.value_int} - {exit_near_margin}), exiting"
+                        )
+                        return
 
                 page = highest_page_var.value_int + 1
                 logger.info(f"Fetching page {page}")
