@@ -2100,10 +2100,6 @@ def update_platonic_info(
         platonic_card.source_expansion is not None
         and incoming_expansion < platonic_card.source_expansion
     ):
-        current_app.logger.debug(
-            f"Skipping PlatonicCard update for '{platonic_card.card_title}': "
-            f"incoming expansion {incoming_expansion} < stored {platonic_card.source_expansion}"
-        )
         return
 
     if card_json["traits"]:
