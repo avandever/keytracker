@@ -40,6 +40,7 @@ interface LoadedDeck {
   expansion: number;
   houses: string[];
   sas_rating: number | null;
+  house_sas: Record<string, number>;
 }
 
 interface AlliancePodBuilderProps {
@@ -121,6 +122,7 @@ export default function AlliancePodBuilder({
           expansion: pod.expansion,
           houses: pod.houses,
           sas_rating: pod.sas_rating,
+          house_sas: {},
         };
         newHouses[i] = pod.house;
         newUrls[i] = pod.kf_id;
@@ -381,17 +383,18 @@ export default function AlliancePodBuilder({
                   <MenuItem value="">
                     <em>Select house</em>
                   </MenuItem>
-                  {podDecks[i]!.houses.map((h) => (
-                    <MenuItem
-                      key={h}
-                      value={h}
-                      disabled={
-                        chosenHouses.includes(h) && podHouses[i] !== h
-                      }
-                    >
-                      {h}
-                    </MenuItem>
-                  ))}
+                  {podDecks[i]!.houses.map((h) => {
+                    const houseSas = podDecks[i]!.house_sas?.[h];
+                    return (
+                      <MenuItem
+                        key={h}
+                        value={h}
+                        disabled={chosenHouses.includes(h) && podHouses[i] !== h}
+                      >
+                        {h}{houseSas != null ? ` (${houseSas} SAS)` : ''}
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
               <Button

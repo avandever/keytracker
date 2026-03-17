@@ -6,9 +6,13 @@ import {
   Chip,
   CircularProgress,
   Container,
+  FormControl,
+  InputLabel,
   LinearProgress,
   Link,
+  MenuItem,
   Paper,
+  Select,
   Tab,
   TablePagination,
   TableSortLabel,
@@ -22,13 +26,17 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { getCollection } from '../api/collection';
+import { getCollection, getCollectionPods, type CollectionPod } from '../api/collection';
 import type { AllianceDeckEntry, CollectionDeck } from '../types';
 
 export default function MyCollectionPage() {
   const [tab, setTab] = useState(0);
   const [standard, setStandard] = useState<CollectionDeck[]>([]);
   const [alliance, setAlliance] = useState<AllianceDeckEntry[]>([]);
+  const [pods, setPods] = useState<CollectionPod[]>([]);
+  const [podHouseFilter, setPodHouseFilter] = useState('');
+  const [podExpansionFilter, setPodExpansionFilter] = useState<number | ''>('');
+  const [podSortDir, setPodSortDir] = useState<'asc' | 'desc'>('desc');
   const [total, setTotal] = useState(0);
   const [initialLoading, setInitialLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
@@ -82,6 +90,15 @@ export default function MyCollectionPage() {
       .catch((e) => setError(e.response?.data?.error || e.message));
   }, [tab]);
 
+  // Fetch all pods once when switching to pods tab
+  useEffect(() => {
+    if (tab !== 2) return;
+    setInitialLoading(false);
+    getCollectionPods()
+      .then((res) => setPods(res.data.pods || []))
+      .catch((e) => setError(e.response?.data?.error || e.message));
+  }, [tab]);
+
   const handleSort = (field: string) => {
     if (sort === field) {
       setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -112,6 +129,7 @@ export default function MyCollectionPage() {
           <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 2 }}>
             <Tab label={`Standard Decks (${total})`} />
             <Tab label={`Alliance Decks (${alliance.length})`} />
+            <Tab label="Pods" />
           </Tabs>
 
           {tab === 0 && (
@@ -260,6 +278,102 @@ export default function MyCollectionPage() {
               </Table>
             </TableContainer>
           )}
+
+          {tab === 2 && (() => {
+            const allHouses = Array.from(new Set(pods.map((p) => p.house))).sort();
+            const allExpansions = Array.from(
+              new Map(pods.map((p) => [p.expansion, p.expansion_name])).entries()
+            ).sort((a, b) => a[1].localeCompare(b[1]));
+            const visiblePods = pods
+              .filter((p) => (!podHouseFilter || p.house === podHouseFilter) &&
+                (podExpansionFilter === '' || p.expansion === podExpansionFilter))
+              .sort((a, b) => podSortDir === 'desc'
+                ? b.sas_rating - a.sas_rating
+                : a.sas_rating - b.sas_rating);
+            return (
+              <Box>
+                <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <FormControl size="small" sx={{ minWidth: 150 }}>
+                    <InputLabel>House</InputLabel>
+                    <Select
+                      value={podHouseFilter}
+                      label="House"
+                      onChange={(e) => setPodHouseFilter(e.target.value)}
+                    >
+                      <MenuItem value="">All Houses</MenuItem>
+                      {allHouses.map((h) => (
+                        <MenuItem key={h} value={h}>{h}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" sx={{ minWidth: 150 }}>
+                    <InputLabel>Set</InputLabel>
+                    <Select
+                      value={podExpansionFilter}
+                      label="Set"
+                      onChange={(e) => setPodExpansionFilter(e.target.value as number | '')}
+                    >
+                      <MenuItem value="">All Sets</MenuItem>
+                      {allExpansions.map(([id, name]) => (
+                        <MenuItem key={id} value={id}>{name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  <FormControl size="small" sx={{ minWidth: 130 }}>
+                    <InputLabel>Sort</InputLabel>
+                    <Select
+                      value={podSortDir}
+                      label="Sort"
+                      onChange={(e) => setPodSortDir(e.target.value as 'asc' | 'desc')}
+                    >
+                      <MenuItem value="desc">SAS High→Low</MenuItem>
+                      <MenuItem value="asc">SAS Low→High</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <Typography variant="body2" color="text.secondary">{visiblePods.length} pods</Typography>
+                </Box>
+                <TableContainer component={Paper}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>House</TableCell>
+                        <TableCell>Deck</TableCell>
+                        <TableCell>Set</TableCell>
+                        <TableCell align="right">Pod SAS</TableCell>
+                        <TableCell>Links</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {visiblePods.map((pod, idx) => (
+                        <TableRow key={`${pod.deck_kf_id}-${pod.house}-${idx}`} hover>
+                          <TableCell>{pod.house}</TableCell>
+                          <TableCell>
+                            <Link component={RouterLink} to={`/deck/${pod.deck_kf_id}`}>
+                              {pod.deck_name}
+                            </Link>
+                          </TableCell>
+                          <TableCell>{pod.expansion_name}</TableCell>
+                          <TableCell align="right">
+                            {pod.sas_rating > 0 ? pod.sas_rating : '—'}
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              {pod.deck_mv_url && (
+                                <Link href={pod.deck_mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                              )}
+                              {pod.deck_dok_url && (
+                                <Link href={pod.deck_dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                              )}
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            );
+          })()}
         </>
       )}
     </Container>

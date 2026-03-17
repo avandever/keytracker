@@ -9,6 +9,7 @@ export interface DeckImportResult {
   expansion: number;
   houses: string[];
   sas_rating: number | null;
+  house_sas: Record<string, number>;
 }
 
 export interface DokAllianceImportResult {

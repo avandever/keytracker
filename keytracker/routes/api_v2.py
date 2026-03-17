@@ -10,12 +10,14 @@ from keytracker.schema import (
     db,
     CollectionSyncJob,
     Deck,
+    EXPANSION_ID_TO_ABBR,
     ExtendedGameData,
     Game,
     Log,
     MatchGame,
     Player,
     PlayerDeckSelection,
+    PodStats,
     TcoUsername,
     User,
     UserAllianceCollection,
@@ -925,7 +927,8 @@ def import_deck_by_url():
         current_app.logger.error("Failed to import deck %s: %s", kf_id, e)
         return jsonify({"error": f"Failed to fetch deck: {str(e)}"}), 400
 
-    houses = [ps.house for ps in deck.pod_stats if ps.house != "Archon Power"]
+    pod_stats = [ps for ps in deck.pod_stats if ps.house != "Archon Power"]
+    houses = [ps.house for ps in pod_stats]
     return jsonify(
         {
             "id": deck.id,
@@ -934,6 +937,7 @@ def import_deck_by_url():
             "expansion": deck.expansion,
             "houses": houses,
             "sas_rating": deck.sas_rating,
+            "house_sas": {ps.house: ps.sas_rating for ps in pod_stats},
         }
     )
 
@@ -1195,3 +1199,46 @@ def get_collection():
             for r in arows
         ]
     return jsonify(result)
+
+
+@blueprint.route("/collection/pods", methods=["GET"])
+@login_required
+def get_collection_pods():
+    """Return all pods from the user's standard collection, optionally filtered."""
+    house_filter = request.args.get("house", "").strip()
+    expansion_filter = request.args.get("expansion", type=int)
+    sort_dir = request.args.get("sort_dir", "desc")
+
+    q = (
+        db.session.query(PodStats, Deck)
+        .join(Deck, PodStats.deck_id == Deck.id)
+        .join(UserDeckCollection, UserDeckCollection.deck_id == Deck.id)
+        .filter(
+            UserDeckCollection.user_id == current_user.id,
+            PodStats.house != "Archon Power",
+        )
+    )
+    if house_filter:
+        q = q.filter(PodStats.house == house_filter)
+    if expansion_filter is not None:
+        q = q.filter(Deck.expansion == expansion_filter)
+
+    sort_col = PodStats.sas_rating
+    q = q.order_by(sort_col.desc() if sort_dir == "desc" else sort_col.asc())
+
+    rows = q.all()
+    return jsonify({
+        "pods": [
+            {
+                "house": ps.house,
+                "sas_rating": ps.sas_rating,
+                "deck_name": deck.name,
+                "deck_kf_id": deck.kf_id,
+                "deck_mv_url": deck.mv_url,
+                "deck_dok_url": deck.dok_url,
+                "expansion": deck.expansion,
+                "expansion_name": EXPANSION_ID_TO_ABBR.get(deck.expansion, "Unknown"),
+            }
+            for ps, deck in rows
+        ]
+    })

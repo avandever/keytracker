@@ -30,3 +30,17 @@ export const getSyncStatus = () =>
 
 export const getCollection = (params: CollectionParams = {}) =>
   apiClient.get<CollectionResponse>('/collection', { params });
+
+export interface CollectionPod {
+  house: string;
+  sas_rating: number;
+  deck_name: string;
+  deck_kf_id: string;
+  deck_mv_url: string;
+  deck_dok_url: string;
+  expansion: number;
+  expansion_name: string;
+}
+
+export const getCollectionPods = (params: { house?: string; expansion?: number; sort_dir?: 'asc' | 'desc' } = {}) =>
+  apiClient.get<{ pods: CollectionPod[] }>('/collection/pods', { params });

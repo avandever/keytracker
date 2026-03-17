@@ -192,7 +192,7 @@ _DOK_EXPANSION_TO_INT = {
     "CRUCIBLE_CLASH": 918,
     "VAULT_MASTERS_2025": 939,
 }
-LATEST_SAS_VERSION = 43
+LATEST_SAS_VERSION = 44  # bumped to backfill per-pod SAS
 SAS_MAX_AGE_DAYS = 60
 SAS_TD = datetime.timedelta(days=SAS_MAX_AGE_DAYS)
 SEARCH_PARAMS = {
@@ -2547,3 +2547,138 @@ def sync_collection_from_dok(user) -> dict:
         "alliance_decks": alliance_count,
         "refresh_deck_ids": needs_refresh,
     }
+
+
+def run_background_pod_stats_backfill(app, stop_event=None, batch_sleep: float = 0.05):
+    """Background thread: finds decks with cards but no pod stats and populates them.
+
+    Uses GlobalVariable 'pod_stats_backfill_last_id' as a persistent cursor so
+    the scan survives restarts. Exits once all decks have been processed.
+    """
+    import socket, time as _time
+
+    logger = app.logger
+    GVAR_NAME = "pod_stats_backfill_last_id"
+    LOCK_NAME = "\0keytracker_pod_stats_backfill_lock"
+
+    lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    try:
+        lock_socket.bind(LOCK_NAME)
+    except OSError:
+        logger.info("Another process already running pod stats backfill, skipping")
+        return
+
+    logger.info("Background pod stats backfill started")
+
+    while stop_event is None or not stop_event.is_set():
+        try:
+            with app.app_context():
+                gvar = GlobalVariable.query.filter_by(name=GVAR_NAME).first()
+                if gvar is None:
+                    gvar = GlobalVariable(name=GVAR_NAME, value_int=0)
+                    db.session.add(gvar)
+                    db.session.commit()
+
+                last_id = gvar.value_int or 0
+                deck = (
+                    Deck.query
+                    .filter(Deck.id > last_id)
+                    .filter(~Deck.pod_stats.any())
+                    .filter(Deck.cards_from_assoc.any())
+                    .order_by(Deck.id)
+                    .first()
+                )
+
+                if deck is None:
+                    # Advance cursor to current max so future decks get picked up
+                    max_id_row = db.session.execute(
+                        db.select(db.func.max(Deck.id))
+                    ).scalar()
+                    if max_id_row and max_id_row > last_id:
+                        gvar.value_int = max_id_row
+                        db.session.commit()
+                    logger.info("Pod stats backfill complete. Thread exiting.")
+                    return
+
+                try:
+                    calculate_pod_stats(deck)
+                    db.session.commit()
+                except Exception:
+                    logger.exception("Pod stats backfill failed for deck %s", deck.kf_id)
+                    db.session.rollback()
+
+                gvar.value_int = deck.id
+                db.session.commit()
+        except Exception:
+            logger.exception("Pod stats backfill outer loop error")
+
+        _time.sleep(batch_sleep)
+
+
+def run_background_sas_backfill(app, stop_event=None, batch_sleep: float = 1.0):
+    """Background thread: finds decks with outdated SAS data and refreshes them.
+
+    Processes decks whose sas_version < LATEST_SAS_VERSION or that have no DokDeck
+    record. Uses GlobalVariable 'sas_backfill_last_id' as a persistent cursor.
+    Exits once all decks have been processed then restarts the cycle.
+    """
+    import socket, time as _time
+
+    logger = app.logger
+    GVAR_NAME = "sas_backfill_last_id"
+    LOCK_NAME = "\0keytracker_sas_backfill_lock"
+
+    lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    try:
+        lock_socket.bind(LOCK_NAME)
+    except OSError:
+        logger.info("Another process already running SAS backfill, skipping")
+        return
+
+    logger.info("Background SAS backfill started")
+
+    while stop_event is None or not stop_event.is_set():
+        try:
+            with app.app_context():
+                gvar = GlobalVariable.query.filter_by(name=GVAR_NAME).first()
+                if gvar is None:
+                    gvar = GlobalVariable(name=GVAR_NAME, value_int=0)
+                    db.session.add(gvar)
+                    db.session.commit()
+
+                last_id = gvar.value_int or 0
+                deck = (
+                    Deck.query
+                    .filter(Deck.id > last_id)
+                    .filter(
+                        db.or_(
+                            Deck.sas_version < LATEST_SAS_VERSION,
+                            Deck.sas_version.is_(None),
+                            ~Deck.dok.has(),
+                        )
+                    )
+                    .order_by(Deck.id)
+                    .first()
+                )
+
+                if deck is None:
+                    # Full cycle complete — reset cursor to 0 for next cycle
+                    gvar.value_int = 0
+                    db.session.commit()
+                    logger.info(
+                        "SAS backfill cycle complete, resetting cursor for next pass"
+                    )
+                    _time.sleep(3600)  # wait an hour before cycling again
+                    continue
+
+                try:
+                    update_sas_scores(deck)
+                except Exception:
+                    logger.exception("SAS backfill failed for deck %s", deck.kf_id)
+
+                gvar.value_int = deck.id
+                db.session.commit()
+        except Exception:
+            logger.exception("SAS backfill outer loop error")
+
+        _time.sleep(batch_sleep)

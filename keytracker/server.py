@@ -442,6 +442,32 @@ from keytracker.deck_enrichment import start_worker as _start_enrichment_worker
 _start_enrichment_worker()
 
 
+if os.getenv("ENABLE_POD_STATS_BACKFILL", "").lower() in ("1", "true", "yes"):
+    import threading
+
+    _pod_stats_backfill_thread = threading.Thread(
+        target=utils.run_background_pod_stats_backfill,
+        args=(app,),
+        daemon=True,
+        name="pod-stats-backfill",
+    )
+    _pod_stats_backfill_thread.start()
+    logging.getLogger("pod_stats_backfill").info("Pod stats backfill thread launched")
+
+
+if os.getenv("ENABLE_SAS_BACKFILL", "").lower() in ("1", "true", "yes"):
+    import threading
+
+    _sas_backfill_thread = threading.Thread(
+        target=utils.run_background_sas_backfill,
+        args=(app,),
+        daemon=True,
+        name="sas-backfill",
+    )
+    _sas_backfill_thread.start()
+    logging.getLogger("sas_backfill").info("SAS backfill thread launched")
+
+
 from keytracker.collection_sync import (
     start_worker as _start_collection_sync_worker,
 )  # noqa: E402
