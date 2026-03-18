@@ -50,12 +50,13 @@ import {
   removeCurationDeck,
   submitSteals,
   submitTertiatePurge,
+  getTeamDeckEntryLog,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
-import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo } from '../types';
+import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo, DeckEntryLogEntry } from '../types';
 import type { SealedPoolEntry, TeamSealedPoolEntry } from '../api/leagues';
 import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
@@ -146,6 +147,10 @@ export default function MyTeamPage() {
   const [openAllianceTokenIds, setOpenAllianceTokenIds] = useState<Record<string, number | null>>({});
   const [openAllianceProphecyIds, setOpenAllianceProphecyIds] = useState<Record<string, number | null>>({});
 
+  // Deck entry log
+  const [deckEntryLog, setDeckEntryLog] = useState<DeckEntryLogEntry[] | null>(null);
+  const [deckEntryLogLoading, setDeckEntryLogLoading] = useState(false);
+
   // SAS Ladder: rung selections keyed by `${weekId}-${userId}`
   const [sasRungSelections, setSasRungSelections] = useState<Record<string, number | ''>>({});
 
@@ -232,6 +237,17 @@ export default function MyTeamPage() {
 
   const isCaptain = league.is_captain;
   const weeks = league.weeks || [];
+  const logTabIdx = weeks.length + 1;
+
+  const handleOpenLogTab = () => {
+    if (deckEntryLog === null && !deckEntryLogLoading) {
+      setDeckEntryLogLoading(true);
+      getTeamDeckEntryLog(league.id, myTeam.id)
+        .then((entries) => setDeckEntryLog(entries))
+        .catch(() => setDeckEntryLog([]))
+        .finally(() => setDeckEntryLogLoading(false));
+    }
+  };
 
   const handleUpdateName = async () => {
     setError('');
@@ -1765,7 +1781,7 @@ export default function MyTeamPage() {
 
       <Tabs
         value={weekTab}
-        onChange={(_, v) => setWeekTab(v)}
+        onChange={(_, v) => { setWeekTab(v); if (v === logTabIdx) handleOpenLogTab(); }}
         sx={{ mb: 2 }}
         variant="scrollable"
         scrollButtons="auto"
@@ -1785,6 +1801,7 @@ export default function MyTeamPage() {
             }
           />
         ))}
+        <Tab value={logTabIdx} label="Log" />
       </Tabs>
 
       {weekTab === 0 && (
@@ -1888,7 +1905,46 @@ export default function MyTeamPage() {
         </>
       )}
 
-      {weekTab > 0 && sortedWeeks[weekTab - 1] && renderWeekContent(sortedWeeks[weekTab - 1])}
+      {weekTab > 0 && weekTab !== logTabIdx && sortedWeeks[weekTab - 1] && renderWeekContent(sortedWeeks[weekTab - 1])}
+
+      {weekTab === logTabIdx && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Deck Entry Log</Typography>
+            {deckEntryLogLoading && <CircularProgress size={24} />}
+            {!deckEntryLogLoading && deckEntryLog !== null && deckEntryLog.length === 0 && (
+              <Typography variant="body2" color="text.secondary">No deck entries recorded yet.</Typography>
+            )}
+            {!deckEntryLogLoading && deckEntryLog !== null && deckEntryLog.length > 0 && (
+              <List dense disablePadding>
+                {deckEntryLog.map((entry) => {
+                  const isSelf = entry.target_user.id === entry.changed_by.id;
+                  const who = isSelf
+                    ? entry.changed_by.name
+                    : `${entry.changed_by.name} (for ${entry.target_user.name})`;
+                  const verb = entry.action === 'added' ? 'added' : 'removed';
+                  const deckLabel = entry.deck_name || entry.deck_kf_id || 'unknown deck';
+                  const slotLabel = entry.slot_number && entry.slot_number > 1 ? ` (slot ${entry.slot_number})` : '';
+                  const ts = new Date(entry.created_at).toLocaleString();
+                  return (
+                    <ListItem key={entry.id} disableGutters sx={{ py: 0.25 }}>
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2">
+                            <strong>{who}</strong> {verb} <em>{deckLabel}</em>{slotLabel}
+                            {entry.week_name ? ` — ${entry.week_name}` : ''}
+                          </Typography>
+                        }
+                        secondary={<Typography variant="caption" color="text.secondary">{ts}</Typography>}
+                      />
+                    </ListItem>
+                  );
+                })}
+              </List>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={pendingDeckAction !== null} onClose={() => setPendingDeckAction(null)}>
         <DialogTitle>Override Deck Selection?</DialogTitle>

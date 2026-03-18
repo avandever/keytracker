@@ -1568,6 +1568,40 @@ class AlliancePodSelection(db.Model):
     )
 
 
+class TeamDeckEntryLog(db.Model):
+    __tablename__ = "team_deck_entry_log"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    team_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_team.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    week_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_league_week.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    target_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    changed_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    action = db.Column(db.String(16), nullable=False)  # "added" or "removed"
+    deck_name = db.Column(db.String(500), nullable=True)
+    deck_kf_id = db.Column(db.String(36), nullable=True)
+    slot_number = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+
+    team = db.relationship("Team")
+    week = db.relationship("LeagueWeek")
+    target_user = db.relationship("User", foreign_keys=[target_user_id])
+    changed_by = db.relationship("User", foreign_keys=[changed_by_user_id])
+
+
 class SasLadderAssignment(db.Model):
     __tablename__ = "sas_ladder_assignment"
     id = db.Column(db.Integer, primary_key=True)

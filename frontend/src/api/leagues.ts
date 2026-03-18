@@ -16,6 +16,7 @@ import type {
   AdminLogEntry,
   CompletedMatchDecks,
   DeckExportWeek,
+  DeckEntryLogEntry,
 } from '../types';
 
 export async function listLeagues(): Promise<LeagueSummary[]> {
@@ -614,5 +615,13 @@ export async function submitTertiatePurge(
     `/leagues/${leagueId}/matches/${matchupId}/tertiate-purge`,
     { purged_house: purgedHouse },
   );
+  return data;
+}
+
+export async function getTeamDeckEntryLog(
+  leagueId: number,
+  teamId: number,
+): Promise<DeckEntryLogEntry[]> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/teams/${teamId}/deck-entry-log`);
   return data;
 }

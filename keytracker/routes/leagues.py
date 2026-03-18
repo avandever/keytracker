@@ -23,6 +23,7 @@ from keytracker.schema import (
     ThiefSteal,
     FeatureDesignation,
     SasLadderAssignment,
+    TeamDeckEntryLog,
     PodStats,
     SignupStatus,
     WeekFormat,
@@ -49,6 +50,7 @@ from keytracker.serializers import (
     serialize_team_detail,
     serialize_user_brief,
     serialize_admin_log_entry,
+    serialize_deck_entry_log_entry,
 )
 from flask import current_app
 from keytracker.routes.auth import get_discord_guilds_for_user
@@ -115,6 +117,25 @@ def _log_admin_action(league_id, week_id, user_id, action_type, details=None):
         user_id=user_id,
         action_type=action_type,
         details=details,
+        created_at=datetime.datetime.utcnow(),
+    )
+    db.session.add(entry)
+
+
+def _log_deck_entry_change(
+    team_id, week_id, target_user_id, changed_by_user_id, action,
+    deck_name=None, deck_kf_id=None, slot_number=None
+):
+    """Record a deck selection add/remove in the team deck entry log."""
+    entry = TeamDeckEntryLog(
+        team_id=team_id,
+        week_id=week_id,
+        target_user_id=target_user_id,
+        changed_by_user_id=changed_by_user_id,
+        action=action,
+        deck_name=deck_name,
+        deck_kf_id=deck_kf_id,
+        slot_number=slot_number,
         created_at=datetime.datetime.utcnow(),
     )
     db.session.add(entry)
@@ -2843,15 +2864,18 @@ def submit_deck_selection(league_id, week_id):
     if target_user_id != effective.id:
         is_admin = _is_league_admin(league, effective)
         is_captain_of_team = False
+        is_peer_allowed = False
         for team in league.teams:
             team_user_ids = {m.user_id for m in team.members}
             if target_user_id in team_user_ids:
-                if any(
-                    m.user_id == effective.id and m.is_captain for m in team.members
-                ):
+                if any(m.user_id == effective.id and m.is_captain for m in team.members):
                     is_captain_of_team = True
+                if team.allow_peer_deck_entry and any(
+                    m.user_id == effective.id for m in team.members
+                ):
+                    is_peer_allowed = True
                 break
-        if not is_admin and not is_captain_of_team:
+        if not is_admin and not is_captain_of_team and not is_peer_allowed:
             return jsonify({"error": "Cannot submit deck selection for this user"}), 403
 
     # Verify target user is in the league
@@ -3226,6 +3250,18 @@ def submit_deck_selection(league_id, week_id):
                                 400,
                             )
 
+    if target_team:
+        _log_deck_entry_change(
+            team_id=target_team.id,
+            week_id=week.id,
+            target_user_id=target_user_id,
+            changed_by_user_id=effective.id,
+            action="added",
+            deck_name=deck.name,
+            deck_kf_id=deck.kf_id,
+            slot_number=slot_number,
+        )
+
     db.session.commit()
 
     # Return all selections for this user/week
@@ -3261,19 +3297,32 @@ def remove_deck_selection(league_id, week_id, slot):
     # Also allow user_id in query params for captain/admin
     target_user_id = request.args.get("user_id", type=int) or effective.id
 
+    target_team = None
     if target_user_id != effective.id:
         is_admin = _is_league_admin(league, effective)
         is_captain_of_team = False
+        is_peer_allowed = False
         for team in league.teams:
             team_user_ids = {m.user_id for m in team.members}
             if target_user_id in team_user_ids:
-                if any(
-                    m.user_id == effective.id and m.is_captain for m in team.members
-                ):
+                target_team = team
+                if any(m.user_id == effective.id and m.is_captain for m in team.members):
                     is_captain_of_team = True
+                if team.allow_peer_deck_entry and any(
+                    m.user_id == effective.id for m in team.members
+                ):
+                    is_peer_allowed = True
                 break
-        if not is_admin and not is_captain_of_team:
+        if not is_admin and not is_captain_of_team and not is_peer_allowed:
             return jsonify({"error": "Cannot remove deck selection for this user"}), 403
+    else:
+        member = (
+            TeamMember.query.join(Team)
+            .filter(Team.league_id == league.id, TeamMember.user_id == target_user_id)
+            .first()
+        )
+        if member:
+            target_team = db.session.get(Team, member.team_id)
 
     sel = PlayerDeckSelection.query.filter_by(
         week_id=week.id, user_id=target_user_id, slot_number=slot
@@ -3281,7 +3330,21 @@ def remove_deck_selection(league_id, week_id, slot):
     if not sel:
         return jsonify({"error": "Selection not found"}), 404
 
+    removed_deck = db.session.get(Deck, sel.deck_id)
     db.session.delete(sel)
+
+    if target_team:
+        _log_deck_entry_change(
+            team_id=target_team.id,
+            week_id=week.id,
+            target_user_id=target_user_id,
+            changed_by_user_id=effective.id,
+            action="removed",
+            deck_name=removed_deck.name if removed_deck else None,
+            deck_kf_id=removed_deck.kf_id if removed_deck else None,
+            slot_number=slot,
+        )
+
     db.session.commit()
     return jsonify({"success": True})
 
@@ -5022,6 +5085,32 @@ def get_admin_log(league_id):
         .all()
     )
     return jsonify([serialize_admin_log_entry(e) for e in entries])
+
+
+# --- Team Deck Entry Log ---
+
+
+@blueprint.route("/<int:league_id>/teams/<int:team_id>/deck-entry-log", methods=["GET"])
+@login_required
+def get_team_deck_entry_log(league_id, team_id):
+    """Return deck entry log for a team. Accessible to any team member or league admin."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    team = db.session.get(Team, team_id)
+    if not team or team.league_id != league.id:
+        return jsonify({"error": "Team not found"}), 404
+    effective = get_effective_user()
+    is_member = any(m.user_id == effective.id for m in team.members)
+    if not is_member and not _is_league_admin(league, effective):
+        return jsonify({"error": "Access denied"}), 403
+    entries = (
+        TeamDeckEntryLog.query.filter_by(team_id=team_id)
+        .order_by(TeamDeckEntryLog.created_at.desc())
+        .limit(500)
+        .all()
+    )
+    return jsonify([serialize_deck_entry_log_entry(e) for e in entries])
 
 
 # --- Regenerate Player Matchups ---

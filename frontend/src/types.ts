@@ -253,6 +253,19 @@ export interface UserBrief {
   dok_profile_url: string | null;
 }
 
+export interface DeckEntryLogEntry {
+  id: number;
+  week_id: number;
+  week_name: string | null;
+  target_user: UserBrief;
+  changed_by: UserBrief;
+  action: 'added' | 'removed';
+  deck_name: string | null;
+  deck_kf_id: string | null;
+  slot_number: number | null;
+  created_at: string;
+}
+
 export interface TeamMemberInfo {
   id: number;
   user: UserBrief;

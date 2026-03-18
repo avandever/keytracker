@@ -679,6 +679,23 @@ def serialize_admin_log_entry(entry: LeagueAdminLog) -> dict:
     }
 
 
+def serialize_deck_entry_log_entry(entry) -> dict:
+    week = entry.week
+    week_name = (week.name or f"Week {week.week_number}") if week else None
+    return {
+        "id": entry.id,
+        "week_id": entry.week_id,
+        "week_name": week_name,
+        "target_user": serialize_user_brief(entry.target_user),
+        "changed_by": serialize_user_brief(entry.changed_by),
+        "action": entry.action,
+        "deck_name": entry.deck_name,
+        "deck_kf_id": entry.deck_kf_id,
+        "slot_number": entry.slot_number,
+        "created_at": entry.created_at.isoformat() + "Z" if entry.created_at else None,
+    }
+
+
 def serialize_match_game(game: MatchGame) -> dict:
     return {
         "id": game.id,
