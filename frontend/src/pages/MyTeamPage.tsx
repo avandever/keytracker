@@ -826,7 +826,7 @@ export default function MyTeamPage() {
     return (
       <Card sx={{ mb: 2 }}>
         <CardContent>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2 }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
             <Typography variant="h6">{week.name || `Week ${week.week_number}`}</Typography>
             <Chip label={FORMAT_LABELS[week.format_type] || week.format_type} size="small" variant="outlined" />
             <Chip label={`Bo${week.best_of_n}`} size="small" variant="outlined" />
@@ -1773,7 +1773,7 @@ export default function MyTeamPage() {
   });
 
   return (
-    <Container maxWidth="sm" sx={{ mt: 3 }}>
+    <Container maxWidth="md" sx={{ mt: 3 }}>
       <Typography variant="h4" gutterBottom>{league.name}</Typography>
       <Typography variant="h5" gutterBottom>My Team</Typography>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
