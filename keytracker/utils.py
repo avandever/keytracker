@@ -2341,21 +2341,24 @@ def run_background_card_refresher(app, stop_event=None):
                 if needs_mv_refresh:
                     logger.info(
                         f"Deck {deck.kf_id} ({deck.name}) has {card_count} cards "
-                        f"(expected {min_cards}-{max_cards}), refreshing from MV"
+                        f"(expected {min_cards}-{max_cards}), trying local DoK"
                         f" after {good_decks_in_a_row} good decks in a row"
                     )
                     good_decks_in_a_row = 0
                     try:
-                        refresh_deck_from_mv(deck)
-                        db.session.flush()
+                        ok = _try_add_deck_from_local_dok(deck)
+                        if not ok:
+                            logger.debug(
+                                f"Local DoK has no data for {deck.kf_id}, skipping"
+                            )
+                        else:
+                            db.session.flush()
                     except Exception:
                         logger.exception(
-                            "MV refresh failed for deck %s, sleeping 30s before retry",
+                            "Local DoK refresh failed for deck %s, skipping",
                             deck.kf_id,
                         )
                         db.session.rollback()
-                        time.sleep(30)
-                        continue
                 else:
                     good_decks_in_a_row += 1
                     if good_decks_in_a_row % 100 == 0:
