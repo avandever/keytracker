@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
@@ -31,7 +32,9 @@ import {
   DialogActions,
   Checkbox,
   FormControlLabel,
+  IconButton,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
   getLeague,
   updateTeam,
@@ -103,12 +106,17 @@ const PROPHECY_EXPANSION_ID = 886;
 export default function MyTeamPage() {
   const leagueId = useLeagueNumericId();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [editName, setEditName] = useState('');
-  const [weekTab, setWeekTab] = useState(0);
+  const [weekTab, setWeekTab] = useState(() => {
+    const t = parseInt(searchParams.get('tab') ?? '0', 10);
+    return isNaN(t) ? 0 : t;
+  });
 
   // Available sets for constraint display
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
@@ -839,7 +847,7 @@ export default function MyTeamPage() {
             <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'warning.main', borderRadius: 1 }}>
               <Typography variant="subtitle2" gutterBottom>Feature Player</Typography>
               {currentFeature ? (
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                   <Typography variant="body2">
                     {myTeam.members.find((m) => m.user.id === currentFeature.user_id)?.user.name || `User ${currentFeature.user_id}`}
                   </Typography>
@@ -897,7 +905,7 @@ export default function MyTeamPage() {
                     );
                     const key = `${week.id}-${slot}`;
                     return (
-                      <Box key={slot} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center' }}>
+                      <Box key={slot} sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                         <Typography variant="body2" sx={{ minWidth: 55 }}>Slot {slot}:</Typography>
                         {existingDeck ? (
                           <>
@@ -973,7 +981,7 @@ export default function MyTeamPage() {
                   Thief Phase — Steal {stealCount} deck{stealCount !== 1 ? 's' : ''} from {opponentTeam.name}
                 </Typography>
                 {opponentDecks.map((cd) => (
-                  <Box key={cd.id} sx={{ display: 'flex', gap: 1, mb: 0.5, alignItems: 'center' }}>
+                  <Box key={cd.id} sx={{ display: 'flex', gap: 1, mb: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
                     <Checkbox
                       size="small"
                       checked={selected.includes(cd.id)}
@@ -1038,7 +1046,7 @@ export default function MyTeamPage() {
             );
             if (stolenDecks.length === 0 && leftDecks.length === 0) return null;
             const renderDeckRow = (cd: (typeof stolenDecks)[0]) => (
-              <Box key={cd.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, ml: 1 }}>
+              <Box key={cd.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, ml: 1, flexWrap: 'wrap' }}>
                 {cd.deck?.houses && <HouseIcons houses={cd.deck.houses} />}
                 <Typography variant="body2">{cd.deck?.name || 'Unknown'}</Typography>
                 {cd.deck?.sas_rating != null && (
@@ -1147,7 +1155,7 @@ export default function MyTeamPage() {
                     <Box sx={{ ml: 4, mb: 1 }}>
                       <Typography variant="caption" color="text.secondary">Sealed Pool:</Typography>
                       {pool.map((entry) => (
-                        <Box key={entry.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                        <Box key={entry.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                           {entry.deck?.houses && <HouseIcons houses={entry.deck.houses} />}
                           <Typography variant="body2">{entry.deck?.name || 'Unknown'}</Typography>
                           {entry.deck?.sas_rating != null && (
@@ -1184,7 +1192,7 @@ export default function MyTeamPage() {
                     <Box sx={{ ml: 4, mb: 1 }}>
                       <Typography variant="caption" color="text.secondary">Current Alliance:</Typography>
                       {podSelections.map((s) => (
-                        <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                        <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                           <Chip label={`Pod ${s.slot_number}`} size="small" variant="outlined" />
                           <HouseIcons houses={[s.house_name || '']} />
                           <Typography variant="body2">{s.deck_name || `Deck ${s.deck_id}`} — {s.house_name}</Typography>
@@ -1522,7 +1530,7 @@ export default function MyTeamPage() {
                   const sel = selections.find((s) => s.slot_number === slotNum);
                   if (sel) {
                     return (
-                      <Box key={slotNum} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, ml: 4 }}>
+                      <Box key={slotNum} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, ml: 4, flexWrap: 'wrap' }}>
                         {maxSlots > 1 && <Chip label={`Slot ${slotNum}`} size="small" variant="outlined" />}
                         {sel.deck?.houses && <HouseIcons houses={sel.deck.houses} />}
                         <Typography variant="body2">{sel.deck?.name || 'Unknown'}</Typography>
@@ -1588,7 +1596,7 @@ export default function MyTeamPage() {
                   return (
                     <Box sx={{ ml: 4, mt: 0.5, p: 1, border: 1, borderColor: 'info.main', borderRadius: 1 }}>
                       <Typography variant="caption" color="info.main">Deck they will play:</Typography>
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
                         {opponentSel.deck.houses && <HouseIcons houses={opponentSel.deck.houses} />}
                         <Typography variant="body2">{opponentSel.deck.name}</Typography>
                         {opponentSel.deck.sas_rating != null && (
@@ -1621,7 +1629,7 @@ export default function MyTeamPage() {
                         pm.player1_started && pm.player2_started;
                       return (
                         <Box key={pm.id} sx={{ mb: 1 }}>
-                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                             <Typography variant="body2">
                               {pm.player1.name} vs {pm.player2.name}
                             </Typography>
@@ -1645,7 +1653,7 @@ export default function MyTeamPage() {
                                   <Box key={player.id}>
                                     <Typography variant="caption" color="text.secondary">{player.name}:</Typography>
                                     {playerPods.map((s) => (
-                                      <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.25 }}>
+                                      <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.25, flexWrap: 'wrap' }}>
                                         <HouseIcons houses={[s.house_name || '']} />
                                         <Typography variant="body2">{s.deck_name} — {s.house_name}</Typography>
                                         {s.deck?.mv_url && <Link href={s.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>}
@@ -1675,7 +1683,7 @@ export default function MyTeamPage() {
                                 {isInMatchup && opponentSel?.deck && (
                                   <Box sx={{ mb: 1 }}>
                                     <Typography variant="caption" color="text.secondary">Opponent's deck (you choose a house to purge):</Typography>
-                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5 }}>
+                                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
                                       {opponentSel.deck.houses && <HouseIcons houses={opponentSel.deck.houses} />}
                                       <Typography variant="body2">{opponentSel.deck.name}</Typography>
                                       {opponentSel.deck.sas_rating != null && <Chip label={`SAS: ${opponentSel.deck.sas_rating}`} size="small" variant="outlined" />}
@@ -1774,14 +1782,19 @@ export default function MyTeamPage() {
 
   return (
     <Container maxWidth="md" sx={{ mt: 3 }}>
-      <Typography variant="h4" gutterBottom>{league.name}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 1 }}>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h4">{league.name}</Typography>
+      </Box>
       <Typography variant="h5" gutterBottom>My Team</Typography>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
       <Tabs
         value={weekTab}
-        onChange={(_, v) => { setWeekTab(v); if (v === logTabIdx) handleOpenLogTab(); }}
+        onChange={(_, v) => { setWeekTab(v); setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true }); if (v === logTabIdx) handleOpenLogTab(); }}
         sx={{ mb: 2 }}
         variant="scrollable"
         scrollButtons="auto"

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container, Typography, CircularProgress, Alert, Box, Chip,
   Table, TableHead, TableBody, TableRow, TableCell, LinearProgress, Paper,
+  IconButton,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { getUser } from '../api/users';
 import type { UserStats, KeyStats } from '../types';
 import GameListing from '../components/GameListing';
@@ -49,6 +51,7 @@ function KeyStatsSection({ keyStats }: { keyStats: KeyStats }) {
 
 export default function UserProfilePage() {
   const { username } = useParams<{ username: string }>();
+  const navigate = useNavigate();
   const [user, setUser] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -73,7 +76,12 @@ export default function UserProfilePage() {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 3 }}>
-      <Typography variant="h5" gutterBottom>{user.username}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 1 }}>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h5">{user.username}</Typography>
+      </Box>
       <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
         <Chip label={`${user.games_won} Wins`} color="primary" variant="outlined" />
         <Chip label={`${user.games_lost} Losses`} variant="outlined" />

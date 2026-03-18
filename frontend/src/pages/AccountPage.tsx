@@ -68,7 +68,10 @@ export default function AccountPage() {
   const [country, setCountry] = useState(user?.country || '');
   const [timezone, setTimezone] = useState(user?.timezone || '');
   const [profileSaving, setProfileSaving] = useState(false);
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(() => {
+    const t = parseInt(searchParams.get('tab') ?? '0', 10);
+    return isNaN(t) ? 0 : t;
+  });
   const [mailingLine1, setMailingLine1] = useState(user?.mailing_address_line1 || '');
   const [mailingLine2, setMailingLine2] = useState(user?.mailing_address_line2 || '');
   const [mailingCity, setMailingCity] = useState(user?.mailing_city || '');
@@ -195,7 +198,7 @@ export default function AccountPage() {
           </Typography>
         </Box>
 
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ borderBottom: 1, borderColor: 'divider' }}>
+        <Tabs value={tab} onChange={(_, v) => { setTab(v); setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true }); }} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tab label="My Info" />
           <Tab label="Integrations" />
         </Tabs>

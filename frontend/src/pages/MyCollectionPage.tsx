@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -30,7 +30,11 @@ import { getCollection, getCollectionPods, type CollectionPod } from '../api/col
 import type { AllianceDeckEntry, CollectionDeck } from '../types';
 
 export default function MyCollectionPage() {
-  const [tab, setTab] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => {
+    const t = parseInt(searchParams.get('tab') ?? '0', 10);
+    return isNaN(t) ? 0 : t;
+  });
   const [standard, setStandard] = useState<CollectionDeck[]>([]);
   const [alliance, setAlliance] = useState<AllianceDeckEntry[]>([]);
   const [pods, setPods] = useState<CollectionPod[]>([]);
@@ -126,7 +130,7 @@ export default function MyCollectionPage() {
         </Alert>
       ) : (
         <>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 2 }}>
+          <Tabs value={tab} onChange={(_, v) => { setTab(v); setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true }); }} variant="scrollable" scrollButtons="auto" allowScrollButtonsMobile sx={{ mb: 2 }}>
             <Tab label={`Standard Decks (${total})`} />
             <Tab label={`Alliance Decks (${alliance.length})`} />
             <Tab label="Pods" />

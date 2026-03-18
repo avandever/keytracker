@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -15,8 +15,10 @@ import {
   TableHead,
   TableRow,
   Tooltip,
+  IconButton,
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { getGame } from '../api/games';
 import type { GameDetail, LogEntry, TurnTimingEntry, KeyForgeEvent, TurnSnapshot } from '../types';
 import { alpha } from '@mui/material/styles';
@@ -441,6 +443,7 @@ function VerticalTimeline({
 
 export default function GameDetailPage() {
   const { crucibleGameId } = useParams<{ crucibleGameId: string }>();
+  const navigate = useNavigate();
   const [game, setGame] = useState<GameDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -520,9 +523,14 @@ export default function GameDetailPage() {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 3 }}>
-      <Typography variant="h5" gutterBottom>
-        {players.join(' vs ')}
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 1 }}>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h5">
+          {players.join(' vs ')}
+        </Typography>
+      </Box>
       <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <Chip label={`Winner: ${game.winner}`} sx={(theme) => ({ bgcolor: alpha(theme.palette.primary.main, 0.12), color: theme.palette.primary.dark })} />
         <Chip label={`Keys: ${game.winner_keys} - ${game.loser_keys}`} variant="outlined" />

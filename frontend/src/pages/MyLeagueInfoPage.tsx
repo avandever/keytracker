@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
@@ -26,7 +27,9 @@ import {
   FormControlLabel,
   Link,
   Autocomplete,
+  IconButton,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
   getLeague,
   submitDeckSelection,
@@ -64,12 +67,17 @@ export default function MyLeagueInfoPage() {
   const { user } = useAuth();
   const { testUserId } = useTestUser();
   const effectiveUserId = testUserId ?? user?.id;
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = parseInt(searchParams.get('tab') ?? '0', 10);
+    return isNaN(t) ? 0 : t;
+  });
 
   // Deck selection
   const [deckUrl, setDeckUrl] = useState('');
@@ -1299,14 +1307,22 @@ export default function MyLeagueInfoPage() {
 
   return (
     <Container maxWidth="sm" sx={{ mt: 3 }}>
-      <Typography variant="h4" gutterBottom>{league.name}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 1 }}>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h4">{league.name}</Typography>
+      </Box>
       <Typography variant="h5" gutterBottom>My Info</Typography>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
       <Tabs
         value={activeTab}
-        onChange={(_, v) => setActiveTab(v)}
+        onChange={(_, v) => {
+          setActiveTab(v);
+          setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true });
+        }}
         sx={{ mb: 2 }}
         variant="scrollable"
         scrollButtons="auto"

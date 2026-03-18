@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams, useNavigate } from 'react-router-dom';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
@@ -37,8 +37,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  IconButton,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 function leagueBaseUrl(league: { id: number; url_name?: string | null }) {
   return league.url_name ? `/league/${league.url_name}` : `/league/by_id/${league.id}`;
@@ -58,12 +60,17 @@ const getChipSx = (color: string) => (theme: any) => {
 export default function LeagueDetailPage() {
   const leagueId = useLeagueNumericId();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [errorNeedsProfile, setErrorNeedsProfile] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = parseInt(searchParams.get('tab') ?? '0', 10);
+    return isNaN(t) ? 0 : t;
+  });
   const [signupDialogOpen, setSignupDialogOpen] = useState(false);
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
@@ -213,7 +220,7 @@ export default function LeagueDetailPage() {
 
                   return (
                     <Box key={pm.id} sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
-                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                         <Typography
                           variant="body2"
                           fontWeight={winnerId === pm.player1.id ? 'bold' : 'normal'}
@@ -917,6 +924,9 @@ export default function LeagueDetailPage() {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 1 }}>
+              <ArrowBackIcon />
+            </IconButton>
             <Typography variant="h4">{league.name}</Typography>
             {league.is_test && <Chip label="Test" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.secondary.main, 0.12), color: theme.palette.secondary.dark })} />}
           </Box>
@@ -1034,6 +1044,7 @@ export default function LeagueDetailPage() {
             value={activeTab}
             onChange={(_, v) => {
               setActiveTab(v);
+              setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true });
               // Lazy-load admin log on first activation
               if (v === adminLogIdx && adminLog === null && !adminLogLoading) {
                 setAdminLogLoading(true);

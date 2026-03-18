@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
@@ -36,6 +36,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import {
@@ -172,8 +173,13 @@ export default function LeagueAdminPage() {
   // Week rename: keyed by weekId
   const [weekNames, setWeekNames] = useState<Record<number, string>>({});
 
+  const [searchParams, setSearchParams] = useSearchParams();
+
   // Tabs
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = parseInt(searchParams.get('tab') ?? '0', 10);
+    return isNaN(t) ? 0 : t;
+  });
 
   // Delete dialogs
   const [deleteLeagueDialogOpen, setDeleteLeagueDialogOpen] = useState(false);
@@ -764,7 +770,12 @@ export default function LeagueAdminPage() {
   return (
     <Container maxWidth="md" sx={{ mt: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-        <Typography variant="h4">Admin: {league.name}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 1 }}>
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h4">Admin: {league.name}</Typography>
+        </Box>
         {isSetup && (() => {
           const hasEnoughSignups = league.signups.length >= league.num_teams * league.team_size;
           return (
@@ -783,7 +794,10 @@ export default function LeagueAdminPage() {
 
       <Tabs
         value={activeTab}
-        onChange={(_, v) => setActiveTab(v)}
+        onChange={(_, v) => {
+          setActiveTab(v);
+          setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true });
+        }}
         sx={{ mb: 2 }}
         variant="scrollable"
         scrollButtons="auto"

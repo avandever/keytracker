@@ -842,7 +842,7 @@ export default function StandaloneMatchPage() {
               <Box>
                 <Typography variant="subtitle2" gutterBottom>Your Sealed Pool</Typography>
                 {sealedPool.map((entry) => (
-                  <Box key={entry.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Box key={entry.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
                     <Typography variant="body2">{entry.deck?.name} ({entry.deck?.expansion_name})</Typography>
                     {entry.deck?.houses && <HouseIcons houses={entry.deck.houses} />}
                   </Box>
@@ -880,7 +880,7 @@ export default function StandaloneMatchPage() {
                     <Box key={slot} sx={{ mb: 2 }}>
                       <Typography variant="subtitle2">Deck {slot}</Typography>
                       {sel ? (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                           <Typography variant="body2">{sel.deck?.name}</Typography>
                           <Chip label={`SAS: ${sel.deck?.sas_rating ?? 'N/A'}`} size="small" />
                           {sel.deck?.houses && <HouseIcons houses={sel.deck.houses} />}
@@ -943,7 +943,7 @@ export default function StandaloneMatchPage() {
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle2">Your selections:</Typography>
                 {mySelections.map((s) => (
-                  <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                  <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                     <Typography variant="body2">Slot {s.slot_number}: {s.deck?.name}</Typography>
                     <Chip label={`SAS: ${s.deck?.sas_rating ?? 'N/A'}`} size="small" />
                   </Box>
@@ -955,7 +955,7 @@ export default function StandaloneMatchPage() {
               <Box sx={{ mt: 2 }}>
                 <Typography variant="subtitle2">Your alliance:</Typography>
                 {myPods.filter((p) => p.slot_type === 'pod').sort((a, b) => a.slot_number - b.slot_number).map((p) => (
-                  <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                  <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                     <Chip label={`Pod ${p.slot_number}`} size="small" variant="outlined" />
                     <HouseIcons houses={[p.house_name || '']} />
                     <Typography variant="body2">{p.deck_name}</Typography>
@@ -998,7 +998,7 @@ export default function StandaloneMatchPage() {
                 </Typography>
                 <Typography variant="subtitle2" sx={{ mt: 1 }}>Opponent&apos;s Decks:</Typography>
                 {oppSelections.map((s) => (
-                  <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                     <Typography variant="body2">{s.deck?.name} (SAS: {s.deck?.sas_rating ?? 'N/A'})</Typography>
                     {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
                     <Chip
@@ -1074,7 +1074,7 @@ export default function StandaloneMatchPage() {
                     Secretly choose one of your non-struck decks to play. Picks are revealed simultaneously.
                   </Typography>
                   {myNonStruckSelections.map((s) => (
-                    <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                    <Box key={s.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
                       <Typography variant="body2">{s.deck?.name} (SAS: {s.deck?.sas_rating ?? 'N/A'})</Typography>
                       {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
                       <Chip
@@ -1112,7 +1112,7 @@ export default function StandaloneMatchPage() {
                     <Box key={player.id}>
                       <Typography variant="subtitle2" gutterBottom>{player.name}</Typography>
                       {pods.filter((p) => p.slot_type === 'pod').sort((a, b) => a.slot_number - b.slot_number).map((p) => (
-                        <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                        <Box key={p.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                           <Chip label={`Pod ${p.slot_number}`} size="small" variant="outlined" />
                           <HouseIcons houses={[p.house_name || '']} />
                           <Typography variant="body2">{p.deck_name}</Typography>
@@ -1136,7 +1136,7 @@ export default function StandaloneMatchPage() {
                   <Box>
                     <Typography variant="subtitle2">{match.creator.name}</Typography>
                     {match.creator_selections.map((s) => (
-                      <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                      <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                         <Typography variant="body2" sx={{ textDecoration: strickenIds.has(s.id) ? 'line-through' : 'none' }}>
                           {s.deck?.name}
                         </Typography>
@@ -1208,7 +1208,7 @@ export default function StandaloneMatchPage() {
                           {mySelections.map((s) => {
                             const eligible = myEligible?.includes(s.deck?.db_id ?? -1);
                             return (
-                              <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                              <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                                 <Typography variant="body2" sx={{ textDecoration: eligible ? 'none' : 'line-through', color: eligible ? 'inherit' : 'text.disabled' }}>
                                   {s.deck?.name}
                                 </Typography>
@@ -1223,7 +1223,7 @@ export default function StandaloneMatchPage() {
                           {oppSelections.map((s) => {
                             const eligible = oppEligible?.includes(s.deck?.db_id ?? -1);
                             return (
-                              <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                              <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                                 <Typography variant="body2" sx={{ textDecoration: eligible ? 'none' : 'line-through', color: eligible ? 'inherit' : 'text.disabled' }}>
                                   {s.deck?.name}
                                 </Typography>

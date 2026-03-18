@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -15,7 +15,9 @@ import {
   TableHead,
   TableRow,
   Link,
+  IconButton,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { getDeck } from '../api/decks';
 import type { DeckDetail, KeyStats } from '../types';
 import GameListing from '../components/GameListing';
@@ -62,6 +64,7 @@ function KeyStatsSection({ keyStats }: { keyStats: KeyStats }) {
 export default function DeckDetailPage() {
   const { deckId } = useParams<{ deckId: string }>();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const username = searchParams.get('username') || undefined;
   const [deck, setDeck] = useState<DeckDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +87,12 @@ export default function DeckDetailPage() {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 3 }}>
-      <Typography variant="h5" gutterBottom>{deck.name}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 1 }}>
+          <ArrowBackIcon />
+        </IconButton>
+        <Typography variant="h5">{deck.name}</Typography>
+      </Box>
       <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
         <Chip label={deck.expansion_name} variant="outlined" />
         <Chip label={`${deck.sas_rating ?? '?'} SAS`} color="primary" variant="outlined" />
