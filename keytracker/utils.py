@@ -814,6 +814,23 @@ def _infer_deck_from_log(lines: list, player_name: str) -> Optional["Deck"]:
     return _find_deck_by_cards(card_names)
 
 
+def _infer_deck_from_snapshots(turn_snapshots: list, player_name: str) -> Optional["Deck"]:
+    """Infer a player's deck from card names seen on their board/hand across turn snapshots."""
+    card_names: set = set()
+    for snap in turn_snapshots:
+        boards = snap.get("boards", {}) if isinstance(snap, dict) else {}
+        player_board = boards.get(player_name, [])
+        if isinstance(player_board, list):
+            for card in player_board:
+                if isinstance(card, dict) and card.get("name"):
+                    card_names.add(card["name"])
+        if snap.get("player") == player_name:
+            for card in snap.get("local_hand", []):
+                if isinstance(card, dict) and card.get("name"):
+                    card_names.add(card["name"])
+    return _find_deck_by_cards(card_names) if card_names else None
+
+
 def _find_deck_for_pod(card_names: list, house_name: str) -> Optional["Deck"]:
     """Find the unique deck containing cards from house_name that match card_names."""
     matching_ids = None

@@ -47,6 +47,7 @@ from keytracker.utils import (
     turn_counts_from_logs,
     username_to_player,
     anonymize_game_for_player,
+    _infer_deck_from_snapshots,
 )
 import keytracker.collection_sync as _collection_sync
 from sqlalchemy import or_
@@ -1032,6 +1033,27 @@ def upload_extended():
             )
         )
     db.session.commit()
+
+    # For sealed games (deck names missing), try to infer decks from turn snapshot card data.
+    if game and turn_snapshots and isinstance(turn_snapshots, list):
+        updated = False
+        if not game.winner_deck_name and game.winner:
+            deck = _infer_deck_from_snapshots(turn_snapshots, game.winner)
+            if deck:
+                game.winner_deck = deck
+                game.winner_deck_id = deck.kf_id
+                game.winner_deck_name = deck.name
+                updated = True
+        if not game.loser_deck_name and game.loser:
+            deck = _infer_deck_from_snapshots(turn_snapshots, game.loser)
+            if deck:
+                game.loser_deck = deck
+                game.loser_deck_id = deck.kf_id
+                game.loser_deck_name = deck.name
+                updated = True
+        if updated:
+            db.session.commit()
+
     return jsonify({"success": True}), 201
 
 
