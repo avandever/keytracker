@@ -1,4 +1,4 @@
-workers = 4
+workers = 8
 loglevel = "debug"
 accesslog = "-"
 reload = True
