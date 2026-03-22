@@ -1227,6 +1227,11 @@ def update_sas_scores(deck: Deck, dok_api_key: str = None) -> bool:
         and datetime.datetime.utcnow() - deck.dok.last_refresh < SAS_TD
     ):
         return False
+    if len(deck.cards_from_assoc) < 36:
+        current_app.logger.info(
+            f"Deck {deck.kf_id} has only {len(deck.cards_from_assoc)} cards — refreshing from MV before DoK update"
+        )
+        refresh_deck_from_mv(deck)
     url = os.path.join(DOK_DECK_BASE, deck.kf_id)
     headers = {"Api-Key": dok_api_key} if dok_api_key else DOK_HEADERS
     response = requests.get(url, headers=headers)
