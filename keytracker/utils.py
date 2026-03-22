@@ -1189,6 +1189,7 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
         card_cache = {}
     if TRY_LOCAL_DOK_FOR_DECK_BASE_DATA and _try_add_deck_from_local_dok(deck):
         return
+    mv_fallback = TRY_LOCAL_DOK_FOR_DECK_BASE_DATA
     deck_url = os.path.join(MV_SINGLE_DECK_BASE, deck.kf_id)
     if "keyforgegame.com" in MV_SINGLE_DECK_BASE:
         params = {"links": "cards,notes"}
@@ -1205,6 +1206,8 @@ def refresh_deck_from_mv(deck: Deck, card_cache: Dict = None) -> None:
     card_json = deck_payload["_linked"]["cards"]
     card_details = {c["id"]: c for c in card_json}
     add_one_deck_v2(data, card_details, deck=deck)
+    if mv_fallback:
+        time.sleep(15)
 
 
 def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
