@@ -954,7 +954,7 @@ class Team(db.Model):
     )
     name = db.Column(db.String(200), nullable=False)
     order_number = db.Column(db.Integer, nullable=False)
-    allow_peer_deck_entry = db.Column(db.Boolean, default=False, nullable=False, server_default="0")
+    allow_peer_deck_entry = db.Column(db.Boolean, default=True, nullable=False, server_default="1")
     league = db.relationship("League", back_populates="teams")
     members = db.relationship(
         "TeamMember", back_populates="team", cascade="all, delete-orphan"
