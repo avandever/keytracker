@@ -1119,7 +1119,7 @@ export default function LeagueAdminPage() {
                     </Box>
 
                     {/* Deck selection readiness (while deck selection is open) */}
-                    {['deck_selection', 'team_paired', 'pairing'].includes(week.status) && (() => {
+                    {['deck_selection', 'team_paired', 'pairing', 'published'].includes(week.status) && (() => {
                       const requiredSlots =
                         week.format_type === 'nordic_hexad' ? 6
                         : ['triad', 'triad_short', 'moirai'].includes(week.format_type) ? 3
@@ -1171,7 +1171,7 @@ export default function LeagueAdminPage() {
                     })()}
 
                     {/* Deck selections summary (other statuses) */}
-                    {!['deck_selection', 'team_paired', 'pairing'].includes(week.status) && week.deck_selections.length > 0 && (
+                    {!['deck_selection', 'team_paired', 'pairing', 'published'].includes(week.status) && week.deck_selections.length > 0 && (
                       <Box sx={{ mb: 2 }}>
                         <Typography variant="subtitle2" gutterBottom>Deck Selections ({week.deck_selections.length})</Typography>
                         {week.deck_selections.map((ds) => (
