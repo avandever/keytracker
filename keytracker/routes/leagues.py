@@ -22,6 +22,8 @@ from keytracker.schema import (
     ThiefCurationDeck,
     ThiefSteal,
     FeatureDesignation,
+    FeatureVolunteer,
+    DeckSuggestion,
     SasLadderAssignment,
     TeamDeckEntryLog,
     PodStats,
@@ -3503,6 +3505,153 @@ def clear_feature_designation(league_id, week_id):
             week_id=week.id, team_id=captain_team.id
         ).delete()
 
+    db.session.commit()
+    db.session.refresh(week)
+    viewer = effective if current_user.is_authenticated else None
+    return jsonify(serialize_league_week(week, viewer=viewer))
+
+
+# --- Feature volunteer routes ---
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/feature-volunteer", methods=["POST"]
+)
+@login_required
+def add_feature_volunteer(league_id, week_id):
+    """Toggle the current player's volunteer status for feature player."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+
+    effective = get_effective_user()
+
+    # Find the user's team
+    user_team = None
+    for team in league.teams:
+        if TeamMember.query.filter_by(team_id=team.id, user_id=effective.id).first():
+            user_team = team
+            break
+    if not user_team:
+        return jsonify({"error": "Not a member of any team in this league"}), 403
+
+    existing = FeatureVolunteer.query.filter_by(
+        week_id=week.id, team_id=user_team.id, user_id=effective.id
+    ).first()
+    if existing:
+        db.session.delete(existing)
+    else:
+        db.session.add(
+            FeatureVolunteer(
+                week_id=week.id, team_id=user_team.id, user_id=effective.id
+            )
+        )
+    db.session.commit()
+    db.session.refresh(week)
+    viewer = effective if current_user.is_authenticated else None
+    return jsonify(serialize_league_week(week, viewer=viewer))
+
+
+# --- Deck suggestion routes ---
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/deck-suggestions", methods=["POST"]
+)
+@login_required
+def add_deck_suggestion(league_id, week_id):
+    """Suggest a deck for teammates to consider for this week."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+
+    effective = get_effective_user()
+
+    user_team = None
+    for team in league.teams:
+        if TeamMember.query.filter_by(team_id=team.id, user_id=effective.id).first():
+            user_team = team
+            break
+    if not user_team:
+        return jsonify({"error": "Not a member of any team in this league"}), 403
+
+    data = request.get_json(silent=True) or {}
+    deck_url = data.get("deck_url", "").strip()
+    if not deck_url:
+        return jsonify({"error": "deck_url required"}), 400
+
+    from keytracker.utils import get_deck_by_id_with_zeal
+
+    kf_id = _parse_deck_url(deck_url)
+    if not kf_id:
+        return jsonify({"error": "Could not parse deck ID from URL"}), 400
+
+    deck = get_deck_by_id_with_zeal(kf_id)
+    if not deck:
+        return jsonify({"error": "Deck not found"}), 404
+
+    existing = DeckSuggestion.query.filter_by(
+        week_id=week.id, team_id=user_team.id, deck_id=deck.id
+    ).first()
+    if existing:
+        return jsonify({"error": "This deck has already been suggested for your team"}), 400
+
+    db.session.add(
+        DeckSuggestion(
+            week_id=week.id,
+            team_id=user_team.id,
+            suggesting_user_id=effective.id,
+            deck_id=deck.id,
+        )
+    )
+    db.session.commit()
+    db.session.refresh(week)
+    viewer = effective if current_user.is_authenticated else None
+    return jsonify(serialize_league_week(week, viewer=viewer))
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/deck-suggestions/<int:suggestion_id>",
+    methods=["DELETE"],
+)
+@login_required
+def remove_deck_suggestion(league_id, week_id, suggestion_id):
+    """Remove a deck suggestion (own suggestions, or captain/admin)."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+
+    suggestion = db.session.get(DeckSuggestion, suggestion_id)
+    if not suggestion or suggestion.week_id != week.id:
+        return jsonify({"error": "Suggestion not found"}), 404
+
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
+
+    # Check if user is captain of the suggestion's team
+    is_captain = bool(
+        TeamMember.query.filter_by(
+            team_id=suggestion.team_id, user_id=effective.id, is_captain=True
+        ).first()
+    )
+
+    if (
+        suggestion.suggesting_user_id != effective.id
+        and not is_admin
+        and not is_captain
+    ):
+        return jsonify({"error": "Not authorized to remove this suggestion"}), 403
+
+    db.session.delete(suggestion)
     db.session.commit()
     db.session.refresh(week)
     viewer = effective if current_user.is_authenticated else None

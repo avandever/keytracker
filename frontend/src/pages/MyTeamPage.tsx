@@ -46,6 +46,9 @@ import {
   getSets,
   setFeatureDesignation,
   clearFeatureDesignation,
+  toggleFeatureVolunteer,
+  addDeckSuggestion,
+  removeDeckSuggestion,
   setSasLadderAssignment,
   submitAllianceSelection,
   clearAllianceSelection,
@@ -133,6 +136,8 @@ export default function MyTeamPage() {
 
   // Deck submission state
   const [teammateDeckUrls, setTeammateDeckUrls] = useState<Record<string, string>>({});
+  // Deck suggestion input state: keyed by weekId
+  const [suggestionUrls, setSuggestionUrls] = useState<Record<number, string>>({});
 
   // Sealed pool state: keyed by `${weekId}-${userId}`
   const [sealedPools, setSealedPools] = useState<Record<string, SealedPoolEntry[]>>({});
@@ -624,12 +629,42 @@ export default function MyTeamPage() {
       max_sas: week.max_sas,
       sas_floor: week.sas_floor,
     });
+    // Deck suggestions for the current user's team this week
+    const myTeamForDeckInput = league.teams.find((t) => t.id === league.my_team_id);
+    const suggestions = myTeamForDeckInput
+      ? (week.deck_suggestions ?? []).filter((s) => s.team_id === myTeamForDeckInput.id && s.deck)
+      : [];
     return (
       <Box sx={{ ml: 4, mt: 0.5 }}>
         {isReversal && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
             Submit the deck your opponent will play
           </Typography>
+        )}
+        {suggestions.length > 0 && (
+          <Autocomplete
+            options={suggestions}
+            getOptionLabel={(s) => `${s.deck!.name}${s.deck!.sas_rating != null ? ` (SAS ${s.deck!.sas_rating})` : ''}`}
+            renderOption={(props, s) => (
+              <li {...props} key={s.id}>
+                <Box>
+                  <Typography variant="body2">{s.deck!.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {s.deck!.sas_rating != null ? `SAS ${s.deck!.sas_rating} · ` : ''}
+                    Suggested by {myTeamForDeckInput!.members.find((m) => m.user.id === s.suggesting_user_id)?.user.name ?? `User ${s.suggesting_user_id}`}
+                  </Typography>
+                </Box>
+              </li>
+            )}
+            onChange={(_, s) => {
+              if (s?.deck) setTeammateDeckUrls((prev) => ({ ...prev, [urlKey]: s.deck!.mv_url }));
+            }}
+            size="small"
+            sx={{ mb: 0.5 }}
+            renderInput={(params) => (
+              <TextField {...params} label="Pick from team suggestions" size="small" />
+            )}
+          />
         )}
         {filteredCollection.length > 0 && (
           <Autocomplete
@@ -695,6 +730,39 @@ export default function MyTeamPage() {
     try {
       await clearFeatureDesignation(league.id, weekId);
       refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleToggleVolunteer = async (weekId: number) => {
+    setError('');
+    try {
+      const updated = await toggleFeatureVolunteer(league.id, weekId);
+      setLeague((prev) => prev ? { ...prev, weeks: prev.weeks!.map((w) => w.id === weekId ? updated : w) } : prev);
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleAddSuggestion = async (weekId: number) => {
+    const url = (suggestionUrls[weekId] || '').trim();
+    if (!url) return;
+    setError('');
+    try {
+      const updated = await addDeckSuggestion(league.id, weekId, url);
+      setSuggestionUrls((prev) => ({ ...prev, [weekId]: '' }));
+      setLeague((prev) => prev ? { ...prev, weeks: prev.weeks!.map((w) => w.id === weekId ? updated : w) } : prev);
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleRemoveSuggestion = async (weekId: number, suggestionId: number) => {
+    setError('');
+    try {
+      const updated = await removeDeckSuggestion(league.id, weekId, suggestionId);
+      setLeague((prev) => prev ? { ...prev, weeks: prev.weeks!.map((w) => w.id === weekId ? updated : w) } : prev);
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
     }
@@ -831,6 +899,16 @@ export default function MyTeamPage() {
         .flatMap((w) => w.feature_designations?.filter((fd) => fd.team_id === myTeam.id) ?? [])
         .map((fd) => fd.user_id)
     );
+    // Volunteers for feature player this week (my team)
+    const teamVolunteers = new Set(
+      (week.feature_volunteers ?? [])
+        .filter((fv) => fv.team_id === myTeam.id)
+        .map((fv) => fv.user_id)
+    );
+    const iHaveVolunteered = teamVolunteers.has(user!.id);
+    // Deck suggestions for my team this week
+    const teamSuggestions = (week.deck_suggestions ?? []).filter((s) => s.team_id === myTeam.id);
+    const canSuggest = isWeekEditable;
 
     return (
       <Card sx={{ mb: 2 }}>
@@ -868,6 +946,24 @@ export default function MyTeamPage() {
               ) : (
                 <Typography variant="body2" color="text.secondary">Not yet designated</Typography>
               )}
+              {/* Volunteer button for all team members */}
+              {!currentFeature && (
+                <Box sx={{ mt: 1 }}>
+                  <Button
+                    size="small"
+                    variant={iHaveVolunteered ? 'contained' : 'outlined'}
+                    color="warning"
+                    onClick={() => handleToggleVolunteer(week.id)}
+                  >
+                    {iHaveVolunteered ? 'Volunteered ✓ (withdraw)' : 'Volunteer as Feature Player'}
+                  </Button>
+                  {teamVolunteers.size > 0 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                      Volunteered: {myTeam.members.filter((m) => teamVolunteers.has(m.user.id)).map((m) => m.user.name).join(', ')}
+                    </Typography>
+                  )}
+                </Box>
+              )}
               {isCaptain && (
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1 }}>
                   <FormControl size="small" sx={{ minWidth: 180 }}>
@@ -879,7 +975,9 @@ export default function MyTeamPage() {
                     >
                       {myTeam.members.map((m) => (
                         <MenuItem key={m.user.id} value={m.user.id} disabled={alreadyFeaturedUserIds.has(m.user.id)}>
-                          {m.user.name}{alreadyFeaturedUserIds.has(m.user.id) ? ' (already featured)' : ''}
+                          {m.user.name}
+                          {teamVolunteers.has(m.user.id) ? ' ⭐ volunteered' : ''}
+                          {alreadyFeaturedUserIds.has(m.user.id) ? ' (already featured)' : ''}
                         </MenuItem>
                       ))}
                     </Select>
@@ -1618,6 +1716,56 @@ export default function MyTeamPage() {
               </Box>
             );
           })}
+
+          {/* Deck suggestions */}
+          {(teamSuggestions.length > 0 || canSuggest) && (
+            <Box sx={{ mt: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom>Team Deck Suggestions</Typography>
+              {teamSuggestions.map((s) => {
+                const suggester = myTeam.members.find((m) => m.user.id === s.suggesting_user_id);
+                const canRemove = s.suggesting_user_id === user!.id || isCaptain;
+                return (
+                  <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
+                    <Typography variant="body2">{s.deck?.name || 'Unknown'}</Typography>
+                    {s.deck?.sas_rating != null && (
+                      <Chip label={`SAS ${s.deck.sas_rating}`} size="small" variant="outlined" />
+                    )}
+                    {s.deck && (
+                      <Link href={s.deck.mv_url} target="_blank" rel="noopener" variant="caption">MV</Link>
+                    )}
+                    <Typography variant="caption" color="text.secondary">
+                      (suggested by {suggester?.user.name ?? `User ${s.suggesting_user_id}`})
+                    </Typography>
+                    {canRemove && (
+                      <Button size="small" color="error" onClick={() => handleRemoveSuggestion(week.id, s.id)}>
+                        Remove
+                      </Button>
+                    )}
+                  </Box>
+                );
+              })}
+              {canSuggest && (
+                <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                  <TextField
+                    label="Suggest a deck (DoK/MV URL)"
+                    value={suggestionUrls[week.id] ?? ''}
+                    onChange={(e) => setSuggestionUrls((prev) => ({ ...prev, [week.id]: e.target.value }))}
+                    size="small"
+                    fullWidth
+                    placeholder="https://decksofkeyforge.com/decks/..."
+                  />
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handleAddSuggestion(week.id)}
+                    disabled={!(suggestionUrls[week.id] ?? '').trim()}
+                  >
+                    Suggest
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          )}
 
           {/* Matchups for this week */}
           {week.matchups.length > 0 && (

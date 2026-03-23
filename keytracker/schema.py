@@ -1237,6 +1237,44 @@ class FeatureDesignation(db.Model):
     )
 
 
+class FeatureVolunteer(db.Model):
+    """Player signals willingness to be feature player for a week."""
+
+    __tablename__ = "tracker_feature_volunteer"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+    )
+    team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    week = db.relationship("LeagueWeek", backref="feature_volunteers")
+    __table_args__ = (
+        db.UniqueConstraint("week_id", "team_id", "user_id", name="uq_feature_volunteer"),
+    )
+
+
+class DeckSuggestion(db.Model):
+    """A player suggests a deck for teammates to consider using."""
+
+    __tablename__ = "tracker_deck_suggestion"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+    )
+    team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
+    suggesting_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    deck_id = db.Column(db.Integer, db.ForeignKey("tracker_deck.id"), nullable=False)
+    week = db.relationship("LeagueWeek", backref="deck_suggestions")
+    deck = db.relationship("Deck")
+    __table_args__ = (
+        db.UniqueConstraint(
+            "week_id", "team_id", "deck_id", name="uq_deck_suggestion"
+        ),
+    )
+
+
 class PlayerDeckSelection(db.Model):
     __tablename__ = "tracker_player_deck_selection"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

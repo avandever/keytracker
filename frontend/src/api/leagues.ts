@@ -467,6 +467,43 @@ export async function clearFeatureDesignation(
   return data;
 }
 
+// --- Feature Volunteer ---
+
+export async function toggleFeatureVolunteer(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/feature-volunteer`,
+  );
+  return data;
+}
+
+// --- Deck Suggestions ---
+
+export async function addDeckSuggestion(
+  leagueId: number,
+  weekId: number,
+  deckUrl: string,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/deck-suggestions`,
+    { deck_url: deckUrl },
+  );
+  return data;
+}
+
+export async function removeDeckSuggestion(
+  leagueId: number,
+  weekId: number,
+  suggestionId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.delete(
+    `/leagues/${leagueId}/weeks/${weekId}/deck-suggestions/${suggestionId}`,
+  );
+  return data;
+}
+
 // --- SAS Ladder ---
 
 export async function setSasLadderAssignment(

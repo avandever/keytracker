@@ -424,6 +424,13 @@ export interface LeagueWeek {
   sas_ladder_assignments?: { id: number; user_id: number; team_id: number; rung_number: number }[];
   custom_description?: string | null;
   hide_standard_description?: boolean;
+  feature_volunteers?: { team_id: number; user_id: number }[];
+  deck_suggestions?: {
+    id: number;
+    team_id: number;
+    suggesting_user_id: number;
+    deck: DeckSummary | null;
+  }[];
 }
 
 export interface WeekMatchup {

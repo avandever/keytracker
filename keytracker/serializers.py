@@ -321,6 +321,19 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             {"team_id": fd.team_id, "user_id": fd.user_id}
             for fd in week.feature_designations
         ],
+        "feature_volunteers": [
+            {"team_id": fv.team_id, "user_id": fv.user_id}
+            for fv in week.feature_volunteers
+        ],
+        "deck_suggestions": [
+            {
+                "id": ds.id,
+                "team_id": ds.team_id,
+                "suggesting_user_id": ds.suggesting_user_id,
+                "deck": serialize_deck_summary(ds.deck) if ds.deck else None,
+            }
+            for ds in week.deck_suggestions
+        ],
         "alliance_selections": [
             serialize_alliance_selection(s) for s in alliance_selections
         ],
