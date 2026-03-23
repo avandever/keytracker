@@ -1084,8 +1084,8 @@ export default function LeagueAdminPage() {
                       {renderWeekActions(week)}
                     </Box>
 
-                    {/* Deck selection readiness (during deck_selection status) */}
-                    {week.status === 'deck_selection' && (() => {
+                    {/* Deck selection readiness (while deck selection is open) */}
+                    {['deck_selection', 'team_paired'].includes(week.status) && (() => {
                       const requiredSlots =
                         week.format_type === 'nordic_hexad' ? 6
                         : ['triad', 'triad_short', 'moirai'].includes(week.format_type) ? 3
@@ -1137,7 +1137,7 @@ export default function LeagueAdminPage() {
                     })()}
 
                     {/* Deck selections summary (other statuses) */}
-                    {week.status !== 'deck_selection' && week.deck_selections.length > 0 && (
+                    {!['deck_selection', 'team_paired'].includes(week.status) && week.deck_selections.length > 0 && (
                       <Box sx={{ mb: 2 }}>
                         <Typography variant="subtitle2" gutterBottom>Deck Selections ({week.deck_selections.length})</Typography>
                         {week.deck_selections.map((ds) => (
