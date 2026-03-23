@@ -1082,8 +1082,63 @@ export default function LeagueAdminPage() {
                       {renderWeekActions(week)}
                     </Box>
 
-                    {/* Deck selections summary */}
-                    {week.deck_selections.length > 0 && (
+                    {/* Deck selection readiness (during deck_selection status) */}
+                    {week.status === 'deck_selection' && (() => {
+                      const requiredSlots =
+                        week.format_type === 'nordic_hexad' ? 6
+                        : ['triad', 'triad_short', 'moirai'].includes(week.format_type) ? 3
+                        : ['oubliette', 'adaptive_short', 'exchange'].includes(week.format_type) ? 2
+                        : 1;
+                      const slotsByUser: Record<number, number> = {};
+                      week.deck_selections.forEach((ds) => {
+                        slotsByUser[ds.user_id] = (slotsByUser[ds.user_id] ?? 0) + 1;
+                      });
+                      const featByTeam: Record<number, number> = {};
+                      week.feature_designations.forEach((fd) => {
+                        featByTeam[fd.team_id] = fd.user_id;
+                      });
+                      const showFeature =
+                        league.team_size % 2 === 0 &&
+                        !['thief', 'sas_ladder'].includes(week.format_type);
+                      return (
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="subtitle2" gutterBottom>Deck Selection Readiness</Typography>
+                          {league.teams.map((team) => {
+                            const featUserId = featByTeam[team.id];
+                            const featMember = team.members.find((m) => m.user.id === featUserId);
+                            return (
+                              <Box key={team.id} sx={{ mb: 1 }}>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {team.name}
+                                  {showFeature && (
+                                    featMember
+                                      ? ` — Feature: ${featMember.user.name}`
+                                      : ' — Feature: (not set)'
+                                  )}
+                                </Typography>
+                                {team.members.map((m) => {
+                                  const submitted = slotsByUser[m.user.id] ?? 0;
+                                  const ready = submitted >= requiredSlots;
+                                  return (
+                                    <Typography
+                                      key={m.user.id}
+                                      variant="body2"
+                                      color={ready ? 'success.main' : 'text.secondary'}
+                                      sx={{ ml: 2 }}
+                                    >
+                                      {ready ? '✓' : '○'} {m.user.name} ({submitted}/{requiredSlots})
+                                    </Typography>
+                                  );
+                                })}
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                      );
+                    })()}
+
+                    {/* Deck selections summary (other statuses) */}
+                    {week.status !== 'deck_selection' && week.deck_selections.length > 0 && (
                       <Box sx={{ mb: 2 }}>
                         <Typography variant="subtitle2" gutterBottom>Deck Selections ({week.deck_selections.length})</Typography>
                         {week.deck_selections.map((ds) => (
