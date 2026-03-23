@@ -424,6 +424,7 @@ export default function MyLeagueInfoPage() {
 
             {/* Week constraints */}
             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
+              <Chip label={`Bo${week.best_of_n}`} size="small" variant="outlined" />
               <WeekConstraints week={week} sets={sets} />
             </Box>
             {(() => {
