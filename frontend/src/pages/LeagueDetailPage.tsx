@@ -29,6 +29,7 @@ import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDec
 import type { SignupDiscordStatus } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
+import { getWeekDescription } from '../utils/formatDescriptions';
 import type { AdminLogEntry, AlliancePodEntry, CompletedMatchDecks, DeckExportPlayerData, DeckExportWeek, KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
 import {
   Table,
@@ -202,6 +203,12 @@ export default function LeagueDetailPage() {
           />
           <WeekConstraints week={week} sets={sets} />
         </Box>
+        {(() => {
+          const desc = getWeekDescription(week.format_type, week.custom_description, week.hide_standard_description);
+          return desc ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{desc}</Typography>
+          ) : null;
+        })()}
 
         {/* Matchups and results */}
         {week.matchups.length > 0 ? (

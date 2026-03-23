@@ -44,6 +44,7 @@ import {
 } from '../api/standalone';
 import { getSets } from '../api/leagues';
 import WeekConstraints from '../components/WeekConstraints';
+import { FORMAT_DESCRIPTIONS } from '../utils/formatDescriptions';
 import HouseIcons from '../components/HouseIcons';
 import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
@@ -646,9 +647,14 @@ export default function StandaloneMatchPage() {
       </Box>
 
       {/* Constraints */}
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
         <WeekConstraints week={weekLike} sets={sets} />
       </Box>
+      {FORMAT_DESCRIPTIONS[match.format_type] && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {FORMAT_DESCRIPTIONS[match.format_type]}
+        </Typography>
+      )}
 
       {/* Players */}
       <Card sx={{ mb: 2 }}>

@@ -1567,6 +1567,10 @@ def update_week(league_id, week_id):
             week.sas_ladder_maxes = None
     if "sas_ladder_feature_rung" in data:
         week.sas_ladder_feature_rung = data["sas_ladder_feature_rung"]
+    if "custom_description" in data:
+        week.custom_description = data["custom_description"] or None
+    if "hide_standard_description" in data:
+        week.hide_standard_description = bool(data["hide_standard_description"])
 
     db.session.commit()
     db.session.refresh(week)

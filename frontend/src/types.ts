@@ -422,6 +422,8 @@ export interface LeagueWeek {
   sas_ladder_maxes: number[] | null;
   sas_ladder_feature_rung: number | null;
   sas_ladder_assignments?: { id: number; user_id: number; team_id: number; rung_number: number }[];
+  custom_description?: string | null;
+  hide_standard_description?: boolean;
 }
 
 export interface WeekMatchup {

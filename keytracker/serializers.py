@@ -299,6 +299,8 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "decks_per_player": week.decks_per_player,
         "sealed_pools_generated": week.sealed_pools_generated,
         "no_keycheat": week.no_keycheat,
+        "custom_description": week.custom_description,
+        "hide_standard_description": week.hide_standard_description,
         "thief_floor_team_id": thief_floor_team_id,
         "alliance_restricted_list_version": (
             serialize_restricted_list_version(week.alliance_restricted_list_version)

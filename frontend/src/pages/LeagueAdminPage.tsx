@@ -168,6 +168,9 @@ export default function LeagueAdminPage() {
   // SAS Ladder-specific
   const [weekSasLadderMaxes, setWeekSasLadderMaxes] = useState('');
   const [weekSasLadderFeatureRung, setWeekSasLadderFeatureRung] = useState('');
+  // Description
+  const [weekCustomDescription, setWeekCustomDescription] = useState('');
+  const [weekHideStandardDescription, setWeekHideStandardDescription] = useState(false);
 
   // Week expanded
   const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({});
@@ -400,6 +403,8 @@ export default function LeagueAdminPage() {
     setWeekAllianceRlVersionId(week.alliance_restricted_list_version?.id ?? '');
     setWeekSasLadderMaxes(week.sas_ladder_maxes?.join(',') ?? '');
     setWeekSasLadderFeatureRung(week.sas_ladder_feature_rung != null ? String(week.sas_ladder_feature_rung) : '');
+    setWeekCustomDescription(week.custom_description ?? '');
+    setWeekHideStandardDescription(week.hide_standard_description ?? false);
     setEditingWeekId(week.id);
     setWeekDialogOpen(true);
   };
@@ -428,6 +433,8 @@ export default function LeagueAdminPage() {
         : null,
       sas_ladder_feature_rung: weekFormat === 'sas_ladder' && weekSasLadderFeatureRung
         ? parseInt(weekSasLadderFeatureRung, 10) || null : null,
+      custom_description: weekCustomDescription.trim() || null,
+      hide_standard_description: weekHideStandardDescription,
     };
     try {
       if (editingWeekId !== null) {
@@ -1456,6 +1463,22 @@ export default function LeagueAdminPage() {
                 )}
               </>
             )}
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+            <TextField
+              label="Custom Description (optional)"
+              multiline
+              minRows={2}
+              value={weekCustomDescription}
+              onChange={(e) => setWeekCustomDescription(e.target.value)}
+              size="small"
+              fullWidth
+              placeholder="Additional context shown to players for this week"
+            />
+            <FormControlLabel
+              control={<Checkbox checked={weekHideStandardDescription} onChange={(e) => setWeekHideStandardDescription(e.target.checked)} />}
+              label="Hide standard format description"
+            />
           </Box>
         </DialogContent>
         <DialogActions>

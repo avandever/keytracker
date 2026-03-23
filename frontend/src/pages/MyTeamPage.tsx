@@ -57,6 +57,7 @@ import {
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
+import { getWeekDescription } from '../utils/formatDescriptions';
 import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
 import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo, DeckEntryLogEntry } from '../types';
@@ -841,6 +842,12 @@ export default function MyTeamPage() {
             <Chip label={week.status.replace('_', ' ')} size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
             <WeekConstraints week={week} sets={sets} />
           </Box>
+          {(() => {
+            const desc = getWeekDescription(week.format_type, week.custom_description, week.hide_standard_description);
+            return desc ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{desc}</Typography>
+            ) : null;
+          })()}
 
           {/* Feature player designation (even team_size leagues only) */}
           {showFeature && (

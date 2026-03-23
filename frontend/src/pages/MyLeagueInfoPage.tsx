@@ -45,6 +45,7 @@ import {
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
+import { getWeekDescription } from '../utils/formatDescriptions';
 import type { SealedPoolEntry } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import { useTestUser } from '../contexts/TestUserContext';
@@ -425,6 +426,12 @@ export default function MyLeagueInfoPage() {
             <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
               <WeekConstraints week={week} sets={sets} />
             </Box>
+            {(() => {
+              const desc = getWeekDescription(week.format_type, week.custom_description, week.hide_standard_description);
+              return desc ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1, whiteSpace: 'pre-line' }}>{desc}</Typography>
+              ) : null;
+            })()}
 
             {/* Current selections */}
             {mySelections.length > 0 && (

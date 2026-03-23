@@ -1049,6 +1049,9 @@ class LeagueWeek(db.Model):
     # SAS Ladder-specific
     sas_ladder_maxes = db.Column(db.Text, nullable=True)
     sas_ladder_feature_rung = db.Column(db.Integer, nullable=True)
+    # Description
+    custom_description = db.Column(db.Text, nullable=True)
+    hide_standard_description = db.Column(db.Boolean, nullable=False, default=False)
 
     league = db.relationship("League", backref="weeks")
     alliance_restricted_list_version = db.relationship(
