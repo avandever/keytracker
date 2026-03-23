@@ -39,6 +39,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 import {
   getLeague,
   updateLeague,
@@ -1104,30 +1106,27 @@ export default function LeagueAdminPage() {
                         <Box sx={{ mb: 2 }}>
                           <Typography variant="subtitle2" gutterBottom>Deck Selection Readiness</Typography>
                           {league.teams.map((team) => {
-                            const featUserId = featByTeam[team.id];
-                            const featMember = team.members.find((m) => m.user.id === featUserId);
+                            const hasFeat = team.id in featByTeam;
                             return (
                               <Box key={team.id} sx={{ mb: 1 }}>
-                                <Typography variant="body2" fontWeight="bold">
-                                  {team.name}
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                   {showFeature && (
-                                    featMember
-                                      ? ` — Feature: ${featMember.user.name}`
-                                      : ' — Feature: (not set)'
+                                    hasFeat
+                                      ? <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                                      : <CancelIcon sx={{ fontSize: 16, color: 'error.main' }} />
                                   )}
-                                </Typography>
+                                  <Typography variant="body2" fontWeight="bold">{team.name}</Typography>
+                                </Box>
                                 {team.members.map((m) => {
-                                  const submitted = slotsByUser[m.user.id] ?? 0;
-                                  const ready = submitted >= requiredSlots;
+                                  const ready = (slotsByUser[m.user.id] ?? 0) >= requiredSlots;
                                   return (
-                                    <Typography
-                                      key={m.user.id}
-                                      variant="body2"
-                                      color={ready ? 'success.main' : 'text.secondary'}
-                                      sx={{ ml: 2 }}
-                                    >
-                                      {ready ? '✓' : '○'} {m.user.name} ({submitted}/{requiredSlots})
-                                    </Typography>
+                                    <Box key={m.user.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 2 }}>
+                                      {ready
+                                        ? <CheckCircleIcon sx={{ fontSize: 16, color: 'success.main' }} />
+                                        : <CancelIcon sx={{ fontSize: 16, color: 'error.main' }} />
+                                      }
+                                      <Typography variant="body2">{m.user.name}</Typography>
+                                    </Box>
                                   );
                                 })}
                               </Box>
