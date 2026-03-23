@@ -16,7 +16,7 @@ export const FORMAT_DESCRIPTIONS: Record<string, string> = {
   thief:
     "Your opponent curates a deck for you, and you do the same for them. You may attempt to steal one of the decks they curated — but choose wisely!",
   adaptive:
-    "Submit a deck from your collection; your opponent reveals theirs before you make your final pick.",
+    "A best-of-three where game 1 is played with your own decks, game 2 with your opponent's deck, and game 3 (if needed) involves bidding chains for the right to choose which deck to play.",
   alliance:
     "Build a custom alliance deck from three houses — one from each of three different decks in your collection.",
   sas_ladder:
@@ -24,17 +24,17 @@ export const FORMAT_DESCRIPTIONS: Record<string, string> = {
   reversal:
     "Your opponent will play the deck you submit, and you'll play theirs. Choose accordingly!",
   oubliette:
-    "Submit two decks face-down. After your opponent locks in their hidden choice, reveal and pick which one you'll play.",
+    "Submit two decks and name a banned house. Decks that contain your banned house cannot be used by your opponent — and vice versa.",
   adaptive_short:
-    "Submit two decks. Your opponent assigns one to game 1; you freely choose which to play in game 2.",
+    "A single game where both players bid chains for the right to choose which deck they play. Higher bidder pays the chains cost and picks first.",
   exchange:
-    "Submit two decks — one will go to your opponent to play, and one stays with you.",
+    "Each player secretly names one of their opponent's decks to borrow. You must win using both your own deck and your borrowed deck — but so must your opponent.",
   nordic_hexad:
-    "Submit six decks for a six-game marathon match. May the best collection win!",
+    "Submit six decks. Each player bans one of their opponent's decks, then protects one of their own from being banned, then bans again — leaving four decks each for a four-game series.",
   moirai:
-    "Submit three decks. You assign one of your opponent's decks to each game, and they assign one of yours — the fates decide!",
+    "Submit three decks. Your opponent assigns one of your decks to each game type (archon, reversal, or adaptive short), and you do the same to theirs.",
   tertiate:
-    "Submit three decks. Your opponent assigns one to each game of a three-game match.",
+    "Submit one deck. After pairings are published, each player secretly picks a house to purge from their opponent's deck — that house cannot be used for the match.",
 };
 
 export function getWeekDescription(
