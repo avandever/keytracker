@@ -193,6 +193,9 @@ export default function LeagueAdminPage() {
   // Force-matchup confirmation (when some players haven't submitted decks)
   const [forceMatchupWeekId, setForceMatchupWeekId] = useState<number | null>(null);
   const [forceMatchupMissing, setForceMatchupMissing] = useState<string[]>([]);
+  // Force-publish confirmation (when some players haven't submitted decks)
+  const [forcePublishWeekId, setForcePublishWeekId] = useState<number | null>(null);
+  const [forcePublishMissing, setForcePublishMissing] = useState<string[]>([]);
 
   // Regenerate sealed pools dialog
   const [regenPoolsWeekId, setRegenPoolsWeekId] = useState<number | null>(null);
@@ -486,8 +489,17 @@ export default function LeagueAdminPage() {
           throw matchupErr;
         }
       } else if (action === 'publish') {
-        await publishWeek(league.id, weekId);
-        setSuccess('Week published');
+        try {
+          await publishWeek(league.id, weekId);
+          setSuccess('Week published');
+        } catch (publishErr: any) {
+          if (publishErr.response?.data?.error === 'missing_deck_selections') {
+            setForcePublishWeekId(weekId);
+            setForcePublishMissing(publishErr.response.data.missing_players || []);
+            return;
+          }
+          throw publishErr;
+        }
       } else if (action === 'check_completion') {
         await checkWeekCompletion(league.id, weekId);
         setSuccess('Completion check done');
@@ -501,6 +513,21 @@ export default function LeagueAdminPage() {
         await endThief(league.id, weekId);
         setSuccess('Thief phase ended, deck selection open!');
       }
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleForcePublish = async () => {
+    if (forcePublishWeekId === null) return;
+    const weekId = forcePublishWeekId;
+    setForcePublishWeekId(null);
+    setForcePublishMissing([]);
+    setError('');
+    try {
+      await publishWeek(league.id, weekId, true);
+      setSuccess('Week published');
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -1503,6 +1530,25 @@ export default function LeagueAdminPage() {
         <DialogActions>
           <Button onClick={() => { setForceMatchupWeekId(null); setForceMatchupMissing([]); }}>Cancel</Button>
           <Button onClick={handleForcePlayerMatchups} variant="contained" color="warning">Generate Anyway</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={forcePublishWeekId !== null} onClose={() => { setForcePublishWeekId(null); setForcePublishMissing([]); }}>
+        <DialogTitle>Some Deck Selections Missing</DialogTitle>
+        <DialogContent>
+          <Typography gutterBottom>
+            The following players have not submitted their deck selections:
+          </Typography>
+          <Box component="ul" sx={{ mt: 0, pl: 3 }}>
+            {forcePublishMissing.map((name) => (
+              <li key={name}><Typography variant="body2">{name}</Typography></li>
+            ))}
+          </Box>
+          <Typography>Publish pairings anyway?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setForcePublishWeekId(null); setForcePublishMissing([]); }}>Cancel</Button>
+          <Button onClick={handleForcePublish} variant="contained" color="warning">Publish Anyway</Button>
         </DialogActions>
       </Dialog>
 

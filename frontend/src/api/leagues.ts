@@ -278,8 +278,12 @@ export async function generatePlayerMatchups(
 export async function publishWeek(
   leagueId: number,
   weekId: number,
+  force = false,
 ): Promise<LeagueWeek> {
-  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/publish`);
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/publish`,
+    force ? { force: true } : {},
+  );
   return data;
 }
 

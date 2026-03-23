@@ -2104,9 +2104,13 @@ def publish_week(league_id, week_id):
     if week.status != WeekStatus.PAIRING.value:
         return jsonify({"error": "Week must be in pairing status"}), 400
 
-    # Verify all deck selections are in
+    data = request.get_json(silent=True) or {}
+    force = bool(data.get("force", False))
+
+    # Verify all deck selections are in (skippable with force=true)
     _aw = (WeekFormat.SEALED_ALLIANCE.value, WeekFormat.ALLIANCE.value)
     active_members = _get_active_players(league)
+    missing = []
     for member in active_members:
         if week.format_type in _aw:
             pod_count = AlliancePodSelection.query.filter_by(
@@ -2114,11 +2118,7 @@ def publish_week(league_id, week_id):
             ).count()
             if pod_count < 3:
                 user = db.session.get(User, member.user_id)
-                name = user.name if user else f"User {member.user_id}"
-                return (
-                    jsonify({"error": f"{name} has not forged their alliance"}),
-                    400,
-                )
+                missing.append(user.name if user else f"User {member.user_id}")
         else:
             required_slots = (
                 6
@@ -2148,11 +2148,12 @@ def publish_week(league_id, week_id):
             ).count()
             if selections < required_slots:
                 user = db.session.get(User, member.user_id)
-                name = user.name if user else f"User {member.user_id}"
-                return (
-                    jsonify({"error": f"{name} has not submitted all deck selections"}),
-                    400,
-                )
+                missing.append(user.name if user else f"User {member.user_id}")
+    if missing and not force:
+        return (
+            jsonify({"error": "missing_deck_selections", "missing_players": missing}),
+            400,
+        )
 
     week.status = WeekStatus.PUBLISHED.value
     _log_admin_action(league.id, week.id, get_effective_user().id, "week_published")
