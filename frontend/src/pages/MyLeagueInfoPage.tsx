@@ -120,6 +120,8 @@ export default function MyLeagueInfoPage() {
       .then((l) => {
         if (count === refreshCountRef.current) {
           setLeague(l);
+          setError('');
+          setSuccess('');
         }
       })
       .catch((e) => setError(e.response?.data?.error || e.message))
