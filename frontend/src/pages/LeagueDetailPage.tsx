@@ -30,7 +30,7 @@ import type { SignupDiscordStatus } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
 import { getWeekDescription } from '../utils/formatDescriptions';
-import type { AdminLogEntry, AlliancePodEntry, CompletedMatchDecks, DeckExportPlayerData, DeckExportWeek, KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail } from '../types';
+import type { AdminLogEntry, AlliancePodEntry, CompletedMatchDecks, DeckExportPlayerData, DeckExportWeek, KeyforgeSetInfo, LeagueDetail, LeagueWeek, PlayerMatchupInfo, TeamDetail } from '../types';
 import {
   Table,
   TableBody,
@@ -45,6 +45,62 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 function leagueBaseUrl(league: { id: number; url_name?: string | null }) {
   return league.url_name ? `/league/${league.url_name}` : `/league/by_id/${league.id}`;
+}
+
+function requiredDeckSlots(formatType: string): number {
+  if (['triad', 'triad_short', 'moirai'].includes(formatType)) return 3;
+  if (['oubliette', 'adaptive_short', 'exchange'].includes(formatType)) return 2;
+  if (formatType === 'nordic_hexad') return 6;
+  return 1;
+}
+
+function matchupIsUndecided(pm: PlayerMatchupInfo, bestOfN: number): boolean {
+  const winsNeeded = Math.ceil(bestOfN / 2);
+  const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
+  const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
+  return p1Wins < winsNeeded && p2Wins < winsNeeded;
+}
+
+function computeMyMatchTab(league: LeagueDetail, userId: number): number {
+  const weeks = league.weeks || [];
+  const weekTabStart = 1 + (league.fee_amount != null ? 1 : 0);
+  let deckSelectionWeekIdx: number | null = null;
+
+  for (let i = 0; i < weeks.length; i++) {
+    const week = weeks[i];
+
+    // Priority 1: published week with an active (undecided) match
+    if (week.status === 'published') {
+      for (const wm of week.matchups) {
+        for (const pm of wm.player_matchups) {
+          if (
+            (pm.player1.id === userId || pm.player2.id === userId) &&
+            matchupIsUndecided(pm, week.best_of_n)
+          ) {
+            return weekTabStart + i;
+          }
+        }
+      }
+    }
+
+    // Priority 2: week needing deck selection from this player
+    if (
+      deckSelectionWeekIdx === null &&
+      ['thief', 'deck_selection', 'team_paired', 'pairing'].includes(week.status)
+    ) {
+      const mySelections = week.deck_selections.filter((ds) => ds.user_id === userId);
+      if (mySelections.length < requiredDeckSlots(week.format_type)) {
+        deckSelectionWeekIdx = i;
+      }
+    }
+  }
+
+  if (deckSelectionWeekIdx !== null) return weekTabStart + deckSelectionWeekIdx;
+
+  // Fallback: most recent week
+  if (weeks.length > 0) return weekTabStart + weeks.length - 1;
+
+  return 0;
 }
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -997,8 +1053,17 @@ export default function LeagueDetailPage() {
             Draft Board
           </Button>
         )}
-        {league.my_team_id && (
+        {league.my_team_id && user && (
           <>
+            <Button
+              variant="contained"
+              onClick={() => {
+                const tab = computeMyMatchTab(league, user.id);
+                navigate(`${leagueBaseUrl(league)}/my-info?tab=${tab}`);
+              }}
+            >
+              My Match
+            </Button>
             <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/my-info`}>
               My Info
             </Button>
