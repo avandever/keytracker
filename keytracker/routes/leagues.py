@@ -24,6 +24,8 @@ from keytracker.schema import (
     FeatureDesignation,
     FeatureVolunteer,
     DeckSuggestion,
+    MatchScheduleProposal,
+    MatchScheduleConfirmation,
     SasLadderAssignment,
     TeamDeckEntryLog,
     PodStats,
@@ -4658,6 +4660,184 @@ def start_match(league_id, matchup_id):
     return jsonify(serialize_player_matchup(pm))
 
 
+def _is_captain_of_player(league_id, player_id, user):
+    """Return True if user is a captain on the same team as player_id in this league."""
+    member = (
+        TeamMember.query.join(Team)
+        .filter(Team.league_id == league_id, TeamMember.user_id == player_id)
+        .first()
+    )
+    if not member:
+        return False
+    return (
+        TeamMember.query.filter_by(
+            team_id=member.team_id, user_id=user.id, is_captain=True
+        ).first()
+        is not None
+    )
+
+
+def _can_see_schedule_proposals(league, pm, effective):
+    """Return True if effective can see private schedule proposals for this matchup."""
+    return (
+        effective.id in (pm.player1_id, pm.player2_id)
+        or _is_league_admin(league, effective)
+        or _is_captain_of_player(league.id, pm.player1_id, effective)
+        or _is_captain_of_player(league.id, pm.player2_id, effective)
+    )
+
+
+def _load_match_for_schedule(league_id, matchup_id):
+    """Load and validate league + matchup for schedule endpoints. Returns (league, pm, week, err)."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return None, None, None, err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return None, None, None, (jsonify({"error": "Matchup not found"}), 404)
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return None, None, None, (jsonify({"error": "Matchup not found"}), 404)
+    if week.status != WeekStatus.PUBLISHED.value:
+        return None, None, None, (jsonify({"error": "Week is not published"}), 400)
+    return league, pm, week, None
+
+
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/schedule/propose", methods=["POST"]
+)
+@login_required
+def propose_schedule_times(league_id, matchup_id):
+    league, pm, week, err = _load_match_for_schedule(league_id, matchup_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+    data = request.get_json(silent=True) or {}
+    times_raw = data.get("times", [])
+    if not isinstance(times_raw, list) or not times_raw:
+        return jsonify({"error": "times must be a non-empty list of ISO datetime strings"}), 400
+    import datetime as _dt
+
+    parsed_times = []
+    for t in times_raw:
+        try:
+            dt = _dt.datetime.fromisoformat(t.replace("Z", "+00:00")).replace(tzinfo=None)
+            parsed_times.append(dt)
+        except (ValueError, AttributeError):
+            return jsonify({"error": f"Invalid datetime: {t}"}), 400
+
+    MatchScheduleProposal.query.filter_by(
+        player_matchup_id=pm.id, proposed_by_user_id=effective.id
+    ).delete()
+    for dt in parsed_times:
+        db.session.add(
+            MatchScheduleProposal(
+                player_matchup_id=pm.id,
+                proposed_by_user_id=effective.id,
+                proposed_time=dt,
+            )
+        )
+    db.session.commit()
+    db.session.refresh(pm)
+    return jsonify(
+        serialize_player_matchup(pm, viewer_can_see_proposals=True)
+    )
+
+
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/schedule/proposals", methods=["DELETE"]
+)
+@login_required
+def clear_schedule_proposals(league_id, matchup_id):
+    league, pm, week, err = _load_match_for_schedule(league_id, matchup_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+    MatchScheduleProposal.query.filter_by(
+        player_matchup_id=pm.id, proposed_by_user_id=effective.id
+    ).delete()
+    db.session.commit()
+    db.session.refresh(pm)
+    return jsonify(
+        serialize_player_matchup(pm, viewer_can_see_proposals=True)
+    )
+
+
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/schedule/confirm", methods=["POST"]
+)
+@login_required
+def confirm_schedule_time(league_id, matchup_id):
+    league, pm, week, err = _load_match_for_schedule(league_id, matchup_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+    data = request.get_json(silent=True) or {}
+    time_raw = data.get("time")
+    if not time_raw:
+        return jsonify({"error": "time is required"}), 400
+    import datetime as _dt
+
+    try:
+        requested_dt = _dt.datetime.fromisoformat(
+            time_raw.replace("Z", "+00:00")
+        ).replace(tzinfo=None)
+    except (ValueError, AttributeError):
+        return jsonify({"error": f"Invalid datetime: {time_raw}"}), 400
+
+    opponent_id = pm.player2_id if effective.id == pm.player1_id else pm.player1_id
+    opponent_proposals = MatchScheduleProposal.query.filter_by(
+        player_matchup_id=pm.id, proposed_by_user_id=opponent_id
+    ).all()
+    if not any(p.proposed_time == requested_dt for p in opponent_proposals):
+        return jsonify({"error": "Time not in opponent's proposals"}), 400
+
+    # Upsert confirmation
+    existing = MatchScheduleConfirmation.query.filter_by(player_matchup_id=pm.id).first()
+    if existing:
+        existing.confirmed_time = requested_dt
+        existing.confirmed_by_user_id = effective.id
+    else:
+        db.session.add(
+            MatchScheduleConfirmation(
+                player_matchup_id=pm.id,
+                confirmed_time=requested_dt,
+                confirmed_by_user_id=effective.id,
+            )
+        )
+    db.session.commit()
+    db.session.refresh(pm)
+    return jsonify(
+        serialize_player_matchup(pm, viewer_can_see_proposals=True)
+    )
+
+
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/schedule/confirm", methods=["DELETE"]
+)
+@login_required
+def clear_schedule_confirmation(league_id, matchup_id):
+    league, pm, week, err = _load_match_for_schedule(league_id, matchup_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if effective.id not in (pm.player1_id, pm.player2_id):
+        return jsonify({"error": "You are not in this matchup"}), 403
+    MatchScheduleConfirmation.query.filter_by(player_matchup_id=pm.id).delete()
+    db.session.commit()
+    db.session.refresh(pm)
+    return jsonify(
+        serialize_player_matchup(pm, viewer_can_see_proposals=True)
+    )
+
+
 @blueprint.route("/<int:league_id>/matches/<int:matchup_id>", methods=["GET"])
 def get_match(league_id, matchup_id):
     league, err = _get_league_or_404(league_id)
@@ -4672,7 +4852,8 @@ def get_match(league_id, matchup_id):
         return jsonify({"error": "Matchup not found"}), 404
 
     viewer = get_effective_user() if current_user.is_authenticated else None
-    return jsonify(serialize_player_matchup(pm, viewer=viewer))
+    can_see = viewer is not None and _can_see_schedule_proposals(league, pm, viewer)
+    return jsonify(serialize_player_matchup(pm, viewer=viewer, viewer_can_see_proposals=can_see))
 
 
 # --- Game reporting ---

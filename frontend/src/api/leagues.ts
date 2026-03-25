@@ -666,3 +666,47 @@ export async function getTeamDeckEntryLog(
   const { data } = await apiClient.get(`/leagues/${leagueId}/teams/${teamId}/deck-entry-log`);
   return data;
 }
+
+export async function proposeScheduleTimes(
+  leagueId: number,
+  matchupId: number,
+  times: string[],
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/schedule/propose`,
+    { times },
+  );
+  return data;
+}
+
+export async function clearScheduleProposals(
+  leagueId: number,
+  matchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.delete(
+    `/leagues/${leagueId}/matches/${matchupId}/schedule/proposals`,
+  );
+  return data;
+}
+
+export async function confirmScheduleTime(
+  leagueId: number,
+  matchupId: number,
+  time: string,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/schedule/confirm`,
+    { time },
+  );
+  return data;
+}
+
+export async function clearScheduleConfirmation(
+  leagueId: number,
+  matchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.delete(
+    `/leagues/${leagueId}/matches/${matchupId}/schedule/confirm`,
+  );
+  return data;
+}

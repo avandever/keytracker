@@ -1219,6 +1219,59 @@ class PlayerMatchup(db.Model):
         back_populates="player_matchup",
         cascade="all, delete-orphan",
     )
+    schedule_proposals = db.relationship(
+        "MatchScheduleProposal",
+        back_populates="player_matchup",
+        cascade="all, delete-orphan",
+    )
+    schedule_confirmation = db.relationship(
+        "MatchScheduleConfirmation",
+        back_populates="player_matchup",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class MatchScheduleProposal(db.Model):
+    __tablename__ = "match_schedule_proposal"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_player_matchup.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    proposed_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    proposed_time = db.Column(db.DateTime, nullable=False)  # UTC
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    player_matchup = db.relationship("PlayerMatchup", back_populates="schedule_proposals")
+    proposed_by = db.relationship("User", foreign_keys=[proposed_by_user_id])
+
+
+class MatchScheduleConfirmation(db.Model):
+    __tablename__ = "match_schedule_confirmation"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    player_matchup_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_player_matchup.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    confirmed_time = db.Column(db.DateTime, nullable=False)  # UTC
+    confirmed_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    created_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.datetime.utcnow
+    )
+    player_matchup = db.relationship(
+        "PlayerMatchup", back_populates="schedule_confirmation", uselist=False
+    )
+    confirmed_by = db.relationship("User", foreign_keys=[confirmed_by_user_id])
 
 
 class FeatureDesignation(db.Model):

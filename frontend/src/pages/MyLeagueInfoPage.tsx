@@ -44,6 +44,7 @@ import {
   submitSteals,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
+import MatchSchedulingSection from '../components/MatchSchedulingSection';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import { getWeekDescription } from '../utils/formatDescriptions';
 import type { SealedPoolEntry } from '../api/leagues';
@@ -279,6 +280,24 @@ export default function MyLeagueInfoPage() {
       setError(e.response?.data?.error || e.message);
     }
   };
+
+  const handleMatchupUpdate = useCallback((updatedPm: PlayerMatchupInfo) => {
+    setLeague((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        weeks: prev.weeks.map((w) => ({
+          ...w,
+          matchups: w.matchups.map((wm) => ({
+            ...wm,
+            player_matchups: wm.player_matchups.map((pm) =>
+              pm.id === updatedPm.id ? updatedPm : pm,
+            ),
+          })),
+        })),
+      };
+    });
+  }, []);
 
   const handleReportGame = async (matchupId: number, pm: PlayerMatchupInfo) => {
     if (!reportWinnerId) return;
@@ -1081,6 +1100,15 @@ export default function MyLeagueInfoPage() {
                 <Button variant="contained" onClick={() => handleStartMatch(myMatchup.id)} sx={{ mb: 2 }}>
                   Start Match
                 </Button>
+              )}
+
+              {effectiveUserId && !isMatchDecided(myMatchup, week.best_of_n) && (
+                <MatchSchedulingSection
+                  leagueId={league.id}
+                  pm={myMatchup}
+                  myUserId={effectiveUserId}
+                  onUpdate={handleMatchupUpdate}
+                />
               )}
 
               {/* Triad Strike Phase */}

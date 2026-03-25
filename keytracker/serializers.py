@@ -391,7 +391,7 @@ def serialize_week_matchup(
     }
 
 
-def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
+def serialize_player_matchup(pm: PlayerMatchup, viewer=None, viewer_can_see_proposals: bool = False) -> dict:
     from keytracker.match_helpers import get_adaptive_winning_deck_player_id
 
     data = {
@@ -578,6 +578,25 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None) -> dict:
         if len(tertiate_purges_raw) == 2
         else []
     )
+
+    # Schedule: confirmed time always visible; proposals restricted until confirmed
+    confirmation = getattr(pm, "schedule_confirmation", None)
+    data["schedule_confirmed_time"] = (
+        confirmation.confirmed_time.isoformat() + "Z" if confirmation else None
+    )
+    proposals_raw = getattr(pm, "schedule_proposals", [])
+    show_proposals = bool(confirmation) or viewer_can_see_proposals
+    if show_proposals:
+        from collections import defaultdict
+
+        by_user: dict = defaultdict(list)
+        for p in proposals_raw:
+            by_user[p.proposed_by_user_id].append(p.proposed_time.isoformat() + "Z")
+        data["schedule_proposals"] = [
+            {"user_id": uid, "times": times} for uid, times in by_user.items()
+        ]
+    else:
+        data["schedule_proposals"] = []
 
     return data
 
