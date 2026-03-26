@@ -4875,8 +4875,14 @@ def report_game(league_id, matchup_id):
     if week.status != WeekStatus.PUBLISHED.value:
         return jsonify({"error": "Week is not published"}), 400
 
-    # Both players must have started
-    if not pm.player1_started or not pm.player2_started:
+    # For formats with pre-match actions, both players must have started first
+    NEEDS_START = {
+        WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value, WeekFormat.TERTIATE.value,
+        WeekFormat.ADAPTIVE.value, WeekFormat.ADAPTIVE_SHORT.value,
+        WeekFormat.OUBLIETTE.value, WeekFormat.NORDIC_HEXAD.value,
+        WeekFormat.EXCHANGE.value, WeekFormat.MOIRAI.value,
+    }
+    if week.format_type in NEEDS_START and (not pm.player1_started or not pm.player2_started):
         return jsonify({"error": "Both players must start before reporting games"}), 400
 
     effective = get_effective_user()
