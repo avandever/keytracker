@@ -190,6 +190,24 @@ export default function MyLeagueInfoPage() {
     return () => clearInterval(interval);
   }, [refresh]);
 
+  const handleMatchupUpdate = useCallback((updatedPm: PlayerMatchupInfo) => {
+    setLeague((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        weeks: prev.weeks.map((w) => ({
+          ...w,
+          matchups: w.matchups.map((wm) => ({
+            ...wm,
+            player_matchups: wm.player_matchups.map((pm) =>
+              pm.id === updatedPm.id ? updatedPm : pm,
+            ),
+          })),
+        })),
+      };
+    });
+  }, []);
+
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
   if (error && !league) return <Container sx={{ mt: 3 }}><Alert severity="error">{error}</Alert></Container>;
   if (!league || !user) return null;
@@ -285,24 +303,6 @@ export default function MyLeagueInfoPage() {
       setError(e.response?.data?.error || e.message);
     }
   };
-
-  const handleMatchupUpdate = useCallback((updatedPm: PlayerMatchupInfo) => {
-    setLeague((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        weeks: prev.weeks.map((w) => ({
-          ...w,
-          matchups: w.matchups.map((wm) => ({
-            ...wm,
-            player_matchups: wm.player_matchups.map((pm) =>
-              pm.id === updatedPm.id ? updatedPm : pm,
-            ),
-          })),
-        })),
-      };
-    });
-  }, []);
 
   const handleReportGame = async (matchupId: number, pm: PlayerMatchupInfo) => {
     if (!reportWinnerId) return;
