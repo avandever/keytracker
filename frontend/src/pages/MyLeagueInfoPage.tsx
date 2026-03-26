@@ -167,7 +167,7 @@ export default function MyLeagueInfoPage() {
   const leagueRef = useRef<LeagueDetail | null>(null);
   leagueRef.current = league;
 
-  // Poll while any published week has an active (started but undecided) match
+  // Poll while any published week has an active (undecided) match
   useEffect(() => {
     const interval = setInterval(() => {
       const l = leagueRef.current;
@@ -176,7 +176,6 @@ export default function MyLeagueInfoPage() {
         if (week.status !== 'published') return false;
         for (const wm of week.matchups) {
           for (const pm of wm.player_matchups) {
-            if (!pm.player1_started || !pm.player2_started) continue;
             const winsNeeded = Math.ceil(week.best_of_n / 2);
             const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
             const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
@@ -430,9 +429,18 @@ export default function MyLeagueInfoPage() {
     return p1Wins >= winsNeeded || p2Wins >= winsNeeded;
   };
 
+  // Formats that need both players to click Start Match before deck info is shown
+  // and pre-match actions (strikes, purges, bids, etc.) can proceed.
+  const NEEDS_START_MATCH = new Set([
+    'triad', 'triad_short', 'tertiate', 'adaptive', 'adaptive_short',
+    'oubliette', 'nordic_hexad', 'exchange', 'moirai',
+  ]);
+
   const renderWeekContent = (week: LeagueWeek) => {
     const mySelections = getMySelections(week);
     const myMatchup = getMyMatchup(week);
+    const needsStart = NEEDS_START_MATCH.has(week.format_type);
+    const isCaptain = myMember?.is_captain ?? false;
     const canSelectDeck = week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
     const maxSlots = week.format_type === 'triad' ? 3 : 1;
 
@@ -1099,26 +1107,28 @@ export default function MyLeagueInfoPage() {
                 </Box>
               </Box>
 
-              {/* Start status */}
-              <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                <Chip
-                  label={`${myMatchup.player1.name}: ${myMatchup.player1_started ? 'Ready' : 'Not started'}`}
-                  size="small"
-                  sx={myMatchup.player1_started ? (theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark }) : undefined}
-                />
-                <Chip
-                  label={`${myMatchup.player2.name}: ${myMatchup.player2_started ? 'Ready' : 'Not started'}`}
-                  size="small"
-                  sx={myMatchup.player2_started ? (theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark }) : undefined}
-                />
-              </Box>
-
-              {/* Start button */}
-              {((myMatchup.player1.id === effectiveUserId && !myMatchup.player1_started) ||
-                (myMatchup.player2.id === effectiveUserId && !myMatchup.player2_started)) && (
-                <Button variant="contained" onClick={() => handleStartMatch(myMatchup.id)} sx={{ mb: 2 }}>
-                  Start Match
-                </Button>
+              {/* Start status + button — only for formats with pre-match actions */}
+              {needsStart && (
+                <>
+                  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+                    <Chip
+                      label={`${myMatchup.player1.name}: ${myMatchup.player1_started ? 'Ready' : 'Not started'}`}
+                      size="small"
+                      sx={myMatchup.player1_started ? (theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark }) : undefined}
+                    />
+                    <Chip
+                      label={`${myMatchup.player2.name}: ${myMatchup.player2_started ? 'Ready' : 'Not started'}`}
+                      size="small"
+                      sx={myMatchup.player2_started ? (theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark }) : undefined}
+                    />
+                  </Box>
+                  {((myMatchup.player1.id === effectiveUserId && !myMatchup.player1_started) ||
+                    (myMatchup.player2.id === effectiveUserId && !myMatchup.player2_started)) && (
+                    <Button variant="contained" onClick={() => handleStartMatch(myMatchup.id)} sx={{ mb: 2 }}>
+                      Start Match
+                    </Button>
+                  )}
+                </>
               )}
 
               {effectiveUserId && !isMatchDecided(myMatchup, week.best_of_n) && (
@@ -1231,7 +1241,7 @@ export default function MyLeagueInfoPage() {
               )}
 
               {/* Game reporting */}
-              {myMatchup.player1_started && myMatchup.player2_started &&
+              {(!needsStart || (myMatchup.player1_started && myMatchup.player2_started)) &&
                 !isMatchDecided(myMatchup, week.best_of_n) &&
                 (week.format_type !== 'triad' || myMatchup.strikes.length >= 2) && (
                 <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
@@ -1355,6 +1365,84 @@ export default function MyLeagueInfoPage() {
         {!myMatchup && week.status === 'published' && (
           <Alert severity="info">No matchup assigned for this week.</Alert>
         )}
+
+        {/* Captain: report on behalf of team members */}
+        {isCaptain && week.status === 'published' && (() => {
+          const teamMatchups: PlayerMatchupInfo[] = [];
+          for (const wm of week.matchups) {
+            const myTeamId = myTeam.id;
+            if (wm.team1.id !== myTeamId && wm.team2.id !== myTeamId) continue;
+            for (const pm of wm.player_matchups) {
+              if (pm.player1.id === effectiveUserId || pm.player2.id === effectiveUserId) continue;
+              if (!isMatchDecided(pm, week.best_of_n)) teamMatchups.push(pm);
+            }
+          }
+          if (teamMatchups.length === 0) return null;
+          return (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom fontWeight="bold">Team Match Reporting</Typography>
+              {teamMatchups.map((pm) => (
+                <Card key={pm.id} sx={{ mb: 2 }}>
+                  <CardContent>
+                    <Typography variant="subtitle2" gutterBottom>
+                      {pm.player1.name} vs {pm.player2.name}
+                    </Typography>
+                    {pm.games.length > 0 && (
+                      <Box sx={{ mb: 1 }}>
+                        {pm.games.map((g) => {
+                          const winner = g.winner_id === pm.player1.id ? pm.player1 : pm.player2;
+                          return (
+                            <Typography key={g.id} variant="body2">
+                              Game {g.game_number}: {winner.name} won ({g.player1_keys}-{g.player2_keys})
+                            </Typography>
+                          );
+                        })}
+                      </Box>
+                    )}
+                    {(!needsStart || (pm.player1_started && pm.player2_started)) && (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, mt: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Report Game {pm.games.length + 1}</Typography>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Winner</InputLabel>
+                          <Select
+                            value={reportWinnerId}
+                            label="Winner"
+                            onChange={(e) => setReportWinnerId(e.target.value as number)}
+                          >
+                            <MenuItem value={pm.player1.id}>{pm.player1.name}</MenuItem>
+                            <MenuItem value={pm.player2.id}>{pm.player2.name}</MenuItem>
+                          </Select>
+                        </FormControl>
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                          <FormControl size="small" sx={{ flex: 1 }}>
+                            <InputLabel>Winner Keys</InputLabel>
+                            <Select value={reportWinnerKeys} label="Winner Keys" onChange={(e) => setReportWinnerKeys(e.target.value)}>
+                              {[0, 1, 2, 3].map((k) => <MenuItem key={k} value={String(k)}>{k}</MenuItem>)}
+                            </Select>
+                          </FormControl>
+                          <FormControl size="small" sx={{ flex: 1 }}>
+                            <InputLabel>Loser Keys</InputLabel>
+                            <Select value={reportLoserKeys} label="Loser Keys" onChange={(e) => setReportLoserKeys(e.target.value)}>
+                              {[0, 1, 2, 3].map((k) => <MenuItem key={k} value={String(k)}>{k}</MenuItem>)}
+                            </Select>
+                          </FormControl>
+                        </Box>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          disabled={!reportWinnerId}
+                          onClick={() => handleReportGame(pm.id, pm)}
+                        >
+                          Report Game
+                        </Button>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </Box>
+          );
+        })()}
       </Box>
     );
   };
