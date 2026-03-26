@@ -109,6 +109,9 @@ export default function MyLeagueInfoPage() {
   const [allianceTokenDeckId, setAllianceTokenDeckId] = useState(0);
   const [allianceProphecyDeckId, setAllianceProphecyDeckId] = useState(0);
 
+  // Deck removal confirmation state
+  const [removePending, setRemovePending] = useState<{ weekId: number; slot: number } | null>(null);
+
   // Thief: steal selection (curation deck IDs) and pool deck selection
   const [thiefSteals, setThiefSteals] = useState<number[]>([]);
   const [thiefDeckId, setThiefDeckId] = useState<number | ''>('');
@@ -249,9 +252,11 @@ export default function MyLeagueInfoPage() {
     setError('');
     try {
       await removeDeckSelection(league.id, weekId, slot);
+      setRemovePending(null);
       setSuccess('Deck removed');
       refresh();
     } catch (e: any) {
+      setRemovePending(null);
       setError(e.response?.data?.error || e.message);
     }
   };
@@ -485,9 +490,23 @@ export default function MyLeagueInfoPage() {
                       )}
                       {isStruck && <Chip label="Struck" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.error.main, 0.12), color: theme.palette.error.dark })} />}
                       {canSelectDeck && (
-                        <Button size="small" color="error" onClick={() => handleRemoveDeck(week.id, sel.slot_number)}>
-                          Remove
-                        </Button>
+                        <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {removePending?.weekId === week.id && removePending?.slot === sel.slot_number ? (
+                            <>
+                              <Typography variant="caption" color="error">Remove deck?</Typography>
+                              <Button size="small" color="error" variant="contained" onClick={() => handleRemoveDeck(week.id, sel.slot_number)}>
+                                Yes
+                              </Button>
+                              <Button size="small" onClick={() => setRemovePending(null)}>
+                                No
+                              </Button>
+                            </>
+                          ) : (
+                            <Button size="small" color="error" onClick={() => setRemovePending({ weekId: week.id, slot: sel.slot_number })}>
+                              Remove
+                            </Button>
+                          )}
+                        </Box>
                       )}
                     </Box>
                   );
