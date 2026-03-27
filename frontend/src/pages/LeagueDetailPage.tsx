@@ -314,7 +314,7 @@ export default function LeagueDetailPage() {
                         {!isComplete && pm.player1_started && pm.player2_started && (
                           <Chip label="In progress" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
                         )}
-                        {!pm.player1_started || !pm.player2_started ? (
+                        {!isComplete && (!pm.player1_started || !pm.player2_started) ? (
                           <Chip label="Not started" size="small" />
                         ) : null}
                       </Box>
