@@ -324,8 +324,8 @@ export default function MyLeagueInfoPage() {
       });
       setSuccess('Game reported!');
       setReportWinnerId('');
-      setReportWinnerKeys('3');
-      setReportLoserKeys('0');
+      setReportWinnerKeys('');
+      setReportLoserKeys('');
       setReportWentToTime(false);
       setReportLoserConceded(false);
       setReportP1DeckId('');
