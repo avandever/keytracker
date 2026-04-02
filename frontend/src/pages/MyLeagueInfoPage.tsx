@@ -37,6 +37,7 @@ import {
   startMatch,
   reportGame,
   submitStrike,
+  submitTertiatePurge,
   getSealedPool,
   getSets,
   submitAllianceSelection,
@@ -92,11 +93,13 @@ export default function MyLeagueInfoPage() {
   const [reportLoserKeys, setReportLoserKeys] = useState('0');
   const [reportWentToTime, setReportWentToTime] = useState(false);
   const [reportLoserConceded, setReportLoserConceded] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
 
   const [reportLog, setReportLog] = useState('');
 
   // Triad: strike selection and deck pickers
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
+  const [tertiateHouseSelection, setTertiateHouseSelection] = useState('');
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
   const [reportP2DeckId, setReportP2DeckId] = useState<number | ''>('');
 
@@ -292,6 +295,20 @@ export default function MyLeagueInfoPage() {
     }
   };
 
+  const handleSubmitTertiatePurge = async (matchupId: number) => {
+    if (!tertiateHouseSelection) return;
+    setError('');
+    setSuccess('');
+    try {
+      const updatedPm = await submitTertiatePurge(league.id, matchupId, tertiateHouseSelection);
+      setSuccess('House purge submitted!');
+      setTertiateHouseSelection('');
+      handleMatchupUpdate(updatedPm);
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const handleStartMatch = async (matchupId: number) => {
     setError('');
     try {
@@ -304,7 +321,8 @@ export default function MyLeagueInfoPage() {
   };
 
   const handleReportGame = async (matchupId: number, pm: PlayerMatchupInfo) => {
-    if (!reportWinnerId) return;
+    if (!reportWinnerId || reportSubmitting) return;
+    setReportSubmitting(true);
     setError('');
     setSuccess('');
     try {
@@ -334,6 +352,8 @@ export default function MyLeagueInfoPage() {
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
+    } finally {
+      setReportSubmitting(false);
     }
   };
 
@@ -1110,17 +1130,19 @@ export default function MyLeagueInfoPage() {
               {/* Start status + button — only for formats with pre-match actions */}
               {needsStart && (
                 <>
-                  <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-                    <Chip
-                      label={`${myMatchup.player1.name}: ${myMatchup.player1_started ? 'Ready' : 'Not started'}`}
-                      size="small"
-                      sx={myMatchup.player1_started ? (theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark }) : undefined}
-                    />
-                    <Chip
-                      label={`${myMatchup.player2.name}: ${myMatchup.player2_started ? 'Ready' : 'Not started'}`}
-                      size="small"
-                      sx={myMatchup.player2_started ? (theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark }) : undefined}
-                    />
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 2 }}>
+                    {[myMatchup.player1, myMatchup.player2].map((player) => {
+                      const started = player.id === myMatchup.player1.id ? myMatchup.player1_started : myMatchup.player2_started;
+                      return (
+                        <Typography key={player.id} variant="body2">
+                          <strong>{player.name}:</strong>{' '}
+                          {started
+                            ? <Box component="span" sx={{ color: 'success.main' }}>Ready!</Box>
+                            : <Box component="span" sx={{ color: 'error.main' }}>Waiting for player to choose Start Match</Box>
+                          }
+                        </Typography>
+                      );
+                    })}
                   </Box>
                   {((myMatchup.player1.id === effectiveUserId && !myMatchup.player1_started) ||
                     (myMatchup.player2.id === effectiveUserId && !myMatchup.player2_started)) && (
@@ -1210,6 +1232,72 @@ export default function MyLeagueInfoPage() {
                 );
               })()}
 
+              {/* Tertiate House Purge Phase */}
+              {week.format_type === 'tertiate' && myMatchup.player1_started && myMatchup.player2_started && (() => {
+                const myPurge = (myMatchup.tertiate_purge_choices || []).find((p) => p.choosing_user_id === effectiveUserId);
+                const bothRevealed = (myMatchup.tertiate_purge_choices || []).length === 2;
+                const opponentId = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.id : myMatchup.player1.id;
+                const opponentSel = week.deck_selections.find((ds) => ds.user_id === opponentId && ds.slot_number === 1);
+                const opponentHouses = opponentSel?.deck?.houses || [];
+                return (
+                  <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                    <Typography variant="subtitle2" gutterBottom>House Purge Phase</Typography>
+                    {opponentSel?.deck && (
+                      <Box sx={{ mb: 1 }}>
+                        <Typography variant="body2" color="text.secondary">Opponent's deck (choose a house to purge):</Typography>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
+                          {opponentSel.deck.houses && <HouseIcons houses={opponentSel.deck.houses} />}
+                          <Typography variant="body2">{opponentSel.deck.name}</Typography>
+                          {opponentSel.deck.sas_rating != null && <Chip label={`SAS: ${opponentSel.deck.sas_rating}`} size="small" variant="outlined" />}
+                          {opponentSel.deck.mv_url && <Link href={opponentSel.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>}
+                          {opponentSel.deck.dok_url && <Link href={opponentSel.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>}
+                        </Box>
+                      </Box>
+                    )}
+                    {!myPurge && !bothRevealed && opponentHouses.length > 0 ? (
+                      <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                        <FormControl size="small" sx={{ minWidth: 160 }}>
+                          <InputLabel>House to purge</InputLabel>
+                          <Select
+                            label="House to purge"
+                            value={tertiateHouseSelection}
+                            onChange={(e) => setTertiateHouseSelection(e.target.value)}
+                          >
+                            {opponentHouses.map((h) => <MenuItem key={h} value={h}>{h}</MenuItem>)}
+                          </Select>
+                        </FormControl>
+                        <Button
+                          variant="outlined"
+                          color="error"
+                          size="small"
+                          disabled={!tertiateHouseSelection}
+                          onClick={() => handleSubmitTertiatePurge(myMatchup.id)}
+                        >
+                          Purge House
+                        </Button>
+                      </Box>
+                    ) : myPurge && !bothRevealed ? (
+                      <Typography variant="body2" color="text.secondary">
+                        You purged <strong>{myPurge.purged_house}</strong>. Waiting for opponent...
+                      </Typography>
+                    ) : bothRevealed ? (
+                      <Box>
+                        {(myMatchup.tertiate_purge_choices || []).map((p) => {
+                          const chooser = p.choosing_user_id === myMatchup.player1.id ? myMatchup.player1 : myMatchup.player2;
+                          const victimId = p.choosing_user_id === myMatchup.player1.id ? myMatchup.player2.id : myMatchup.player1.id;
+                          const victimSel = week.deck_selections.find((ds) => ds.user_id === victimId && ds.slot_number === 1);
+                          return (
+                            <Typography key={p.choosing_user_id} variant="body2">
+                              {chooser.name} purged <strong>{p.purged_house}</strong> from {victimSel?.deck?.name || "opponent's deck"}
+                            </Typography>
+                          );
+                        })}
+                      </Box>
+                    ) : null}
+                  </Box>
+                );
+              })()}
+
               {/* Games played */}
               {myMatchup.games.length > 0 && (
                 <Box sx={{ mb: 2 }}>
@@ -1243,9 +1331,19 @@ export default function MyLeagueInfoPage() {
               {/* Game reporting */}
               {(!needsStart || (myMatchup.player1_started && myMatchup.player2_started)) &&
                 !isMatchDecided(myMatchup, week.best_of_n) &&
-                (week.format_type !== 'triad' || myMatchup.strikes.length >= 2) && (
+                (week.format_type !== 'triad' || myMatchup.strikes.length >= 2) &&
+                (week.format_type !== 'tertiate' || (myMatchup.tertiate_purge_choices || []).length >= 2) && (
                 <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>Report Game {myMatchup.games.length + 1}</Typography>
+                  {myMatchup.games.length > 0 && (() => {
+                    const lastGame = myMatchup.games[myMatchup.games.length - 1];
+                    const lastWinner = lastGame.winner_id === myMatchup.player1.id ? myMatchup.player1 : myMatchup.player2;
+                    return (
+                      <Alert severity="info" sx={{ mb: 1 }}>
+                        Game {lastGame.game_number} already recorded: <strong>{lastWinner.name}</strong> won ({lastGame.player1_keys}–{lastGame.player2_keys} keys). Only submit below if this is a <em>new</em> game.
+                      </Alert>
+                    );
+                  })()}
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Winner</InputLabel>
@@ -1347,7 +1445,7 @@ export default function MyLeagueInfoPage() {
                     <Button
                       variant="contained"
                       onClick={() => handleReportGame(myMatchup.id, myMatchup)}
-                      disabled={!reportWinnerId}
+                      disabled={!reportWinnerId || reportSubmitting}
                     >
                       Report Game
                     </Button>
@@ -1402,6 +1500,15 @@ export default function MyLeagueInfoPage() {
                     {(!needsStart || (pm.player1_started && pm.player2_started)) && (
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, mt: 1 }}>
                         <Typography variant="caption" color="text.secondary">Report Game {pm.games.length + 1}</Typography>
+                        {pm.games.length > 0 && (() => {
+                          const lastGame = pm.games[pm.games.length - 1];
+                          const lastWinner = lastGame.winner_id === pm.player1.id ? pm.player1 : pm.player2;
+                          return (
+                            <Alert severity="info" sx={{ py: 0.5 }}>
+                              Game {lastGame.game_number} already recorded: <strong>{lastWinner.name}</strong> won ({lastGame.player1_keys}–{lastGame.player2_keys} keys).
+                            </Alert>
+                          );
+                        })()}
                         <FormControl fullWidth size="small">
                           <InputLabel>Winner</InputLabel>
                           <Select
@@ -1430,7 +1537,7 @@ export default function MyLeagueInfoPage() {
                         <Button
                           variant="contained"
                           size="small"
-                          disabled={!reportWinnerId}
+                          disabled={!reportWinnerId || reportSubmitting}
                           onClick={() => handleReportGame(pm.id, pm)}
                         >
                           Report Game
