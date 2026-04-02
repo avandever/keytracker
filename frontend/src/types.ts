@@ -481,7 +481,6 @@ export interface PlayerMatchupInfo {
   nordic_p2_remaining_deck_ids?: number[] | null;
   moirai_assignments_count?: number | null;
   moirai_assignments?: MoiraiAssignmentInfo[] | null;
-  tertiate_purge_choices_count?: number;
   tertiate_purge_choices?: TertiatePurgeChoiceInfo[];
   schedule_confirmed_time?: string | null;
   schedule_proposals?: { user_id: number; times: string[] }[];
@@ -512,6 +511,7 @@ export interface MoiraiAssignmentInfo {
 export interface TertiatePurgeChoiceInfo {
   choosing_user_id: number;
   purged_house: string;
+  game_number: number;
 }
 
 export interface DeckSelectionInfo {

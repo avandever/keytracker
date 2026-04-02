@@ -1821,23 +1821,27 @@ export default function MyTeamPage() {
                             </Box>
                           )}
 
-                          {/* Tertiate: show opponent deck + house purge UI */}
+                          {/* Tertiate: show opponent deck + per-game house purge UI */}
                           {week.format_type === 'tertiate' && (week.status === 'published' || week.status === 'completed') && (() => {
                             const isInMatchup = pm.player1.id === user?.id || pm.player2.id === user?.id;
                             const opponentId = pm.player1.id === user?.id ? pm.player2.id : pm.player1.id;
                             const opponentSel = week.deck_selections.find((ds) => ds.user_id === opponentId && ds.slot_number === 1);
-                            const purges = pm.tertiate_purge_choices || [];
-                            const myPurge = purges.find((p) => p.choosing_user_id === user?.id);
-                            const bothRevealed = purges.length === 2;
+                            const allPurges = pm.tertiate_purge_choices || [];
                             const bothStarted = pm.player1_started && pm.player2_started;
                             const opponentHouses = opponentSel?.deck?.houses || [];
                             const houseSelectKey = pm.id;
+                            const nextGameNum = pm.games.length + 1;
+                            const purgesThisGame = allPurges.filter((p) => p.game_number === nextGameNum);
+                            const myPurgeThisGame = purgesThisGame.find((p) => p.choosing_user_id === user?.id);
+                            const bothPurgedThisGame = purgesThisGame.length === 2;
+                            const pastPurges = allPurges.filter((p) => p.game_number < nextGameNum);
+                            const pastGameNums = [...new Set(pastPurges.map((p) => p.game_number))].sort((a, b) => a - b);
                             return (
                               <Box sx={{ ml: 2, mt: 1 }}>
-                                {/* Show opponent deck to viewer */}
-                                {isInMatchup && opponentSel?.deck && (
+                                {/* Show opponent deck to viewer — only after both have started */}
+                                {isInMatchup && bothStarted && opponentSel?.deck && (
                                   <Box sx={{ mb: 1 }}>
-                                    <Typography variant="caption" color="text.secondary">Opponent's deck (you choose a house to purge):</Typography>
+                                    <Typography variant="caption" color="text.secondary">Opponent's deck (choose a house to purge for Game {nextGameNum}):</Typography>
                                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
                                       {opponentSel.deck.houses && <HouseIcons houses={opponentSel.deck.houses} />}
                                       <Typography variant="body2">{opponentSel.deck.name}</Typography>
@@ -1847,8 +1851,8 @@ export default function MyTeamPage() {
                                     </Box>
                                   </Box>
                                 )}
-                                {/* Purge selection — only for participants, only after both started, only if not yet submitted */}
-                                {isInMatchup && bothStarted && !myPurge && !bothRevealed && opponentHouses.length > 0 && (
+                                {/* Purge selection — only for participants, only after both started, only if not yet submitted for this game */}
+                                {isInMatchup && bothStarted && !myPurgeThisGame && !bothPurgedThisGame && opponentHouses.length > 0 && (
                                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
                                     <FormControl size="small" sx={{ minWidth: 140 }}>
                                       <InputLabel>Purge house</InputLabel>
@@ -1893,21 +1897,37 @@ export default function MyTeamPage() {
                                   </Box>
                                 )}
                                 {/* Waiting state */}
-                                {isInMatchup && bothStarted && myPurge && !bothRevealed && (
-                                  <Typography variant="body2" color="text.secondary">Waiting for opponent to choose...</Typography>
+                                {isInMatchup && bothStarted && myPurgeThisGame && !bothPurgedThisGame && (
+                                  <Typography variant="body2" color="text.secondary">Waiting for opponent to choose for Game {nextGameNum}...</Typography>
                                 )}
-                                {/* Reveal */}
-                                {bothRevealed && (
+                                {/* Reveal for current game */}
+                                {bothPurgedThisGame && (
                                   <Box>
-                                    {purges.map((p) => {
+                                    {purgesThisGame.map((p) => {
                                       const chooser = p.choosing_user_id === pm.player1.id ? pm.player1 : pm.player2;
                                       const victimId = p.choosing_user_id === pm.player1.id ? pm.player2.id : pm.player1.id;
                                       const victimSel = week.deck_selections.find((ds) => ds.user_id === victimId && ds.slot_number === 1);
                                       return (
                                         <Typography key={p.choosing_user_id} variant="body2">
-                                          {chooser.name} purged <strong>{p.purged_house}</strong> from {victimSel?.deck?.name || 'opponent deck'}
+                                          Game {nextGameNum}: {chooser.name} purged <strong>{p.purged_house}</strong> from {victimSel?.deck?.name || 'opponent deck'}
                                         </Typography>
                                       );
+                                    })}
+                                  </Box>
+                                )}
+                                {/* Past game purge history */}
+                                {pastGameNums.length > 0 && (
+                                  <Box sx={{ mt: 0.5 }}>
+                                    {pastGameNums.map((gn) => {
+                                      const gPurges = pastPurges.filter((p) => p.game_number === gn);
+                                      return gPurges.map((p) => {
+                                        const chooser = p.choosing_user_id === pm.player1.id ? pm.player1 : pm.player2;
+                                        return (
+                                          <Typography key={`${gn}-${p.choosing_user_id}`} variant="caption" display="block" color="text.secondary">
+                                            Game {gn}: {chooser.name} purged {p.purged_house}
+                                          </Typography>
+                                        );
+                                      });
                                     })}
                                   </Box>
                                 )}

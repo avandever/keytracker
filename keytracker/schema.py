@@ -1588,7 +1588,8 @@ class TertiateHousePurge(db.Model):
     """
     Records a player's secret house purge choice in Tertiate format.
     Each player chooses one house from the OPPONENT's deck to purge (all 12 cards removed).
-    Reveal: when len(purges) == 2 (both players submitted).
+    A new choice is made before each game. Reveal: when both players have submitted for
+    the same game_number.
     """
 
     __tablename__ = "tertiate_house_purge"
@@ -1599,6 +1600,7 @@ class TertiateHousePurge(db.Model):
     choosing_user_id = db.Column(
         db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
     )
+    game_number = db.Column(db.Integer, nullable=False, default=1)
     purged_house = db.Column(db.Text, nullable=False)
 
     player_matchup = db.relationship(
@@ -1610,6 +1612,7 @@ class TertiateHousePurge(db.Model):
         db.UniqueConstraint(
             "player_matchup_id",
             "choosing_user_id",
+            "game_number",
             name="uq_tertiate_house_purge",
         ),
     )

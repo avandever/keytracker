@@ -4547,7 +4547,7 @@ def submit_nordic_action(league_id, matchup_id):
 )
 @login_required
 def submit_tertiate_purge(league_id, matchup_id):
-    """Submit a secret house purge choice in Tertiate format."""
+    """Submit a secret house purge choice for the upcoming game in Tertiate format."""
     from keytracker.schema import TertiateHousePurge as TertiateHousePurgeModel
 
     league, err = _get_league_or_404(league_id)
@@ -4572,12 +4572,15 @@ def submit_tertiate_purge(league_id, matchup_id):
     if not pm.player1_started or not pm.player2_started:
         return jsonify({"error": "Both players must start the match before choosing"}), 400
 
-    # Check not already submitted
+    # The purge is for the next game to be played
+    game_number = len(pm.games) + 1
+
+    # Check not already submitted for this game
     existing = TertiateHousePurgeModel.query.filter_by(
-        player_matchup_id=pm.id, choosing_user_id=effective.id
+        player_matchup_id=pm.id, choosing_user_id=effective.id, game_number=game_number
     ).first()
     if existing:
-        return jsonify({"error": "You have already submitted your purge choice"}), 400
+        return jsonify({"error": "You have already submitted your purge choice for this game"}), 400
 
     data = request.get_json(silent=True) or {}
     purged_house = (data.get("purged_house") or "").strip()
@@ -4599,12 +4602,14 @@ def submit_tertiate_purge(league_id, matchup_id):
     purge = TertiateHousePurgeModel(
         player_matchup_id=pm.id,
         choosing_user_id=effective.id,
+        game_number=game_number,
         purged_house=purged_house,
     )
     db.session.add(purge)
     db.session.commit()
+    db.session.refresh(pm)
 
-    return jsonify(serialize_player_matchup(pm))
+    return jsonify(serialize_player_matchup(pm, viewer=effective))
 
 
 # --- Match flow ---
@@ -4925,6 +4930,21 @@ def report_game(league_id, matchup_id):
                 return jsonify({"error": "Match is already decided"}), 400
     elif p1_wins >= wins_needed or p2_wins >= wins_needed:
         return jsonify({"error": "Match is already decided"}), 400
+
+    # Tertiate: both players must have submitted their purge for this game_number
+    if week.format_type == WeekFormat.TERTIATE.value:
+        from keytracker.schema import TertiateHousePurge as THP
+        purges_for_game = THP.query.filter_by(
+            player_matchup_id=pm.id, game_number=game_number
+        ).all()
+        submitters = {p.choosing_user_id for p in purges_for_game}
+        if pm.player1_id not in submitters or pm.player2_id not in submitters:
+            return (
+                jsonify(
+                    {"error": "Both players must submit their house purge before reporting this game"}
+                ),
+                400,
+            )
 
     p1_keys = data.get("player1_keys", 0)
     p2_keys = data.get("player2_keys", 0)

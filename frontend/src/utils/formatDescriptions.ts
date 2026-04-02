@@ -34,7 +34,7 @@ export const FORMAT_DESCRIPTIONS: Record<string, string> = {
   moirai:
     "Submit three decks. Your opponent assigns one of your decks to each game type (archon, reversal, or adaptive short), and you do the same to theirs.",
   tertiate:
-    "Submit one deck. After pairings are published, each player secretly picks a house to purge from their opponent's deck — that house cannot be used for the match.",
+    "Submit one deck. Before each game, both players secretly pick a house to purge from their opponent's deck — that house cannot be used for that game. Players may choose the same or a different house each game.",
 };
 
 export function getWeekDescription(

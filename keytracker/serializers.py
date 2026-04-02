@@ -282,6 +282,21 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         thief_steals = ThiefSteal.query.filter_by(week_id=week.id).all()
         thief_floor_team_id = week.thief_floor_team_id
 
+    # For Tertiate, hide opponent deck selections from the viewer until both players have started.
+    # Admins always see everything.
+    redacted_opponent_ids: set = set()
+    if viewer and not viewer_is_admin and week.format_type == "tertiate":
+        for wm in week.matchups:
+            for pm in wm.player_matchups:
+                if pm.player1_id == viewer.id or pm.player2_id == viewer.id:
+                    if not (pm.player1_started and pm.player2_started):
+                        opponent_id = (
+                            pm.player2_id
+                            if pm.player1_id == viewer.id
+                            else pm.player1_id
+                        )
+                        redacted_opponent_ids.add(opponent_id)
+
     data = {
         "id": week.id,
         "league_id": week.league_id,
@@ -315,7 +330,8 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             for m in week.matchups
         ],
         "deck_selections": [
-            serialize_deck_selection(ds) for ds in week.deck_selections
+            serialize_deck_selection(ds, redact_deck=ds.user_id in redacted_opponent_ids)
+            for ds in week.deck_selections
         ],
         "feature_designations": [
             {"team_id": fd.team_id, "user_id": fd.user_id}
@@ -564,20 +580,28 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None, viewer_can_see_prop
     else:
         data["moirai_assignments"] = None
 
-    # Tertiate: reveal purge choices only after both players have submitted
+    # Tertiate: per-game purge choices. Always show the viewer's own choice; reveal
+    # the opponent's choice for a given game_number only after both have submitted.
     tertiate_purges_raw = getattr(pm, "tertiate_purge_choices", [])
-    data["tertiate_purge_choices_count"] = len(tertiate_purges_raw)
-    data["tertiate_purge_choices"] = (
-        [
-            {
-                "choosing_user_id": p.choosing_user_id,
-                "purged_house": p.purged_house,
-            }
-            for p in tertiate_purges_raw
-        ]
-        if len(tertiate_purges_raw) == 2
-        else []
-    )
+    viewer_id = viewer.id if viewer else None
+    from collections import defaultdict as _defaultdict
+    purges_by_game: dict = _defaultdict(list)
+    for p in tertiate_purges_raw:
+        purges_by_game[p.game_number].append(p)
+    visible_purges = []
+    for _game_num, game_purges in purges_by_game.items():
+        if len(game_purges) == 2:
+            visible_purges.extend(game_purges)
+        else:
+            visible_purges.extend(p for p in game_purges if p.choosing_user_id == viewer_id)
+    data["tertiate_purge_choices"] = [
+        {
+            "choosing_user_id": p.choosing_user_id,
+            "purged_house": p.purged_house,
+            "game_number": p.game_number,
+        }
+        for p in visible_purges
+    ]
 
     # Schedule: confirmed time always visible; proposals restricted until confirmed
     confirmation = getattr(pm, "schedule_confirmation", None)
@@ -585,7 +609,8 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None, viewer_can_see_prop
         confirmation.confirmed_time.isoformat() + "Z" if confirmation else None
     )
     proposals_raw = getattr(pm, "schedule_proposals", [])
-    show_proposals = bool(confirmation) or viewer_can_see_proposals
+    viewer_is_player = viewer is not None and viewer.id in (pm.player1_id, pm.player2_id)
+    show_proposals = bool(confirmation) or viewer_can_see_proposals or viewer_is_player
     if show_proposals:
         from collections import defaultdict
 
@@ -624,9 +649,9 @@ def serialize_alliance_selection(sel: AlliancePodSelection) -> dict:
     }
 
 
-def serialize_deck_selection(sel: PlayerDeckSelection) -> dict:
+def serialize_deck_selection(sel: PlayerDeckSelection, redact_deck: bool = False) -> dict:
     deck_data = None
-    if sel.deck:
+    if sel.deck and not redact_deck:
         deck_data = serialize_deck_summary(sel.deck)
         deck_data["db_id"] = sel.deck.id
     return {

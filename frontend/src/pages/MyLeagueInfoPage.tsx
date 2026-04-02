@@ -1232,19 +1232,27 @@ export default function MyLeagueInfoPage() {
                 );
               })()}
 
-              {/* Tertiate House Purge Phase */}
-              {week.format_type === 'tertiate' && myMatchup.player1_started && myMatchup.player2_started && (() => {
-                const myPurge = (myMatchup.tertiate_purge_choices || []).find((p) => p.choosing_user_id === effectiveUserId);
-                const bothRevealed = (myMatchup.tertiate_purge_choices || []).length === 2;
+              {/* Tertiate House Purge Phase — repeated before each game */}
+              {week.format_type === 'tertiate' && myMatchup.player1_started && myMatchup.player2_started && !isMatchDecided(myMatchup, week.best_of_n) && (() => {
+                const nextGameNum = myMatchup.games.length + 1;
+                const allPurges = myMatchup.tertiate_purge_choices || [];
+                const purgesThisGame = allPurges.filter((p) => p.game_number === nextGameNum);
+                const myPurgeThisGame = purgesThisGame.find((p) => p.choosing_user_id === effectiveUserId);
+                const bothPurgedThisGame = purgesThisGame.length === 2;
                 const opponentId = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.id : myMatchup.player1.id;
                 const opponentSel = week.deck_selections.find((ds) => ds.user_id === opponentId && ds.slot_number === 1);
                 const opponentHouses = opponentSel?.deck?.houses || [];
+
+                // Past game purge results (all games already played)
+                const pastPurges = allPurges.filter((p) => p.game_number < nextGameNum);
+                const pastGameNums = [...new Set(pastPurges.map((p) => p.game_number))].sort((a, b) => a - b);
+
                 return (
                   <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
-                    <Typography variant="subtitle2" gutterBottom>House Purge Phase</Typography>
+                    <Typography variant="subtitle2" gutterBottom>House Purge — Game {nextGameNum}</Typography>
                     {opponentSel?.deck && (
                       <Box sx={{ mb: 1 }}>
-                        <Typography variant="body2" color="text.secondary">Opponent's deck (choose a house to purge):</Typography>
+                        <Typography variant="body2" color="text.secondary">Opponent's deck (choose a house to purge for this game):</Typography>
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
                           {opponentSel.deck.houses && <HouseIcons houses={opponentSel.deck.houses} />}
                           <Typography variant="body2">{opponentSel.deck.name}</Typography>
@@ -1254,7 +1262,7 @@ export default function MyLeagueInfoPage() {
                         </Box>
                       </Box>
                     )}
-                    {!myPurge && !bothRevealed && opponentHouses.length > 0 ? (
+                    {!myPurgeThisGame && !bothPurgedThisGame && opponentHouses.length > 0 ? (
                       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                         <FormControl size="small" sx={{ minWidth: 160 }}>
                           <InputLabel>House to purge</InputLabel>
@@ -1276,13 +1284,13 @@ export default function MyLeagueInfoPage() {
                           Purge House
                         </Button>
                       </Box>
-                    ) : myPurge && !bothRevealed ? (
+                    ) : myPurgeThisGame && !bothPurgedThisGame ? (
                       <Typography variant="body2" color="text.secondary">
-                        You purged <strong>{myPurge.purged_house}</strong>. Waiting for opponent...
+                        You chose to purge <strong>{myPurgeThisGame.purged_house}</strong>. Waiting for opponent...
                       </Typography>
-                    ) : bothRevealed ? (
+                    ) : bothPurgedThisGame ? (
                       <Box>
-                        {(myMatchup.tertiate_purge_choices || []).map((p) => {
+                        {purgesThisGame.map((p) => {
                           const chooser = p.choosing_user_id === myMatchup.player1.id ? myMatchup.player1 : myMatchup.player2;
                           const victimId = p.choosing_user_id === myMatchup.player1.id ? myMatchup.player2.id : myMatchup.player1.id;
                           const victimSel = week.deck_selections.find((ds) => ds.user_id === victimId && ds.slot_number === 1);
@@ -1294,6 +1302,25 @@ export default function MyLeagueInfoPage() {
                         })}
                       </Box>
                     ) : null}
+                    {pastGameNums.length > 0 && (
+                      <Box sx={{ mt: 1.5, pt: 1, borderTop: 1, borderColor: 'divider' }}>
+                        <Typography variant="caption" color="text.secondary">Previous purges:</Typography>
+                        {pastGameNums.map((gn) => {
+                          const gPurges = pastPurges.filter((p) => p.game_number === gn);
+                          return (
+                            <Box key={gn} sx={{ ml: 1 }}>
+                              <Typography variant="caption" color="text.secondary">Game {gn}: </Typography>
+                              {gPurges.map((p) => {
+                                const chooser = p.choosing_user_id === myMatchup.player1.id ? myMatchup.player1 : myMatchup.player2;
+                                return (
+                                  <Typography key={p.choosing_user_id} variant="caption"> {chooser.name} → {p.purged_house}</Typography>
+                                );
+                              })}
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    )}
                   </Box>
                 );
               })()}
@@ -1332,7 +1359,7 @@ export default function MyLeagueInfoPage() {
               {(!needsStart || (myMatchup.player1_started && myMatchup.player2_started)) &&
                 !isMatchDecided(myMatchup, week.best_of_n) &&
                 (week.format_type !== 'triad' || myMatchup.strikes.length >= 2) &&
-                (week.format_type !== 'tertiate' || (myMatchup.tertiate_purge_choices || []).length >= 2) && (
+                (week.format_type !== 'tertiate' || (myMatchup.tertiate_purge_choices || []).filter((p) => p.game_number === myMatchup.games.length + 1).length >= 2) && (
                 <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>Report Game {myMatchup.games.length + 1}</Typography>
                   {myMatchup.games.length > 0 && (() => {
