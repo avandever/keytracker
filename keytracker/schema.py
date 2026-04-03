@@ -1219,6 +1219,11 @@ class PlayerMatchup(db.Model):
         back_populates="player_matchup",
         cascade="all, delete-orphan",
     )
+    result_confirmed_at = db.Column(db.DateTime, nullable=True)
+    result_confirmed_by_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=True
+    )
+    result_confirmed_by = db.relationship("User", foreign_keys=[result_confirmed_by_id])
     schedule_proposals = db.relationship(
         "MatchScheduleProposal",
         back_populates="player_matchup",

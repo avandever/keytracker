@@ -1481,7 +1481,23 @@ export default function MyLeagueInfoPage() {
               )}
 
               {isMatchDecided(myMatchup, week.best_of_n) && (
-                <Alert severity="success" sx={{ mt: 1 }}>Match complete!</Alert>
+                <Alert severity="success" sx={{ mt: 1 }}>
+                  Match complete!{' '}
+                  {!myMatchup.result_confirmed && (
+                    <>
+                      Please post your results in{' '}
+                      <Link
+                        href="https://discord.com/channels/698635177248948316/711694305688944660"
+                        target="_blank"
+                        rel="noopener"
+                      >
+                        #game-results
+                      </Link>{' '}
+                      and tag your captain.
+                    </>
+                  )}
+                  {myMatchup.result_confirmed && ' Results confirmed ✓'}
+                </Alert>
               )}
             </CardContent>
           </Card>

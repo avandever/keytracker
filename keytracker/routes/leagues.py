@@ -5374,6 +5374,57 @@ def submit_adaptive_bid(league_id, matchup_id):
     return jsonify(serialize_player_matchup(pm, viewer=viewer))
 
 
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/confirm-result", methods=["POST"]
+)
+@login_required
+def confirm_match_result(league_id, matchup_id):
+    """Captain (or admin) confirms a completed match result, making it visible to all."""
+    import datetime as _dt
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
+
+    if not is_admin:
+        # Must be a captain of one of the teams in this week-matchup
+        team_ids = {wm.team1_id, wm.team2_id}
+        captain_member = TeamMember.query.filter(
+            TeamMember.team_id.in_(team_ids),
+            TeamMember.user_id == effective.id,
+            TeamMember.is_captain == True,
+        ).first()
+        if not captain_member:
+            return jsonify({"error": "Only a team captain or admin can confirm results"}), 403
+
+    # Match must be complete
+    wins_needed = math.ceil(week.best_of_n / 2)
+    p1_wins = sum(1 for g in pm.games if g.winner_id == pm.player1_id)
+    p2_wins = sum(1 for g in pm.games if g.winner_id == pm.player2_id)
+    if p1_wins < wins_needed and p2_wins < wins_needed:
+        return jsonify({"error": "Match is not yet complete"}), 400
+
+    if pm.result_confirmed_at:
+        return jsonify({"error": "Result already confirmed"}), 400
+
+    pm.result_confirmed_at = _dt.datetime.utcnow()
+    pm.result_confirmed_by_id = effective.id
+    db.session.commit()
+
+    viewer = get_effective_user()
+    return jsonify(serialize_player_matchup(pm, viewer=viewer))
+
+
 def _check_week_completion(week):
     """Check if all matches in a week are complete, and if so mark week as COMPLETED.
 

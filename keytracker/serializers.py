@@ -325,7 +325,10 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         ),
         "matchups": [
             serialize_week_matchup(
-                m, viewer=viewer, show_player_matchups=show_player_matchups
+                m,
+                viewer=viewer,
+                show_player_matchups=show_player_matchups,
+                viewer_is_admin=viewer_is_admin,
             )
             for m in week.matchups
         ],
@@ -388,7 +391,10 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
 
 
 def serialize_week_matchup(
-    matchup: WeekMatchup, viewer=None, show_player_matchups: bool = True
+    matchup: WeekMatchup,
+    viewer=None,
+    show_player_matchups: bool = True,
+    viewer_is_admin: bool = False,
 ) -> dict:
     return {
         "id": matchup.id,
@@ -398,7 +404,7 @@ def serialize_week_matchup(
         "thief_stolen_team_id": matchup.thief_stolen_team_id,
         "player_matchups": (
             [
-                serialize_player_matchup(pm, viewer=viewer)
+                serialize_player_matchup(pm, viewer=viewer, viewer_is_admin=viewer_is_admin)
                 for pm in matchup.player_matchups
             ]
             if show_player_matchups
@@ -407,8 +413,21 @@ def serialize_week_matchup(
     }
 
 
-def serialize_player_matchup(pm: PlayerMatchup, viewer=None, viewer_can_see_proposals: bool = False) -> dict:
+def serialize_player_matchup(
+    pm: PlayerMatchup,
+    viewer=None,
+    viewer_can_see_proposals: bool = False,
+    viewer_is_admin: bool = False,
+) -> dict:
     from keytracker.match_helpers import get_adaptive_winning_deck_player_id
+
+    is_participant = viewer is not None and viewer.id in (pm.player1_id, pm.player2_id)
+    can_see_games = (
+        is_participant
+        or viewer_is_admin
+        or (viewer is not None and getattr(viewer, "is_league_admin", False))
+        or pm.result_confirmed_at is not None
+    )
 
     data = {
         "id": pm.id,
@@ -418,10 +437,18 @@ def serialize_player_matchup(pm: PlayerMatchup, viewer=None, viewer_can_see_prop
         "player1_started": pm.player1_started,
         "player2_started": pm.player2_started,
         "is_feature": pm.is_feature,
-        "games": [
-            serialize_match_game(g)
-            for g in sorted(pm.games, key=lambda g: g.game_number)
-        ],
+        "result_confirmed": pm.result_confirmed_at is not None,
+        "result_confirmed_at": (
+            pm.result_confirmed_at.isoformat() + "Z" if pm.result_confirmed_at else None
+        ),
+        "games": (
+            [
+                serialize_match_game(g)
+                for g in sorted(pm.games, key=lambda g: g.game_number)
+            ]
+            if can_see_games
+            else []
+        ),
         "adaptive_bid_chains": pm.adaptive_bid_chains,
         "adaptive_bidder_id": pm.adaptive_bidder_id,
         "adaptive_bidding_complete": pm.adaptive_bidding_complete,

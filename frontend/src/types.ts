@@ -482,6 +482,8 @@ export interface PlayerMatchupInfo {
   moirai_assignments_count?: number | null;
   moirai_assignments?: MoiraiAssignmentInfo[] | null;
   tertiate_purge_choices?: TertiatePurgeChoiceInfo[];
+  result_confirmed: boolean;
+  result_confirmed_at: string | null;
   schedule_confirmed_time?: string | null;
   schedule_proposals?: { user_id: number; times: string[] }[];
 }

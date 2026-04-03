@@ -647,6 +647,16 @@ export async function getSignupDiscordCheck(leagueId: number): Promise<SignupDis
 }
 
 
+export async function confirmMatchResult(
+  leagueId: number,
+  matchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/confirm-result`,
+  );
+  return data;
+}
+
 export async function submitTertiatePurge(
   leagueId: number,
   matchupId: number,

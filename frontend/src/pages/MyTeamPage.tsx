@@ -56,6 +56,7 @@ import {
   removeCurationDeck,
   submitSteals,
   submitTertiatePurge,
+  confirmMatchResult,
   getTeamDeckEntryLog,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
@@ -1796,6 +1797,43 @@ export default function MyTeamPage() {
                             ) : pm.games.length === 0 ? (
                               <Chip label="In progress" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
                             ) : null}
+                            {pm.result_confirmed && (
+                              <Chip label="Confirmed" size="small" color="success" />
+                            )}
+                            {isCaptain && !pm.result_confirmed && (p1Wins + p2Wins > 0) && (() => {
+                              const winsNeeded = Math.ceil(week.best_of_n / 2);
+                              const matchDecided = p1Wins >= winsNeeded || p2Wins >= winsNeeded;
+                              if (!matchDecided) return null;
+                              return (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  color="success"
+                                  onClick={async () => {
+                                    try {
+                                      const updated = await confirmMatchResult(leagueId, pm.id);
+                                      setLeague((prev) => {
+                                        if (!prev) return prev;
+                                        return {
+                                          ...prev,
+                                          weeks: prev.weeks.map((w) => w.id === week.id ? {
+                                            ...w,
+                                            matchups: w.matchups.map((wm2) => ({
+                                              ...wm2,
+                                              player_matchups: wm2.player_matchups.map((pm2) => pm2.id === pm.id ? updated : pm2),
+                                            })),
+                                          } : w),
+                                        };
+                                      });
+                                    } catch {
+                                      setError('Failed to confirm result');
+                                    }
+                                  }}
+                                >
+                                  Confirm Result
+                                </Button>
+                              );
+                            })()}
                           </Box>
                           {showPods && (
                             <Box sx={{ ml: 2, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
