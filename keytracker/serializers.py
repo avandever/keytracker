@@ -422,8 +422,21 @@ def serialize_player_matchup(
     from keytracker.match_helpers import get_adaptive_winning_deck_player_id
 
     is_participant = viewer is not None and viewer.id in (pm.player1_id, pm.player2_id)
+
+    # Captains of either team in a week matchup can always see game results
+    is_team_captain = False
+    if viewer is not None and not is_participant and pm.week_matchup_id:
+        wm = pm.week_matchup
+        if wm:
+            is_team_captain = any(
+                m.user_id == viewer.id and m.is_captain
+                for team in [wm.team1, wm.team2]
+                for m in team.members
+            )
+
     can_see_games = (
         is_participant
+        or is_team_captain
         or viewer_is_admin
         or (viewer is not None and getattr(viewer, "is_league_admin", False))
         or pm.result_confirmed_at is not None
