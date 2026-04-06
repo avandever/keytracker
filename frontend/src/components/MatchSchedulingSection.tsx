@@ -7,7 +7,6 @@ import {
   Alert,
   Divider,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
 import type { PlayerMatchupInfo } from '../types';
 import {
   proposeScheduleTimes,
@@ -37,7 +36,6 @@ function formatTime(isoUtc: string): string {
 
 export default function MatchSchedulingSection({ leagueId, pm, myUserId, onUpdate }: Props) {
   const [pickerValue, setPickerValue] = useState('');
-  const [pendingTimes, setPendingTimes] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState('');
 
@@ -61,23 +59,14 @@ export default function MatchSchedulingSection({ leagueId, pm, myUserId, onUpdat
     }
   }
 
-  function addPending() {
-    if (!pickerValue) return;
+  async function addTime() {
+    if (!pickerValue || busy) return;
     const iso = new Date(pickerValue).toISOString();
-    if (!pendingTimes.includes(iso)) {
-      setPendingTimes((prev) => [...prev, iso]);
-    }
+    const existing = myProposals?.times ?? [];
+    if (existing.includes(iso)) return;
+    const updated = [...existing, iso];
     setPickerValue('');
-  }
-
-  function removePending(iso: string) {
-    setPendingTimes((prev) => prev.filter((t) => t !== iso));
-  }
-
-  async function submitProposals() {
-    if (!pendingTimes.length) return;
-    await doAction(() => proposeScheduleTimes(leagueId, pm.id, pendingTimes));
-    setPendingTimes([]);
+    await doAction(() => proposeScheduleTimes(leagueId, pm.id, updated));
   }
 
   // --- Confirmed state ---
@@ -154,31 +143,10 @@ export default function MatchSchedulingSection({ leagueId, pm, myUserId, onUpdat
           onChange={(e) => setPickerValue(e.target.value)}
           style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
         />
-        <Button size="small" variant="outlined" onClick={addPending} disabled={!pickerValue}>
+        <Button size="small" variant="outlined" onClick={addTime} disabled={!pickerValue || busy}>
           Add
         </Button>
       </Box>
-      {pendingTimes.length > 0 && (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-          {pendingTimes.map((t) => (
-            <Chip
-              key={t}
-              label={formatTime(t)}
-              size="small"
-              onDelete={() => removePending(t)}
-              sx={(theme) => ({ bgcolor: alpha(theme.palette.primary.main, 0.1) })}
-            />
-          ))}
-          <Button
-            size="small"
-            variant="contained"
-            disabled={busy || !pendingTimes.length}
-            onClick={submitProposals}
-          >
-            Submit
-          </Button>
-        </Box>
-      )}
 
       {/* Opponent proposals */}
       <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }} gutterBottom>
