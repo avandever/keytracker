@@ -3097,6 +3097,17 @@ def submit_deck_selection(league_id, week_id):
     # Validate max SAS / sas floor
     if week.max_sas is not None or week.sas_floor is not None:
         sas = deck.sas_rating
+        fails_ceiling = week.max_sas is not None and sas and sas > week.max_sas
+        fails_floor = week.sas_floor is not None and sas and sas < week.sas_floor
+        if fails_ceiling or fails_floor:
+            # Refresh from production DoK and re-check before failing
+            try:
+                update_sas_scores(deck, force=True)
+                sas = deck.sas_rating
+            except Exception as e:
+                logger.warning(
+                    "Failed to force-refresh SAS for deck %s: %s", deck.kf_id, e
+                )
         if week.max_sas is not None and sas and sas > week.max_sas:
             return (
                 jsonify(
@@ -3131,17 +3142,26 @@ def submit_deck_selection(league_id, week_id):
         ranges = _get_rung_ranges(week.sas_ladder_maxes)
         rung_min, rung_max = ranges[assignment.rung_number - 1]
         if sas < rung_min or (rung_max is not None and sas > rung_max):
-            range_str = (
-                f"{rung_min}+" if rung_max is None else f"{rung_min}\u2013{rung_max}"
-            )
-            return (
-                jsonify(
-                    {
-                        "error": f"Deck SAS ({sas}) is not in your rung range ({range_str})"
-                    }
-                ),
-                400,
-            )
+            # Refresh from production DoK and re-check before failing
+            try:
+                update_sas_scores(deck, force=True)
+                sas = deck.sas_rating
+            except Exception as e:
+                logger.warning(
+                    "Failed to force-refresh SAS for deck %s: %s", deck.kf_id, e
+                )
+            if sas < rung_min or (rung_max is not None and sas > rung_max):
+                range_str = (
+                    f"{rung_min}+" if rung_max is None else f"{rung_min}\u2013{rung_max}"
+                )
+                return (
+                    jsonify(
+                        {
+                            "error": f"Deck SAS ({sas}) is not in your rung range ({range_str})"
+                        }
+                    ),
+                    400,
+                )
 
     # Validate no_keycheat
     if week.no_keycheat:

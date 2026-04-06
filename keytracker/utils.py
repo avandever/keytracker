@@ -1218,9 +1218,9 @@ def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
     return deck
 
 
-def update_sas_scores(deck: Deck, dok_api_key: str = None) -> bool:
-    """Returns True if update occurred."""
-    if (
+def update_sas_scores(deck: Deck, dok_api_key: str = None, force: bool = False) -> bool:
+    """Returns True if update occurred. Pass force=True to bypass cache and always fetch from DoK."""
+    if not force and (
         (deck.sas_version or 0) >= LATEST_SAS_VERSION
         and deck.dok
         and deck.dok.last_refresh is not None
