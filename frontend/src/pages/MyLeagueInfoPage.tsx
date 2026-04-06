@@ -1540,7 +1540,18 @@ export default function MyLeagueInfoPage() {
                         })}
                       </Box>
                     )}
-                    {(!needsStart || (pm.player1_started && pm.player2_started)) && (
+                    {(!needsStart || (pm.player1_started && pm.player2_started)) && (() => {
+                      const nextGameNum = pm.games.length + 1;
+                      const purgesForNextGame = (pm.tertiate_purge_choices || []).filter((p) => p.game_number === nextGameNum);
+                      const tertiateReady = week.format_type !== 'tertiate' || purgesForNextGame.length >= 2;
+                      if (!tertiateReady) {
+                        return (
+                          <Alert severity="info" sx={{ mt: 1 }}>
+                            Waiting for both players to submit purge choices for Game {nextGameNum}.
+                          </Alert>
+                        );
+                      }
+                      return (
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, border: 1, borderColor: 'divider', borderRadius: 1, p: 1.5, mt: 1 }}>
                         <Typography variant="caption" color="text.secondary">Report Game {pm.games.length + 1}</Typography>
                         {pm.games.length > 0 && (() => {
@@ -1586,7 +1597,8 @@ export default function MyLeagueInfoPage() {
                           Report Game
                         </Button>
                       </Box>
-                    )}
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               ))}
