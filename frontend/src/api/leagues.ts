@@ -3,7 +3,6 @@ import type {
   LeagueSummary,
   LeagueDetail,
   LeagueWeek,
-  WeekMatchup,
   TeamDetail,
   DraftState,
   UserBrief,
@@ -310,14 +309,14 @@ export async function submitDeckSelection(
   return data;
 }
 
-export async function setWeekMatchupDoubleLoss(
+export async function setPlayerMatchupDoubleLoss(
   leagueId: number,
   weekId: number,
-  weekMatchupId: number,
+  playerMatchupId: number,
   isDoubleLoss: boolean,
-): Promise<WeekMatchup> {
+): Promise<PlayerMatchupInfo> {
   const { data } = await apiClient.post(
-    `/leagues/${leagueId}/weeks/${weekId}/matchups/${weekMatchupId}/double-loss`,
+    `/leagues/${leagueId}/weeks/${weekId}/player-matchups/${playerMatchupId}/double-loss`,
     { is_double_loss: isDoubleLoss },
   );
   return data;

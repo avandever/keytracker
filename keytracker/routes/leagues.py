@@ -2093,12 +2093,12 @@ def edit_matchup(league_id, week_id, matchup_id):
 
 
 @blueprint.route(
-    "/<int:league_id>/weeks/<int:week_id>/matchups/<int:week_matchup_id>/double-loss",
+    "/<int:league_id>/weeks/<int:week_id>/player-matchups/<int:player_matchup_id>/double-loss",
     methods=["POST"],
 )
 @login_required
-def set_double_loss(league_id, week_id, week_matchup_id):
-    """Admin endpoint to mark or unmark a WeekMatchup as a double loss."""
+def set_double_loss(league_id, week_id, player_matchup_id):
+    """Admin endpoint to mark or unmark a PlayerMatchup as a double loss."""
     league, err = _get_league_or_404(league_id)
     if err:
         return err
@@ -2107,23 +2107,23 @@ def set_double_loss(league_id, week_id, week_matchup_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    wm = db.session.get(WeekMatchup, week_matchup_id)
-    if not wm or wm.week_id != week.id:
-        return jsonify({"error": "Matchup not found"}), 404
+    pm = db.session.get(PlayerMatchup, player_matchup_id)
+    if not pm or not pm.week_matchup_id or pm.week_matchup.week_id != week.id:
+        return jsonify({"error": "Player matchup not found"}), 404
 
     data = request.get_json(silent=True) or {}
-    wm.is_double_loss = bool(data.get("is_double_loss", True))
+    pm.is_double_loss = bool(data.get("is_double_loss", True))
 
-    action = "double_loss_set" if wm.is_double_loss else "double_loss_cleared"
+    action = "double_loss_set" if pm.is_double_loss else "double_loss_cleared"
     _log_admin_action(
         league.id,
         week.id,
         get_effective_user().id,
         action,
-        f"week_matchup_id={week_matchup_id} ({wm.team1.name} vs {wm.team2.name})",
+        f"player_matchup_id={player_matchup_id} ({pm.player1.name} vs {pm.player2.name})",
     )
     db.session.commit()
-    return jsonify(serialize_week_matchup(wm, viewer_is_admin=True))
+    return jsonify(serialize_player_matchup(pm, viewer_is_admin=True))
 
 
 @blueprint.route("/<int:league_id>/weeks/<int:week_id>/publish", methods=["POST"])

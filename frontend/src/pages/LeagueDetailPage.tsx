@@ -412,13 +412,13 @@ export default function LeagueDetailPage() {
     for (const week of qualifyingWeeks) {
       const winsNeeded = Math.ceil(week.best_of_n / 2);
       for (const wm of week.matchups) {
-        if (wm.is_double_loss) continue;
         const team1MemberIds = new Set(wm.team1.members.map((m) => m.user.id));
-        const totalMatchups = wm.player_matchups.length;
+        const totalMatchups = wm.player_matchups.filter((pm) => !pm.is_double_loss).length;
         let team1Wins = 0;
         let team2Wins = 0;
         let featureWinnerId: number | null = null;
         for (const pm of wm.player_matchups) {
+          if (pm.is_double_loss) continue;
           const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
           const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
           let winnerOfPm: number | null = null;

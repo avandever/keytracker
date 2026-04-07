@@ -402,7 +402,6 @@ def serialize_week_matchup(
         "team1": serialize_team_detail(matchup.team1),
         "team2": serialize_team_detail(matchup.team2),
         "thief_stolen_team_id": matchup.thief_stolen_team_id,
-        "is_double_loss": bool(matchup.is_double_loss),
         "player_matchups": (
             [
                 serialize_player_matchup(pm, viewer=viewer, viewer_is_admin=viewer_is_admin)
@@ -451,6 +450,7 @@ def serialize_player_matchup(
         "player1_started": pm.player1_started,
         "player2_started": pm.player2_started,
         "is_feature": pm.is_feature,
+        "is_double_loss": bool(pm.is_double_loss),
         "result_confirmed": pm.result_confirmed_at is not None,
         "result_confirmed_at": (
             pm.result_confirmed_at.isoformat() + "Z" if pm.result_confirmed_at else None
