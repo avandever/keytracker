@@ -439,6 +439,7 @@ export interface WeekMatchup {
   team1: TeamDetail;
   team2: TeamDetail;
   thief_stolen_team_id?: number | null;
+  is_double_loss: boolean;
   player_matchups: PlayerMatchupInfo[];
 }
 

@@ -1081,6 +1081,7 @@ class WeekMatchup(db.Model):
     thief_stolen_team_id = db.Column(
         db.Integer, nullable=True
     )  # team required to feature stolen-deck player
+    is_double_loss = db.Column(db.Boolean, nullable=False, default=False)
     week = db.relationship("LeagueWeek", back_populates="matchups")
     team1 = db.relationship("Team", foreign_keys=[team1_id])
     team2 = db.relationship("Team", foreign_keys=[team2_id])

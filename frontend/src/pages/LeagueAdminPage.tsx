@@ -70,6 +70,7 @@ import {
   getRestrictedListVersions,
   addAdmin,
   removeAdmin,
+  setWeekMatchupDoubleLoss,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -566,6 +567,17 @@ export default function LeagueAdminPage() {
     try {
       await deleteWeek(league.id, weekId);
       setSuccess('Week deleted');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleToggleDoubleLoss = async (weekId: number, weekMatchupId: number, currentValue: boolean) => {
+    setError('');
+    try {
+      await setWeekMatchupDoubleLoss(league.id, weekId, weekMatchupId, !currentValue);
+      setSuccess(!currentValue ? 'Matchup marked as double loss — no points awarded to either team.' : 'Double loss cleared.');
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -1217,9 +1229,21 @@ export default function LeagueAdminPage() {
                         <Typography variant="subtitle2" gutterBottom>Matchups</Typography>
                         {week.matchups.map((m) => (
                           <Box key={m.id} sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
-                            <Typography variant="body2" fontWeight="bold">
-                              {m.team1.name} vs {m.team2.name}
-                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                              <Typography variant="body2" fontWeight="bold">
+                                {m.team1.name} vs {m.team2.name}
+                              </Typography>
+                              {m.is_double_loss && <Chip label="Double Loss" size="small" color="error" />}
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color={m.is_double_loss ? 'inherit' : 'error'}
+                                onClick={() => handleToggleDoubleLoss(week.id, m.id, m.is_double_loss)}
+                                sx={{ ml: 'auto' }}
+                              >
+                                {m.is_double_loss ? 'Clear Double Loss' : 'Mark Double Loss'}
+                              </Button>
+                            </Box>
                             {m.player_matchups.map((pm) => {
                               const isEditing = editingPairingsWeekId === week.id;
                               if (isEditing) {
