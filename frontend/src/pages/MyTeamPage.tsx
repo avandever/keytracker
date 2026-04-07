@@ -126,10 +126,11 @@ export default function MyTeamPage() {
   // Available sets for constraint display
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
 
-  // Captain override confirmation for PAIRING status
+  // Captain override confirmation for PAIRING status or SAS restriction violations
   type PendingDeckAction =
     | { type: 'submit'; weekId: number; userId: number; slotNumber: number; playerName: string }
-    | { type: 'remove'; weekId: number; slot: number; userId: number; playerName: string };
+    | { type: 'remove'; weekId: number; slot: number; userId: number; playerName: string }
+    | { type: 'sas_override'; weekId: number; userId: number; slotNumber: number; playerName: string; violation: string };
   const [pendingDeckAction, setPendingDeckAction] = useState<PendingDeckAction | null>(null);
 
   // Feature designation state: keyed by weekId
@@ -296,44 +297,56 @@ export default function MyTeamPage() {
     }
   };
 
-  const doSubmitDeck = async (weekId: number, userId: number, slotNumber: number) => {
+  const doSubmitDeck = async (weekId: number, userId: number, slotNumber: number, forceSasOverride = false) => {
     const key = `${weekId}-${userId}-${slotNumber}`;
     const url = teammateDeckUrls[key];
     if (!url?.trim()) return;
     setError('');
     setSuccess('');
     try {
-      const payload: { deck_url: string; slot_number: number; user_id?: number } = {
+      const payload: { deck_url: string; slot_number: number; user_id?: number; force_sas_override?: boolean } = {
         deck_url: url.trim(),
         slot_number: slotNumber,
       };
       if (userId !== user.id) payload.user_id = userId;
+      if (forceSasOverride) payload.force_sas_override = true;
       await submitDeckSelection(league.id, weekId, payload);
       setTeammateDeckUrls((prev) => ({ ...prev, [key]: '' }));
       setSuccess('Deck submitted');
       refresh();
     } catch (e: any) {
+      if (e.response?.data?.code === 'sas_override_required') {
+        const playerName = getPlayerName(userId);
+        setPendingDeckAction({ type: 'sas_override', weekId, userId, slotNumber, playerName, violation: e.response.data.error });
+        return;
+      }
       setError(e.response?.data?.error || e.message);
     }
   };
 
-  const doSubmitSealed = async (weekId: number, userId: number, slotNumber: number) => {
+  const doSubmitSealed = async (weekId: number, userId: number, slotNumber: number, forceSasOverride = false) => {
     const key = `${weekId}-${userId}-${slotNumber}`;
     const deckId = sealedSelections[key];
     if (!deckId) return;
     setError('');
     setSuccess('');
     try {
-      const payload: { deck_id: number; slot_number: number; user_id?: number } = {
+      const payload: { deck_id: number; slot_number: number; user_id?: number; force_sas_override?: boolean } = {
         deck_id: deckId,
         slot_number: slotNumber,
       };
       if (userId !== user.id) payload.user_id = userId;
+      if (forceSasOverride) payload.force_sas_override = true;
       await submitDeckSelection(league.id, weekId, payload);
       setSealedSelections((prev) => ({ ...prev, [key]: 0 }));
       setSuccess('Deck submitted');
       refresh();
     } catch (e: any) {
+      if (e.response?.data?.code === 'sas_override_required') {
+        const playerName = getPlayerName(userId);
+        setPendingDeckAction({ type: 'sas_override', weekId, userId, slotNumber, playerName, violation: e.response.data.error });
+        return;
+      }
       setError(e.response?.data?.error || e.message);
     }
   };
@@ -396,6 +409,8 @@ export default function MyTeamPage() {
     setPendingDeckAction(null);
     if (action.type === 'submit') {
       doSubmitDeck(action.weekId, action.userId, action.slotNumber);
+    } else if (action.type === 'sas_override') {
+      doSubmitDeck(action.weekId, action.userId, action.slotNumber, true);
     } else {
       doRemoveDeck(action.weekId, action.slot, action.userId);
     }
@@ -2173,13 +2188,23 @@ export default function MyTeamPage() {
       )}
 
       <Dialog open={pendingDeckAction !== null} onClose={() => setPendingDeckAction(null)}>
-        <DialogTitle>Override Deck Selection?</DialogTitle>
+        <DialogTitle>
+          {pendingDeckAction?.type === 'sas_override' ? 'Override SAS Restriction?' : 'Override Deck Selection?'}
+        </DialogTitle>
         <DialogContent>
-          <Typography>
-            Player matchups are already generated. Changing{' '}
-            <strong>{pendingDeckAction?.playerName ?? ''}</strong>'s deck selection at this stage
-            overrides the normal rules. Continue?
-          </Typography>
+          {pendingDeckAction?.type === 'sas_override' ? (
+            <Typography>
+              The deck for <strong>{pendingDeckAction.playerName}</strong> fails the SAS restriction:{' '}
+              <strong>{pendingDeckAction.violation}</strong>. As a captain, you can override this restriction.
+              This action will be logged. Continue?
+            </Typography>
+          ) : (
+            <Typography>
+              Player matchups are already generated. Changing{' '}
+              <strong>{pendingDeckAction?.playerName ?? ''}</strong>'s deck selection at this stage
+              overrides the normal rules. Continue?
+            </Typography>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setPendingDeckAction(null)}>Cancel</Button>

@@ -28,6 +28,10 @@ import {
   Link,
   Autocomplete,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
@@ -114,6 +118,9 @@ export default function MyLeagueInfoPage() {
 
   // Deck removal confirmation state
   const [removePending, setRemovePending] = useState<{ weekId: number; slot: number } | null>(null);
+
+  // SAS override confirmation state (captain submitting own deck that violates restriction)
+  const [sasOverridePending, setSasOverridePending] = useState<{ weekId: number; slotNumber: number; violation: string } | null>(null);
 
   // Thief: steal selection (curation deck IDs) and pool deck selection
   const [thiefSteals, setThiefSteals] = useState<number[]>([]);
@@ -248,20 +255,26 @@ export default function MyLeagueInfoPage() {
     }
   };
 
-  const handleSubmitDeck = async (weekId: number, slotNumber: number = 1) => {
+  const handleSubmitDeck = async (weekId: number, slotNumber: number = 1, forceSasOverride = false) => {
     if (!deckUrl.trim()) return;
     setError('');
     setSuccess('');
     setSubmitting(true);
     try {
-      await submitDeckSelection(league.id, weekId, {
+      const payload: { deck_url: string; slot_number: number; force_sas_override?: boolean } = {
         deck_url: deckUrl.trim(),
         slot_number: slotNumber,
-      });
+      };
+      if (forceSasOverride) payload.force_sas_override = true;
+      await submitDeckSelection(league.id, weekId, payload);
       setDeckUrl('');
       setSuccess('Deck submitted!');
       refresh();
     } catch (e: any) {
+      if (e.response?.data?.code === 'sas_override_required') {
+        setSasOverridePending({ weekId, slotNumber, violation: e.response.data.error });
+        return;
+      }
       setError(e.response?.data?.error || e.message);
     } finally {
       setSubmitting(false);
@@ -1708,6 +1721,31 @@ export default function MyLeagueInfoPage() {
       )}
 
       {activeTab >= weekStartIdx && weeks[activeTab - weekStartIdx] && renderWeekContent(weeks[activeTab - weekStartIdx])}
+
+      <Dialog open={sasOverridePending !== null} onClose={() => setSasOverridePending(null)}>
+        <DialogTitle>Override SAS Restriction?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Your deck fails the SAS restriction: <strong>{sasOverridePending?.violation}</strong>.
+            As a captain, you can override this restriction. This action will be logged. Continue?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSasOverridePending(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => {
+              if (!sasOverridePending) return;
+              const { weekId, slotNumber } = sasOverridePending;
+              setSasOverridePending(null);
+              handleSubmitDeck(weekId, slotNumber, true);
+            }}
+          >
+            Override
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

@@ -2092,6 +2092,40 @@ def edit_matchup(league_id, week_id, matchup_id):
     return jsonify(serialize_player_matchup(pm))
 
 
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/matchups/<int:week_matchup_id>/double-loss",
+    methods=["POST"],
+)
+@login_required
+def set_double_loss(league_id, week_id, week_matchup_id):
+    """Admin endpoint to mark or unmark a WeekMatchup as a double loss."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    wm = db.session.get(WeekMatchup, week_matchup_id)
+    if not wm or wm.week_id != week.id:
+        return jsonify({"error": "Matchup not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    wm.is_double_loss = bool(data.get("is_double_loss", True))
+
+    action = "double_loss_set" if wm.is_double_loss else "double_loss_cleared"
+    _log_admin_action(
+        league.id,
+        week.id,
+        get_effective_user().id,
+        action,
+        f"week_matchup_id={week_matchup_id} ({wm.team1.name} vs {wm.team2.name})",
+    )
+    db.session.commit()
+    return jsonify(serialize_week_matchup(wm, viewer_is_admin=True))
+
+
 @blueprint.route("/<int:league_id>/weeks/<int:week_id>/publish", methods=["POST"])
 @login_required
 def publish_week(league_id, week_id):
@@ -2869,9 +2903,16 @@ def submit_deck_selection(league_id, week_id):
     data = request.get_json(silent=True) or {}
     target_user_id = data.get("user_id", effective.id)
 
+    # Determine if submitter is an admin or captain (used for SAS override below)
+    submitter_is_admin = _is_league_admin(league, effective)
+    submitter_is_captain = any(
+        any(m.user_id == effective.id and m.is_captain for m in team.members)
+        for team in league.teams
+    )
+    submitter_is_privileged = submitter_is_admin or submitter_is_captain
+
     # If submitting for another user, must be admin or captain of that user's team
     if target_user_id != effective.id:
-        is_admin = _is_league_admin(league, effective)
         is_captain_of_team = False
         is_peer_allowed = False
         for team in league.teams:
@@ -2884,7 +2925,7 @@ def submit_deck_selection(league_id, week_id):
                 ):
                     is_peer_allowed = True
                 break
-        if not is_admin and not is_captain_of_team and not is_peer_allowed:
+        if not submitter_is_admin and not is_captain_of_team and not is_peer_allowed:
             return jsonify({"error": "Cannot submit deck selection for this user"}), 403
 
     # Verify target user is in the league
@@ -3095,6 +3136,7 @@ def submit_deck_selection(league_id, week_id):
             logger.warning("Failed to refresh SAS for deck %s: %s", deck.kf_id, e)
 
     # Validate max SAS / sas floor
+    force_sas_override = bool(data.get("force_sas_override"))
     if week.max_sas is not None or week.sas_floor is not None:
         sas = deck.sas_rating
         fails_ceiling = week.max_sas is not None and sas and sas > week.max_sas
@@ -3104,24 +3146,42 @@ def submit_deck_selection(league_id, week_id):
             try:
                 update_sas_scores(deck, force=True)
                 sas = deck.sas_rating
+                fails_ceiling = week.max_sas is not None and sas and sas > week.max_sas
+                fails_floor = week.sas_floor is not None and sas and sas < week.sas_floor
             except Exception as e:
                 logger.warning(
                     "Failed to force-refresh SAS for deck %s: %s", deck.kf_id, e
                 )
         if week.max_sas is not None and sas and sas > week.max_sas:
-            return (
-                jsonify(
-                    {"error": f"Deck SAS ({sas}) exceeds max SAS ({week.max_sas})"}
-                ),
-                400,
-            )
+            violation = f"Deck SAS ({sas}) exceeds max SAS ({week.max_sas})"
+            if submitter_is_privileged and force_sas_override:
+                target_user = db.session.get(User, target_user_id)
+                target_name = target_user.name if target_user else str(target_user_id)
+                _log_admin_action(
+                    league.id, week.id, effective.id,
+                    "captain_sas_override",
+                    f"SAS override for {target_name}: {violation}",
+                )
+            else:
+                return (
+                    jsonify({"error": violation, "code": "sas_override_required" if submitter_is_privileged else None}),
+                    400,
+                )
         if week.sas_floor is not None and sas and sas < week.sas_floor:
-            return (
-                jsonify(
-                    {"error": f"Deck SAS ({sas}) is below the SAS floor ({week.sas_floor})"}
-                ),
-                400,
-            )
+            violation = f"Deck SAS ({sas}) is below the SAS floor ({week.sas_floor})"
+            if submitter_is_privileged and force_sas_override:
+                target_user = db.session.get(User, target_user_id)
+                target_name = target_user.name if target_user else str(target_user_id)
+                _log_admin_action(
+                    league.id, week.id, effective.id,
+                    "captain_sas_override",
+                    f"SAS override for {target_name}: {violation}",
+                )
+            else:
+                return (
+                    jsonify({"error": violation, "code": "sas_override_required" if submitter_is_privileged else None}),
+                    400,
+                )
 
     # Validate SAS Ladder rung
     if week.format_type == WeekFormat.SAS_LADDER.value:
@@ -3154,14 +3214,20 @@ def submit_deck_selection(league_id, week_id):
                 range_str = (
                     f"{rung_min}+" if rung_max is None else f"{rung_min}\u2013{rung_max}"
                 )
-                return (
-                    jsonify(
-                        {
-                            "error": f"Deck SAS ({sas}) is not in your rung range ({range_str})"
-                        }
-                    ),
-                    400,
-                )
+                violation = f"Deck SAS ({sas}) is not in your rung range ({range_str})"
+                if submitter_is_privileged and force_sas_override:
+                    target_user = db.session.get(User, target_user_id)
+                    target_name = target_user.name if target_user else str(target_user_id)
+                    _log_admin_action(
+                        league.id, week.id, effective.id,
+                        "captain_sas_override",
+                        f"SAS override for {target_name}: {violation}",
+                    )
+                else:
+                    return (
+                        jsonify({"error": violation, "code": "sas_override_required" if submitter_is_privileged else None}),
+                        400,
+                    )
 
     # Validate no_keycheat
     if week.no_keycheat:

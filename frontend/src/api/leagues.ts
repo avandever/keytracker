@@ -3,6 +3,7 @@ import type {
   LeagueSummary,
   LeagueDetail,
   LeagueWeek,
+  WeekMatchup,
   TeamDetail,
   DraftState,
   UserBrief,
@@ -300,11 +301,24 @@ export async function checkWeekCompletion(
 export async function submitDeckSelection(
   leagueId: number,
   weekId: number,
-  payload: { deck_url?: string; deck_id?: number; slot_number?: number; user_id?: number },
+  payload: { deck_url?: string; deck_id?: number; slot_number?: number; user_id?: number; force_sas_override?: boolean },
 ): Promise<DeckSelectionInfo[]> {
   const { data } = await apiClient.post(
     `/leagues/${leagueId}/weeks/${weekId}/deck-selection`,
     payload,
+  );
+  return data;
+}
+
+export async function setWeekMatchupDoubleLoss(
+  leagueId: number,
+  weekId: number,
+  weekMatchupId: number,
+  isDoubleLoss: boolean,
+): Promise<WeekMatchup> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/matchups/${weekMatchupId}/double-loss`,
+    { is_double_loss: isDoubleLoss },
   );
   return data;
 }
