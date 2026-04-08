@@ -186,6 +186,7 @@ export default function MyLeagueInfoPage() {
         if (week.status !== 'published') return false;
         for (const wm of week.matchups) {
           for (const pm of wm.player_matchups) {
+            if (pm.is_double_loss) continue;
             const winsNeeded = Math.ceil(week.best_of_n / 2);
             const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
             const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
@@ -456,6 +457,7 @@ export default function MyLeagueInfoPage() {
   };
 
   const isMatchDecided = (pm: PlayerMatchupInfo, bestOfN: number): boolean => {
+    if (pm.is_double_loss) return true;
     const winsNeeded = Math.ceil(bestOfN / 2);
     const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
     const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
@@ -1140,6 +1142,10 @@ export default function MyLeagueInfoPage() {
                 </Box>
               </Box>
 
+              {myMatchup.is_double_loss && (
+                <Alert severity="error" sx={{ mt: 1, mb: 1 }}>This match has been marked as a double loss — no points are awarded to either player.</Alert>
+              )}
+
               {/* Start status + button — only for formats with pre-match actions */}
               {needsStart && (
                 <>
@@ -1493,7 +1499,7 @@ export default function MyLeagueInfoPage() {
                 </Box>
               )}
 
-              {isMatchDecided(myMatchup, week.best_of_n) && (
+              {isMatchDecided(myMatchup, week.best_of_n) && !myMatchup.is_double_loss && (
                 <Alert severity="success" sx={{ mt: 1 }}>
                   Match complete!{' '}
                   {!myMatchup.result_confirmed && (

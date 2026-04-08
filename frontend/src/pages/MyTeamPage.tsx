@@ -1804,15 +1804,16 @@ export default function MyTeamPage() {
                             <Typography variant="body2">
                               {pm.player1.name} vs {pm.player2.name}
                             </Typography>
-                            {pm.games.length > 0 && (
+                            {pm.is_double_loss && <Chip label="Double Loss" size="small" color="error" />}
+                            {!pm.is_double_loss && pm.games.length > 0 && (
                               <Chip label={`${p1Wins}-${p2Wins}`} size="small" variant="outlined" />
                             )}
-                            {!pm.player1_started || !pm.player2_started ? (
+                            {!pm.is_double_loss && (!pm.player1_started || !pm.player2_started) ? (
                               <Chip label="Not started" size="small" color="default" />
-                            ) : pm.games.length === 0 ? (
+                            ) : !pm.is_double_loss && pm.games.length === 0 ? (
                               <Chip label="In progress" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
                             ) : null}
-                            {pm.result_confirmed && (
+                            {!pm.is_double_loss && pm.result_confirmed && (
                               <Chip label="Confirmed" size="small" color="success" />
                             )}
                             {isCaptain && !pm.result_confirmed && (p1Wins + p2Wins > 0) && (() => {

@@ -5520,6 +5520,8 @@ def _check_week_completion(week):
     is_exchange = week.format_type == WeekFormat.EXCHANGE.value
     for wm in week.matchups:
         for pm in wm.player_matchups:
+            if pm.is_double_loss:
+                continue  # Double-loss matchups count as resolved
             games = sorted(pm.games, key=lambda g: g.game_number)
             if is_exchange:
                 from keytracker.match_helpers import (

@@ -278,8 +278,8 @@ export default function LeagueDetailPage() {
                   const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
                   const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
                   const winsNeeded = Math.ceil(week.best_of_n / 2);
-                  const isComplete = p1Wins >= winsNeeded || p2Wins >= winsNeeded;
-                  const winnerId = p1Wins >= winsNeeded ? pm.player1.id : p2Wins >= winsNeeded ? pm.player2.id : null;
+                  const isComplete = pm.is_double_loss || p1Wins >= winsNeeded || p2Wins >= winsNeeded;
+                  const winnerId = pm.is_double_loss ? null : p1Wins >= winsNeeded ? pm.player1.id : p2Wins >= winsNeeded ? pm.player2.id : null;
 
                   return (
                     <Box key={pm.id} sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
@@ -310,11 +310,12 @@ export default function LeagueDetailPage() {
                           )}
                         </Typography>
                         {pm.is_feature && <Chip label="Feature" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />}
-                        {isComplete && <Chip label="Complete" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />}
-                        {!isComplete && pm.player1_started && pm.player2_started && (
+                        {pm.is_double_loss && <Chip label="Double Loss" size="small" color="error" />}
+                        {!pm.is_double_loss && isComplete && <Chip label="Complete" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />}
+                        {!pm.is_double_loss && !isComplete && pm.player1_started && pm.player2_started && (
                           <Chip label="In progress" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
                         )}
-                        {!isComplete && (!pm.player1_started || !pm.player2_started) ? (
+                        {!pm.is_double_loss && !isComplete && (!pm.player1_started || !pm.player2_started) ? (
                           <Chip label="Not started" size="small" />
                         ) : null}
                       </Box>
