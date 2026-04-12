@@ -259,6 +259,14 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
     viewer_is_admin = viewer and any(a.user_id == viewer.id for a in week.league.admins)
     show_player_matchups = week.status != "pairing" or viewer_is_admin
 
+    # Determine the viewer's team ID for filtering team-private data (deck suggestions)
+    viewer_team_id = None
+    if viewer and not viewer_is_admin:
+        for team in week.league.teams:
+            if any(m.user_id == viewer.id for m in team.members):
+                viewer_team_id = team.id
+                break
+
     # Alliance pod selections for the viewer's team (so teammates are visible)
     alliance_selections = []
     if viewer and week.format_type in ("sealed_alliance", "alliance"):
@@ -344,6 +352,8 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             {"team_id": fv.team_id, "user_id": fv.user_id}
             for fv in week.feature_volunteers
         ],
+        # Deck suggestions are team-private: only the viewer's own team's suggestions
+        # are sent. Admins see all. Unauthenticated viewers see none.
         "deck_suggestions": [
             {
                 "id": ds.id,
@@ -352,6 +362,7 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
                 "deck": serialize_deck_summary(ds.deck) if ds.deck else None,
             }
             for ds in week.deck_suggestions
+            if viewer_is_admin or (viewer_team_id is not None and ds.team_id == viewer_team_id)
         ],
         "alliance_selections": [
             serialize_alliance_selection(s) for s in alliance_selections
@@ -418,18 +429,22 @@ def serialize_player_matchup(
     viewer=None,
     viewer_can_see_proposals: bool = False,
     viewer_is_admin: bool = False,
+    viewer_id: int = None,
 ) -> dict:
     from keytracker.match_helpers import get_adaptive_winning_deck_player_id
 
-    is_participant = viewer is not None and viewer.id in (pm.player1_id, pm.player2_id)
+    # Resolve effective viewer ID — accepts either a User object or a raw int
+    effective_viewer_id = (viewer.id if viewer is not None else None) or viewer_id
+
+    is_participant = effective_viewer_id is not None and effective_viewer_id in (pm.player1_id, pm.player2_id)
 
     # Captains of either team in a week matchup can always see game results
     is_team_captain = False
-    if viewer is not None and not is_participant and pm.week_matchup_id:
+    if effective_viewer_id is not None and not is_participant and pm.week_matchup_id:
         wm = pm.week_matchup
         if wm:
             is_team_captain = any(
-                m.user_id == viewer.id and m.is_captain
+                m.user_id == effective_viewer_id and m.is_captain
                 for team in [wm.team1, wm.team2]
                 for m in team.members
             )
@@ -509,9 +524,20 @@ def serialize_player_matchup(
     data["adaptive_short_bidding_complete"] = getattr(
         pm, "adaptive_short_bidding_complete", False
     )
-    # Oubliette banned houses and eligible deck IDs
-    data["oubliette_p1_banned_house"] = getattr(pm, "oubliette_p1_banned_house", None)
-    data["oubliette_p2_banned_house"] = getattr(pm, "oubliette_p2_banned_house", None)
+    # Oubliette banned houses and eligible deck IDs.
+    # Banning is blind-simultaneous: don't reveal a player's ban to their opponent
+    # until both bans have been submitted. Admins always see both.
+    _both_oubliette_bans = bool(pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house)
+    if _both_oubliette_bans or viewer_is_admin:
+        data["oubliette_p1_banned_house"] = pm.oubliette_p1_banned_house
+        data["oubliette_p2_banned_house"] = pm.oubliette_p2_banned_house
+    else:
+        data["oubliette_p1_banned_house"] = (
+            pm.oubliette_p1_banned_house if effective_viewer_id == pm.player1_id else None
+        )
+        data["oubliette_p2_banned_house"] = (
+            pm.oubliette_p2_banned_house if effective_viewer_id == pm.player2_id else None
+        )
     if pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house:
         from keytracker.match_helpers import get_oubliette_eligible_deck_ids
 
@@ -624,7 +650,6 @@ def serialize_player_matchup(
     # Tertiate: per-game purge choices. Always show the viewer's own choice; reveal
     # the opponent's choice for a given game_number only after both have submitted.
     tertiate_purges_raw = getattr(pm, "tertiate_purge_choices", [])
-    viewer_id = viewer.id if viewer else None
     from collections import defaultdict as _defaultdict
     purges_by_game: dict = _defaultdict(list)
     for p in tertiate_purges_raw:
@@ -634,7 +659,7 @@ def serialize_player_matchup(
         if len(game_purges) == 2:
             visible_purges.extend(game_purges)
         else:
-            visible_purges.extend(p for p in game_purges if p.choosing_user_id == viewer_id)
+            visible_purges.extend(p for p in game_purges if p.choosing_user_id == effective_viewer_id)
     data["tertiate_purge_choices"] = [
         {
             "choosing_user_id": p.choosing_user_id,
@@ -650,7 +675,7 @@ def serialize_player_matchup(
         confirmation.confirmed_time.isoformat() + "Z" if confirmation else None
     )
     proposals_raw = getattr(pm, "schedule_proposals", [])
-    viewer_is_player = viewer is not None and viewer.id in (pm.player1_id, pm.player2_id)
+    viewer_is_player = effective_viewer_id is not None and effective_viewer_id in (pm.player1_id, pm.player2_id)
     show_proposals = bool(confirmation) or viewer_can_see_proposals or viewer_is_player
     if show_proposals:
         from collections import defaultdict
@@ -751,7 +776,11 @@ def serialize_standalone_match(match: StandaloneMatch, current_user_id=None) -> 
         "no_keycheat": match.no_keycheat,
         "allowed_sets": match.allowed_sets,
         "created_at": match.created_at.isoformat() + "Z" if match.created_at else None,
-        "matchup": serialize_player_matchup(match.matchup) if match.matchup else None,
+        "matchup": (
+            serialize_player_matchup(match.matchup, viewer_id=current_user_id)
+            if match.matchup
+            else None
+        ),
         "creator_selections": [serialize_deck_selection(s) for s in creator_selections],
         "opponent_selections": [
             serialize_deck_selection(s) for s in opponent_selections

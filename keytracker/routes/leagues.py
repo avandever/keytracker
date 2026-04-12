@@ -2089,7 +2089,7 @@ def edit_matchup(league_id, week_id, matchup_id):
         f"matchup_id={matchup_id}",
     )
     db.session.commit()
-    return jsonify(serialize_player_matchup(pm))
+    return jsonify(serialize_player_matchup(pm, viewer_is_admin=True))
 
 
 @blueprint.route(
@@ -4369,7 +4369,7 @@ def submit_oubliette_banned_house(league_id, matchup_id):
                 _check_week_completion(week)
 
     db.session.commit()
-    return jsonify(serialize_player_matchup(pm))
+    return jsonify(serialize_player_matchup(pm, viewer=effective))
 
 
 @blueprint.route(
