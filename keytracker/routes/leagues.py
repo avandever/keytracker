@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
 from flask_login import current_user, login_required
+from keytracker.response_helpers import etag_response
 from keytracker.schema import (
     db,
     Deck,
@@ -236,7 +237,7 @@ def get_league(league_id):
     data["is_signed_up"] = is_signed_up
     data["my_team_id"] = my_team_id
     data["is_captain"] = is_captain
-    return jsonify(data)
+    return etag_response(data)
 
 
 @blueprint.route("/<int:league_id>", methods=["PUT"])
@@ -955,7 +956,7 @@ def get_draft(league_id):
     )
     if not is_admin and not is_captain:
         return jsonify({"error": "Captains and admins only"}), 403
-    return jsonify(compute_draft_state(league))
+    return etag_response(compute_draft_state(league))
 
 
 @blueprint.route("/<int:league_id>/draft/pick", methods=["POST"])
@@ -1503,7 +1504,7 @@ def get_week(league_id, week_id):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
     viewer = get_effective_user() if current_user.is_authenticated else None
-    return jsonify(serialize_league_week(week, viewer=viewer))
+    return etag_response(serialize_league_week(week, viewer=viewer))
 
 
 @blueprint.route("/<int:league_id>/weeks/<int:week_id>", methods=["PUT"])

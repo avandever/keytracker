@@ -44,6 +44,7 @@ from keytracker.serializers import (
     serialize_player_matchup,
     serialize_match_game,
 )
+from keytracker.response_helpers import etag_response
 from keytracker.match_helpers import (
     validate_deck_for_standalone,
     generate_sealed_pools_for_standalone,
@@ -258,7 +259,7 @@ def get_match(match_id):
             return jsonify({"error": "UUID required to view this match"}), 403
 
     viewer_id = current_user.id if current_user.is_authenticated else None
-    return jsonify(serialize_standalone_match(match, viewer_id))
+    return etag_response(serialize_standalone_match(match, viewer_id))
 
 
 @standalone_bp.route("/<int:match_id>/join", methods=["POST"])
