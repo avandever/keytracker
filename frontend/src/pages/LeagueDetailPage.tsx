@@ -398,6 +398,7 @@ export default function LeagueDetailPage() {
   interface StandingsRow {
     team: TeamDetail;
     week_points: Record<number, number>;
+    week_opponents: Record<number, string>;
     total: number;
   }
 
@@ -407,7 +408,7 @@ export default function LeagueDetailPage() {
     );
     const rows: Record<number, StandingsRow> = {};
     for (const team of league.teams) {
-      rows[team.id] = { team, week_points: {}, total: 0 };
+      rows[team.id] = { team, week_points: {}, week_opponents: {}, total: 0 };
     }
     const bonusPoints = league.week_bonus_points ?? 2;
     for (const week of qualifyingWeeks) {
@@ -462,11 +463,13 @@ export default function LeagueDetailPage() {
           rows[wm.team1.id].week_points[week.week_number] =
             (rows[wm.team1.id].week_points[week.week_number] || 0) + team1Wins + t1Bonus;
           rows[wm.team1.id].total += team1Wins + t1Bonus;
+          rows[wm.team1.id].week_opponents[week.week_number] = wm.team2.name;
         }
         if (rows[wm.team2.id]) {
           rows[wm.team2.id].week_points[week.week_number] =
             (rows[wm.team2.id].week_points[week.week_number] || 0) + team2Wins + t2Bonus;
           rows[wm.team2.id].total += team2Wins + t2Bonus;
+          rows[wm.team2.id].week_opponents[week.week_number] = wm.team1.name;
         }
       }
     }
@@ -506,11 +509,21 @@ export default function LeagueDetailPage() {
           {rows.map((row) => (
             <TableRow key={row.team.id}>
               <TableCell>{row.team.name}</TableCell>
-              {qualifyingWeeks.map((w) => (
-                <TableCell key={w.id} align="center">
-                  {row.week_points[w.week_number] ?? 0}
-                </TableCell>
-              ))}
+              {qualifyingWeeks.map((w) => {
+                const opponent = row.week_opponents[w.week_number];
+                const pts = row.week_points[w.week_number] ?? 0;
+                return (
+                  <TableCell key={w.id} align="center">
+                    {opponent ? (
+                      <Tooltip title={`vs ${opponent}`} arrow>
+                        <Box component="span" sx={{ cursor: 'pointer', borderBottom: '1px dotted', borderColor: 'text.disabled' }}>
+                          {pts}
+                        </Box>
+                      </Tooltip>
+                    ) : pts}
+                  </TableCell>
+                );
+              })}
               <TableCell align="center"><strong>{row.total}</strong></TableCell>
               <TableCell align="center" sx={{ color: 'text.secondary' }}>N/A</TableCell>
             </TableRow>
