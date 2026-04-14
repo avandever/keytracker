@@ -89,12 +89,11 @@ export default function AuctionPage() {
       setAuction(data);
     } catch (e: unknown) {
       let msg = 'An error occurred';
-      if (e instanceof Error) {
-        try {
-          msg = (JSON.parse(e.message) as { error?: string })?.error || e.message;
-        } catch {
-          msg = e.message;
-        }
+      const axErr = e as { response?: { data?: { error?: string } }; message?: string };
+      if (axErr.response?.data?.error) {
+        msg = axErr.response.data.error;
+      } else if (axErr.message) {
+        msg = axErr.message;
       }
       setActionError(msg);
     } finally {

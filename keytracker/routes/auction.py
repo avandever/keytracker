@@ -13,6 +13,7 @@ from xkcdpass import xkcd_password as xp
 
 from flask import Blueprint, jsonify, request
 from flask_login import current_user
+from keytracker.response_helpers import etag_response
 from sqlalchemy.orm import joinedload
 
 from keytracker.routes.auth import member_required
@@ -204,7 +205,7 @@ def get_auction(auction_id):
     if not auction:
         return jsonify({"error": "Not found"}), 404
     viewer_id = current_user.id if current_user.is_authenticated else None
-    return jsonify(serialize_auction_detail(auction, viewer_id=viewer_id))
+    return etag_response(serialize_auction_detail(auction, viewer_id=viewer_id))
 
 
 @auction_bp.route("/<int:auction_id>/join", methods=["POST"])
