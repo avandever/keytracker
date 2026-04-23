@@ -25,7 +25,7 @@ import {
   DialogActions,
   Tooltip,
 } from '@mui/material';
-import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport, getSignupDiscordCheck, startDraft } from '../api/leagues';
+import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport, getSignupDiscordCheck, startDraft, confirmMatchResult } from '../api/leagues';
 import type { SignupDiscordStatus } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -280,13 +280,18 @@ export default function LeagueDetailPage() {
                   const winsNeeded = Math.ceil(week.best_of_n / 2);
                   const isComplete = pm.is_double_loss || p1Wins >= winsNeeded || p2Wins >= winsNeeded;
                   const winnerId = pm.is_double_loss ? null : p1Wins >= winsNeeded ? pm.player1.id : p2Wins >= winsNeeded ? pm.player2.id : null;
+                  // Unverified: games played to completion but not yet confirmed by a captain
+                  const isUnverified = isComplete && !pm.result_confirmed && !pm.is_double_loss;
+                  const hasVisibleGames = pm.games.length > 0;
+                  // Gray out scores for unverified matches (only participants/captains can see them)
+                  const grayedOut = isUnverified && hasVisibleGames;
 
                   return (
-                    <Box key={pm.id} sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1 }}>
+                    <Box key={pm.id} sx={{ mb: 1, p: 1, bgcolor: 'action.hover', borderRadius: 1, ...(grayedOut ? { opacity: 0.55 } : {}) }}>
                       <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                         <Typography
                           variant="body2"
-                          fontWeight={winnerId === pm.player1.id ? 'bold' : 'normal'}
+                          fontWeight={!isUnverified && winnerId === pm.player1.id ? 'bold' : 'normal'}
                         >
                           {pm.player1.name}
                           {league.is_admin && (
@@ -296,11 +301,11 @@ export default function LeagueDetailPage() {
                           )}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {pm.games.length > 0 ? `${p1Wins} - ${p2Wins}` : 'vs'}
+                          {hasVisibleGames ? `${p1Wins} - ${p2Wins}` : isUnverified ? '? - ?' : 'vs'}
                         </Typography>
                         <Typography
                           variant="body2"
-                          fontWeight={winnerId === pm.player2.id ? 'bold' : 'normal'}
+                          fontWeight={!isUnverified && winnerId === pm.player2.id ? 'bold' : 'normal'}
                         >
                           {pm.player2.name}
                           {league.is_admin && (
@@ -311,17 +316,47 @@ export default function LeagueDetailPage() {
                         </Typography>
                         {pm.is_feature && <Chip label="Feature" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />}
                         {pm.is_double_loss && <Chip label="Double Loss" size="small" color="error" />}
-                        {!pm.is_double_loss && isComplete && <Chip label="Complete" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />}
+                        {!pm.is_double_loss && isComplete && pm.result_confirmed && <Chip label="Verified" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />}
+                        {!pm.is_double_loss && isUnverified && <Chip label="Unverified" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.15), color: theme.palette.warning.dark })} />}
                         {!pm.is_double_loss && !isComplete && pm.player1_started && pm.player2_started && (
                           <Chip label="In progress" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
                         )}
                         {!pm.is_double_loss && !isComplete && (!pm.player1_started || !pm.player2_started) ? (
                           <Chip label="Not started" size="small" />
                         ) : null}
+                        {isUnverified && (league.is_captain || league.is_admin) && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="success"
+                            onClick={async () => {
+                              try {
+                                const updated = await confirmMatchResult(league.id, pm.id);
+                                setLeague((prev) => {
+                                  if (!prev) return prev;
+                                  return {
+                                    ...prev,
+                                    weeks: prev.weeks.map((w2) => w2.id === week.id ? {
+                                      ...w2,
+                                      matchups: w2.matchups.map((wm2) => ({
+                                        ...wm2,
+                                        player_matchups: wm2.player_matchups.map((pm2) => pm2.id === pm.id ? updated : pm2),
+                                      })),
+                                    } : w2),
+                                  };
+                                });
+                              } catch {
+                                /* ignore */
+                              }
+                            }}
+                          >
+                            Verify
+                          </Button>
+                        )}
                       </Box>
 
-                      {/* Show individual games for completed matches */}
-                      {isComplete && pm.games.length > 0 && (
+                      {/* Show individual games for completed matches (grayed if unverified) */}
+                      {isComplete && hasVisibleGames && (
                         <Box sx={{ ml: 2, mt: 0.5 }}>
                           {pm.games.map((g) => {
                             const gameWinner = g.winner_id === pm.player1.id ? pm.player1 : pm.player2;
@@ -415,12 +450,13 @@ export default function LeagueDetailPage() {
       const winsNeeded = Math.ceil(week.best_of_n / 2);
       for (const wm of week.matchups) {
         const team1MemberIds = new Set(wm.team1.members.map((m) => m.user.id));
-        const totalMatchups = wm.player_matchups.filter((pm) => !pm.is_double_loss).length;
+        const totalMatchups = wm.player_matchups.filter((pm) => !pm.is_double_loss && pm.result_confirmed).length;
         let team1Wins = 0;
         let team2Wins = 0;
         let featureWinnerId: number | null = null;
         for (const pm of wm.player_matchups) {
           if (pm.is_double_loss) continue;
+          if (!pm.result_confirmed) continue; // Only count verified results
           const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
           const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
           let winnerOfPm: number | null = null;
@@ -599,7 +635,14 @@ export default function LeagueDetailPage() {
               const ourLosses = teamIsTeam1 ? p2Wins : p1Wins;
 
               let result = '-';
-              if (ourWins >= winsNeeded) {
+              if (!pm.result_confirmed) {
+                // Unverified — show indicator but don't count
+                if (pm.is_double_loss) {
+                  result = 'DL';
+                } else if (pm.games.length > 0) {
+                  result = '?';
+                }
+              } else if (ourWins >= winsNeeded) {
                 result = 'W';
                 teamWeekWins[week.week_number]++;
                 playerWins[ourPlayer.id] = (playerWins[ourPlayer.id] || 0) + 1;

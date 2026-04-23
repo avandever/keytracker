@@ -1795,61 +1795,68 @@ export default function MyTeamPage() {
                     {wm.player_matchups.map((pm) => {
                       const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
                       const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
+                      const winsNeeded = Math.ceil(week.best_of_n / 2);
+                      const isComplete = pm.is_double_loss || p1Wins >= winsNeeded || p2Wins >= winsNeeded;
+                      const isUnverified = isComplete && !pm.result_confirmed && !pm.is_double_loss;
+                      const hasVisibleGames = pm.games.length > 0;
+                      const grayedOut = isUnverified && hasVisibleGames;
                       const showPods = (week.format_type === 'sealed_alliance' || week.format_type === 'alliance' || week.format_type === 'team_sealed_alliance') &&
                         (week.status === 'published' || week.status === 'completed') &&
                         pm.player1_started && pm.player2_started;
                       return (
-                        <Box key={pm.id} sx={{ mb: 1 }}>
+                        <Box key={pm.id} sx={{ mb: 1, ...(grayedOut ? { opacity: 0.55 } : {}) }}>
                           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                             <Typography variant="body2">
-                              {pm.player1.name} vs {pm.player2.name}
+                              {pm.player1.name}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {hasVisibleGames ? `${p1Wins} - ${p2Wins}` : isUnverified ? '? - ?' : 'vs'}
+                            </Typography>
+                            <Typography variant="body2">
+                              {pm.player2.name}
                             </Typography>
                             {pm.is_double_loss && <Chip label="Double Loss" size="small" color="error" />}
-                            {!pm.is_double_loss && pm.games.length > 0 && (
-                              <Chip label={`${p1Wins}-${p2Wins}`} size="small" variant="outlined" />
+                            {!pm.is_double_loss && isComplete && pm.result_confirmed && (
+                              <Chip label="Verified" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />
                             )}
-                            {!pm.is_double_loss && (!pm.player1_started || !pm.player2_started) ? (
-                              <Chip label="Not started" size="small" color="default" />
-                            ) : !pm.is_double_loss && pm.games.length === 0 ? (
+                            {!pm.is_double_loss && isUnverified && (
+                              <Chip label="Unverified" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.15), color: theme.palette.warning.dark })} />
+                            )}
+                            {!pm.is_double_loss && !isComplete && pm.player1_started && pm.player2_started && (
                               <Chip label="In progress" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
-                            ) : null}
-                            {!pm.is_double_loss && pm.result_confirmed && (
-                              <Chip label="Confirmed" size="small" color="success" />
                             )}
-                            {isCaptain && !pm.result_confirmed && (p1Wins + p2Wins > 0) && (() => {
-                              const winsNeeded = Math.ceil(week.best_of_n / 2);
-                              const matchDecided = p1Wins >= winsNeeded || p2Wins >= winsNeeded;
-                              if (!matchDecided) return null;
-                              return (
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  color="success"
-                                  onClick={async () => {
-                                    try {
-                                      const updated = await confirmMatchResult(leagueId, pm.id);
-                                      setLeague((prev) => {
-                                        if (!prev) return prev;
-                                        return {
-                                          ...prev,
-                                          weeks: prev.weeks.map((w) => w.id === week.id ? {
-                                            ...w,
-                                            matchups: w.matchups.map((wm2) => ({
-                                              ...wm2,
-                                              player_matchups: wm2.player_matchups.map((pm2) => pm2.id === pm.id ? updated : pm2),
-                                            })),
-                                          } : w),
-                                        };
-                                      });
-                                    } catch {
-                                      setError('Failed to confirm result');
-                                    }
-                                  }}
-                                >
-                                  Confirm Result
-                                </Button>
-                              );
-                            })()}
+                            {!pm.is_double_loss && !isComplete && (!pm.player1_started || !pm.player2_started) ? (
+                              <Chip label="Not started" size="small" color="default" />
+                            ) : null}
+                            {isUnverified && isCaptain && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                color="success"
+                                onClick={async () => {
+                                  try {
+                                    const updated = await confirmMatchResult(leagueId, pm.id);
+                                    setLeague((prev) => {
+                                      if (!prev) return prev;
+                                      return {
+                                        ...prev,
+                                        weeks: prev.weeks.map((w) => w.id === week.id ? {
+                                          ...w,
+                                          matchups: w.matchups.map((wm2) => ({
+                                            ...wm2,
+                                            player_matchups: wm2.player_matchups.map((pm2) => pm2.id === pm.id ? updated : pm2),
+                                          })),
+                                        } : w),
+                                      };
+                                    });
+                                  } catch {
+                                    setError('Failed to confirm result');
+                                  }
+                                }}
+                              >
+                                Verify
+                              </Button>
+                            )}
                           </Box>
                           {showPods && (
                             <Box sx={{ ml: 2, display: 'flex', gap: 4, flexWrap: 'wrap' }}>

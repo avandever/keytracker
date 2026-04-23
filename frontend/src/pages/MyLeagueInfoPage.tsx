@@ -47,6 +47,7 @@ import {
   submitAllianceSelection,
   clearAllianceSelection,
   submitSteals,
+  confirmMatchResult,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import MatchSchedulingSection from '../components/MatchSchedulingSection';
@@ -1345,9 +1346,20 @@ export default function MyLeagueInfoPage() {
               })()}
 
               {/* Games played */}
-              {myMatchup.games.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" gutterBottom>Games</Typography>
+              {myMatchup.games.length > 0 && (() => {
+                const matchDecided = isMatchDecided(myMatchup, week.best_of_n);
+                const isUnverified = matchDecided && !myMatchup.result_confirmed && !myMatchup.is_double_loss;
+                return (
+                <Box sx={{ mb: 2, ...(isUnverified ? { opacity: 0.55 } : {}) }}>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5 }}>
+                    <Typography variant="subtitle2">Games</Typography>
+                    {isUnverified && (
+                      <Chip label="Unverified" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.15), color: theme.palette.warning.dark })} />
+                    )}
+                    {matchDecided && myMatchup.result_confirmed && (
+                      <Chip label="Verified" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.success.main, 0.12), color: theme.palette.success.dark })} />
+                    )}
+                  </Box>
                   {myMatchup.games.map((g) => {
                     const winner = g.winner_id === myMatchup.player1.id
                       ? myMatchup.player1 : myMatchup.player2;
@@ -1372,7 +1384,8 @@ export default function MyLeagueInfoPage() {
                     );
                   })()}
                 </Box>
-              )}
+                );
+              })()}
 
               {/* Game reporting */}
               {(!needsStart || (myMatchup.player1_started && myMatchup.player2_started)) &&
@@ -1500,11 +1513,12 @@ export default function MyLeagueInfoPage() {
               )}
 
               {isMatchDecided(myMatchup, week.best_of_n) && !myMatchup.is_double_loss && (
-                <Alert severity="success" sx={{ mt: 1 }}>
-                  Match complete!{' '}
-                  {!myMatchup.result_confirmed && (
+                <Alert severity={myMatchup.result_confirmed ? 'success' : 'info'} sx={{ mt: 1 }}>
+                  {myMatchup.result_confirmed ? (
+                    'Match complete — results verified ✓'
+                  ) : (
                     <>
-                      Please post your results in{' '}
+                      Match complete — awaiting verification. Please post your results in{' '}
                       <Link
                         href="https://discord.com/channels/698635177248948316/711694305688944660"
                         target="_blank"
@@ -1515,7 +1529,36 @@ export default function MyLeagueInfoPage() {
                       and tag your captain.
                     </>
                   )}
-                  {myMatchup.result_confirmed && ' Results confirmed ✓'}
+                  {isCaptain && !myMatchup.result_confirmed && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="success"
+                      sx={{ ml: 2 }}
+                      onClick={async () => {
+                        try {
+                          const updated = await confirmMatchResult(league.id, myMatchup.id);
+                          setLeague((prev) => {
+                            if (!prev) return prev;
+                            return {
+                              ...prev,
+                              weeks: prev.weeks.map((w) => w.id === week.id ? {
+                                ...w,
+                                matchups: w.matchups.map((wm2) => ({
+                                  ...wm2,
+                                  player_matchups: wm2.player_matchups.map((pm2) => pm2.id === myMatchup.id ? updated : pm2),
+                                })),
+                              } : w),
+                            };
+                          });
+                        } catch {
+                          setError('Failed to verify result');
+                        }
+                      }}
+                    >
+                      Verify
+                    </Button>
+                  )}
                 </Alert>
               )}
             </CardContent>
@@ -1525,6 +1568,67 @@ export default function MyLeagueInfoPage() {
         {!myMatchup && week.status === 'published' && (
           <Alert severity="info">No matchup assigned for this week.</Alert>
         )}
+
+        {/* Captain: verify completed team matches */}
+        {isCaptain && week.status === 'published' && (() => {
+          const unverifiedMatchups: PlayerMatchupInfo[] = [];
+          for (const wm of week.matchups) {
+            const myTeamId = myTeam.id;
+            if (wm.team1.id !== myTeamId && wm.team2.id !== myTeamId) continue;
+            for (const pm of wm.player_matchups) {
+              if (!isMatchDecided(pm, week.best_of_n)) continue;
+              if (pm.is_double_loss || pm.result_confirmed) continue;
+              unverifiedMatchups.push(pm);
+            }
+          }
+          if (unverifiedMatchups.length === 0) return null;
+          return (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom fontWeight="bold">Matches Awaiting Verification</Typography>
+              {unverifiedMatchups.map((pm) => {
+                const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
+                const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
+                return (
+                  <Card key={pm.id} sx={{ mb: 1, opacity: 0.55 }}>
+                    <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', py: 1, '&:last-child': { pb: 1 } }}>
+                      <Typography variant="body2">
+                        {pm.player1.name} {p1Wins} - {p2Wins} {pm.player2.name}
+                      </Typography>
+                      <Chip label="Unverified" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.15), color: theme.palette.warning.dark })} />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="success"
+                        onClick={async () => {
+                          try {
+                            const updated = await confirmMatchResult(league.id, pm.id);
+                            setLeague((prev) => {
+                              if (!prev) return prev;
+                              return {
+                                ...prev,
+                                weeks: prev.weeks.map((w) => w.id === week.id ? {
+                                  ...w,
+                                  matchups: w.matchups.map((wm2) => ({
+                                    ...wm2,
+                                    player_matchups: wm2.player_matchups.map((pm2) => pm2.id === pm.id ? updated : pm2),
+                                  })),
+                                } : w),
+                              };
+                            });
+                          } catch {
+                            setError('Failed to verify result');
+                          }
+                        }}
+                      >
+                        Verify
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Box>
+          );
+        })()}
 
         {/* Captain: report on behalf of team members */}
         {isCaptain && week.status === 'published' && (() => {
