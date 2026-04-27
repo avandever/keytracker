@@ -165,19 +165,18 @@ def serialize_user_brief(user) -> dict:
     return {
         "id": user.id,
         "name": user.name,
-        "email": user.email,
         "avatar_url": user.avatar_url,
-        "is_test_user": user.is_test_user,
         "tco_username": tco[0] if tco else None,
         "discord_username": user.discord_username,
-        "dok_profile_url": user.dok_profile_url,
     }
 
 
 def serialize_team_member(member: TeamMember) -> dict:
+    user_data = serialize_user_brief(member.user)
+    user_data["dok_profile_url"] = member.user.dok_profile_url
     return {
         "id": member.id,
-        "user": serialize_user_brief(member.user),
+        "user": user_data,
         "is_captain": member.is_captain,
         "has_paid": member.has_paid,
     }

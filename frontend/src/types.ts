@@ -245,12 +245,10 @@ export interface MyGamesResponse {
 export interface UserBrief {
   id: number;
   name: string;
-  email: string;
   avatar_url: string | null;
-  is_test_user: boolean;
   tco_username: string | null;
   discord_username: string | null;
-  dok_profile_url: string | null;
+  dok_profile_url?: string | null;
 }
 
 export interface DeckEntryLogEntry {
