@@ -5879,7 +5879,7 @@ def completed_match_decks(league_id, week_id):
             p2_wins = sum(1 for g in pm.games if g.winner_id == pm.player2_id)
             if p1_wins < wins_needed and p2_wins < wins_needed:
                 continue  # not complete
-            if not pm.result_confirmed:
+            if not pm.result_confirmed_at:
                 continue  # not yet verified by a captain
 
             if is_alliance:
