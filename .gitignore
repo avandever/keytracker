@@ -25,3 +25,5 @@ frontend/dist/
 *.crt
 *.key
 *.swp
+deploy/deploy.log
+deploy/keytracker-webhook.service
