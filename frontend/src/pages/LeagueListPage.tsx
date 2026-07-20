@@ -75,7 +75,7 @@ export default function LeagueListPage() {
                 />
               </Box>
               {league.description && (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1, whiteSpace: 'pre-line' }}>
                   {league.description}
                 </Typography>
               )}

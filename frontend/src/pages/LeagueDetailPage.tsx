@@ -1052,7 +1052,7 @@ export default function LeagueDetailPage() {
             {league.is_test && <Chip label="Test" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.secondary.main, 0.12), color: theme.palette.secondary.dark })} />}
           </Box>
           {league.description && (
-            <Typography color="text.secondary" sx={{ mt: 1 }}>{league.description}</Typography>
+            <Typography color="text.secondary" sx={{ mt: 1, whiteSpace: 'pre-line' }}>{league.description}</Typography>
           )}
         </Box>
         <Chip label={league.status} sx={getChipSx(league.status === 'active' ? 'success' : league.status === 'drafting' || league.status === 'playoffs' ? 'warning' : 'info')} />
