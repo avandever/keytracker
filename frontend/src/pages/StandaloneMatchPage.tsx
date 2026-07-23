@@ -268,6 +268,9 @@ export default function StandaloneMatchPage() {
     feature_designations: [],
     sas_ladder_maxes: null,
     sas_ladder_feature_rung: null,
+    team_max_raw_amber: null,
+    team_min_raw_amber: null,
+    required_card_names: null,
     sas_floor: match.sas_floor,
   };
 
