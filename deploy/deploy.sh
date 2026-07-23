@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_DIR="$HOME/tracker"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 IMAGE_NAME="keytracker"
 CONTAINER_NAME="keytracker"
 VITE_RECAPTCHA_SITE_KEY="6LfZAXksAAAAAOycX9ZMlksKsKKyyMTAXZnZxJo9"
