@@ -2,6 +2,7 @@ import logging
 import queue
 import threading
 import datetime
+import time
 
 from flask import Flask
 
@@ -42,7 +43,29 @@ def _run_sync(user_id: int, job_id: int):
 
     try:
         user = User.query.get(user_id)
+        t0 = time.monotonic()
         result = sync_collection_from_dok(user)
+        elapsed = time.monotonic() - t0
+        timing = result.get("timing", {})
+        logger.info(
+            "Collection sync completed for user %s in %.1fs: "
+            "%d standard decks, %d alliance decks, %d need refresh. "
+            "Timing breakdown — DoK API: %.1fs, DB/processing: %.1fs, "
+            "standard pages: %d (DoK: %.1fs, DB: %.1fs), "
+            "alliance (DoK: %.1fs, DB: %.1fs)",
+            user_id,
+            elapsed,
+            result["standard_decks"],
+            result["alliance_decks"],
+            len(result.get("refresh_deck_ids", [])),
+            timing.get("dok_api_total", 0),
+            timing.get("db_total", 0),
+            timing.get("standard_pages", 0),
+            timing.get("standard_dok", 0),
+            timing.get("standard_db", 0),
+            timing.get("alliance_dok", 0),
+            timing.get("alliance_db", 0),
+        )
         job.status = "done"
         job.standard_decks = result["standard_decks"]
         job.alliance_decks = result["alliance_decks"]

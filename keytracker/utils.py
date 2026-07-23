@@ -2488,18 +2488,26 @@ def sync_collection_from_dok(user) -> dict:
     headers = {"Api-Key": user.dok_api_key}
     now = datetime.datetime.utcnow()
 
+    timing_standard_dok = 0.0
+    timing_standard_db = 0.0
+    standard_pages = 0
+
     # --- Standard decks (paginated, 100/page) ---
     standard_count = 0
     needs_refresh = []
     page = 0
     while True:
+        t_api = time.monotonic()
         resp = requests.get(
             DOK_MY_DECKS_BASE, params={"page": page}, headers=headers, timeout=30
         )
         resp.raise_for_status()
         entries = resp.json()
+        timing_standard_dok += time.monotonic() - t_api
         if not entries:
             break
+        standard_pages += 1
+        t_db = time.monotonic()
         for entry in entries:
             dok_deck = entry.get("deck", {})
             kf_id = dok_deck.get("keyforgeId")
@@ -2532,13 +2540,18 @@ def sync_collection_from_dok(user) -> dict:
                 or deck.dok.last_refresh is None
             ):
                 needs_refresh.append(deck.id)
+        timing_standard_db += time.monotonic() - t_db
         page += 1
 
     # --- Alliance decks (single call, no pagination) ---
+    t_api = time.monotonic()
     resp = requests.get(DOK_MY_ALLIANCES_URL, headers=headers, timeout=30)
     resp.raise_for_status()
     alliance_entries = resp.json()
+    timing_alliance_dok = time.monotonic() - t_api
+
     alliance_count = 0
+    t_db = time.monotonic()
     for entry in alliance_entries:
         dok_deck = entry.get("deck", {})
         kf_id = dok_deck.get("keyforgeId")
@@ -2576,12 +2589,29 @@ def sync_collection_from_dok(user) -> dict:
         arow.dok_notes = entry.get("notes")
         arow.last_synced_at = now
         alliance_count += 1
+    timing_alliance_db = time.monotonic() - t_db
 
+    t_commit = time.monotonic()
     db.session.commit()
+    timing_commit = time.monotonic() - t_commit
+
+    dok_api_total = timing_standard_dok + timing_alliance_dok
+    db_total = timing_standard_db + timing_alliance_db + timing_commit
+
     return {
         "standard_decks": standard_count,
         "alliance_decks": alliance_count,
         "refresh_deck_ids": needs_refresh,
+        "timing": {
+            "dok_api_total": dok_api_total,
+            "db_total": db_total,
+            "standard_pages": standard_pages,
+            "standard_dok": timing_standard_dok,
+            "standard_db": timing_standard_db,
+            "alliance_dok": timing_alliance_dok,
+            "alliance_db": timing_alliance_db,
+            "commit": timing_commit,
+        },
     }
 
 

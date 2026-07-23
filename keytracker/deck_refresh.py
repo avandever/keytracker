@@ -1,6 +1,7 @@
 import logging
 import queue
 import threading
+import time
 
 from flask import Flask
 
@@ -36,26 +37,47 @@ def _refresh(deck_id: int, user_dok_api_key: str | None):
     if not deck:
         return
 
+    t0 = time.monotonic()
+
     if len(deck.cards_from_assoc) < 36:
         try:
+            t_mv = time.monotonic()
             refresh_deck_from_mv(deck)
             db.session.flush()
+            logger.info(
+                "Deck %s (%s): MV refresh %.1fs",
+                deck_id, deck.kf_id, time.monotonic() - t_mv,
+            )
         except Exception:
             logger.exception("MV refresh failed for deck %s (%s)", deck_id, deck.kf_id)
 
     if len(deck.pod_stats) == 0 and len(deck.cards_from_assoc) >= 36:
         try:
+            t_pod = time.monotonic()
             calculate_pod_stats(deck)
             db.session.commit()
+            logger.info(
+                "Deck %s: pod stats %.1fs",
+                deck_id, time.monotonic() - t_pod,
+            )
         except Exception:
             logger.exception("Pod stats failed for deck %s", deck_id)
 
     if not deck.dok or deck.dok.last_refresh is None:
         try:
+            t_sas = time.monotonic()
             update_sas_scores(deck, dok_api_key=user_dok_api_key)
             db.session.commit()
+            logger.info(
+                "Deck %s: SAS update %.1fs",
+                deck_id, time.monotonic() - t_sas,
+            )
         except Exception:
             logger.exception("SAS update failed for deck %s", deck_id)
+
+    logger.info(
+        "Deck %s refresh total: %.1fs", deck_id, time.monotonic() - t0,
+    )
 
 
 def start_worker():
