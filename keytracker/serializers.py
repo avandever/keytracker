@@ -321,6 +321,13 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "decks_per_player": week.decks_per_player,
         "sealed_pools_generated": week.sealed_pools_generated,
         "no_keycheat": week.no_keycheat,
+        "team_max_raw_amber": week.team_max_raw_amber,
+        "team_min_raw_amber": week.team_min_raw_amber,
+        "required_card_names": (
+            json.loads(week.required_card_names)
+            if week.required_card_names
+            else None
+        ),
         "custom_description": week.custom_description,
         "hide_standard_description": week.hide_standard_description,
         "thief_floor_team_id": thief_floor_team_id,

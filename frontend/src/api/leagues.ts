@@ -231,9 +231,17 @@ export async function createWeek(
     set_diversity?: boolean;
     house_diversity?: boolean;
     decks_per_player?: number | null;
+    team_max_raw_amber?: number | null;
+    team_min_raw_amber?: number | null;
+    required_card_names?: string[] | null;
   },
 ): Promise<LeagueWeek> {
   const { data } = await apiClient.post(`/leagues/${leagueId}/weeks`, payload);
+  return data;
+}
+
+export async function searchCards(query: string): Promise<string[]> {
+  const { data } = await apiClient.get('/leagues/cards/search', { params: { q: query } });
   return data;
 }
 

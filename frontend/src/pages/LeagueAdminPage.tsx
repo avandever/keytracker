@@ -75,6 +75,7 @@ import {
   setPlayerMatchupDoubleLoss,
   reorderWeeks,
   updateTeam,
+  searchCards,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -176,6 +177,14 @@ export default function LeagueAdminPage() {
   // SAS Ladder-specific
   const [weekSasLadderMaxes, setWeekSasLadderMaxes] = useState('');
   const [weekSasLadderFeatureRung, setWeekSasLadderFeatureRung] = useState('');
+  // Team aember constraints
+  const [weekTeamMaxAmber, setWeekTeamMaxAmber] = useState('');
+  const [weekTeamMinAmber, setWeekTeamMinAmber] = useState('');
+  // Required card list
+  const [weekRequiredCards, setWeekRequiredCards] = useState<string[]>([]);
+  const [cardSearchQuery, setCardSearchQuery] = useState('');
+  const [cardSearchResults, setCardSearchResults] = useState<string[]>([]);
+  const [cardSearchLoading, setCardSearchLoading] = useState(false);
   // Description
   const [weekCustomDescription, setWeekCustomDescription] = useState('');
   const [weekHideStandardDescription, setWeekHideStandardDescription] = useState(false);
@@ -409,6 +418,13 @@ export default function LeagueAdminPage() {
     setWeekAllianceRlVersionId('');
     setWeekSasLadderMaxes('');
     setWeekSasLadderFeatureRung('');
+    setWeekTeamMaxAmber('');
+    setWeekTeamMinAmber('');
+    setWeekRequiredCards([]);
+    setCardSearchQuery('');
+    setCardSearchResults([]);
+    setWeekCustomDescription('');
+    setWeekHideStandardDescription(false);
     setEditingWeekId(null);
   };
 
@@ -427,6 +443,11 @@ export default function LeagueAdminPage() {
     setWeekAllianceRlVersionId(week.alliance_restricted_list_version?.id ?? '');
     setWeekSasLadderMaxes(week.sas_ladder_maxes?.join(',') ?? '');
     setWeekSasLadderFeatureRung(week.sas_ladder_feature_rung != null ? String(week.sas_ladder_feature_rung) : '');
+    setWeekTeamMaxAmber(week.team_max_raw_amber != null ? String(week.team_max_raw_amber) : '');
+    setWeekTeamMinAmber(week.team_min_raw_amber != null ? String(week.team_min_raw_amber) : '');
+    setWeekRequiredCards(week.required_card_names || []);
+    setCardSearchQuery('');
+    setCardSearchResults([]);
     setWeekCustomDescription(week.custom_description ?? '');
     setWeekHideStandardDescription(week.hide_standard_description ?? false);
     setEditingWeekId(week.id);
@@ -457,6 +478,9 @@ export default function LeagueAdminPage() {
         : null,
       sas_ladder_feature_rung: weekFormat === 'sas_ladder' && weekSasLadderFeatureRung
         ? parseInt(weekSasLadderFeatureRung, 10) || null : null,
+      team_max_raw_amber: weekTeamMaxAmber ? parseInt(weekTeamMaxAmber, 10) : null,
+      team_min_raw_amber: weekTeamMinAmber ? parseInt(weekTeamMinAmber, 10) : null,
+      required_card_names: weekRequiredCards.length > 0 ? weekRequiredCards : null,
       custom_description: weekCustomDescription.trim() || null,
       hide_standard_description: weekHideStandardDescription,
     };
@@ -1586,6 +1610,70 @@ export default function LeagueAdminPage() {
                 )}
               </>
             )}
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <TextField
+                label="Team Min Aember"
+                helperText="Minimum combined printed aember pips across all team decks"
+                value={weekTeamMinAmber}
+                onChange={(e) => setWeekTeamMinAmber(e.target.value)}
+                type="number"
+                size="small"
+                fullWidth
+              />
+              <TextField
+                label="Team Max Aember"
+                helperText="Maximum combined printed aember pips across all team decks"
+                value={weekTeamMaxAmber}
+                onChange={(e) => setWeekTeamMaxAmber(e.target.value)}
+                type="number"
+                size="small"
+                fullWidth
+              />
+            </Box>
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                Required Cards {weekRequiredCards.length > 0 ? `(${weekRequiredCards.length})` : ''}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                Each deck must contain at least one card from this list. Within a team, each card can only appear in one player&apos;s deck.
+              </Typography>
+              <Autocomplete
+                freeSolo
+                options={cardSearchResults}
+                inputValue={cardSearchQuery}
+                onInputChange={(_e, value) => {
+                  setCardSearchQuery(value);
+                  if (value.length >= 2) {
+                    setCardSearchLoading(true);
+                    searchCards(value).then(setCardSearchResults).finally(() => setCardSearchLoading(false));
+                  } else {
+                    setCardSearchResults([]);
+                  }
+                }}
+                onChange={(_e, value) => {
+                  if (value && typeof value === 'string' && !weekRequiredCards.includes(value)) {
+                    setWeekRequiredCards([...weekRequiredCards, value]);
+                  }
+                  setCardSearchQuery('');
+                  setCardSearchResults([]);
+                }}
+                loading={cardSearchLoading}
+                renderInput={(params) => (
+                  <TextField {...params} label="Search cards to add" size="small" />
+                )}
+                size="small"
+              />
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                {weekRequiredCards.map((card) => (
+                  <Chip
+                    key={card}
+                    label={card}
+                    size="small"
+                    onDelete={() => setWeekRequiredCards(weekRequiredCards.filter((c) => c !== card))}
+                  />
+                ))}
+              </Box>
+            </Box>
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
             <TextField

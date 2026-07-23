@@ -410,6 +410,9 @@ export interface LeagueWeek {
   decks_per_player: number | null;
   sealed_pools_generated: boolean;
   no_keycheat: boolean | null;
+  team_max_raw_amber: number | null;
+  team_min_raw_amber: number | null;
+  required_card_names: string[] | null;
   thief_floor_team_id?: number | null;
   matchups: WeekMatchup[];
   deck_selections: DeckSelectionInfo[];

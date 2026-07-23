@@ -1055,6 +1055,11 @@ class LeagueWeek(db.Model):
     # SAS Ladder-specific
     sas_ladder_maxes = db.Column(db.Text, nullable=True)
     sas_ladder_feature_rung = db.Column(db.Integer, nullable=True)
+    # Team aember constraints
+    team_max_raw_amber = db.Column(db.Integer, nullable=True)
+    team_min_raw_amber = db.Column(db.Integer, nullable=True)
+    # Required card list (JSON list of card names)
+    required_card_names = db.Column(db.Text, nullable=True)
     # Description
     custom_description = db.Column(db.Text, nullable=True)
     hide_standard_description = db.Column(db.Boolean, nullable=False, default=False)

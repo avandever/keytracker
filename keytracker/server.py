@@ -234,6 +234,30 @@ with app.app_context():
                             "ALTER TABLE tracker_league ADD COLUMN is_test BOOLEAN NOT NULL DEFAULT FALSE"
                         )
                     )
+        if inspector.has_table("tracker_league_week"):
+            columns = {
+                c["name"]
+                for c in inspector.get_columns("tracker_league_week")
+            }
+            with db.engine.begin() as conn:
+                if "team_max_raw_amber" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league_week ADD COLUMN team_max_raw_amber INTEGER"
+                        )
+                    )
+                if "team_min_raw_amber" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league_week ADD COLUMN team_min_raw_amber INTEGER"
+                        )
+                    )
+                if "required_card_names" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league_week ADD COLUMN required_card_names TEXT"
+                        )
+                    )
         if inspector.has_table("tracker_set"):
             columns = {c["name"] for c in inspector.get_columns("tracker_set")}
             with db.engine.begin() as conn:

@@ -35,6 +35,15 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
   if (week.no_keycheat) {
     chips.push(<Chip key="no-keycheat" label="No Keycheat" size={size} variant="outlined" color="error" />);
   }
+  if (week.team_max_raw_amber != null) {
+    chips.push(<Chip key="team-max-amber" label={`Team Max Aember: ${week.team_max_raw_amber}`} size={size} variant="outlined" />);
+  }
+  if (week.team_min_raw_amber != null) {
+    chips.push(<Chip key="team-min-amber" label={`Team Min Aember: ${week.team_min_raw_amber}`} size={size} variant="outlined" />);
+  }
+  if (week.required_card_names && week.required_card_names.length > 0) {
+    chips.push(<Chip key="required-cards" label={`Required Cards: ${week.required_card_names.length}`} size={size} variant="outlined" color="info" />);
+  }
   if (week.format_type === 'sas_ladder' && week.sas_ladder_maxes && week.sas_ladder_maxes.length > 0) {
     const numRungs = week.sas_ladder_maxes.length + 1;
     chips.push(<Chip key="sas-ladder" label={`SAS Ladder: ${numRungs} rungs`} size={size} variant="outlined" color="secondary" />);

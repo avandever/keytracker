@@ -1082,6 +1082,28 @@ def list_sets():
     )
 
 
+@blueprint.route("/cards/search", methods=["GET"])
+def search_cards():
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    from keytracker.schema import PlatonicCard
+
+    cards = (
+        PlatonicCard.query.filter(PlatonicCard.card_title.ilike(f"%{q}%"))
+        .order_by(PlatonicCard.card_title)
+        .limit(20)
+        .all()
+    )
+    seen = set()
+    results = []
+    for c in cards:
+        if c.card_title not in seen:
+            seen.add(c.card_title)
+            results.append(c.card_title)
+    return jsonify(results)
+
+
 # --- Week management ---
 
 
@@ -1435,6 +1457,13 @@ def create_week(league_id):
         else None
     )
 
+    required_card_names_raw = data.get("required_card_names")
+    required_card_names_json = (
+        json.dumps(required_card_names_raw)
+        if isinstance(required_card_names_raw, list)
+        else None
+    )
+
     week = LeagueWeek(
         league_id=league.id,
         week_number=max_week + 1,
@@ -1453,6 +1482,9 @@ def create_week(league_id):
         alliance_restricted_list_version_id=alliance_restricted_list_version_id,
         sas_ladder_maxes=sas_ladder_maxes_json,
         sas_ladder_feature_rung=data.get("sas_ladder_feature_rung"),
+        team_max_raw_amber=data.get("team_max_raw_amber"),
+        team_min_raw_amber=data.get("team_min_raw_amber"),
+        required_card_names=required_card_names_json,
     )
     db.session.add(week)
     db.session.commit()
@@ -1621,6 +1653,15 @@ def update_week(league_id, week_id):
             week.sas_ladder_maxes = None
     if "sas_ladder_feature_rung" in data:
         week.sas_ladder_feature_rung = data["sas_ladder_feature_rung"]
+    if "team_max_raw_amber" in data:
+        week.team_max_raw_amber = data["team_max_raw_amber"]
+    if "team_min_raw_amber" in data:
+        week.team_min_raw_amber = data["team_min_raw_amber"]
+    if "required_card_names" in data:
+        if data["required_card_names"] and isinstance(data["required_card_names"], list):
+            week.required_card_names = json.dumps(data["required_card_names"])
+        else:
+            week.required_card_names = None
     if "custom_description" in data:
         week.custom_description = data["custom_description"] or None
     if "hide_standard_description" in data:
@@ -3290,6 +3331,110 @@ def submit_deck_selection(league_id, week_id):
                 ),
                 400,
             )
+
+    # Validate team raw aember constraints
+    if target_team and (
+        week.team_max_raw_amber is not None or week.team_min_raw_amber is not None
+    ):
+        deck_raw_amber = deck.dok.raw_amber if deck.dok else None
+        if deck_raw_amber is not None:
+            team_user_ids = {m.user_id for m in target_team.members}
+            teammate_sels = PlayerDeckSelection.query.filter(
+                PlayerDeckSelection.week_id == week.id,
+                PlayerDeckSelection.user_id.in_(team_user_ids),
+                PlayerDeckSelection.user_id != target_user_id,
+            ).all()
+            team_total = deck_raw_amber
+            for ts in teammate_sels:
+                if ts.deck and ts.deck.dok and ts.deck.dok.raw_amber is not None:
+                    team_total += ts.deck.dok.raw_amber
+            # Also include this user's other slots (for multi-slot formats)
+            own_other_sels = PlayerDeckSelection.query.filter(
+                PlayerDeckSelection.week_id == week.id,
+                PlayerDeckSelection.user_id == target_user_id,
+                PlayerDeckSelection.slot_number != slot_number,
+            ).all()
+            for os in own_other_sels:
+                if os.deck and os.deck.dok and os.deck.dok.raw_amber is not None:
+                    team_total += os.deck.dok.raw_amber
+            if week.team_max_raw_amber is not None and team_total > week.team_max_raw_amber:
+                return (
+                    jsonify(
+                        {
+                            "error": f"Team total raw aember would be {team_total}, exceeding the maximum of {week.team_max_raw_amber} (this deck has {deck_raw_amber})"
+                        }
+                    ),
+                    400,
+                )
+            if week.team_min_raw_amber is not None and team_total < week.team_min_raw_amber:
+                return (
+                    jsonify(
+                        {
+                            "error": f"Team total raw aember would be {team_total}, below the minimum of {week.team_min_raw_amber} (this deck has {deck_raw_amber})"
+                        }
+                    ),
+                    400,
+                )
+
+    # Validate required card list
+    if week.required_card_names:
+        try:
+            required_names = json.loads(week.required_card_names)
+        except (json.JSONDecodeError, TypeError):
+            required_names = []
+        if required_names:
+            required_set = {n.lower() for n in required_names}
+            deck_card_titles = {
+                c.card_title.lower()
+                for c in (deck.cards_from_assoc or [])
+                if c.card_title
+            }
+            matched_cards = required_set & deck_card_titles
+            if not matched_cards:
+                return (
+                    jsonify(
+                        {
+                            "error": "Deck must contain at least one card from the required list"
+                        }
+                    ),
+                    400,
+                )
+            # Team uniqueness: each required card can only appear in one player's deck
+            if target_team:
+                team_user_ids = {m.user_id for m in target_team.members} - {
+                    target_user_id
+                }
+                if team_user_ids:
+                    teammate_sels = PlayerDeckSelection.query.filter(
+                        PlayerDeckSelection.week_id == week.id,
+                        PlayerDeckSelection.user_id.in_(team_user_ids),
+                    ).all()
+                    for ts in teammate_sels:
+                        if ts.deck:
+                            ts_titles = {
+                                c.card_title.lower()
+                                for c in (ts.deck.cards_from_assoc or [])
+                                if c.card_title
+                            }
+                            conflicts = matched_cards & ts_titles
+                            if conflicts:
+                                u = db.session.get(User, ts.user_id)
+                                name = u.name if u else "a teammate"
+                                conflict_names = ", ".join(
+                                    sorted(
+                                        n
+                                        for n in required_names
+                                        if n.lower() in conflicts
+                                    )
+                                )
+                                return (
+                                    jsonify(
+                                        {
+                                            "error": f"Required card(s) already used by {name}: {conflict_names}"
+                                        }
+                                    ),
+                                    400,
+                                )
 
     # Within-week same-team deck uniqueness check (all formats)
     if target_team:
