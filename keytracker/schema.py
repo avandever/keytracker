@@ -281,6 +281,7 @@ class PodStats(db.Model):
     enhanced_draw = db.Column(db.Integer, default=0)
     enhanced_damage = db.Column(db.Integer, default=0)
     enhanced_discard = db.Column(db.Integer, default=0)
+    enhanced_power = db.Column(db.Integer, default=0)
     enhanced_houses = db.Column(TINYINT(unsigned=True), default=0)
     # not derived because should be indexable
     num_enhancements = db.Column(db.Integer, default=0, index=True)
@@ -461,6 +462,7 @@ class CardInDeck(db.Model):
     enhanced_draw = db.Column(TINYINT(unsigned=True), default=0)
     enhanced_damage = db.Column(TINYINT(unsigned=True), default=0)
     enhanced_discard = db.Column(TINYINT(unsigned=True), default=0)
+    enhanced_power = db.Column(TINYINT(unsigned=True), default=0)
     enhanced_houses = db.Column(TINYINT(unsigned=True), default=0)
     house_enhancements = db.relationship("HouseEnhancement", back_populates="card")
     card_title = association_proxy("platonic_card", "card_title")

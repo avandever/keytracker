@@ -148,6 +148,7 @@ def serialize_deck_detail(deck: Deck) -> dict:
             "enhanced_draw": ps.enhanced_draw,
             "enhanced_damage": ps.enhanced_damage,
             "enhanced_discard": ps.enhanced_discard,
+            "enhanced_power": ps.enhanced_power or 0,
             "num_enhancements": ps.num_enhancements,
             "num_mutants": ps.num_mutants,
             "creatures": ps.creatures,

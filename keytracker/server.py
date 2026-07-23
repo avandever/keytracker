@@ -276,6 +276,17 @@ with app.app_context():
                             ),
                             {"n": set_num},
                         )
+        for table_name in ("tracker_card_in_deck", "tracker_pod_stats"):
+            if inspector.has_table(table_name):
+                columns = {c["name"] for c in inspector.get_columns(table_name)}
+                if "enhanced_power" not in columns:
+                    col_type = "TINYINT UNSIGNED DEFAULT 0" if table_name == "tracker_card_in_deck" else "INTEGER DEFAULT 0"
+                    with db.engine.begin() as conn:
+                        conn.execute(
+                            text(
+                                f"ALTER TABLE {table_name} ADD COLUMN enhanced_power {col_type}"
+                            )
+                        )
     except Exception:
         pass
 

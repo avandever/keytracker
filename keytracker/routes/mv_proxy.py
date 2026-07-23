@@ -45,6 +45,7 @@ def mv_deck_proxy(kf_id):
             + ["draw"] * (card.enhanced_draw or 0)
             + ["damage"] * (card.enhanced_damage or 0)
             + ["discard"] * (card.enhanced_discard or 0)
+            + ["power"] * (getattr(card, "enhanced_power", 0) or 0)
         )
         if icons:
             bonus_icons.append({"card_id": card.card_kf_id, "bonus_icons": icons})

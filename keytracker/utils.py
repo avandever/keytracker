@@ -120,6 +120,7 @@ VALID_HOUSE_ENHANCEMENTS = [
     "geistoid",
     "logos",
     "mars",
+    "ouboros",
     "redemption",
     "sanctum",
     "saurian",
@@ -1172,6 +1173,7 @@ def _try_add_deck_from_local_dok(deck: Deck) -> bool:
             enhanced_draw=card_data.get("bonusDraw", 0) if is_enhanced else 0,
             enhanced_damage=card_data.get("bonusDamage", 0) if is_enhanced else 0,
             enhanced_discard=card_data.get("bonusDiscard", 0) if is_enhanced else 0,
+            enhanced_power=card_data.get("bonusPower", 0) if is_enhanced else 0,
             enhanced_houses=len(card_data.get("bonusHouses", [])) if is_enhanced else 0,
             is_legacy=check_is_legacy(pcis.card, deck),
         )
@@ -1645,7 +1647,7 @@ def calculate_pod_stats(deck: Deck) -> None:
             "Prophecy",
         ]:
             continue
-        enhancements, amber, capture, draw, damage = 0, 0, 0, 0, 0
+        enhancements, amber, capture, draw, damage, power = 0, 0, 0, 0, 0, 0
         mutants, creatures, raw_amber = 0, 0, 0
         for card in cards:
             if any(trait.name == "mutant" for trait in card.traits):
@@ -1657,12 +1659,14 @@ def calculate_pod_stats(deck: Deck) -> None:
             capture += card.enhanced_capture
             draw += card.enhanced_draw
             damage += card.enhanced_damage
+            power += getattr(card, "enhanced_power", 0) or 0
             enhancements += sum(
                 [
                     card.enhanced_amber,
                     card.enhanced_capture,
                     card.enhanced_draw,
                     card.enhanced_damage,
+                    getattr(card, "enhanced_power", 0) or 0,
                 ]
             )
         for pod in deck.pod_stats:
@@ -1675,6 +1679,7 @@ def calculate_pod_stats(deck: Deck) -> None:
         pod.enhanced_capture = capture
         pod.enhanced_draw = draw
         pod.enhanced_damage = damage
+        pod.enhanced_power = power
         pod.num_enhancements = enhancements
         pod.num_mutants = mutants
         pod.creatures = creatures
@@ -2039,6 +2044,7 @@ def add_cards_v2_new(
             enhanced_draw=0,
             enhanced_damage=0,
             enhanced_discard=0,
+            enhanced_power=0,
             enhanced_houses=0,
             is_legacy=check_is_legacy(pc, deck),
         )
@@ -2058,6 +2064,8 @@ def add_cards_v2_new(
                             card.enhanced_capture += 1
                         elif icon == "discard":
                             card.enhanced_discard += 1
+                        elif icon == "power":
+                            card.enhanced_power += 1
                         elif icon in VALID_HOUSE_ENHANCEMENTS:
                             card.enhanced_houses += 1
                             house_enhancement = HouseEnhancement(
