@@ -1511,8 +1511,12 @@ export default function LeagueAdminPage() {
                   {weekFormat !== 'sealed_alliance' && (
                     <>
                       <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5, py: 0 }}
-                        onClick={() => setWeekAllowedSets(availableSets.map((s) => s.number))}>
+                        onClick={() => setWeekAllowedSets(availableSets.filter((s) => s.is_legal).map((s) => s.number))}>
                         All
+                      </Button>
+                      <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5, py: 0 }}
+                        onClick={() => setWeekAllowedSets(availableSets.map((s) => s.number))}>
+                        All (even non-legal)
                       </Button>
                       <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5, py: 0 }}
                         onClick={() => setWeekAllowedSets([])}>
@@ -1525,10 +1529,11 @@ export default function LeagueAdminPage() {
                   {availableSets.map((s) => (
                     <Chip
                       key={s.number}
-                      label={s.shortname}
+                      label={s.is_legal ? s.shortname : `${s.shortname} *`}
                       size="small"
                       variant={weekAllowedSets.includes(s.number) ? 'filled' : 'outlined'}
                       color={weekAllowedSets.includes(s.number) ? 'primary' : 'default'}
+                      sx={!s.is_legal ? { fontStyle: 'italic' } : undefined}
                       onClick={() => toggleSet(s.number)}
                     />
                   ))}

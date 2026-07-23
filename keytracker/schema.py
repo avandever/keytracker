@@ -75,12 +75,16 @@ EXPANSION_VALUES = [
 EXPANSION_ID_TO_ABBR = {exp.number: exp.shortname for exp in EXPANSION_VALUES}
 
 
+NON_LEGAL_SETS = {601, 722, 892}  # UC22, M24, MCW
+
+
 class KeyforgeSet(db.Model):
     __tablename__ = "tracker_set"
     number = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     shortname = db.Column(db.String(10), nullable=False)
     dokname = db.Column(db.String(10), nullable=False)
+    is_legal = db.Column(db.Boolean, nullable=False, default=True, server_default="1")
 
 
 class KeyforgeRarity(db.Model):

@@ -234,6 +234,24 @@ with app.app_context():
                             "ALTER TABLE tracker_league ADD COLUMN is_test BOOLEAN NOT NULL DEFAULT FALSE"
                         )
                     )
+        if inspector.has_table("tracker_set"):
+            columns = {c["name"] for c in inspector.get_columns("tracker_set")}
+            with db.engine.begin() as conn:
+                if "is_legal" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_set ADD COLUMN is_legal BOOLEAN NOT NULL DEFAULT TRUE"
+                        )
+                    )
+                    from keytracker.schema import NON_LEGAL_SETS
+
+                    for set_num in NON_LEGAL_SETS:
+                        conn.execute(
+                            text(
+                                "UPDATE tracker_set SET is_legal = FALSE WHERE number = :n"
+                            ),
+                            {"n": set_num},
+                        )
     except Exception:
         pass
 

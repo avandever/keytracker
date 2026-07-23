@@ -355,6 +355,7 @@ export interface KeyforgeSetInfo {
   number: number;
   name: string;
   shortname: string;
+  is_legal: boolean;
 }
 
 // Must be kept in sync with WeekStatus enum in keytracker/schema.py

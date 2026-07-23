@@ -6,6 +6,7 @@ from keytracker.schema import (
     Deck,
     EXPANSION_VALUES,
     KeyforgeSet,
+    NON_LEGAL_SETS,
     League,
     LeagueAdmin,
     LeagueAdminLog,
@@ -1058,14 +1059,24 @@ def list_sets():
     if sets:
         return jsonify(
             [
-                {"number": s.number, "name": s.name, "shortname": s.shortname}
+                {
+                    "number": s.number,
+                    "name": s.name,
+                    "shortname": s.shortname,
+                    "is_legal": s.is_legal,
+                }
                 for s in sets
             ]
         )
     # Fallback to hardcoded EXPANSION_VALUES
     return jsonify(
         [
-            {"number": ev.number, "name": ev.name, "shortname": ev.shortname}
+            {
+                "number": ev.number,
+                "name": ev.name,
+                "shortname": ev.shortname,
+                "is_legal": ev.number not in NON_LEGAL_SETS,
+            }
             for ev in EXPANSION_VALUES
         ]
     )
