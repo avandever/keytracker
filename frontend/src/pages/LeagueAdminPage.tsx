@@ -74,6 +74,7 @@ import {
   removeAdmin,
   setPlayerMatchupDoubleLoss,
   reorderWeeks,
+  updateTeam,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -138,6 +139,9 @@ export default function LeagueAdminPage() {
 
   // Team creation
   const [newTeamName, setNewTeamName] = useState('');
+
+  // Team rename
+  const [teamNameEdits, setTeamNameEdits] = useState<Record<number, string>>({});
 
   // Captain assignment
   const [captainSelections, setCaptainSelections] = useState<Record<number, number>>({});
@@ -322,6 +326,19 @@ export default function LeagueAdminPage() {
     try {
       await deleteTeam(league.id, teamId);
       refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleRenameTeam = async (teamId: number) => {
+    const name = (teamNameEdits[teamId] || '').trim();
+    if (!name) return;
+    setError('');
+    try {
+      await updateTeam(league.id, teamId, { name });
+      refresh();
+      setSuccess('Team renamed');
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
     }
@@ -900,6 +917,22 @@ export default function LeagueAdminPage() {
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       )}
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1, alignItems: 'center' }}>
+                      <TextField
+                        label="Rename Team"
+                        size="small"
+                        value={teamNameEdits[team.id] ?? team.name}
+                        onChange={(e) => setTeamNameEdits((prev) => ({ ...prev, [team.id]: e.target.value }))}
+                      />
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={(teamNameEdits[team.id] ?? team.name) === team.name}
+                        onClick={() => handleRenameTeam(team.id)}
+                      >
+                        Rename
+                      </Button>
                     </Box>
                     {captains.length > 0 && (
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
