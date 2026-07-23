@@ -1055,7 +1055,14 @@ def get_or_create_deck_for_collection(
     deck = Deck.query.filter_by(kf_id=kf_id).first()
     if deck is None:
         deck = Deck(kf_id=kf_id)
-        refresh_deck_from_mv(deck)
+        try:
+            refresh_deck_from_mv(deck)
+        except Exception:
+            current_app.logger.warning(
+                "MV refresh failed for new deck %s during collection sync, "
+                "will retry via deck refresh queue",
+                kf_id,
+            )
         if sas_rating is not None and aerc_score is not None:
             deck.sas_rating = sas_rating
             deck.aerc_score = aerc_score
