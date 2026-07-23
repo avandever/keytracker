@@ -3,7 +3,7 @@ import queue
 import threading
 import time
 
-from flask import Flask
+from flask import Flask, current_app
 
 logger = logging.getLogger(__name__)
 _queue: queue.Queue = queue.Queue()
@@ -33,6 +33,7 @@ def _refresh(deck_id: int, user_dok_api_key: str | None):
         update_sas_scores,
     )
 
+    log = current_app.logger
     deck = Deck.query.get(deck_id)
     if not deck:
         return
@@ -44,38 +45,38 @@ def _refresh(deck_id: int, user_dok_api_key: str | None):
             t_mv = time.monotonic()
             refresh_deck_from_mv(deck)
             db.session.flush()
-            logger.info(
+            log.info(
                 "Deck %s (%s): MV refresh %.1fs",
                 deck_id, deck.kf_id, time.monotonic() - t_mv,
             )
         except Exception:
-            logger.exception("MV refresh failed for deck %s (%s)", deck_id, deck.kf_id)
+            log.exception("MV refresh failed for deck %s (%s)", deck_id, deck.kf_id)
 
     if len(deck.pod_stats) == 0 and len(deck.cards_from_assoc) >= 36:
         try:
             t_pod = time.monotonic()
             calculate_pod_stats(deck)
             db.session.commit()
-            logger.info(
+            log.info(
                 "Deck %s: pod stats %.1fs",
                 deck_id, time.monotonic() - t_pod,
             )
         except Exception:
-            logger.exception("Pod stats failed for deck %s", deck_id)
+            log.exception("Pod stats failed for deck %s", deck_id)
 
     if not deck.dok or deck.dok.last_refresh is None:
         try:
             t_sas = time.monotonic()
             update_sas_scores(deck, dok_api_key=user_dok_api_key)
             db.session.commit()
-            logger.info(
+            log.info(
                 "Deck %s: SAS update %.1fs",
                 deck_id, time.monotonic() - t_sas,
             )
         except Exception:
-            logger.exception("SAS update failed for deck %s", deck_id)
+            log.exception("SAS update failed for deck %s", deck_id)
 
-    logger.info(
+    log.info(
         "Deck %s refresh total: %.1fs", deck_id, time.monotonic() - t0,
     )
 

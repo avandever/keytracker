@@ -4,7 +4,7 @@ import threading
 import datetime
 import time
 
-from flask import Flask
+from flask import Flask, current_app
 
 logger = logging.getLogger(__name__)
 _queue: queue.Queue = queue.Queue()
@@ -29,10 +29,11 @@ def _worker():
 
 
 def _run_sync(user_id: int, job_id: int):
-    from flask import current_app
     from keytracker.schema import db, CollectionSyncJob, User
     from keytracker.utils import sync_collection_from_dok
     import keytracker.deck_refresh as deck_refresh
+
+    log = current_app.logger
 
     job = CollectionSyncJob.query.get(job_id)
     if not job:
@@ -47,12 +48,12 @@ def _run_sync(user_id: int, job_id: int):
         result = sync_collection_from_dok(user)
         elapsed = time.monotonic() - t0
         timing = result.get("timing", {})
-        logger.info(
+        log.info(
             "Collection sync completed for user %s in %.1fs: "
             "%d standard decks, %d alliance decks, %d need refresh. "
             "Timing breakdown — DoK API: %.1fs, DB/processing: %.1fs, "
             "standard pages: %d (DoK: %.1fs, DB: %.1fs), "
-            "alliance (DoK: %.1fs, DB: %.1fs)",
+            "alliance (DoK: %.1fs, DB: %.1fs), commit: %.1fs",
             user_id,
             elapsed,
             result["standard_decks"],
@@ -65,6 +66,7 @@ def _run_sync(user_id: int, job_id: int):
             timing.get("standard_db", 0),
             timing.get("alliance_dok", 0),
             timing.get("alliance_db", 0),
+            timing.get("commit", 0),
         )
         job.status = "done"
         job.standard_decks = result["standard_decks"]
@@ -72,13 +74,13 @@ def _run_sync(user_id: int, job_id: int):
         app = current_app._get_current_object()
         for deck_id in result.get("refresh_deck_ids", []):
             deck_refresh.enqueue(app, deck_id, user.dok_api_key)
-        logger.info(
+        log.info(
             "Enqueued %d decks for refresh (user %s)",
             len(result.get("refresh_deck_ids", [])),
             user_id,
         )
     except Exception as e:
-        logger.exception("Collection sync error for user %s", user_id)
+        log.exception("Collection sync error for user %s", user_id)
         job.status = "failed"
         job.error = str(e)
     finally:
