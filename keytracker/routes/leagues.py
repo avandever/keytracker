@@ -1495,6 +1495,44 @@ def list_weeks(league_id):
     return jsonify([serialize_league_week(w) for w in weeks])
 
 
+@blueprint.route("/<int:league_id>/weeks/reorder", methods=["POST"])
+@login_required
+def reorder_weeks(league_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if not _is_league_admin(league, effective):
+        return jsonify({"error": "Admin access required"}), 403
+
+    data = request.get_json(silent=True) or {}
+    week_ids = data.get("week_ids")
+    if not week_ids or not isinstance(week_ids, list):
+        return jsonify({"error": "week_ids list required"}), 400
+
+    weeks = LeagueWeek.query.filter_by(league_id=league.id).all()
+    week_map = {w.id: w for w in weeks}
+    if set(week_ids) != set(week_map.keys()):
+        return jsonify({"error": "week_ids must contain all weeks in the league"}), 400
+
+    # Use a large temporary offset to avoid unique constraint violations
+    offset = 10000
+    for w in weeks:
+        w.week_number = w.week_number + offset
+    db.session.flush()
+
+    for i, wid in enumerate(week_ids, start=1):
+        week_map[wid].week_number = i
+    db.session.commit()
+
+    _log_admin_action(
+        league.id, None, effective.id, "reorder_weeks",
+        details=f"Reordered to: {week_ids}",
+    )
+
+    return jsonify({"success": True})
+
+
 @blueprint.route("/<int:league_id>/weeks/<int:week_id>", methods=["GET"])
 def get_week(league_id, week_id):
     league, err = _get_league_or_404(league_id)

@@ -41,6 +41,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import {
   getLeague,
   updateLeague,
@@ -71,6 +73,7 @@ import {
   addAdmin,
   removeAdmin,
   setPlayerMatchupDoubleLoss,
+  reorderWeeks,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -665,6 +668,21 @@ export default function LeagueAdminPage() {
     setExpandedWeeks((prev) => ({ ...prev, [weekId]: !prev[weekId] }));
   };
 
+  const handleMoveWeek = async (weekId: number, direction: 'up' | 'down') => {
+    if (!league) return;
+    const weeks = [...(league.weeks || [])].sort((a, b) => a.week_number - b.week_number);
+    const idx = weeks.findIndex((w) => w.id === weekId);
+    if ((direction === 'up' && idx <= 0) || (direction === 'down' && idx >= weeks.length - 1)) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [weeks[idx], weeks[swapIdx]] = [weeks[swapIdx], weeks[idx]];
+    try {
+      await reorderWeeks(league.id, weeks.map((w) => w.id));
+      await refresh();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Failed to reorder weeks');
+    }
+  };
+
   // Get captain IDs so we can exclude them from captain dropdown for other teams
   const assignedCaptainIds = new Set(
     league.teams.flatMap((t) => t.members.filter((m) => m.is_captain).map((m) => m.user.id))
@@ -1103,6 +1121,22 @@ export default function LeagueAdminPage() {
                       Bo{week.best_of_n}
                     </Typography>
                     <WeekConstraints week={week} sets={availableSets} />
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }} onClick={(e) => e.stopPropagation()}>
+                    <IconButton
+                      size="small"
+                      disabled={(league.weeks || []).indexOf(week) === 0}
+                      onClick={() => handleMoveWeek(week.id, 'up')}
+                    >
+                      <ArrowUpwardIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      disabled={(league.weeks || []).indexOf(week) === (league.weeks || []).length - 1}
+                      onClick={() => handleMoveWeek(week.id, 'down')}
+                    >
+                      <ArrowDownwardIcon fontSize="small" />
+                    </IconButton>
                   </Box>
                   {expandedWeeks[week.id] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                 </ListItemButton>

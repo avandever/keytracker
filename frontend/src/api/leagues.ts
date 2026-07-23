@@ -81,6 +81,13 @@ export async function deleteWeek(
   await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}`);
 }
 
+export async function reorderWeeks(
+  leagueId: number,
+  weekIds: number[],
+): Promise<void> {
+  await apiClient.post(`/leagues/${leagueId}/weeks/reorder`, { week_ids: weekIds });
+}
+
 export async function listTeams(leagueId: number): Promise<TeamDetail[]> {
   const { data } = await apiClient.get(`/leagues/${leagueId}/teams`);
   return data;
