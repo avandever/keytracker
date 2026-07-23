@@ -13,6 +13,7 @@ log() { echo "[$(date -Iseconds)] $*" | tee -a "$LOG_FILE"; }
 log "=== Deploy triggered ==="
 
 cd "$REPO_DIR"
+git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
 
 log "Pulling latest from origin/main..."
 git pull origin main 2>&1 | tee -a "$LOG_FILE"
