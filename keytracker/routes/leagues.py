@@ -1676,6 +1676,38 @@ def update_week(league_id, week_id):
 
 
 @blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/revert-to-setup", methods=["POST"]
+)
+@login_required
+def revert_to_setup(league_id, week_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if not _is_league_admin(league, effective):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.status == WeekStatus.SETUP.value:
+        return jsonify({"error": "Week is already in setup"}), 400
+    if week.status == WeekStatus.COMPLETED.value:
+        return jsonify({"error": "Cannot revert a completed week"}), 400
+
+    old_status = week.status
+    week.status = WeekStatus.SETUP.value
+    db.session.commit()
+
+    _log_admin_action(
+        league.id, week.id, effective.id, "revert_to_setup",
+        details=f"Reverted from {old_status}",
+    )
+
+    db.session.refresh(week)
+    return jsonify(serialize_league_week(week))
+
+
+@blueprint.route(
     "/<int:league_id>/weeks/<int:week_id>/open-deck-selection", methods=["POST"]
 )
 @login_required

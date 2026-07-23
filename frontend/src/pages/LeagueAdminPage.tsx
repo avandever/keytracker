@@ -76,6 +76,7 @@ import {
   reorderWeeks,
   updateTeam,
   searchCards,
+  revertToSetup,
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
@@ -871,7 +872,26 @@ export default function LeagueAdminPage() {
         break;
     }
 
-    return actions.length > 0 ? <Box sx={{ display: 'flex', gap: 1 }}>{actions}</Box> : null;
+    if (week.status !== 'setup' && week.status !== 'completed') {
+      actions.push(
+        <Button key="revert-setup" size="small" variant="outlined" color="error"
+          onClick={async () => {
+            if (!confirm('Revert this week to setup? This will not delete any existing data but will allow editing settings again.')) return;
+            setError('');
+            try {
+              await revertToSetup(league.id, week.id);
+              refresh();
+              setSuccess('Week reverted to setup');
+            } catch (e: any) {
+              setError(e.response?.data?.error || e.message);
+            }
+          }}>
+          Revert to Setup
+        </Button>
+      );
+    }
+
+    return actions.length > 0 ? <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>{actions}</Box> : null;
   };
 
   return (

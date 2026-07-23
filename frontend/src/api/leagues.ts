@@ -240,6 +240,14 @@ export async function createWeek(
   return data;
 }
 
+export async function revertToSetup(
+  leagueId: number,
+  weekId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/weeks/${weekId}/revert-to-setup`);
+  return data;
+}
+
 export async function searchCards(query: string): Promise<string[]> {
   const { data } = await apiClient.get('/leagues/cards/search', { params: { q: query } });
   return data;
