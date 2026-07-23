@@ -1064,8 +1064,9 @@ def get_or_create_deck_for_collection(
                 "will retry via deck refresh queue",
                 kf_id,
             )
-        if sas_rating is not None and aerc_score is not None:
+        if sas_rating is not None and sas_rating >= 0:
             deck.sas_rating = sas_rating
+        if aerc_score is not None and aerc_score >= 0:
             deck.aerc_score = aerc_score
             deck.sas_version = LATEST_SAS_VERSION
         db.session.add(deck)
@@ -1229,7 +1230,10 @@ def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
 
 def update_sas_scores(deck: Deck, dok_api_key: str = None, force: bool = False) -> bool:
     """Returns True if update occurred. Pass force=True to bypass cache and always fetch from DoK."""
-    if not force and (
+    has_negative = (deck.sas_rating is not None and deck.sas_rating < 0) or (
+        deck.dok and deck.dok.sas_rating is not None and deck.dok.sas_rating < 0
+    )
+    if not force and not has_negative and (
         (deck.sas_version or 0) >= LATEST_SAS_VERSION
         and deck.dok
         and deck.dok.last_refresh is not None
@@ -1246,8 +1250,12 @@ def update_sas_scores(deck: Deck, dok_api_key: str = None, force: bool = False) 
     response = requests.get(url, headers=headers)
     data = response.json()
     try:
-        deck.sas_rating = data["deck"]["sasRating"]
-        deck.aerc_score = data["deck"]["aercScore"]
+        sas = data["deck"]["sasRating"]
+        aerc = data["deck"]["aercScore"]
+        if sas is not None and sas >= 0:
+            deck.sas_rating = sas
+        if aerc is not None and aerc >= 0:
+            deck.aerc_score = aerc
         deck.sas_version = data["sasVersion"]
         add_dok_deck_from_dict(save_prod_id=(_DOK_BASE == PROD_DOK_BASE), **data["deck"])
     except KeyError:
@@ -1595,10 +1603,14 @@ def add_dok_deck_from_dict(skip_commit: bool = False, save_prod_id: bool = False
     if dok is None:
         dok = DokDeck(deck=deck)
         db.session.add(dok)
-    dok.sas_rating = get_snake_or_camel(data, "sas_rating")
+    sas = get_snake_or_camel(data, "sas_rating")
+    if sas is not None and sas >= 0:
+        dok.sas_rating = sas
     dok.synergy_rating = get_snake_or_camel(data, "synergy_rating")
     dok.antisynergy_rating = get_snake_or_camel(data, "antisynergy_rating")
-    dok.aerc_score = get_snake_or_camel(data, "aerc_score")
+    aerc = get_snake_or_camel(data, "aerc_score")
+    if aerc is not None and aerc >= 0:
+        dok.aerc_score = aerc
     dok.amber_control = get_snake_or_camel(data, "amber_control")
     dok.expected_amber = get_snake_or_camel(data, "expected_amber")
     dok.artifact_control = get_snake_or_camel(data, "artifact_control")
