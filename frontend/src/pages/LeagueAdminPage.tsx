@@ -931,17 +931,17 @@ export default function LeagueAdminPage() {
           </IconButton>
           <Typography variant="h4">Admin: {league.name}</Typography>
         </Box>
-        {isSetup && (() => {
-          const hasEnoughSignups = league.signups.length >= league.num_teams * league.team_size;
-          return (
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                variant="outlined"
-                color={league.signups_open ? 'error' : 'success'}
-                onClick={handleToggleSignups}
-              >
-                {league.signups_open ? 'Close Signups' : 'Open Signups'}
-              </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            color={league.signups_open ? 'error' : 'success'}
+            onClick={handleToggleSignups}
+          >
+            {league.signups_open ? 'Close Signups' : 'Open Signups'}
+          </Button>
+          {isSetup && (() => {
+            const hasEnoughSignups = league.signups.length >= league.num_teams * league.team_size;
+            return (
               <Tooltip title={!hasEnoughSignups ? `Need ${league.num_teams * league.team_size} signups (${league.signups.length} so far)` : ''}>
                 <span>
                   <Button variant="contained" color="warning" disabled={!hasEnoughSignups} onClick={() => setDraftDialogOpen(true)}>
@@ -949,9 +949,9 @@ export default function LeagueAdminPage() {
                   </Button>
                 </span>
               </Tooltip>
-            </Box>
-          );
-        })()}
+            );
+          })()}
+        </Box>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
