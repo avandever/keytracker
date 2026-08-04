@@ -379,7 +379,9 @@ def signup(league_id):
         return err
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Signups only during setup"}), 400
-    if not league.signups_open:
+    capacity = league.num_teams * league.team_size
+    current_signups = LeagueSignup.query.filter_by(league_id=league.id).count()
+    if not league.signups_open and current_signups < capacity:
         return jsonify({"error": "Signups are closed"}), 400
     effective = get_effective_user()
     missing = []
