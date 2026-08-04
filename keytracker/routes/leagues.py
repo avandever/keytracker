@@ -38,6 +38,7 @@ from keytracker.schema import (
     TeamMember,
     DraftPick,
     User,
+    UserDeckCollection,
     TOKEN_EXPANSION_IDS,
     PROPHECY_EXPANSION_ID,
 )
@@ -54,6 +55,7 @@ from keytracker.serializers import (
     serialize_alliance_selection,
     serialize_match_game,
     serialize_team_detail,
+    serialize_team_member,
     serialize_user_brief,
     serialize_admin_log_entry,
     serialize_deck_entry_log_entry,
@@ -853,6 +855,23 @@ def compute_draft_state(league):
             if m.is_captain:
                 captain_user_ids.add(m.user_id)
 
+    all_user_ids = {s.user_id for s in league.signups}
+    for team in teams:
+        for m in team.members:
+            all_user_ids.add(m.user_id)
+    collection_counts = dict(
+        db.session.query(
+            UserDeckCollection.user_id,
+            db.func.count(UserDeckCollection.deck_id),
+        )
+        .filter(
+            UserDeckCollection.user_id.in_(all_user_ids),
+            UserDeckCollection.dok_owned == True,
+        )
+        .group_by(UserDeckCollection.user_id)
+        .all()
+    )
+
     available = []
     for s in league.signups:
         if (
@@ -862,6 +881,7 @@ def compute_draft_state(league):
         ):
             player = serialize_user_brief(s.user)
             player["dok_profile_url"] = s.user.dok_profile_url
+            player["collection_size"] = collection_counts.get(s.user_id, 0)
             available.append(player)
     available.sort(key=lambda p: (p["name"] or "").lower())
 
@@ -917,7 +937,19 @@ def compute_draft_state(league):
         "available_players": available,
         "pick_history": pick_history,
         "draft_board": draft_board,
-        "teams": [serialize_team_detail(t) for t in teams],
+        "teams": [
+            {
+                **serialize_team_detail(t),
+                "members": [
+                    {**serialize_team_member(m), "collection_size": collection_counts.get(m.user_id, 0)}
+                    for m in t.members
+                ],
+                "total_collection_size": sum(
+                    collection_counts.get(m.user_id, 0) for m in t.members
+                ),
+            }
+            for t in teams
+        ],
     }
 
 

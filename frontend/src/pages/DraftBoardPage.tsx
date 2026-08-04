@@ -116,8 +116,15 @@ export default function DraftBoardPage() {
             <TableHead>
               <TableRow>
                 <TableCell>Round</TableCell>
-                {draft.teams.map((t) => (
-                  <TableCell key={t.id} align="center">{t.name}</TableCell>
+                {draft.teams.map((t: any) => (
+                  <TableCell key={t.id} align="center">
+                    {t.name}
+                    {t.total_collection_size != null && (
+                      <Typography variant="caption" display="block" color="text.secondary">
+                        {t.total_collection_size} decks
+                      </Typography>
+                    )}
+                  </TableCell>
                 ))}
               </TableRow>
             </TableHead>
@@ -182,7 +189,10 @@ export default function DraftBoardPage() {
                     </ListItemAvatar>
                     <ListItemText
                       primary={p.name}
-                      secondary={p.discord_username ? `@${p.discord_username}` : undefined}
+                      secondary={[
+                        p.discord_username ? `@${p.discord_username}` : null,
+                        p.collection_size != null ? `${p.collection_size} decks` : null,
+                      ].filter(Boolean).join(' · ') || undefined}
                     />
                   </ListItemButton>
                 </ListItem>
