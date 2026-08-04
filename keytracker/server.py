@@ -234,6 +234,12 @@ with app.app_context():
                             "ALTER TABLE tracker_league ADD COLUMN is_test BOOLEAN NOT NULL DEFAULT FALSE"
                         )
                     )
+                if "signups_open" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league ADD COLUMN signups_open BOOLEAN NOT NULL DEFAULT TRUE"
+                        )
+                    )
         if inspector.has_table("tracker_league_week"):
             columns = {
                 c["name"]

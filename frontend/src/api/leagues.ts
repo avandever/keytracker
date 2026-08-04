@@ -117,6 +117,13 @@ export async function deleteTeam(
   await apiClient.delete(`/leagues/${leagueId}/teams/${teamId}`);
 }
 
+export async function reorderTeams(
+  leagueId: number,
+  teamIds: number[],
+): Promise<void> {
+  await apiClient.post(`/leagues/${leagueId}/teams/reorder`, { team_ids: teamIds });
+}
+
 export async function assignCaptain(
   leagueId: number,
   teamId: number,

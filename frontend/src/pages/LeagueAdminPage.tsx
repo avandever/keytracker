@@ -74,6 +74,7 @@ import {
   removeAdmin,
   setPlayerMatchupDoubleLoss,
   reorderWeeks,
+  reorderTeams,
   updateTeam,
   searchCards,
   revertToSetup,
@@ -349,6 +350,33 @@ export default function LeagueAdminPage() {
       await updateTeam(league.id, teamId, { name });
       refresh();
       setSuccess('Team renamed');
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleMoveTeam = async (teamId: number, direction: 'up' | 'down') => {
+    const sorted = [...league.teams].sort((a, b) => a.order_number - b.order_number);
+    const idx = sorted.findIndex((t) => t.id === teamId);
+    if ((direction === 'up' && idx === 0) || (direction === 'down' && idx === sorted.length - 1)) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    const newOrder = sorted.map((t) => t.id);
+    [newOrder[idx], newOrder[swapIdx]] = [newOrder[swapIdx], newOrder[idx]];
+    setError('');
+    try {
+      await reorderTeams(league.id, newOrder);
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleToggleSignups = async () => {
+    setError('');
+    try {
+      await updateLeague(league.id, { signups_open: !league.signups_open } as any);
+      refresh();
+      setSuccess(league.signups_open ? 'Signups closed' : 'Signups opened');
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
     }
@@ -906,13 +934,22 @@ export default function LeagueAdminPage() {
         {isSetup && (() => {
           const hasEnoughSignups = league.signups.length >= league.num_teams * league.team_size;
           return (
-            <Tooltip title={!hasEnoughSignups ? `Need ${league.num_teams * league.team_size} signups (${league.signups.length} so far)` : ''}>
-              <span>
-                <Button variant="contained" color="warning" disabled={!hasEnoughSignups} onClick={() => setDraftDialogOpen(true)}>
-                  Start Draft
-                </Button>
-              </span>
-            </Tooltip>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                color={league.signups_open ? 'error' : 'success'}
+                onClick={handleToggleSignups}
+              >
+                {league.signups_open ? 'Close Signups' : 'Open Signups'}
+              </Button>
+              <Tooltip title={!hasEnoughSignups ? `Need ${league.num_teams * league.team_size} signups (${league.signups.length} so far)` : ''}>
+                <span>
+                  <Button variant="contained" color="warning" disabled={!hasEnoughSignups} onClick={() => setDraftDialogOpen(true)}>
+                    Start Draft
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
           );
         })()}
       </Box>
@@ -950,12 +987,25 @@ export default function LeagueAdminPage() {
                   <Button variant="contained" onClick={handleCreateTeam}>Add Team</Button>
                 </Box>
               )}
-              {league.teams.map((team) => {
+              {[...league.teams].sort((a, b) => a.order_number - b.order_number).map((team, idx, sortedTeams) => {
                 const captains = team.members.filter((m) => m.is_captain);
+                const canReorder = league.status === 'setup' || league.status === 'drafting';
                 return (
                   <Box key={team.id} sx={{ mb: 2, p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="subtitle1">{team.name}</Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {canReorder && (
+                          <>
+                            <IconButton size="small" disabled={idx === 0} onClick={() => handleMoveTeam(team.id, 'up')}>
+                              <ArrowUpwardIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton size="small" disabled={idx === sortedTeams.length - 1} onClick={() => handleMoveTeam(team.id, 'down')}>
+                              <ArrowDownwardIcon fontSize="small" />
+                            </IconButton>
+                          </>
+                        )}
+                        <Typography variant="subtitle1">{team.name}</Typography>
+                      </Box>
                       {isSetup && (
                         <IconButton size="small" onClick={() => handleDeleteTeam(team.id)}>
                           <DeleteIcon fontSize="small" />

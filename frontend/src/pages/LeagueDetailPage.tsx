@@ -1079,7 +1079,7 @@ export default function LeagueDetailPage() {
             ? <Chip label="Waitlist" color="warning" variant="outlined" sx={chipSx} />
             : <Chip label="Signed Up" color="success" variant="outlined" sx={chipSx} />;
         })()}
-        {user && league.status === 'setup' && !league.is_signed_up && (
+        {user && league.status === 'setup' && league.signups_open && !league.is_signed_up && (
           <Button variant="contained" onClick={() => setSignupDialogOpen(true)} disabled={actionLoading}>
             Sign Up
           </Button>

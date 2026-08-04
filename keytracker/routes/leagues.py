@@ -266,6 +266,8 @@ def update_league(league_id):
             if conflict:
                 return jsonify({"error": "That name is already in use"}), 409
         league.url_name = raw
+    if "signups_open" in data:
+        league.signups_open = bool(data["signups_open"])
     if league.status != LeagueStatus.SETUP.value:
         db.session.commit()
         db.session.refresh(league)
@@ -327,6 +329,45 @@ def delete_league(league_id):
     return jsonify({"success": True}), 200
 
 
+@blueprint.route("/<int:league_id>/teams/reorder", methods=["POST"])
+@login_required
+def reorder_teams(league_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if not _is_league_admin(league, effective):
+        return jsonify({"error": "Admin access required"}), 403
+    if league.status not in (LeagueStatus.SETUP.value, LeagueStatus.DRAFTING.value):
+        return jsonify({"error": "Can only reorder teams during setup or drafting"}), 400
+
+    data = request.get_json(silent=True) or {}
+    team_ids = data.get("team_ids")
+    if not team_ids or not isinstance(team_ids, list):
+        return jsonify({"error": "team_ids list required"}), 400
+
+    teams = Team.query.filter_by(league_id=league.id).all()
+    team_map = {t.id: t for t in teams}
+    if set(team_ids) != set(team_map.keys()):
+        return jsonify({"error": "team_ids must contain all teams in the league"}), 400
+
+    offset = 10000
+    for t in teams:
+        t.order_number = t.order_number + offset
+    db.session.flush()
+
+    for i, tid in enumerate(team_ids, start=1):
+        team_map[tid].order_number = i
+    db.session.commit()
+
+    _log_admin_action(
+        league.id, None, effective.id, "reorder_teams",
+        details=f"Reordered to: {team_ids}",
+    )
+
+    return jsonify({"success": True})
+
+
 # --- Signups ---
 
 
@@ -338,6 +379,8 @@ def signup(league_id):
         return err
     if league.status != LeagueStatus.SETUP.value:
         return jsonify({"error": "Signups only during setup"}), 400
+    if not league.signups_open:
+        return jsonify({"error": "Signups are closed"}), 400
     effective = get_effective_user()
     missing = []
     if not effective.dok_profile_url:
