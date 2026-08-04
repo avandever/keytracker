@@ -75,6 +75,7 @@ import {
   setPlayerMatchupDoubleLoss,
   reorderWeeks,
   reorderTeams,
+  resetDraft,
   updateTeam,
   searchCards,
   revertToSetup,
@@ -155,6 +156,7 @@ export default function LeagueAdminPage() {
 
   // Start draft dialog
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
+  const [resetDraftDialogOpen, setResetDraftDialogOpen] = useState(false);
 
   // Week creation / editing
   const [weekDialogOpen, setWeekDialogOpen] = useState(false);
@@ -377,6 +379,18 @@ export default function LeagueAdminPage() {
       await updateLeague(league.id, { signups_open: !league.signups_open } as any);
       refresh();
       setSuccess(league.signups_open ? 'Signups closed' : 'Signups opened');
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleResetDraft = async () => {
+    setResetDraftDialogOpen(false);
+    setError('');
+    try {
+      await resetDraft(league.id);
+      refresh();
+      setSuccess('Draft reset — league returned to setup');
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
     }
@@ -951,6 +965,11 @@ export default function LeagueAdminPage() {
               </Tooltip>
             );
           })()}
+          {league.status === 'drafting' && (
+            <Button variant="outlined" color="warning" onClick={() => setResetDraftDialogOpen(true)}>
+              Reset Draft
+            </Button>
+          )}
         </Box>
       </Box>
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -1465,6 +1484,20 @@ export default function LeagueAdminPage() {
         <DialogActions>
           <Button onClick={() => setDraftDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleStartDraft} variant="contained" color="warning">Start Draft</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={resetDraftDialogOpen} onClose={() => setResetDraftDialogOpen(false)}>
+        <DialogTitle>Reset Draft?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This will revert the league to setup status, remove all draft picks and non-captain team members,
+            and reset all signup statuses. This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResetDraftDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleResetDraft} variant="contained" color="warning">Reset Draft</Button>
         </DialogActions>
       </Dialog>
 

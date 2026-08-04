@@ -192,6 +192,10 @@ export async function startDraft(leagueId: number): Promise<DraftState> {
   return data;
 }
 
+export async function resetDraft(leagueId: number): Promise<void> {
+  await apiClient.post(`/leagues/${leagueId}/draft/reset`);
+}
+
 export async function getDraft(leagueId: number): Promise<DraftState> {
   const { data } = await apiClient.get(`/leagues/${leagueId}/draft`);
   return data;

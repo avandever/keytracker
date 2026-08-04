@@ -978,7 +978,33 @@ def start_draft(league_id):
 
     league.status = LeagueStatus.DRAFTING.value
     db.session.commit()
+    _log_admin_action(league.id, None, get_effective_user().id, "start_draft", {})
     return jsonify(compute_draft_state(league))
+
+
+@blueprint.route("/<int:league_id>/draft/reset", methods=["POST"])
+@login_required
+def reset_draft(league_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    if league.status != LeagueStatus.DRAFTING.value:
+        return jsonify({"error": "League is not in drafting status"}), 400
+
+    DraftPick.query.filter_by(league_id=league.id).delete()
+    for team in league.teams:
+        TeamMember.query.filter(
+            TeamMember.team_id == team.id,
+            TeamMember.is_captain == False,
+        ).delete()
+    for s in league.signups:
+        s.status = SignupStatus.SIGNED_UP.value
+    league.status = LeagueStatus.SETUP.value
+    db.session.commit()
+    _log_admin_action(league.id, None, get_effective_user().id, "reset_draft", {})
+    return jsonify({"success": True})
 
 
 @blueprint.route("/<int:league_id>/draft", methods=["GET"])
