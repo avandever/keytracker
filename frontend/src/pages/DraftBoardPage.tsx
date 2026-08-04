@@ -23,7 +23,10 @@ import {
   ListItemAvatar,
   Avatar,
   ListItemButton,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { getDraft, makePick } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import { useTestUser } from '../contexts/TestUserContext';
@@ -151,8 +154,23 @@ export default function DraftBoardPage() {
               Available Players ({draft.available_players.length})
             </Typography>
             <List dense>
-              {draft.available_players.map((p) => (
-                <ListItem key={p.id} disablePadding>
+              {draft.available_players.map((p: any) => (
+                <ListItem key={p.id} disablePadding secondaryAction={
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    {p.dok_profile_url && (
+                      <Tooltip title="View DoK Collection">
+                        <IconButton size="small" href={p.dok_profile_url} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()}>
+                          <OpenInNewIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {isMyPick && (
+                      <Button size="small" variant="outlined" disabled={pickLoading}>
+                        Pick
+                      </Button>
+                    )}
+                  </Box>
+                }>
                   <ListItemButton
                     onClick={() => handlePick(p.id)}
                     disabled={pickLoading || !isMyPick}
@@ -166,11 +184,6 @@ export default function DraftBoardPage() {
                       primary={p.name}
                       secondary={p.discord_username ? `@${p.discord_username}` : undefined}
                     />
-                    {isMyPick && (
-                      <Button size="small" variant="outlined" disabled={pickLoading}>
-                        Pick
-                      </Button>
-                    )}
                   </ListItemButton>
                 </ListItem>
               ))}

@@ -860,7 +860,10 @@ def compute_draft_state(league):
             and s.user_id not in picked_user_ids
             and s.user_id not in captain_user_ids
         ):
-            available.append(serialize_user_brief(s.user))
+            player = serialize_user_brief(s.user)
+            player["dok_profile_url"] = s.user.dok_profile_url
+            available.append(player)
+    available.sort(key=lambda p: (p["name"] or "").lower())
 
     # Compute current pick
     picks_made = len(picks)
