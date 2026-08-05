@@ -44,7 +44,7 @@ export default function TestUserPicker() {
       }}
     >
       <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-        Impersonate Test User
+        Impersonate User
       </Typography>
       <FormControl size="small" fullWidth>
         <InputLabel>Acting as</InputLabel>

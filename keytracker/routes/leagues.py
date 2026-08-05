@@ -78,7 +78,7 @@ def get_effective_user():
     """Return the effective user for league operations.
 
     If the X-Test-User-Id header is present, validates that the real current_user
-    is a league admin and the target is a test user, then returns the test user.
+    is a league admin and the target exists, then returns that user.
     Otherwise returns current_user.
     """
     test_user_id = request.headers.get("X-Test-User-Id")
@@ -90,10 +90,10 @@ def get_effective_user():
         test_user_id = int(test_user_id)
     except (ValueError, TypeError):
         return current_user
-    test_user = db.session.get(User, test_user_id)
-    if not test_user or not test_user.is_test_user:
+    target_user = db.session.get(User, test_user_id)
+    if not target_user:
         return current_user
-    return test_user
+    return target_user
 
 
 def _is_league_admin(league, user=None):
@@ -1152,8 +1152,15 @@ def make_pick(league_id):
 def list_test_users():
     if not current_user.is_league_admin:
         return jsonify({"error": "League admin permission required"}), 403
-    test_users = User.query.filter_by(is_test_user=True).order_by(User.id).all()
-    return jsonify([serialize_user_brief(u) for u in test_users])
+    signup_user_ids = db.session.query(LeagueSignup.user_id).distinct()
+    users = (
+        User.query.filter(
+            db.or_(User.is_test_user == True, User.id.in_(signup_user_ids))
+        )
+        .order_by(User.name)
+        .all()
+    )
+    return jsonify([serialize_user_brief(u) for u in users])
 
 
 # --- Sets reference ---
