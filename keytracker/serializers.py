@@ -291,9 +291,9 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         thief_steals = ThiefSteal.query.filter_by(week_id=week.id).all()
         thief_floor_team_id = week.thief_floor_team_id
 
-    # Hide opponent deck selections from non-admins until the week is published/completed.
+    # Hide opponent deck selections from non-admins until the week is completed.
     redacted_opponent_ids: set = set()
-    if viewer and not viewer_is_admin and week.status not in ("published", "completed"):
+    if viewer and not viewer_is_admin and week.status != "completed":
         viewer_team_member_ids = set()
         if viewer_team_id:
             for team in week.league.teams:
