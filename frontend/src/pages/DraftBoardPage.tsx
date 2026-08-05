@@ -172,7 +172,7 @@ export default function DraftBoardPage() {
                       </Tooltip>
                     )}
                     {isMyPick && (
-                      <Button size="small" variant="outlined" disabled={pickLoading}>
+                      <Button size="small" variant="outlined" disabled={pickLoading} onClick={() => handlePick(p.id)}>
                         Pick
                       </Button>
                     )}
