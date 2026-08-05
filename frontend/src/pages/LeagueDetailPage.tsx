@@ -1207,11 +1207,13 @@ export default function LeagueDetailPage() {
           {activeTab >= weekStartIdx && activeTab < adminLogIdx && weeks[activeTab - weekStartIdx] && renderWeekTab(weeks[activeTab - weekStartIdx])}
           {activeTab === adminLogIdx && renderAdminLogTab()}
         </>
-      ) : (
+      ) : showTeamLists ? (
         <>
           <Typography variant="h5" sx={{ mb: 2 }}>Teams</Typography>
           {renderTeamsTab()}
         </>
+      ) : (
+        <Alert severity="info" sx={{ mt: 2 }}>Draft in progress — team rosters will be visible once the draft is complete.</Alert>
       )}
 
 
