@@ -1111,7 +1111,7 @@ export default function LeagueDetailPage() {
             Draft Board
           </Button>
         )}
-        {league.my_team_id && user && (
+        {league.my_team_id && user && !(league.status === 'drafting' && !league.is_admin && !league.is_captain) && (
           <>
             <Button
               variant="contained"

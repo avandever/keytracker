@@ -248,6 +248,14 @@ export default function MyTeamPage() {
     );
   }
 
+  if (league.status === 'drafting' && !league.is_admin && !league.is_captain) {
+    return (
+      <Container sx={{ mt: 3 }}>
+        <Alert severity="info">Team pages are not available while the draft is in progress.</Alert>
+      </Container>
+    );
+  }
+
   const myTeam = league.teams.find((t) => t.id === league.my_team_id);
   if (!myTeam) return null;
 
