@@ -129,6 +129,28 @@ export default function DraftBoardPage() {
               </TableRow>
             </TableHead>
             <TableBody>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 'bold' }}>Captain</TableCell>
+                {draft.teams.map((t: any) => {
+                  const captain = t.members.find((m: any) => m.is_captain);
+                  return (
+                    <TableCell key={t.id} align="center">
+                      {captain ? (
+                        <Chip
+                          label={captain.user.discord_username
+                            ? `${captain.user.name} (@${captain.user.discord_username})`
+                            : captain.user.name}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">-</Typography>
+                      )}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
               {draft.draft_board.map((round) => (
                 <TableRow key={round.round}>
                   <TableCell>{round.round}</TableCell>
