@@ -291,9 +291,20 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         thief_steals = ThiefSteal.query.filter_by(week_id=week.id).all()
         thief_floor_team_id = week.thief_floor_team_id
 
-    # For Tertiate, hide opponent deck selections from the viewer until both players have started.
-    # Admins always see everything.
+    # Hide opponent deck selections from non-admins until the week is published/completed.
     redacted_opponent_ids: set = set()
+    if viewer and not viewer_is_admin and week.status not in ("published", "completed"):
+        viewer_team_member_ids = set()
+        if viewer_team_id:
+            for team in week.league.teams:
+                if team.id == viewer_team_id:
+                    viewer_team_member_ids = {m.user_id for m in team.members}
+                    break
+        for ds in week.deck_selections:
+            if ds.user_id != viewer.id and ds.user_id not in viewer_team_member_ids:
+                redacted_opponent_ids.add(ds.user_id)
+    # For Tertiate specifically, also hide opponent decks until both players have started
+    # (even after the week is published)
     if viewer and not viewer_is_admin and week.format_type == "tertiate":
         for wm in week.matchups:
             for pm in wm.player_matchups:
