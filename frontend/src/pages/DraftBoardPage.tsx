@@ -27,7 +27,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { getDraft, makePick } from '../api/leagues';
+import { getDraft, makePick, undoPick } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import { useTestUser } from '../contexts/TestUserContext';
 import type { DraftState } from '../types';
@@ -69,6 +69,19 @@ export default function DraftBoardPage() {
     }
   };
 
+  const handleUndo = async () => {
+    setPickLoading(true);
+    setError('');
+    try {
+      const updated = await undoPick(leagueId);
+      setDraft(updated);
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    } finally {
+      setPickLoading(false);
+    }
+  };
+
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
   if (error && !draft) return <Container sx={{ mt: 3 }}><Alert severity="error">{error}</Alert></Container>;
   if (!draft) return null;
@@ -78,6 +91,12 @@ export default function DraftBoardPage() {
   const effectiveUserId = testUserId ?? user?.id;
   const currentTeamCaptainId = draft.current_team?.members.find((m) => m.is_captain)?.user.id;
   const isMyPick = user && draft.current_team && currentTeamCaptainId === effectiveUserId;
+
+  // Can undo? Last pick must be from a team the user captains (or user is admin)
+  const lastPick = draft.pick_history.length > 0 ? draft.pick_history[draft.pick_history.length - 1] : null;
+  const lastPickTeam = lastPick ? draft.teams.find((t: any) => t.id === lastPick.team_id) : null;
+  const lastPickTeamCaptainId = lastPickTeam?.members.find((m: any) => m.is_captain)?.user.id;
+  const canUndo = lastPick && (lastPickTeamCaptainId === effectiveUserId);
 
   return (
     <Container maxWidth="lg" sx={{ mt: 3 }}>
@@ -93,6 +112,11 @@ export default function DraftBoardPage() {
         <Typography>
           {draft.picks_made}/{draft.total_picks} picks made
         </Typography>
+        {canUndo && (
+          <Button size="small" variant="outlined" color="warning" disabled={pickLoading} onClick={handleUndo}>
+            Undo Last Pick
+          </Button>
+        )}
       </Box>
 
       {/* Current pick info */}

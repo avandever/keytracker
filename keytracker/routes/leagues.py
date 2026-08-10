@@ -1144,6 +1144,52 @@ def make_pick(league_id):
     return jsonify(compute_draft_state(league))
 
 
+@blueprint.route("/<int:league_id>/draft/undo", methods=["POST"])
+@login_required
+def undo_pick(league_id):
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if league.status != LeagueStatus.DRAFTING.value:
+        return jsonify({"error": "Draft is not active"}), 400
+
+    last_pick = (
+        DraftPick.query.filter_by(league_id=league.id)
+        .order_by(DraftPick.picked_at.desc())
+        .first()
+    )
+    if not last_pick:
+        return jsonify({"error": "No picks to undo"}), 400
+
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
+    is_pick_captain = (
+        TeamMember.query.filter_by(
+            team_id=last_pick.team_id,
+            user_id=effective.id,
+            is_captain=True,
+        ).first()
+        is not None
+    )
+    if not is_admin and not is_pick_captain:
+        return jsonify({"error": "Only the captain who made the last pick or an admin can undo"}), 403
+
+    TeamMember.query.filter_by(
+        team_id=last_pick.team_id,
+        user_id=last_pick.picked_user_id,
+        is_captain=False,
+    ).delete()
+    db.session.delete(last_pick)
+    db.session.commit()
+
+    _log_admin_action(
+        league.id, None, effective.id, "undo_draft_pick",
+        {"undone_user_id": last_pick.picked_user_id, "team_id": last_pick.team_id},
+    )
+
+    return jsonify(compute_draft_state(league))
+
+
 # --- Test users ---
 
 

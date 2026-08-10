@@ -211,6 +211,11 @@ export async function makePick(
   return data;
 }
 
+export async function undoPick(leagueId: number): Promise<DraftState> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/draft/undo`);
+  return data;
+}
+
 export async function listTestUsers(): Promise<UserBrief[]> {
   const { data } = await apiClient.get('/leagues/test-users');
   return data;
