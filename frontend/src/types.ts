@@ -350,6 +350,77 @@ export interface DraftState {
   teams: TeamDetail[];
 }
 
+// --- Advanced pod search types ---
+
+// Numeric bounds are sent as <field>_min / <field>_max alongside the named keys.
+export interface PodSearchCardFilter {
+  card_name?: string;
+  min_count?: number;
+  is_enhanced?: boolean;
+  is_maverick?: boolean;
+  is_anomaly?: boolean;
+  is_legacy?: boolean;
+  [key: string]: string | number | boolean | undefined;
+}
+
+export interface PodSearchRequest {
+  scope?: 'collection' | 'all';
+  card_filters?: PodSearchCardFilter[];
+  pod_filters?: Record<string, unknown>;
+  deck_filters?: Record<string, unknown>;
+  sort?: string;
+  sort_dir?: 'asc' | 'desc';
+  page?: number;
+  per_page?: number;
+  include_total?: boolean;
+}
+
+export interface PodSearchDok {
+  amber_control: number | null;
+  expected_amber: number | null;
+  artifact_control: number | null;
+  creature_control: number | null;
+  efficiency: number | null;
+  recursion: number | null;
+  disruption: number | null;
+  creature_protection: number | null;
+  other: number | null;
+  effective_power: number | null;
+}
+
+export interface PodSearchResult {
+  house: string;
+  sas_rating: number | null;
+  aerc_score: number | null;
+  num_enhancements: number | null;
+  enhanced_amber: number | null;
+  enhanced_capture: number | null;
+  enhanced_draw: number | null;
+  enhanced_damage: number | null;
+  enhanced_discard: number | null;
+  enhanced_power: number | null;
+  creatures: number | null;
+  raw_amber: number | null;
+  total_amber: number | null;
+  deck_name: string;
+  deck_kf_id: string;
+  deck_mv_url: string;
+  deck_dok_url: string;
+  deck_sas: number | null;
+  deck_aerc: number | null;
+  expansion: number;
+  expansion_name: string;
+  dok: PodSearchDok | null;
+}
+
+export interface PodSearchResponse {
+  total: number | null;
+  has_more: boolean;
+  page: number;
+  per_page: number;
+  pods: PodSearchResult[];
+}
+
 // --- League Week types ---
 
 export interface KeyforgeSetInfo {

@@ -24,6 +24,7 @@ import { useAuth } from '../contexts/AuthContext';
 const NAV_LINKS = [
   { label: 'Games', to: '/games' },
   { label: 'Decks', to: '/decks' },
+  { label: 'Pod Search', to: '/pod-search' },
   { label: 'Players', to: '/user' },
   { label: 'Leagues', to: '/leagues' },
   { label: 'Quick Match', to: '/matches' },

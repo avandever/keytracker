@@ -1,5 +1,16 @@
 import apiClient from './client';
-import type { DeckSummary, DeckDetail, DeckCardEntry } from '../types';
+import type {
+  DeckSummary,
+  DeckDetail,
+  DeckCardEntry,
+  PodSearchRequest,
+  PodSearchResponse,
+} from '../types';
+
+export async function podSearch(payload: PodSearchRequest): Promise<PodSearchResponse> {
+  const { data } = await apiClient.post('/decks/pod-search', payload);
+  return data;
+}
 
 export async function searchDecks(params: Record<string, string | undefined>): Promise<DeckSummary[]> {
   const filtered = Object.fromEntries(

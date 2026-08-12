@@ -14,6 +14,8 @@ import GameDetailPage from './pages/GameDetailPage';
 import GamesSearchPage from './pages/GamesSearchPage';
 import DeckDetailPage from './pages/DeckDetailPage';
 import DecksSearchPage from './pages/DecksSearchPage';
+import PodSearchPage from './pages/PodSearchPage';
+import RequireMember from './components/RequireMember';
 import UserSearchPage from './pages/UserSearchPage';
 import UserProfilePage from './pages/UserProfilePage';
 import UploadLogPage from './pages/UploadLogPage';
@@ -109,6 +111,10 @@ export default function App() {
               <Route path="/games" element={<GamesSearchPage />} />
               <Route path="/deck/:deckId" element={<DeckDetailPage />} />
               <Route path="/decks" element={<DecksSearchPage />} />
+              <Route
+                path="/pod-search"
+                element={<RequireMember><PodSearchPage /></RequireMember>}
+              />
               <Route path="/user" element={<UserSearchPage />} />
               <Route path="/user/:username" element={<UserProfilePage />} />
               <Route path="/upload" element={<RequireAuth><UploadLogPage /></RequireAuth>} />

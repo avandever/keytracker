@@ -41,7 +41,17 @@ export default function DecksSearchPage() {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 3 }}>
-      <Typography variant="h5" gutterBottom>Decks Search</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mb: 1 }}>
+        <Typography variant="h5">Decks Search</Typography>
+        <Typography
+          component={RouterLink}
+          to="/pod-search"
+          variant="body2"
+          sx={{ color: 'primary.main', textDecoration: 'none' }}
+        >
+          Advanced pod search →
+        </Typography>
+      </Box>
       <Box component="form" onSubmit={handleSearch} sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
         <TextField
           label="SAS Min"
