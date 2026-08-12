@@ -8,21 +8,27 @@ from better_profanity import profanity
 from flask_login import current_user, login_required
 from keytracker.schema import (
     db,
+    CardInDeck,
     CollectionSyncJob,
     Deck,
+    DokDeck,
     EXPANSION_ID_TO_ABBR,
     ExtendedGameData,
     Game,
+    KeyforgeHouse,
     Log,
     MatchGame,
     Player,
     PlayerDeckSelection,
+    PlatonicCard,
+    PlatonicCardInSet,
     PodStats,
     TcoUsername,
     User,
     UserAllianceCollection,
     UserDeckCollection,
 )
+from keytracker.routes.auth import member_required
 from keytracker.serializers import (
     serialize_deck_detail,
     serialize_deck_summary,
@@ -50,7 +56,7 @@ from keytracker.utils import (
     _infer_deck_from_snapshots,
 )
 import keytracker.collection_sync as _collection_sync
-from sqlalchemy import or_
+from sqlalchemy import and_, func, or_
 import datetime
 import re
 import requests
@@ -324,6 +330,324 @@ def decks_search():
     offset = (page - 1) * per_page
     decks = query.limit(per_page).offset(offset).all()
     return jsonify([serialize_deck_summary(d) for d in decks])
+
+
+# --- Advanced pod search (members only) ---
+
+# Houses that are not real pods and should never be returned as search results.
+EXCLUDED_POD_HOUSES = ("Archon Power", "The Tide", "Prophecy")
+
+# Per-card enhancement pip types, as stored on CardInDeck.enhanced_<name>.
+ENHANCEMENT_TYPES = ("amber", "capture", "draw", "damage", "discard", "power")
+
+# Numeric PodStats columns filterable via <field>_min / <field>_max.
+POD_RANGE_FIELDS = (
+    "sas_rating",
+    "aerc_score",
+    "num_enhancements",
+    "creatures",
+    "raw_amber",
+    "total_amber",
+    "num_mutants",
+    "enhanced_amber",
+    "enhanced_capture",
+    "enhanced_draw",
+    "enhanced_damage",
+    "enhanced_discard",
+    "enhanced_power",
+    "enhanced_houses",
+)
+
+# Deck-level columns filterable via <field>_min / <field>_max.
+DECK_RANGE_FIELDS = ("sas_rating", "aerc_score")
+
+# DoK AERC breakdown, deck-level only (PodStats does not store the letters).
+DOK_RANGE_FIELDS = (
+    "amber_control",
+    "expected_amber",
+    "artifact_control",
+    "creature_control",
+    "efficiency",
+    "recursion",
+    "disruption",
+    "creature_protection",
+    "other",
+    "effective_power",
+    "raw_amber",
+    "action_count",
+    "upgrade_count",
+    "creature_count",
+)
+
+POD_SORT_COLUMNS = {
+    "pod_sas": lambda: PodStats.sas_rating,
+    "pod_aerc": lambda: PodStats.aerc_score,
+    "pod_enhancements": lambda: PodStats.num_enhancements,
+    "pod_creatures": lambda: PodStats.creatures,
+    "pod_total_amber": lambda: PodStats.total_amber,
+    "deck_sas": lambda: Deck.sas_rating,
+    "deck_aerc": lambda: Deck.aerc_score,
+    "deck_name": lambda: Deck.name,
+    "deck_expected_amber": lambda: DokDeck.expected_amber,
+    "deck_amber_control": lambda: DokDeck.amber_control,
+    "deck_creature_control": lambda: DokDeck.creature_control,
+    "deck_efficiency": lambda: DokDeck.efficiency,
+}
+
+
+def _apply_range_filters(query, model, spec, fields):
+    """Apply <field>_min / <field>_max filters from spec onto query."""
+    if not isinstance(spec, dict):
+        return query
+    for field in fields:
+        column = getattr(model, field)
+        low = spec.get(f"{field}_min")
+        if low is not None:
+            query = query.filter(column >= low)
+        high = spec.get(f"{field}_max")
+        if high is not None:
+            query = query.filter(column <= high)
+    return query
+
+
+# Returned when a criterion can never match, so the search short-circuits.
+_NO_MATCH = object()
+
+
+def _card_filter_subquery(spec):
+    """Build a (deck_id, kf_house_id) subquery for one card criterion.
+
+    Returns _NO_MATCH if the criterion can never match (e.g. an unknown card
+    name), None if it is empty and should be skipped, else the subquery.
+
+    Card identity is resolved to platonic_card_id up front so the query hits
+    the index on tracker_card_in_deck rather than joining the card tables --
+    that table has on the order of 100M rows.
+    """
+    conditions = []
+
+    name = (spec.get("card_name") or "").strip()
+    if name:
+        card_ids = [
+            row[0]
+            for row in db.session.query(PlatonicCard.id)
+            .filter(func.lower(PlatonicCard.card_title) == name.lower())
+            .all()
+        ]
+        if not card_ids:
+            return _NO_MATCH
+        conditions.append(CardInDeck.platonic_card_id.in_(card_ids))
+
+    for pip in ENHANCEMENT_TYPES:
+        column = getattr(CardInDeck, f"enhanced_{pip}")
+        low = spec.get(f"enhanced_{pip}_min")
+        if low is not None:
+            conditions.append(column >= low)
+        high = spec.get(f"enhanced_{pip}_max")
+        if high is not None:
+            conditions.append(column <= high)
+
+    for field in ("is_enhanced", "is_legacy"):
+        value = spec.get(field)
+        if value is not None:
+            conditions.append(getattr(CardInDeck, field) == bool(value))
+
+    for field in ("is_maverick", "is_anomaly"):
+        value = spec.get(field)
+        if value is not None:
+            conditions.append(getattr(PlatonicCardInSet, field) == bool(value))
+
+    try:
+        min_count = max(1, int(spec.get("min_count") or 1))
+    except (TypeError, ValueError):
+        min_count = 1
+
+    if not conditions:
+        return None
+
+    # Grouping also collapses multiple matching cards down to one row per pod.
+    return (
+        db.session.query(
+            CardInDeck.deck_id.label("deck_id"),
+            PlatonicCardInSet.kf_house_id.label("kf_house_id"),
+        )
+        .join(PlatonicCardInSet, CardInDeck.card_in_set_id == PlatonicCardInSet.id)
+        .filter(*conditions)
+        .group_by(CardInDeck.deck_id, PlatonicCardInSet.kf_house_id)
+        .having(func.count() >= min_count)
+        .subquery()
+    )
+
+
+@blueprint.route("/decks/pod-search", methods=["POST"])
+@member_required
+def pod_search():
+    """Card-level pod search, e.g. "pods with a Keyfrog carrying 2 damage pips".
+
+    Card criteria match within a single pod: a card counts only if the house of
+    its printing is the pod's house, so mavericks land in the pod they were
+    actually dealt into.
+    """
+    body = request.get_json(silent=True) or {}
+
+    scope = body.get("scope") or "collection"
+    if scope not in ("collection", "all"):
+        return jsonify({"error": "scope must be 'collection' or 'all'"}), 400
+
+    card_filters = body.get("card_filters") or []
+    if not isinstance(card_filters, list):
+        return jsonify({"error": "card_filters must be a list"}), 400
+    pod_filters = body.get("pod_filters") or {}
+    deck_filters = body.get("deck_filters") or {}
+
+    page = max(1, int(body.get("page") or 1))
+    per_page = min(max(1, int(body.get("per_page") or 50)), 100)
+
+    query = (
+        db.session.query(PodStats, Deck, DokDeck)
+        .join(Deck, PodStats.deck_id == Deck.id)
+        .join(KeyforgeHouse, PodStats.kf_house_id == KeyforgeHouse.id)
+        .outerjoin(DokDeck, DokDeck.deck_id == Deck.id)
+        .filter(KeyforgeHouse.name.notin_(EXCLUDED_POD_HOUSES))
+    )
+
+    if scope == "collection":
+        query = query.join(
+            UserDeckCollection,
+            and_(
+                UserDeckCollection.deck_id == PodStats.deck_id,
+                UserDeckCollection.user_id == current_user.id,
+                UserDeckCollection.dok_owned == True,  # noqa: E712
+            ),
+        )
+
+    applied_card_filters = 0
+    for spec in card_filters:
+        if not isinstance(spec, dict):
+            continue
+        subquery = _card_filter_subquery(spec)
+        if subquery is _NO_MATCH:
+            return jsonify(
+                {
+                    "total": 0,
+                    "has_more": False,
+                    "page": page,
+                    "per_page": per_page,
+                    "pods": [],
+                }
+            )
+        if subquery is None:
+            continue
+        query = query.join(
+            subquery,
+            and_(
+                PodStats.deck_id == subquery.c.deck_id,
+                PodStats.kf_house_id == subquery.c.kf_house_id,
+            ),
+        )
+        applied_card_filters += 1
+
+    houses = pod_filters.get("houses")
+    if houses:
+        query = query.filter(KeyforgeHouse.name.in_(houses))
+    expansions = pod_filters.get("expansions")
+    if expansions:
+        query = query.filter(Deck.expansion.in_(expansions))
+    query = _apply_range_filters(query, PodStats, pod_filters, POD_RANGE_FIELDS)
+
+    deck_name = (deck_filters.get("name") or "").strip()
+    if deck_name:
+        query = query.filter(Deck.name.ilike(f"%{deck_name}%"))
+    query = _apply_range_filters(query, Deck, deck_filters, DECK_RANGE_FIELDS)
+    # NULL comparisons are false, so these also drop decks with no DoK data.
+    query = _apply_range_filters(query, DokDeck, deck_filters, DOK_RANGE_FIELDS)
+
+    has_other_filters = (
+        bool(houses)
+        or bool(expansions)
+        or bool(deck_name)
+        or any(k.endswith(("_min", "_max")) for k in pod_filters)
+        or any(k.endswith(("_min", "_max")) for k in deck_filters)
+    )
+    if scope == "all" and not applied_card_filters and not has_other_filters:
+        return (
+            jsonify(
+                {"error": "Searching all decks requires at least one filter"}
+            ),
+            400,
+        )
+
+    sort_key = body.get("sort") or "pod_sas"
+    if sort_key not in POD_SORT_COLUMNS:
+        return jsonify({"error": f"Unknown sort '{sort_key}'"}), 400
+    sort_column = POD_SORT_COLUMNS[sort_key]()
+    descending = (body.get("sort_dir") or "desc") != "asc"
+    query = query.order_by(
+        sort_column.desc() if descending else sort_column.asc(),
+        PodStats.deck_id,
+        PodStats.kf_house_id,
+    )
+
+    # Fetching one extra row tells us whether another page exists without
+    # paying for a full COUNT, which on this query costs as much as the
+    # page itself. An exact total is opt-in.
+    window = query.limit(per_page + 1).offset((page - 1) * per_page).all()
+    has_more = len(window) > per_page
+    rows = window[:per_page]
+    total = query.count() if body.get("include_total") else None
+
+    return jsonify(
+        {
+            "total": total,
+            "has_more": has_more,
+            "page": page,
+            "per_page": per_page,
+            "pods": [
+                {
+                    "house": pod.house,
+                    "sas_rating": pod.sas_rating,
+                    "aerc_score": pod.aerc_score,
+                    "num_enhancements": pod.num_enhancements,
+                    "enhanced_amber": pod.enhanced_amber,
+                    "enhanced_capture": pod.enhanced_capture,
+                    "enhanced_draw": pod.enhanced_draw,
+                    "enhanced_damage": pod.enhanced_damage,
+                    "enhanced_discard": pod.enhanced_discard,
+                    "enhanced_power": pod.enhanced_power,
+                    "creatures": pod.creatures,
+                    "raw_amber": pod.raw_amber,
+                    "total_amber": pod.total_amber,
+                    "deck_name": deck.name,
+                    "deck_kf_id": deck.kf_id,
+                    "deck_mv_url": deck.mv_url,
+                    "deck_dok_url": deck.dok_url,
+                    "deck_sas": deck.sas_rating,
+                    "deck_aerc": deck.aerc_score,
+                    "expansion": deck.expansion,
+                    "expansion_name": EXPANSION_ID_TO_ABBR.get(
+                        deck.expansion, "Unknown"
+                    ),
+                    "dok": (
+                        {
+                            "amber_control": dok.amber_control,
+                            "expected_amber": dok.expected_amber,
+                            "artifact_control": dok.artifact_control,
+                            "creature_control": dok.creature_control,
+                            "efficiency": dok.efficiency,
+                            "recursion": dok.recursion,
+                            "disruption": dok.disruption,
+                            "creature_protection": dok.creature_protection,
+                            "other": dok.other,
+                            "effective_power": dok.effective_power,
+                        }
+                        if dok is not None
+                        else None
+                    ),
+                }
+                for pod, deck, dok in rows
+            ],
+        }
+    )
 
 
 @blueprint.route("/decks/<deck_id>")
