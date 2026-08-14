@@ -1228,8 +1228,18 @@ def get_deck_by_name_with_zeal(deck_name: str) -> Deck:
     return deck
 
 
-def update_sas_scores(deck: Deck, dok_api_key: str = None, force: bool = False) -> bool:
-    """Returns True if update occurred. Pass force=True to bypass cache and always fetch from DoK."""
+def update_sas_scores(
+    deck: Deck,
+    dok_api_key: str = None,
+    force: bool = False,
+    use_prod: bool = False,
+) -> bool:
+    """Returns True if update occurred. Pass force=True to bypass cache and always fetch from DoK.
+
+    Pass use_prod=True to query production DoK even when DOK_BASE_URL points at
+    a local mirror. A mirror can be missing decks entirely, answering with an
+    empty deck object, which would otherwise leave the deck with no SAS rating.
+    """
     has_negative = (deck.sas_rating is not None and deck.sas_rating < 0) or (
         deck.dok and deck.dok.sas_rating is not None and deck.dok.sas_rating < 0
     )
@@ -1245,7 +1255,8 @@ def update_sas_scores(deck: Deck, dok_api_key: str = None, force: bool = False) 
             f"Deck {deck.kf_id} has only {len(deck.cards_from_assoc)} cards — refreshing from MV before DoK update"
         )
         refresh_deck_from_mv(deck)
-    url = os.path.join(DOK_DECK_BASE, deck.kf_id)
+    base = PROD_DOK_BASE if use_prod else _DOK_BASE
+    url = os.path.join(f"{base}/public-api/v3/decks", deck.kf_id)
     headers = {"Api-Key": dok_api_key} if dok_api_key else DOK_HEADERS
     response = requests.get(url, headers=headers)
     data = response.json()
@@ -1257,10 +1268,11 @@ def update_sas_scores(deck: Deck, dok_api_key: str = None, force: bool = False) 
         if aerc is not None and aerc >= 0:
             deck.aerc_score = aerc
         deck.sas_version = data["sasVersion"]
-        add_dok_deck_from_dict(save_prod_id=(_DOK_BASE == PROD_DOK_BASE), **data["deck"])
+        add_dok_deck_from_dict(save_prod_id=(base == PROD_DOK_BASE), **data["deck"])
     except KeyError:
         current_app.logger.exception(f"Failed getting dok data for {deck.kf_id}")
         current_app.logger.debug(f"Received text:\n{response.text}")
+        return False
     return True
 
 
