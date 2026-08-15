@@ -39,7 +39,17 @@ def mv_deck_proxy(kf_id):
     # Build bonus_icons from per-card enhancement data.
     bonus_icons = []
     for card in cards:
-        icons = (
+        # Master Vault reports a house pip as the lowercased house name in the
+        # same list as the other icons, and lists it first. DoK needs these to
+        # build its house enhancement combos: without them a house-enhanced
+        # card is left out of the gaining house, which shifts creature counts
+        # and every synergy that keys off them.
+        icons = [
+            enhancement.house.lower()
+            for enhancement in (card.house_enhancements or [])
+            if enhancement.house
+        ]
+        icons += (
             ["amber"] * (card.enhanced_amber or 0)
             + ["capture"] * (card.enhanced_capture or 0)
             + ["draw"] * (card.enhanced_draw or 0)
