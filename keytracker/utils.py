@@ -1124,6 +1124,51 @@ def _same_house(a: str, b: str) -> bool:
     return a.replace(" ", "").lower() == b.replace(" ", "").lower()
 
 
+def _find_printing(title, house_name, expansion_int, card_data):
+    """Pick the PlatonicCardInSet for a card DoK reports in a deck.
+
+    Prefers a printing from the deck's own expansion whose house matches,
+    which is the ordinary case. Legacy cards break that assumption: an older
+    card played in a newer deck keeps its original expansion, so Legatus
+    Raptor shows up in a Mass Mutation deck while every printing we hold is
+    Worlds Collide. For those, search all expansions and lean on the house
+    and the maverick/anomaly flags DoK gives us.
+
+    Several printings can survive, but in practice they resolve to the same
+    PlatonicCard, so the card's text and stats are not in question -- only
+    which printing row we record. Ordering is deterministic so repeated runs
+    agree.
+    """
+    candidates = (
+        PlatonicCardInSet.query.join(
+            PlatonicCard, PlatonicCardInSet.card_id == PlatonicCard.id
+        )
+        .filter(PlatonicCard.card_title == title)
+        .all()
+    )
+    if not candidates:
+        return None
+
+    in_expansion = [p for p in candidates if p.expansion == expansion_int]
+    same_house = [p for p in in_expansion if _same_house(p.house, house_name)]
+    if same_house:
+        return min(same_house, key=lambda p: p.id)
+    if len(in_expansion) == 1:
+        return in_expansion[0]
+
+    by_house = [p for p in candidates if _same_house(p.house, house_name)]
+    if not by_house:
+        return None
+    flagged = [
+        p
+        for p in by_house
+        if bool(p.is_maverick) == bool(card_data.get("maverick"))
+        and bool(p.is_anomaly) == bool(card_data.get("anomaly"))
+    ]
+    pool = flagged or by_house
+    return min(pool, key=lambda p: (p.expansion, p.id))
+
+
 def _try_add_deck_from_local_dok(deck: Deck) -> bool:
     """Try to populate deck card data from local DoK's search-result-with-cards endpoint.
 
@@ -1160,23 +1205,7 @@ def _try_add_deck_from_local_dok(deck: Deck) -> bool:
         house_name = house_entry["house"]
         for card_data in house_entry["cards"]:
             title = _dok_title_to_tracker(card_data["cardTitle"])
-            # Find matching PlatonicCardInSet by title + expansion, preferring the
-            # record whose house matches the deck house (handles mavericks correctly).
-            candidates = (
-                PlatonicCardInSet.query.join(
-                    PlatonicCard, PlatonicCardInSet.card_id == PlatonicCard.id
-                )
-                .filter(
-                    PlatonicCard.card_title == title,
-                    PlatonicCardInSet.expansion == expansion_int,
-                )
-                .all()
-            )
-            pcis = next(
-                (p for p in candidates if _same_house(p.house, house_name)), None
-            )
-            if pcis is None and len(candidates) == 1:
-                pcis = candidates[0]
+            pcis = _find_printing(title, house_name, expansion_int, card_data)
             if pcis is None:
                 current_app.logger.debug(
                     f"PlatonicCardInSet not found for {title!r} "
