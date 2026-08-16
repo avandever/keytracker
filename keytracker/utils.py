@@ -1099,6 +1099,20 @@ def loop_loading_missed_sas(batch_size: int, max_set_id: int = 700) -> None:
                 current_app.logger.info(f"{count} left in this batch")
 
 
+DOK_EVIL_TWIN_SUFFIX = " – Evil Twin"
+
+
+def _dok_title_to_tracker(title: str) -> str:
+    """Translate DoK's card title into ours.
+
+    An evil twin is its own card in both systems, but DoK marks it with a
+    suffix while we prefix it: "Lapisaurus – Evil Twin" is "Evil Lapisaurus".
+    """
+    if title.endswith(DOK_EVIL_TWIN_SUFFIX):
+        return "Evil " + title[: -len(DOK_EVIL_TWIN_SUFFIX)]
+    return title
+
+
 def _same_house(a: str, b: str) -> bool:
     """Compare house names across DoK's and our spellings.
 
@@ -1145,7 +1159,7 @@ def _try_add_deck_from_local_dok(deck: Deck) -> bool:
     for house_entry in data.get("housesAndCards", []):
         house_name = house_entry["house"]
         for card_data in house_entry["cards"]:
-            title = card_data["cardTitle"]
+            title = _dok_title_to_tracker(card_data["cardTitle"])
             # Find matching PlatonicCardInSet by title + expansion, preferring the
             # record whose house matches the deck house (handles mavericks correctly).
             candidates = (
