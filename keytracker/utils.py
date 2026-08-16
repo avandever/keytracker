@@ -1099,6 +1099,17 @@ def loop_loading_missed_sas(batch_size: int, max_set_id: int = 700) -> None:
                 current_app.logger.info(f"{count} left in this batch")
 
 
+def _same_house(a: str, b: str) -> bool:
+    """Compare house names across DoK's and our spellings.
+
+    DoK reports its House enum name, so "Star Alliance" arrives as
+    "StarAlliance". Casing has drifted too, so ignore spaces and case.
+    """
+    if not a or not b:
+        return False
+    return a.replace(" ", "").lower() == b.replace(" ", "").lower()
+
+
 def _try_add_deck_from_local_dok(deck: Deck) -> bool:
     """Try to populate deck card data from local DoK's search-result-with-cards endpoint.
 
@@ -1147,7 +1158,9 @@ def _try_add_deck_from_local_dok(deck: Deck) -> bool:
                 )
                 .all()
             )
-            pcis = next((p for p in candidates if p.house == house_name), None)
+            pcis = next(
+                (p for p in candidates if _same_house(p.house, house_name)), None
+            )
             if pcis is None and len(candidates) == 1:
                 pcis = candidates[0]
             if pcis is None:
@@ -1423,9 +1436,21 @@ def randip() -> str:
 
 
 def get_house_for_enhancement(name: str) -> KeyforgeHouse:
-    house = KeyforgeHouse.query.filter(KeyforgeHouse.name.ilike(name)).first()
-    assert house is not None, f"Can't find house for {name}"
-    return house
+    """Resolve a house row by name, tolerating DoK's spelling.
+
+    DoK reports its House enum name, so "Star Alliance" arrives as
+    "StarAlliance", and a stray lowercase duplicate row exists. Match ignoring
+    spaces and case, preferring the canonical spaced spelling so enhancements
+    never land on the duplicate.
+    """
+    target = (name or "").replace(" ", "").lower()
+    matches = [
+        house
+        for house in KeyforgeHouse.query.all()
+        if house.name.replace(" ", "").lower() == target
+    ]
+    assert matches, f"Can't find house for {name}"
+    return max(matches, key=lambda house: (" " in house.name, len(house.name)))
 
 
 def get_or_create_house(name: str) -> KeyforgeHouse:
