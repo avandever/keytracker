@@ -56,10 +56,12 @@ function getHouseColor(house: string): string {
 }
 
 const S3_HOUSE_BASE = 'https://mastervault-storage-prod.s3.amazonaws.com/media/houses';
+// Ouboros is the only house stored lowercase in the bucket; other casings 403.
 const HOUSE_FILE_OVERRIDES: Record<string, string> = {
   Geistoid: 'KF_Geistoid',
   Ekwidon: 'Ekwidon200',
   'Star Alliance': 'Star_Alliance',
+  Ouboros: 'ouboros',
 };
 function houseIconUrl(house: string): string {
   const n = normalizeHouse(house);

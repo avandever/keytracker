@@ -2,11 +2,13 @@ import { Box } from '@mui/material';
 
 const S3_BASE = 'https://mastervault-storage-prod.s3.amazonaws.com/media/houses';
 
-// Some houses use a KF_ prefix in the S3 bucket
+// Master Vault's filenames don't all match the house name. Ouboros is the
+// only one stored lowercase; the bucket 403s on any other casing.
 const HOUSE_FILE_OVERRIDES: Record<string, string> = {
   Geistoid: 'KF_Geistoid',
   Ekwidon: 'Ekwidon200',
   'Star Alliance': 'Star_Alliance',
+  Ouboros: 'ouboros',
 };
 
 function houseImageUrl(house: string): string {
