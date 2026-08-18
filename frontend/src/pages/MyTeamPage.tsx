@@ -1646,7 +1646,7 @@ export default function MyTeamPage() {
                         onClick={() => handleSetSasRung(week.id, m.user.id, sasRungSelections[selKey] as number)}
                         disabled={!sasRungSelections[selKey]}
                       >
-                        {assignment ? 'Change' : 'Claim'}
+                        {assignment ? 'Change' : 'Assign'}
                       </Button>
                     </Box>
                   );
