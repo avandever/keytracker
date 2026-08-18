@@ -268,6 +268,15 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
                 viewer_team_id = team.id
                 break
 
+    # The same lookup, but done for admins too: rung assignments stay private
+    # to a team until pairings are out, and an admin is usually also playing.
+    viewer_own_team_id = viewer_team_id
+    if viewer and viewer_is_admin:
+        for team in week.league.teams:
+            if any(m.user_id == viewer.id for m in team.members):
+                viewer_own_team_id = team.id
+                break
+
     # Alliance pod selections for the viewer's team (so teammates are visible)
     alliance_selections = []
     if viewer and week.format_type in ("sealed_alliance", "alliance"):
@@ -407,6 +416,10 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             json.loads(week.sas_ladder_maxes) if week.sas_ladder_maxes else None
         ),
         "sas_ladder_feature_rung": week.sas_ladder_feature_rung,
+        # Rung assignments are a team's own business until pairings are out:
+        # knowing which rung an opponent sits on ahead of time gives away what
+        # SAS range they must bring. Once the week is published the matchups
+        # are public anyway, so there is nothing left to protect.
         "sas_ladder_assignments": [
             {
                 "id": a.id,
@@ -415,6 +428,8 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
                 "rung_number": a.rung_number,
             }
             for a in (week.sas_ladder_assignments or [])
+            if week.status in ("published", "completed")
+            or (viewer_own_team_id is not None and a.team_id == viewer_own_team_id)
         ],
     }
     return data
