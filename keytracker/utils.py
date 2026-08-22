@@ -1849,7 +1849,14 @@ def get_decks_from_page_v2(
     tries: int = 5,
     update_highest_page: bool = False,
     gvar_name: str = "highest_mv_page_scraped",
+    expansion: int = None,
 ) -> int:
+    """Ingest one page of decks from Master Vault.
+
+    Pass expansion to walk a single set rather than the whole catalogue,
+    which is how a set the main crawl left behind gets filled in without
+    disturbing its page pointer.
+    """
     # MV api will not return more than 25, so don't try
     page_size = 25
     params = SEARCH_PARAMS.copy()
@@ -1858,6 +1865,8 @@ def get_decks_from_page_v2(
         "links": "cards",
         "page_size": page_size,
     }
+    if expansion is not None:
+        params["expansion"] = expansion
     if reverse:
         params["ordering"] = "date"
     else:
