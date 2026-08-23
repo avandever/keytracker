@@ -69,6 +69,7 @@ import type { SealedPoolEntry, TeamSealedPoolEntry } from '../api/leagues';
 import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
 import { filterCollectionForConstraints } from '../utils/collectionFilter';
+import { deckSlotsForFormat } from '../utils/deckSlots';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
@@ -909,7 +910,7 @@ export default function MyTeamPage() {
     const isWeekEditable = week.format_type === 'thief'
       ? thiefEditableStatuses.has(week.status)
       : week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
-    const maxSlots = week.format_type === 'triad' ? 3 : 1;
+    const maxSlots = deckSlotsForFormat(week.format_type);
     const showFeature = league.team_size % 2 === 0 &&
       week.format_type !== 'sas_ladder' &&
       !['setup', 'pairing', 'published', 'completed'].includes(week.status);

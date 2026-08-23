@@ -66,6 +66,7 @@ import type {
 import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
 import { filterCollectionForConstraints } from '../utils/collectionFilter';
+import { deckSlotsForFormat } from '../utils/deckSlots';
 
 const TOKEN_SETS = new Set([855, 600]);
 const PROPHECY_EXPANSION_ID = 886;
@@ -478,7 +479,7 @@ export default function MyLeagueInfoPage() {
     const needsStart = NEEDS_START_MATCH.has(week.format_type);
     const isCaptain = myMember?.is_captain ?? false;
     const canSelectDeck = week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
-    const maxSlots = week.format_type === 'triad' ? 3 : 1;
+    const maxSlots = deckSlotsForFormat(week.format_type);
 
     return (
       <Box>

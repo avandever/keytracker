@@ -30,6 +30,7 @@ import type { SignupDiscordStatus } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
 import { getWeekDescription } from '../utils/formatDescriptions';
+import { deckSlotsForFormat } from '../utils/deckSlots';
 import type { AdminLogEntry, AlliancePodEntry, CompletedMatchDecks, DeckExportPlayerData, DeckExportWeek, KeyforgeSetInfo, LeagueDetail, LeagueWeek, PlayerMatchupInfo, TeamDetail } from '../types';
 import {
   Table,
@@ -47,12 +48,7 @@ function leagueBaseUrl(league: { id: number; url_name?: string | null }) {
   return league.url_name ? `/league/${league.url_name}` : `/league/by_id/${league.id}`;
 }
 
-function requiredDeckSlots(formatType: string): number {
-  if (['triad', 'triad_short', 'moirai'].includes(formatType)) return 3;
-  if (['oubliette', 'adaptive_short', 'exchange'].includes(formatType)) return 2;
-  if (formatType === 'nordic_hexad') return 6;
-  return 1;
-}
+const requiredDeckSlots = deckSlotsForFormat;
 
 function matchupIsUndecided(pm: PlayerMatchupInfo, bestOfN: number): boolean {
   const winsNeeded = Math.ceil(bestOfN / 2);
@@ -823,12 +819,7 @@ export default function LeagueDetailPage() {
       ];
     }
     if (fmt === 'thief') return [label, `${label} Stolen?`];
-    const slotCounts: Record<string, number> = {
-      adaptive_short: 2, oubliette: 2, exchange: 2,
-      triad: 3, triad_short: 3, moirai: 3,
-      nordic_hexad: 6,
-    };
-    const n = slotCounts[fmt] ?? 1;
+    const n = deckSlotsForFormat(fmt);
     return n === 1 ? [label] : Array.from({ length: n }, (_, i) => `${label} Deck ${i + 1}`);
   };
 
