@@ -348,6 +348,18 @@ export async function submitDeckSelection(
   return data;
 }
 
+export async function submitOublietteBannedHouse(
+  leagueId: number,
+  matchupId: number,
+  bannedHouse: string,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/banned-house`,
+    { banned_house: bannedHouse },
+  );
+  return data;
+}
+
 export async function setPlayerMatchupDoubleLoss(
   leagueId: number,
   weekId: number,
