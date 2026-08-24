@@ -495,6 +495,9 @@ export interface LeagueWeek {
   alliance_restricted_list_version?: AllianceRestrictedListVersion | null;
   sas_ladder_maxes: number[] | null;
   sas_ladder_feature_rung: number | null;
+  /** False when a team fields an odd number of players, where no match needs
+   *  to be worth more. Feature designations should be hidden in that case. */
+  feature_match_applies?: boolean;
   /** Oubliette: the viewer's own banned house. Never another player's. */
   my_oubliette_ban?: string | null;
   sas_ladder_assignments?: { id: number; user_id: number; team_id: number; rung_number: number }[];

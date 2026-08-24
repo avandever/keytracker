@@ -47,7 +47,7 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
   if (week.format_type === 'sas_ladder' && week.sas_ladder_maxes && week.sas_ladder_maxes.length > 0) {
     const numRungs = week.sas_ladder_maxes.length + 1;
     chips.push(<Chip key="sas-ladder" label={`SAS Ladder: ${numRungs} rungs`} size={size} variant="outlined" color="secondary" />);
-    if (week.sas_ladder_feature_rung != null) {
+    if (week.sas_ladder_feature_rung != null && week.feature_match_applies) {
       chips.push(<Chip key="feature-rung" label={`Feature: Rung ${week.sas_ladder_feature_rung}`} size={size} variant="outlined" />);
     }
   }

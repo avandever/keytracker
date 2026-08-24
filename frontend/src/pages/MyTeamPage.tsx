@@ -1602,7 +1602,9 @@ export default function MyTeamPage() {
                 {week.format_type === 'sas_ladder' && (() => {
                   const ranges = getSasLadderRanges(week.sas_ladder_maxes || []);
                   const assignment = (week.sas_ladder_assignments || []).find((a) => a.user_id === m.user.id);
-                  const isFeature = assignment != null && week.sas_ladder_feature_rung === assignment.rung_number;
+                  const isFeature = assignment != null
+                    && week.feature_match_applies
+                    && week.sas_ladder_feature_rung === assignment.rung_number;
                   const canAssign = isWeekEditable && (isMe || isCaptain || myTeam.allow_peer_deck_entry);
                   const selKey = `${week.id}-${m.user.id}`;
 

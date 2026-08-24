@@ -416,6 +416,13 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             json.loads(week.sas_ladder_maxes) if week.sas_ladder_maxes else None
         ),
         "sas_ladder_feature_rung": week.sas_ladder_feature_rung,
+        # A feature match only means anything when a team fields an even number
+        # of players, since otherwise a team match cannot be tied and nothing
+        # needs to be worth more. Kept alongside the configured value rather
+        # than nulling it, so an admin editing the week still sees their input.
+        "feature_match_applies": bool(
+            week.league and week.league.team_size % 2 == 0
+        ),
         # Oubliette bans are secret, so a viewer only ever sees their own.
         # Opponent bans surface on the matchup once both are in.
         "my_oubliette_ban": (

@@ -1462,7 +1462,15 @@ def _generate_sas_ladder_pairings(team1, team2, week):
     """
     maxes = json.loads(week.sas_ladder_maxes) if week.sas_ladder_maxes else []
     num_rungs = len(maxes) + 1
-    feature_rung = week.sas_ladder_feature_rung
+    # A feature match only matters when a team fields an even number of
+    # players, so an odd team size ignores the configured rung -- the same
+    # rule _generate_player_pairings applies to feature designations.
+    league = week.league
+    feature_rung = (
+        week.sas_ladder_feature_rung
+        if league and league.team_size % 2 == 0
+        else None
+    )
     feature, rest = [], []
     for rung in range(1, num_rungs + 1):
         a1 = SasLadderAssignment.query.filter_by(
