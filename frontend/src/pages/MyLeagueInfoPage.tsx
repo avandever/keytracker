@@ -49,6 +49,8 @@ import {
   submitSteals,
   confirmMatchResult,
   submitOublietteBannedHouse,
+  submitWeekOublietteBan,
+  clearWeekOublietteBan,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import MatchSchedulingSection from '../components/MatchSchedulingSection';
@@ -129,8 +131,10 @@ export default function MyLeagueInfoPage() {
   const [thiefSteals, setThiefSteals] = useState<number[]>([]);
   const [thiefDeckId, setThiefDeckId] = useState<number | ''>('');
 
-  // Oubliette: the house this player is banning, keyed by matchup
+  // Oubliette: the house this player is banning, keyed by matchup (post-pairing)
   const [oublietteBan, setOublietteBan] = useState<Record<number, string>>({});
+  // ...and keyed by week, for the ban made alongside deck submission
+  const [weekBanInput, setWeekBanInput] = useState<Record<number, string>>({});
 
   const refreshCountRef = useRef(0);
   const refresh = useCallback(() => {
@@ -447,6 +451,39 @@ export default function MyLeagueInfoPage() {
     }
   };
 
+  const handleWeekOublietteBan = async (weekId: number) => {
+    const house = (weekBanInput[weekId] || '').trim();
+    if (!house) return;
+    setError('');
+    setSuccess('');
+    setSubmitting(true);
+    try {
+      await submitWeekOublietteBan(league.id, weekId, house);
+      setWeekBanInput((prev) => ({ ...prev, [weekId]: '' }));
+      setSuccess('Banned house saved!');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleClearWeekOublietteBan = async (weekId: number) => {
+    setError('');
+    setSuccess('');
+    setSubmitting(true);
+    try {
+      await clearWeekOublietteBan(league.id, weekId);
+      setSuccess('Banned house cleared.');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleOublietteBan = async (matchupId: number) => {
     const house = (oublietteBan[matchupId] || '').trim();
     if (!house) return;
@@ -637,6 +674,59 @@ export default function MyLeagueInfoPage() {
                 </Box>
               );
             })()}
+
+            {/* Oubliette: the banned house is part of submission, not a later step.
+                It depends only on your own decks, so it is chosen here rather than
+                waiting for pairings. */}
+            {week.format_type === 'oubliette' && canSelectDeck && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="subtitle2" gutterBottom>Banned house</Typography>
+                {week.my_oubliette_ban ? (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Chip label={`You banned ${week.my_oubliette_ban}`} color="error" />
+                    <Button
+                      size="small"
+                      onClick={() => handleClearWeekOublietteBan(week.id)}
+                      disabled={submitting}
+                    >
+                      Change
+                    </Button>
+                  </Box>
+                ) : (
+                  <>
+                    <Typography variant="body2" color="text.secondary" gutterBottom>
+                      Name a house that does NOT appear in either of your own decks.
+                      Any deck containing a banned house is eliminated once you and
+                      your opponent have both banned.
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <TextField
+                        size="small"
+                        label="House to ban (e.g. Shadows)"
+                        value={weekBanInput[week.id] || ''}
+                        onChange={(e) =>
+                          setWeekBanInput((prev) => ({ ...prev, [week.id]: e.target.value }))
+                        }
+                        sx={{ minWidth: 220 }}
+                      />
+                      <Button
+                        variant="contained"
+                        color="error"
+                        onClick={() => handleWeekOublietteBan(week.id)}
+                        disabled={submitting || !(weekBanInput[week.id] || '').trim()}
+                      >
+                        Save Ban
+                      </Button>
+                    </Box>
+                    {mySelections.length === 0 && (
+                      <Typography variant="caption" color="text.secondary">
+                        Tip: submit your decks first, so the ban can be checked against them.
+                      </Typography>
+                    )}
+                  </>
+                )}
+              </Box>
+            )}
 
             {/* Sealed Archon: always show pool, show dropdown only when selecting */}
             {week.format_type === 'sealed_archon' && (() => {

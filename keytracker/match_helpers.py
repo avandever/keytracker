@@ -405,6 +405,26 @@ def get_deck_houses(deck) -> set:
     return {ps.house for ps in deck.pod_stats if ps.house != "Archon Power"}
 
 
+def validate_oubliette_ban_against_decks(banned_house, user_selections):
+    """Check a banned house against the banning player's own decks.
+
+    This is the whole of the Oubliette ban rule that does not involve the
+    opponent, so it can be applied at deck submission time, before pairings
+    exist. Returns an error string, or None when the ban is legal.
+    """
+    if not banned_house or not isinstance(banned_house, str):
+        return "banned_house must be a non-empty string"
+
+    for sel in user_selections:
+        deck = db.session.get(Deck, sel.deck_id)
+        if not deck:
+            continue
+        if banned_house in get_deck_houses(deck):
+            return f"Banned house '{banned_house}' appears in one of your own decks"
+
+    return None
+
+
 def validate_oubliette_ban(pm, banning_user_id, banned_house, user_selections):
     """
     Validate an Oubliette banned-house submission.
@@ -429,15 +449,7 @@ def validate_oubliette_ban(pm, banning_user_id, banned_house, user_selections):
     if already_banned:
         return "You have already submitted a banned house"
 
-    # Banned house must NOT appear in any of the banning user's own decks
-    for sel in user_selections:
-        deck = db.session.get(Deck, sel.deck_id)
-        if not deck:
-            continue
-        if banned_house in get_deck_houses(deck):
-            return f"Banned house '{banned_house}' appears in one of your own decks"
-
-    return None
+    return validate_oubliette_ban_against_decks(banned_house, user_selections)
 
 
 def get_oubliette_eligible_deck_ids(pm, p1_selections, p2_selections):

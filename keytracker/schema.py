@@ -1739,6 +1739,29 @@ class SasLadderAssignment(db.Model):
     team = db.relationship("Team")
 
 
+class OublietteBan(db.Model):
+    """A player's banned house for an Oubliette week.
+
+    The ban only depends on the player's own decks, so it is made alongside
+    deck submission -- well before pairings exist. It cannot live on
+    PlayerMatchup, which is not created until the week reaches pairing, so it
+    is held here and copied onto the matchup once pairings are generated.
+    """
+
+    __tablename__ = "tracker_oubliette_ban"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    banned_house = db.Column(db.String(50), nullable=False)
+    __table_args__ = (
+        db.UniqueConstraint("week_id", "user_id", name="uq_oubliette_ban_week_user"),
+    )
+    week = db.relationship("LeagueWeek", backref="oubliette_bans")
+    user = db.relationship("User")
+
+
 class AllianceRestrictedListVersion(db.Model):
     __tablename__ = "alliance_restricted_list_version"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

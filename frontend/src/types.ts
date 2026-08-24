@@ -495,6 +495,8 @@ export interface LeagueWeek {
   alliance_restricted_list_version?: AllianceRestrictedListVersion | null;
   sas_ladder_maxes: number[] | null;
   sas_ladder_feature_rung: number | null;
+  /** Oubliette: the viewer's own banned house. Never another player's. */
+  my_oubliette_ban?: string | null;
   sas_ladder_assignments?: { id: number; user_id: number; team_id: number; rung_number: number }[];
   custom_description?: string | null;
   hide_standard_description?: boolean;

@@ -416,6 +416,20 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             json.loads(week.sas_ladder_maxes) if week.sas_ladder_maxes else None
         ),
         "sas_ladder_feature_rung": week.sas_ladder_feature_rung,
+        # Oubliette bans are secret, so a viewer only ever sees their own.
+        # Opponent bans surface on the matchup once both are in.
+        "my_oubliette_ban": (
+            next(
+                (
+                    b.banned_house
+                    for b in (week.oubliette_bans or [])
+                    if viewer and b.user_id == viewer.id
+                ),
+                None,
+            )
+            if week.format_type == "oubliette"
+            else None
+        ),
         # Rung assignments are a team's own business until pairings are out:
         # knowing which rung an opponent sits on ahead of time gives away what
         # SAS range they must bring. Once the week is published the matchups

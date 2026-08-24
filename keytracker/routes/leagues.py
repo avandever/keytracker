@@ -28,6 +28,7 @@ from keytracker.schema import (
     DeckSuggestion,
     MatchScheduleProposal,
     MatchScheduleConfirmation,
+    OublietteBan,
     SasLadderAssignment,
     TeamDeckEntryLog,
     PodStats,
@@ -2027,6 +2028,9 @@ def generate_matchups(league_id, week_id):
             db.session.add(pm)
 
     week.status = WeekStatus.PAIRING.value
+    db.session.flush()
+    db.session.refresh(week)
+    _apply_oubliette_bans(week)
     db.session.commit()
     db.session.refresh(week)
     return jsonify(serialize_league_week(week))
@@ -2321,6 +2325,9 @@ def generate_player_matchups(league_id, week_id):
     _log_admin_action(
         league.id, week.id, get_effective_user().id, "player_matchups_generated"
     )
+    db.session.flush()
+    db.session.refresh(week)
+    _apply_oubliette_bans(week)
     db.session.commit()
     db.session.refresh(week)
     return jsonify(serialize_league_week(week))
@@ -3842,6 +3849,191 @@ def remove_deck_selection(league_id, week_id, slot):
     return jsonify({"success": True})
 
 
+def _resolve_oubliette_forfeit(week, pm):
+    """Once both bans are in, award a forfeit if a player has no legal deck left."""
+    from keytracker.match_helpers import get_oubliette_eligible_deck_ids
+
+    if not (pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house):
+        return
+    if pm.games:
+        return  # already resolved
+
+    p1_sels = PlayerDeckSelection.query.filter_by(
+        week_id=week.id, user_id=pm.player1_id
+    ).all()
+    p2_sels = PlayerDeckSelection.query.filter_by(
+        week_id=week.id, user_id=pm.player2_id
+    ).all()
+    eligible = get_oubliette_eligible_deck_ids(pm, p1_sels, p2_sels)
+    if not eligible:
+        return
+
+    forfeit_winner_id = None
+    if not eligible["p1"] and not eligible["p2"]:
+        return  # both wiped out; leave it for an admin to settle
+    elif not eligible["p1"]:
+        forfeit_winner_id = pm.player2_id
+    elif not eligible["p2"]:
+        forfeit_winner_id = pm.player1_id
+
+    if forfeit_winner_id:
+        db.session.add(
+            MatchGame(
+                player_matchup_id=pm.id,
+                game_number=1,
+                winner_id=forfeit_winner_id,
+                player1_keys=0,
+                player2_keys=0,
+                went_to_time=False,
+                loser_conceded=True,
+            )
+        )
+        db.session.flush()
+        db.session.expire(pm, ["games"])
+        _check_week_completion(week)
+
+
+def _apply_oubliette_bans(week):
+    """Copy each player's stored ban onto their new matchup, then settle forfeits.
+
+    Bans are made during deck selection, before pairings exist, so they are
+    transferred here once the matchups have been generated.
+    """
+    if week.format_type != WeekFormat.OUBLIETTE.value:
+        return
+    bans = {
+        b.user_id: b.banned_house
+        for b in OublietteBan.query.filter_by(week_id=week.id).all()
+    }
+    if not bans:
+        return
+    for wm in week.matchups:
+        for pm in wm.player_matchups:
+            if bans.get(pm.player1_id) and not pm.oubliette_p1_banned_house:
+                pm.oubliette_p1_banned_house = bans[pm.player1_id]
+            if bans.get(pm.player2_id) and not pm.oubliette_p2_banned_house:
+                pm.oubliette_p2_banned_house = bans[pm.player2_id]
+    db.session.flush()
+    for wm in week.matchups:
+        for pm in wm.player_matchups:
+            _resolve_oubliette_forfeit(week, pm)
+
+
+# --- Oubliette banned house (submitted with decks, before pairings exist) ---
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/oubliette-ban", methods=["POST"]
+)
+@login_required
+def submit_week_oubliette_ban(league_id, week_id):
+    """Record a player's Oubliette banned house for the week.
+
+    The ban only depends on the player's own decks, so it belongs with deck
+    submission. PlayerMatchup does not exist until the week reaches pairing,
+    so the ban is stored per week and copied onto the matchup then.
+    """
+    from keytracker.match_helpers import validate_oubliette_ban_against_decks
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.format_type != WeekFormat.OUBLIETTE.value:
+        return jsonify({"error": "Only for Oubliette format"}), 400
+    if week.status not in (
+        WeekStatus.DECK_SELECTION.value,
+        WeekStatus.TEAM_PAIRED.value,
+        WeekStatus.PAIRING.value,
+    ):
+        return jsonify({"error": "Deck selection is not open"}), 400
+
+    effective = get_effective_user()
+    data = request.get_json(silent=True) or {}
+    target_user_id = data.get("user_id", effective.id)
+
+    # Submitting for someone else follows the same rule as deck selection:
+    # admins, and captains or peers on that player's team.
+    if target_user_id != effective.id:
+        allowed = _is_league_admin(league, effective)
+        for team in league.teams:
+            if target_user_id in {m.user_id for m in team.members}:
+                if any(m.user_id == effective.id and m.is_captain for m in team.members):
+                    allowed = True
+                if team.allow_peer_deck_entry and any(
+                    m.user_id == effective.id for m in team.members
+                ):
+                    allowed = True
+                break
+        if not allowed:
+            return jsonify({"error": "Cannot submit a ban for this user"}), 403
+
+    member = (
+        TeamMember.query.join(Team)
+        .filter(Team.league_id == league.id, TeamMember.user_id == target_user_id)
+        .first()
+    )
+    if not member:
+        return jsonify({"error": "User is not in this league"}), 400
+
+    banned_house = (data.get("banned_house") or "").strip()
+    if not banned_house:
+        return jsonify({"error": "banned_house is required"}), 400
+
+    selections = PlayerDeckSelection.query.filter_by(
+        week_id=week.id, user_id=target_user_id
+    ).all()
+    error = validate_oubliette_ban_against_decks(banned_house, selections)
+    if error:
+        return jsonify({"error": error}), 400
+
+    ban = OublietteBan.query.filter_by(week_id=week.id, user_id=target_user_id).first()
+    if ban is None:
+        ban = OublietteBan(
+            week_id=week.id, user_id=target_user_id, banned_house=banned_house
+        )
+        db.session.add(ban)
+    else:
+        # Revisable while deck selection is open, like the decks themselves.
+        ban.banned_house = banned_house
+    db.session.commit()
+
+    return jsonify(
+        {"user_id": target_user_id, "banned_house": banned_house}
+    )
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/oubliette-ban", methods=["DELETE"]
+)
+@login_required
+def clear_week_oubliette_ban(league_id, week_id):
+    """Clear the requesting player's Oubliette ban while selection is open."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    if week.status not in (
+        WeekStatus.DECK_SELECTION.value,
+        WeekStatus.TEAM_PAIRED.value,
+        WeekStatus.PAIRING.value,
+    ):
+        return jsonify({"error": "Deck selection is not open"}), 400
+
+    effective = get_effective_user()
+    target_user_id = request.args.get("user_id", type=int) or effective.id
+    if target_user_id != effective.id and not _is_league_admin(league, effective):
+        return jsonify({"error": "Cannot clear a ban for this user"}), 403
+
+    OublietteBan.query.filter_by(week_id=week.id, user_id=target_user_id).delete()
+    db.session.commit()
+    return jsonify({"success": True})
+
+
 # --- Feature designation ---
 
 
@@ -4732,39 +4924,7 @@ def submit_oubliette_banned_house(league_id, matchup_id):
         pm.oubliette_p2_banned_house = banned_house
 
     db.session.flush()
-
-    # After both bans: check for forfeits
-    if pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house:
-        p1_sels = PlayerDeckSelection.query.filter_by(
-            week_id=week.id, user_id=pm.player1_id
-        ).all()
-        p2_sels = PlayerDeckSelection.query.filter_by(
-            week_id=week.id, user_id=pm.player2_id
-        ).all()
-        eligible = get_oubliette_eligible_deck_ids(pm, p1_sels, p2_sels)
-        if eligible:
-            forfeit_winner_id = None
-            if not eligible["p1"] and not eligible["p2"]:
-                pass
-            elif not eligible["p1"]:
-                forfeit_winner_id = pm.player2_id
-            elif not eligible["p2"]:
-                forfeit_winner_id = pm.player1_id
-
-            if forfeit_winner_id:
-                forfeit_game = MatchGame(
-                    player_matchup_id=pm.id,
-                    game_number=1,
-                    winner_id=forfeit_winner_id,
-                    player1_keys=0,
-                    player2_keys=0,
-                    went_to_time=False,
-                    loser_conceded=True,
-                )
-                db.session.add(forfeit_game)
-                db.session.flush()
-                db.session.expire(pm, ["games"])
-                _check_week_completion(week)
+    _resolve_oubliette_forfeit(week, pm)
 
     db.session.commit()
     return jsonify(serialize_player_matchup(pm, viewer=effective))

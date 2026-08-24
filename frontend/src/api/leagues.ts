@@ -348,6 +348,27 @@ export async function submitDeckSelection(
   return data;
 }
 
+/** Record the banned house alongside deck submission, before pairings exist. */
+export async function submitWeekOublietteBan(
+  leagueId: number,
+  weekId: number,
+  bannedHouse: string,
+  userId?: number,
+): Promise<{ user_id: number; banned_house: string }> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/oubliette-ban`,
+    { banned_house: bannedHouse, ...(userId !== undefined && { user_id: userId }) },
+  );
+  return data;
+}
+
+export async function clearWeekOublietteBan(
+  leagueId: number,
+  weekId: number,
+): Promise<void> {
+  await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}/oubliette-ban`);
+}
+
 export async function submitOublietteBannedHouse(
   leagueId: number,
   matchupId: number,
