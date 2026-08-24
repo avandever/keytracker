@@ -3175,11 +3175,17 @@ def submit_deck_selection(league_id, week_id):
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
 
-    if week.status not in (
+    # Once pairings are published the window has closed for players, but a
+    # captain can still enter a deck for someone who missed the deadline
+    # rather than the match being dead on arrival. Every such entry is logged
+    # and counted against the team -- see _log_deck_entry_change below.
+    _open_statuses = (
         WeekStatus.DECK_SELECTION.value,
         WeekStatus.TEAM_PAIRED.value,
         WeekStatus.PAIRING.value,
-    ):
+    )
+    is_after_pairing = week.status == WeekStatus.PUBLISHED.value
+    if week.status not in _open_statuses and not is_after_pairing:
         return jsonify({"error": "Deck selection is not open"}), 400
 
     # Alliance formats use a different endpoint for pod selection
@@ -3239,6 +3245,24 @@ def submit_deck_selection(league_id, week_id):
 
     # Resolve the player's team for cross-week conflict checking
     target_team = db.session.get(Team, member.team_id)
+
+    # The after-pairing window belongs to captains of the player's own team,
+    # and to league admins. A player cannot let themselves in late, and a
+    # captain cannot reach into another team.
+    if is_after_pairing:
+        captains_target_team = target_team is not None and any(
+            m.user_id == effective.id and m.is_captain for m in target_team.members
+        )
+        if not submitter_is_admin and not captains_target_team:
+            return (
+                jsonify(
+                    {
+                        "error": "Deck selection has closed for this week. "
+                        "Ask your captain to enter the deck for you."
+                    }
+                ),
+                403,
+            )
 
     slot_number = data.get("slot_number", 1)
     _three_slot = (
@@ -3764,10 +3788,22 @@ def submit_deck_selection(league_id, week_id):
             week_id=week.id,
             target_user_id=target_user_id,
             changed_by_user_id=effective.id,
-            action="added",
+            action="added_late" if is_after_pairing else "added",
             deck_name=deck.name,
             deck_kf_id=deck.kf_id,
             slot_number=slot_number,
+        )
+
+    if is_after_pairing:
+        target_user = db.session.get(User, target_user_id)
+        target_name = target_user.name if target_user else str(target_user_id)
+        _log_admin_action(
+            league.id,
+            week.id,
+            effective.id,
+            "late_deck_submission",
+            f"{effective.name} entered {deck.name!r} for {target_name} "
+            f"(slot {slot_number}) after pairings were published",
         )
 
     db.session.commit()

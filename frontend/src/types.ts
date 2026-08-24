@@ -276,6 +276,8 @@ export interface TeamDetail {
   name: string;
   order_number: number;
   allow_peer_deck_entry: boolean;
+  /** How many decks this team's captains entered after pairings published. */
+  late_deck_entries?: number;
   members: TeamMemberInfo[];
 }
 

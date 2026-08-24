@@ -21,7 +21,13 @@ from keytracker.schema import (
     LeagueAdminLog,
     EXPANSION_ID_TO_ABBR,
 )
-from keytracker.schema import StandaloneMatch, PlatonicCard, PlatonicCardInSet, db
+from keytracker.schema import (
+    StandaloneMatch,
+    PlatonicCard,
+    PlatonicCardInSet,
+    TeamDeckEntryLog,
+    db,
+)
 from sqlalchemy import select
 import json
 
@@ -184,11 +190,18 @@ def serialize_team_member(member: TeamMember) -> dict:
 
 
 def serialize_team_detail(team: Team, hide_members: bool = False) -> dict:
+    # How often this team's captains have entered a deck after pairings went
+    # out. The privilege exists so a missed deadline does not kill a match,
+    # but it should be visible rather than quiet.
+    late_deck_entries = TeamDeckEntryLog.query.filter_by(
+        team_id=team.id, action="added_late"
+    ).count()
     return {
         "id": team.id,
         "name": team.name,
         "order_number": team.order_number,
         "allow_peer_deck_entry": bool(team.allow_peer_deck_entry),
+        "late_deck_entries": late_deck_entries,
         "members": [] if hide_members else [serialize_team_member(m) for m in team.members],
     }
 

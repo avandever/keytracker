@@ -1024,6 +1024,18 @@ export default function LeagueAdminPage() {
                           </>
                         )}
                         <Typography variant="subtitle1">{team.name}</Typography>
+                        {(team.late_deck_entries ?? 0) > 0 && (
+                          <Tooltip title="Decks entered by a captain after pairings were published. See the Admin Log tab for details.">
+                            <Chip
+                              label={`${team.late_deck_entries} late deck ${
+                                team.late_deck_entries === 1 ? 'entry' : 'entries'
+                              }`}
+                              size="small"
+                              color="warning"
+                              variant="outlined"
+                            />
+                          </Tooltip>
+                        )}
                       </Box>
                       {isSetup && (
                         <IconButton size="small" onClick={() => handleDeleteTeam(team.id)}>
