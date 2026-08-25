@@ -1707,13 +1707,25 @@ export default function MyLeagueInfoPage() {
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       <FormControl size="small" sx={{ flex: 1 }}>
                         <InputLabel>Winner Keys</InputLabel>
-                        <Select value={reportWinnerKeys} label="Winner Keys" onChange={(e) => setReportWinnerKeys(e.target.value)}>
+                        <Select
+                          value={winnerKeysFor(myMatchup.id)}
+                          label="Winner Keys"
+                          onChange={(e) =>
+                            setReportWinnerKeysById((prev) => ({ ...prev, [myMatchup.id]: e.target.value }))
+                          }
+                        >
                           {[0, 1, 2, 3].map((k) => <MenuItem key={k} value={String(k)}>{k}</MenuItem>)}
                         </Select>
                       </FormControl>
                       <FormControl size="small" sx={{ flex: 1 }}>
                         <InputLabel>Loser Keys</InputLabel>
-                        <Select value={reportLoserKeys} label="Loser Keys" onChange={(e) => setReportLoserKeys(e.target.value)}>
+                        <Select
+                          value={loserKeysFor(myMatchup.id)}
+                          label="Loser Keys"
+                          onChange={(e) =>
+                            setReportLoserKeysById((prev) => ({ ...prev, [myMatchup.id]: e.target.value }))
+                          }
+                        >
                           {[0, 1, 2, 3].map((k) => <MenuItem key={k} value={String(k)}>{k}</MenuItem>)}
                         </Select>
                       </FormControl>
@@ -1742,7 +1754,7 @@ export default function MyLeagueInfoPage() {
                     <Button
                       variant="contained"
                       onClick={() => handleReportGame(myMatchup.id, myMatchup)}
-                      disabled={!reportWinnerId || reportSubmitting}
+                      disabled={!winnerFor(myMatchup.id) || reportSubmitting}
                     >
                       Report Game
                     </Button>
