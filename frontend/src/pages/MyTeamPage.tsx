@@ -50,6 +50,8 @@ import {
   addDeckSuggestion,
   removeDeckSuggestion,
   setSasLadderAssignment,
+  submitWeekOublietteBan,
+  clearWeekOublietteBan,
   submitAllianceSelection,
   clearAllianceSelection,
   submitCurationDeck,
@@ -70,6 +72,7 @@ import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
 import { filterCollectionForConstraints } from '../utils/collectionFilter';
 import { deckSlotsForFormat } from '../utils/deckSlots';
+import { housesNotInDecks } from '../utils/houses';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
@@ -170,6 +173,8 @@ export default function MyTeamPage() {
 
   // SAS Ladder: rung selections keyed by `${weekId}-${userId}`
   const [sasRungSelections, setSasRungSelections] = useState<Record<string, number | ''>>({});
+  // Oubliette: pending banned-house picks, keyed by `${weekId}-${userId}`
+  const [oublietteBanSelections, setOublietteBanSelections] = useState<Record<string, string>>({});
 
   // Tertiate: house purge selections keyed by matchup id
   const [tertiateHouseSelections, setTertiateHouseSelections] = useState<Record<number, string>>({});
@@ -798,6 +803,30 @@ export default function MyTeamPage() {
     try {
       await setSasLadderAssignment(league.id, weekId, rungNumber, userId !== user!.id ? userId : undefined);
       setSuccess('Rung assigned!');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleSetOublietteBan = async (weekId: number, userId: number, house: string) => {
+    setError('');
+    try {
+      await submitWeekOublietteBan(
+        league.id, weekId, house, userId !== user!.id ? userId : undefined,
+      );
+      setSuccess('Banned house saved!');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleClearOublietteBan = async (weekId: number, userId: number) => {
+    setError('');
+    try {
+      await clearWeekOublietteBan(league.id, weekId, userId !== user!.id ? userId : undefined);
+      setSuccess('Banned house cleared.');
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -1715,6 +1744,67 @@ export default function MyTeamPage() {
                     <CombinedSas selections={selections} />
                   </Box>
                 )}
+
+                {/* Oubliette: the banned house is part of this player's
+                    submission, so captains enter it here beside their decks. */}
+                {week.format_type === 'oubliette' && (() => {
+                  const existing = (week.team_oubliette_bans || []).find(
+                    (b) => b.user_id === m.user.id,
+                  );
+                  const canEdit = isWeekEditable && (isMe || isCaptain || myTeam.allow_peer_deck_entry);
+                  const banKey = `${week.id}-${m.user.id}`;
+                  if (existing) {
+                    return (
+                      <Box sx={{ ml: 4, mt: 0.5, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Chip label={`Banned: ${existing.banned_house}`} size="small" color="error" />
+                        {canEdit && (
+                          <Button
+                            size="small"
+                            onClick={() => handleClearOublietteBan(week.id, m.user.id)}
+                          >
+                            Change
+                          </Button>
+                        )}
+                      </Box>
+                    );
+                  }
+                  if (!canEdit) {
+                    return (
+                      <Box sx={{ ml: 4, mt: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary">No house banned</Typography>
+                      </Box>
+                    );
+                  }
+                  return (
+                    <Box sx={{ ml: 4, mt: 0.5, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <FormControl size="small" sx={{ minWidth: 200 }}>
+                        <InputLabel>House to ban</InputLabel>
+                        <Select
+                          label="House to ban"
+                          value={oublietteBanSelections[banKey] ?? ''}
+                          onChange={(e) =>
+                            setOublietteBanSelections((prev) => ({ ...prev, [banKey]: e.target.value }))
+                          }
+                        >
+                          {housesNotInDecks(selections.map((s) => s.deck?.houses)).map((h) => (
+                            <MenuItem key={h} value={h}>{h}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="error"
+                        disabled={!oublietteBanSelections[banKey]}
+                        onClick={() =>
+                          handleSetOublietteBan(week.id, m.user.id, oublietteBanSelections[banKey])
+                        }
+                      >
+                        Save Ban
+                      </Button>
+                    </Box>
+                  );
+                })()}
 
                 {/* Reversal: show the deck this player will actually play (opponent's selection) */}
                 {week.format_type === 'reversal' && (week.status === 'published' || week.status === 'completed') && (() => {

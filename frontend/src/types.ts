@@ -502,6 +502,8 @@ export interface LeagueWeek {
   feature_match_applies?: boolean;
   /** Oubliette: the viewer's own banned house. Never another player's. */
   my_oubliette_ban?: string | null;
+  /** Oubliette: bans for the viewer's own team, so captains can enter them. */
+  team_oubliette_bans?: { user_id: number; banned_house: string }[];
   sas_ladder_assignments?: { id: number; user_id: number; team_id: number; rung_number: number }[];
   custom_description?: string | null;
   hide_standard_description?: boolean;

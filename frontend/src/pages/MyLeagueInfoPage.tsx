@@ -56,6 +56,7 @@ import HouseIcons from '../components/HouseIcons';
 import MatchSchedulingSection from '../components/MatchSchedulingSection';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import { getWeekDescription } from '../utils/formatDescriptions';
+import { housesNotInDecks } from '../utils/houses';
 import type { SealedPoolEntry } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import { useTestUser } from '../contexts/TestUserContext';
@@ -96,10 +97,14 @@ export default function MyLeagueInfoPage() {
   const [submitting, setSubmitting] = useState(false);
   const { decks: collectionDecks } = useMyCollection();
 
-  // Game reporting
-  const [reportWinnerId, setReportWinnerId] = useState<number | ''>('');
-  const [reportWinnerKeys, setReportWinnerKeys] = useState('3');
-  const [reportLoserKeys, setReportLoserKeys] = useState('0');
+  // Game reporting. Keyed by matchup: a captain sees a form per team match,
+  // and sharing one value made every form move together.
+  const [reportWinnerById, setReportWinnerById] = useState<Record<number, number | ''>>({});
+  const [reportWinnerKeysById, setReportWinnerKeysById] = useState<Record<number, string>>({});
+  const [reportLoserKeysById, setReportLoserKeysById] = useState<Record<number, string>>({});
+  const winnerFor = (id: number) => reportWinnerById[id] ?? '';
+  const winnerKeysFor = (id: number) => reportWinnerKeysById[id] ?? '3';
+  const loserKeysFor = (id: number) => reportLoserKeysById[id] ?? '0';
   const [reportWentToTime, setReportWentToTime] = useState(false);
   const [reportLoserConceded, setReportLoserConceded] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
@@ -345,19 +350,20 @@ export default function MyLeagueInfoPage() {
   };
 
   const handleReportGame = async (matchupId: number, pm: PlayerMatchupInfo) => {
-    if (!reportWinnerId || reportSubmitting) return;
+    const winnerId = winnerFor(matchupId);
+    if (!winnerId || reportSubmitting) return;
     setReportSubmitting(true);
     setError('');
     setSuccess('');
     try {
       const nextGameNumber = pm.games.length + 1;
-      const winnerKeys = parseInt(reportWinnerKeys, 10) || 0;
-      const loserKeys = parseInt(reportLoserKeys, 10) || 0;
+      const winnerKeys = parseInt(winnerKeysFor(matchupId), 10) || 0;
+      const loserKeys = parseInt(loserKeysFor(matchupId), 10) || 0;
       await reportGame(league.id, matchupId, {
         game_number: nextGameNumber,
-        winner_id: reportWinnerId as number,
-        player1_keys: reportWinnerId === pm.player1.id ? winnerKeys : loserKeys,
-        player2_keys: reportWinnerId === pm.player2.id ? winnerKeys : loserKeys,
+        winner_id: winnerId as number,
+        player1_keys: winnerId === pm.player1.id ? winnerKeys : loserKeys,
+        player2_keys: winnerId === pm.player2.id ? winnerKeys : loserKeys,
         went_to_time: reportWentToTime,
         loser_conceded: reportLoserConceded,
         player1_deck_id: reportP1DeckId || undefined,
@@ -365,9 +371,9 @@ export default function MyLeagueInfoPage() {
         log: reportLog.trim() || undefined,
       });
       setSuccess('Game reported!');
-      setReportWinnerId('');
-      setReportWinnerKeys('');
-      setReportLoserKeys('');
+      setReportWinnerById((prev) => ({ ...prev, [matchupId]: '' }));
+      setReportWinnerKeysById((prev) => ({ ...prev, [matchupId]: '3' }));
+      setReportLoserKeysById((prev) => ({ ...prev, [matchupId]: '0' }));
       setReportWentToTime(false);
       setReportLoserConceded(false);
       setReportP1DeckId('');
@@ -695,20 +701,26 @@ export default function MyLeagueInfoPage() {
                 ) : (
                   <>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Name a house that does NOT appear in either of your own decks.
+                      Choose a house that does NOT appear in either of your own decks.
                       Any deck containing a banned house is eliminated once you and
                       your opponent have both banned.
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      <TextField
-                        size="small"
-                        label="House to ban (e.g. Shadows)"
-                        value={weekBanInput[week.id] || ''}
-                        onChange={(e) =>
-                          setWeekBanInput((prev) => ({ ...prev, [week.id]: e.target.value }))
-                        }
-                        sx={{ minWidth: 220 }}
-                      />
+                      <FormControl size="small" sx={{ minWidth: 220 }}>
+                        <InputLabel>House to ban</InputLabel>
+                        <Select
+                          label="House to ban"
+                          value={weekBanInput[week.id] || ''}
+                          onChange={(e) =>
+                            setWeekBanInput((prev) => ({ ...prev, [week.id]: e.target.value }))
+                          }
+                        >
+                          {/* Only houses absent from this player's decks are legal. */}
+                          {housesNotInDecks(mySelections.map((s) => s.deck?.houses)).map((h) => (
+                            <MenuItem key={h} value={h}>{h}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
                       <Button
                         variant="contained"
                         color="error"
@@ -720,7 +732,8 @@ export default function MyLeagueInfoPage() {
                     </Box>
                     {mySelections.length === 0 && (
                       <Typography variant="caption" color="text.secondary">
-                        Tip: submit your decks first, so the ban can be checked against them.
+                        Tip: submit your decks first, so houses they contain are
+                        filtered out of this list.
                       </Typography>
                     )}
                   </>
@@ -1630,9 +1643,11 @@ export default function MyLeagueInfoPage() {
                     <FormControl fullWidth size="small">
                       <InputLabel>Winner</InputLabel>
                       <Select
-                        value={reportWinnerId}
+                        value={winnerFor(myMatchup.id)}
                         label="Winner"
-                        onChange={(e) => setReportWinnerId(e.target.value as number)}
+                        onChange={(e) =>
+                          setReportWinnerById((prev) => ({ ...prev, [myMatchup.id]: e.target.value as number }))
+                        }
                       >
                         <MenuItem value={myMatchup.player1.id}>{myMatchup.player1.name}</MenuItem>
                         <MenuItem value={myMatchup.player2.id}>{myMatchup.player2.name}</MenuItem>
@@ -1912,9 +1927,11 @@ export default function MyLeagueInfoPage() {
                         <FormControl fullWidth size="small">
                           <InputLabel>Winner</InputLabel>
                           <Select
-                            value={reportWinnerId}
+                            value={winnerFor(pm.id)}
                             label="Winner"
-                            onChange={(e) => setReportWinnerId(e.target.value as number)}
+                            onChange={(e) =>
+                              setReportWinnerById((prev) => ({ ...prev, [pm.id]: e.target.value as number }))
+                            }
                           >
                             <MenuItem value={pm.player1.id}>{pm.player1.name}</MenuItem>
                             <MenuItem value={pm.player2.id}>{pm.player2.name}</MenuItem>
@@ -1923,13 +1940,25 @@ export default function MyLeagueInfoPage() {
                         <Box sx={{ display: 'flex', gap: 2 }}>
                           <FormControl size="small" sx={{ flex: 1 }}>
                             <InputLabel>Winner Keys</InputLabel>
-                            <Select value={reportWinnerKeys} label="Winner Keys" onChange={(e) => setReportWinnerKeys(e.target.value)}>
+                            <Select
+                              value={winnerKeysFor(pm.id)}
+                              label="Winner Keys"
+                              onChange={(e) =>
+                                setReportWinnerKeysById((prev) => ({ ...prev, [pm.id]: e.target.value }))
+                              }
+                            >
                               {[0, 1, 2, 3].map((k) => <MenuItem key={k} value={String(k)}>{k}</MenuItem>)}
                             </Select>
                           </FormControl>
                           <FormControl size="small" sx={{ flex: 1 }}>
                             <InputLabel>Loser Keys</InputLabel>
-                            <Select value={reportLoserKeys} label="Loser Keys" onChange={(e) => setReportLoserKeys(e.target.value)}>
+                            <Select
+                              value={loserKeysFor(pm.id)}
+                              label="Loser Keys"
+                              onChange={(e) =>
+                                setReportLoserKeysById((prev) => ({ ...prev, [pm.id]: e.target.value }))
+                              }
+                            >
                               {[0, 1, 2, 3].map((k) => <MenuItem key={k} value={String(k)}>{k}</MenuItem>)}
                             </Select>
                           </FormControl>
@@ -1937,7 +1966,7 @@ export default function MyLeagueInfoPage() {
                         <Button
                           variant="contained"
                           size="small"
-                          disabled={!reportWinnerId || reportSubmitting}
+                          disabled={!winnerFor(pm.id) || reportSubmitting}
                           onClick={() => handleReportGame(pm.id, pm)}
                         >
                           Report Game

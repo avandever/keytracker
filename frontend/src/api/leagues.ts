@@ -365,8 +365,11 @@ export async function submitWeekOublietteBan(
 export async function clearWeekOublietteBan(
   leagueId: number,
   weekId: number,
+  userId?: number,
 ): Promise<void> {
-  await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}/oubliette-ban`);
+  await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}/oubliette-ban`, {
+    ...(userId !== undefined && { params: { user_id: userId } }),
+  });
 }
 
 export async function submitOublietteBannedHouse(

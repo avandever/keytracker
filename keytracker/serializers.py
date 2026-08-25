@@ -436,8 +436,10 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "feature_match_applies": bool(
             week.league and week.league.team_size % 2 == 0
         ),
-        # Oubliette bans are secret, so a viewer only ever sees their own.
-        # Opponent bans surface on the matchup once both are in.
+        # Oubliette bans stay secret from opponents. A viewer sees their own,
+        # and their own team's, the same way deck selections are shared within
+        # a team so a captain can enter them. Opponent bans surface on the
+        # matchup once both are in.
         "my_oubliette_ban": (
             next(
                 (
@@ -449,6 +451,21 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             )
             if week.format_type == "oubliette"
             else None
+        ),
+        "team_oubliette_bans": (
+            [
+                {"user_id": b.user_id, "banned_house": b.banned_house}
+                for b in (week.oubliette_bans or [])
+                if viewer_own_team_id is not None
+                and any(
+                    m.user_id == b.user_id
+                    for t in week.league.teams
+                    if t.id == viewer_own_team_id
+                    for m in t.members
+                )
+            ]
+            if week.format_type == "oubliette"
+            else []
         ),
         # Rung assignments are a team's own business until pairings are out:
         # knowing which rung an opponent sits on ahead of time gives away what

@@ -4070,8 +4070,21 @@ def clear_week_oubliette_ban(league_id, week_id):
 
     effective = get_effective_user()
     target_user_id = request.args.get("user_id", type=int) or effective.id
-    if target_user_id != effective.id and not _is_league_admin(league, effective):
-        return jsonify({"error": "Cannot clear a ban for this user"}), 403
+    # Whoever may set a ban may clear it: the player, a captain or peer on
+    # their team, or a league admin.
+    if target_user_id != effective.id:
+        allowed = _is_league_admin(league, effective)
+        for team in league.teams:
+            if target_user_id in {m.user_id for m in team.members}:
+                if any(m.user_id == effective.id and m.is_captain for m in team.members):
+                    allowed = True
+                if team.allow_peer_deck_entry and any(
+                    m.user_id == effective.id for m in team.members
+                ):
+                    allowed = True
+                break
+        if not allowed:
+            return jsonify({"error": "Cannot clear a ban for this user"}), 403
 
     OublietteBan.query.filter_by(week_id=week.id, user_id=target_user_id).delete()
     db.session.commit()
@@ -5581,7 +5594,18 @@ def report_game(league_id, matchup_id):
     effective = get_effective_user()
     is_admin = _is_league_admin(league, effective)
     is_participant = effective.id in (pm.player1_id, pm.player2_id)
-    if not is_admin and not is_participant:
+    # Captains report on behalf of their team, which is what the team match
+    # reporting section on My Info offers them.
+    is_captain_of_matchup = False
+    if not is_admin and not is_participant and wm:
+        for team_id in (wm.team1_id, wm.team2_id):
+            team = db.session.get(Team, team_id)
+            if team and any(
+                m.user_id == effective.id and m.is_captain for m in team.members
+            ):
+                is_captain_of_matchup = True
+                break
+    if not is_admin and not is_participant and not is_captain_of_matchup:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     data = request.get_json(silent=True) or {}
