@@ -56,7 +56,7 @@ import HouseIcons from '../components/HouseIcons';
 import MatchSchedulingSection from '../components/MatchSchedulingSection';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import { getWeekDescription } from '../utils/formatDescriptions';
-import { housesNotInDecks } from '../utils/houses';
+import { banOptions } from '../utils/houses';
 import type { SealedPoolEntry } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import { useTestUser } from '../contexts/TestUserContext';
@@ -715,9 +715,10 @@ export default function MyLeagueInfoPage() {
                             setWeekBanInput((prev) => ({ ...prev, [week.id]: e.target.value }))
                           }
                         >
-                          {/* Only houses absent from this player's decks are legal. */}
-                          {housesNotInDecks(mySelections.map((s) => s.deck?.houses)).map((h) => (
-                            <MenuItem key={h} value={h}>{h}</MenuItem>
+                          {banOptions(week.allowed_houses, mySelections.map((s) => s.deck?.houses)).map((o) => (
+                            <MenuItem key={o.house} value={o.house} disabled={o.disabled}>
+                              {o.house}{o.reason ? ` — ${o.reason}` : ''}
+                            </MenuItem>
                           ))}
                         </Select>
                       </FormControl>

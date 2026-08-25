@@ -25,6 +25,7 @@ from keytracker.schema import (
     StandaloneMatch,
     PlatonicCard,
     PlatonicCardInSet,
+    KeyforgeHouse,
     TeamDeckEntryLog,
     db,
 )
@@ -261,6 +262,24 @@ def serialize_league_detail(
     return data
 
 
+def _allowed_houses_for_week(week: LeagueWeek, allowed_sets) -> list:
+    """Houses a deck legal for this week could contain.
+
+    With no set restriction, or with sets we hold no card data for, fall back
+    to every playable house rather than offering an empty list.
+    """
+    from keytracker.utils import houses_for_expansions, NON_PLAYABLE_HOUSES
+
+    if allowed_sets:
+        houses = houses_for_expansions(allowed_sets)
+        if houses:
+            return houses
+    all_houses = (
+        db.session.query(KeyforgeHouse.name).order_by(KeyforgeHouse.name).all()
+    )
+    return [n for (n,) in all_houses if n and n not in NON_PLAYABLE_HOUSES]
+
+
 def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
     allowed_sets = None
     if week.allowed_sets:
@@ -436,6 +455,9 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "feature_match_applies": bool(
             week.league and week.league.team_size % 2 == 0
         ),
+        # Houses a deck this week could actually contain, so pickers offer the
+        # sets in play rather than every house that has ever existed.
+        "allowed_houses": _allowed_houses_for_week(week, allowed_sets),
         # Oubliette bans stay secret from opponents. A viewer sees their own,
         # and their own team's, the same way deck selections are shared within
         # a team so a captain can enter them. Opponent bans surface on the

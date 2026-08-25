@@ -72,7 +72,7 @@ import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
 import { filterCollectionForConstraints } from '../utils/collectionFilter';
 import { deckSlotsForFormat } from '../utils/deckSlots';
-import { housesNotInDecks } from '../utils/houses';
+import { banOptions } from '../utils/houses';
 
 const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon Standard',
@@ -1786,8 +1786,10 @@ export default function MyTeamPage() {
                             setOublietteBanSelections((prev) => ({ ...prev, [banKey]: e.target.value }))
                           }
                         >
-                          {housesNotInDecks(selections.map((s) => s.deck?.houses)).map((h) => (
-                            <MenuItem key={h} value={h}>{h}</MenuItem>
+                          {banOptions(week.allowed_houses, selections.map((s) => s.deck?.houses)).map((o) => (
+                            <MenuItem key={o.house} value={o.house} disabled={o.disabled}>
+                              {o.house}{o.reason ? ` — ${o.reason}` : ''}
+                            </MenuItem>
                           ))}
                         </Select>
                       </FormControl>

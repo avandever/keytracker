@@ -1,34 +1,29 @@
 /**
- * The playable KeyForge houses, in the spelling the tracker stores.
+ * Houses the player may ban in Oubliette, with the illegal ones marked.
  *
- * Excludes Prophecy and Archon Power, which are card pools rather than houses
- * a deck is built from.
+ * The candidates come from the week's allowed sets (the server derives them
+ * from card data), so a DM-only week offers DM's seven houses rather than
+ * every house that has ever been printed. A house appearing in the player's
+ * own decks cannot be banned, but is still listed and disabled — hiding it
+ * makes a short list look broken rather than explained.
  */
-export const HOUSES = [
-  'Brobnar',
-  'Dis',
-  'Ekwidon',
-  'Elders',
-  'Geistoid',
-  'Ironyx Rebels',
-  'Logos',
-  'Mars',
-  'Ouboros',
-  'Redemption',
-  'Sanctum',
-  'Saurian',
-  'Shadows',
-  'Skyborn',
-  'Star Alliance',
-  'Unfathomable',
-  'Untamed',
-] as const;
+export interface BanOption {
+  house: string;
+  disabled: boolean;
+  reason?: string;
+}
 
-/** Houses legal to ban in Oubliette: any house not in the player's own decks. */
-export function housesNotInDecks(deckHouseLists: (string[] | null | undefined)[]): string[] {
+export function banOptions(
+  allowedHouses: string[] | undefined,
+  ownDeckHouseLists: (string[] | null | undefined)[],
+): BanOption[] {
   const own = new Set<string>();
-  for (const houses of deckHouseLists) {
+  for (const houses of ownDeckHouseLists) {
     for (const h of houses || []) own.add(h);
   }
-  return HOUSES.filter((h) => !own.has(h));
+  return (allowedHouses || []).map((house) => ({
+    house,
+    disabled: own.has(house),
+    reason: own.has(house) ? 'in one of your decks' : undefined,
+  }));
 }

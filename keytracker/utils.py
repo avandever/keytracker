@@ -113,6 +113,59 @@ CARD_EXP_TO_OVERRIDE = {
 }
 
 
+# Rows in tracker_house that are not houses a deck is built from, so they are
+# never offered as choices.
+NON_PLAYABLE_HOUSES = {
+    "Prophecy",
+    "Archon Power",
+    "The Tide",
+    "Keyraken",
+    "No House",
+}
+
+_expansion_houses_cache = {}
+
+
+def houses_for_expansions(expansions):
+    """Return the houses native to the given sets, sorted.
+
+    Derived from our own card data rather than a hand-kept table, so it
+    follows the real oddities: Prophetic Visions carries both Sanctum and
+    Redemption, Martian Civil War only Elders and Ironyx Rebels, Menagerie
+    far more than the usual seven. Maverick and anomaly printings are
+    excluded, since those carry a house foreign to the set and would
+    otherwise make every set look like it holds every house.
+
+    An empty result means we have no card data for those sets; callers
+    should fall back to the full house list rather than show nothing.
+    """
+    from keytracker.schema import PlatonicCardInSet, KeyforgeHouse
+
+    key = tuple(sorted(expansions))
+    if key in _expansion_houses_cache:
+        return _expansion_houses_cache[key]
+
+    rows = (
+        db.session.query(KeyforgeHouse.name)
+        .join(
+            PlatonicCardInSet,
+            PlatonicCardInSet.kf_house_id == KeyforgeHouse.id,
+        )
+        .filter(
+            PlatonicCardInSet.expansion.in_(key),
+            PlatonicCardInSet.is_maverick == False,  # noqa: E712
+            PlatonicCardInSet.is_anomaly == False,  # noqa: E712
+        )
+        .distinct()
+        .all()
+    )
+    houses = sorted(
+        {name for (name,) in rows if name and name not in NON_PLAYABLE_HOUSES}
+    )
+    _expansion_houses_cache[key] = houses
+    return houses
+
+
 VALID_HOUSE_ENHANCEMENTS = [
     "brobnar",
     "dis",

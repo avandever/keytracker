@@ -500,6 +500,8 @@ export interface LeagueWeek {
   /** False when a team fields an odd number of players, where no match needs
    *  to be worth more. Feature designations should be hidden in that case. */
   feature_match_applies?: boolean;
+  /** Houses a deck legal for this week could contain, from its allowed sets. */
+  allowed_houses?: string[];
   /** Oubliette: the viewer's own banned house. Never another player's. */
   my_oubliette_ban?: string | null;
   /** Oubliette: bans for the viewer's own team, so captains can enter them. */
