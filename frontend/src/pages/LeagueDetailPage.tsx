@@ -426,10 +426,19 @@ export default function LeagueDetailPage() {
     );
   };
 
+  interface WeekBreakdown {
+    complete: number;
+    unverified: number;
+    unplayed: number;
+    /** Unplayed pairings, oriented so this row's own player is always on the left. */
+    unplayedMatchups: { mine: string; theirs: string }[];
+  }
+
   interface StandingsRow {
     team: TeamDetail;
     week_points: Record<number, number>;
     week_opponents: Record<number, string>;
+    week_breakdown: Record<number, WeekBreakdown>;
     total: number;
   }
 
@@ -439,7 +448,7 @@ export default function LeagueDetailPage() {
     );
     const rows: Record<number, StandingsRow> = {};
     for (const team of league.teams) {
-      rows[team.id] = { team, week_points: {}, week_opponents: {}, total: 0 };
+      rows[team.id] = { team, week_points: {}, week_opponents: {}, week_breakdown: {}, total: 0 };
     }
     const bonusPoints = league.week_bonus_points ?? 2;
     for (const week of qualifyingWeeks) {
@@ -497,13 +506,45 @@ export default function LeagueDetailPage() {
         } else if (team2WonMajority || team2WonHalfPlusFeature) {
           t2Bonus = bonusPoints;
         }
+        // Progress breakdown for the standings tooltip. Separate from the scoring
+        // loop above, which only looks at confirmed results.
+        const buildBreakdown = (forTeam1: boolean): WeekBreakdown => {
+          let complete = 0;
+          let unverified = 0;
+          let unplayed = 0;
+          const unplayedMatchups: { mine: string; theirs: string }[] = [];
+          for (const pm of wm.player_matchups) {
+            const p1IsMine = forTeam1
+              ? team1MemberIds.has(pm.player1.id)
+              : !team1MemberIds.has(pm.player1.id);
+            const p1Wins = pm.games.filter((g) => g.winner_id === pm.player1.id).length;
+            const p2Wins = pm.games.filter((g) => g.winner_id === pm.player2.id).length;
+            const decided = p1Wins >= winsNeeded || p2Wins >= winsNeeded;
+            // A double loss needs no reporting, so it counts as resolved.
+            if (pm.is_double_loss || pm.result_confirmed) {
+              complete++;
+            } else if (decided) {
+              unverified++;
+            } else {
+              unplayed++;
+              unplayedMatchups.push({
+                mine: p1IsMine ? pm.player1.name : pm.player2.name,
+                theirs: p1IsMine ? pm.player2.name : pm.player1.name,
+              });
+            }
+          }
+          return { complete, unverified, unplayed, unplayedMatchups };
+        };
+
         if (rows[wm.team1.id]) {
+          rows[wm.team1.id].week_breakdown[week.week_number] = buildBreakdown(true);
           rows[wm.team1.id].week_points[week.week_number] =
             (rows[wm.team1.id].week_points[week.week_number] || 0) + team1Wins + t1Bonus;
           rows[wm.team1.id].total += team1Wins + t1Bonus;
           rows[wm.team1.id].week_opponents[week.week_number] = wm.team2.name;
         }
         if (rows[wm.team2.id]) {
+          rows[wm.team2.id].week_breakdown[week.week_number] = buildBreakdown(false);
           rows[wm.team2.id].week_points[week.week_number] =
             (rows[wm.team2.id].week_points[week.week_number] || 0) + team2Wins + t2Bonus;
           rows[wm.team2.id].total += team2Wins + t2Bonus;
@@ -550,10 +591,28 @@ export default function LeagueDetailPage() {
               {qualifyingWeeks.map((w) => {
                 const opponent = row.week_opponents[w.week_number];
                 const pts = row.week_points[w.week_number] ?? 0;
+                const bd = row.week_breakdown[w.week_number];
+                const tooltipContent = (
+                  <Box>
+                    <Box>vs {opponent}</Box>
+                    {bd && (
+                      <>
+                        <Box sx={{ mt: 0.5 }}>Matches complete: {bd.complete}</Box>
+                        <Box>Matches unverified: {bd.unverified}</Box>
+                        <Box>Matches unplayed: {bd.unplayed}</Box>
+                        {bd.unplayedMatchups.map((um, i) => (
+                          <Box key={i} sx={{ ml: 1 }}>
+                            {um.mine} vs {um.theirs}
+                          </Box>
+                        ))}
+                      </>
+                    )}
+                  </Box>
+                );
                 return (
                   <TableCell key={w.id} align="center">
                     {opponent ? (
-                      <Tooltip title={`vs ${opponent}`} arrow>
+                      <Tooltip title={tooltipContent} arrow>
                         <Box component="span" sx={{ cursor: 'pointer', borderBottom: '1px dotted', borderColor: 'text.disabled' }}>
                           {pts}
                         </Box>
