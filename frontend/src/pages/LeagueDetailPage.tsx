@@ -427,6 +427,9 @@ export default function LeagueDetailPage() {
   };
 
   interface WeekBreakdown {
+    /** Match wins/losses only -- the week bonus is deliberately excluded. */
+    wins: number;
+    losses: number;
     complete: number;
     unverified: number;
     unplayed: number;
@@ -533,7 +536,14 @@ export default function LeagueDetailPage() {
               });
             }
           }
-          return { complete, unverified, unplayed, unplayedMatchups };
+          return {
+            wins: forTeam1 ? team1Wins : team2Wins,
+            losses: forTeam1 ? team2Wins : team1Wins,
+            complete,
+            unverified,
+            unplayed,
+            unplayedMatchups,
+          };
         };
 
         if (rows[wm.team1.id]) {
@@ -597,6 +607,7 @@ export default function LeagueDetailPage() {
                     <Box>vs {opponent}</Box>
                     {bd && (
                       <>
+                        <Box>Record: {bd.wins}-{bd.losses}</Box>
                         <Box sx={{ mt: 0.5 }}>Matches complete: {bd.complete}</Box>
                         <Box>Matches unverified: {bd.unverified}</Box>
                         <Box>Matches unplayed: {bd.unplayed}</Box>
