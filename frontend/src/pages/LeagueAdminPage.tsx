@@ -73,6 +73,7 @@ import {
   addAdmin,
   removeAdmin,
   setPlayerMatchupDoubleLoss,
+  clearPlayerMatchupResults,
   reorderWeeks,
   reorderTeams,
   resetDraft,
@@ -210,6 +211,9 @@ export default function LeagueAdminPage() {
   // Delete dialogs
   const [deleteLeagueDialogOpen, setDeleteLeagueDialogOpen] = useState(false);
   const [deleteWeekId, setDeleteWeekId] = useState<number | null>(null);
+  const [clearResultsTarget, setClearResultsTarget] = useState<
+    { weekId: number; playerMatchupId: number; label: string } | null
+  >(null);
 
   // Force-matchup confirmation (when some players haven't submitted decks)
   const [forceMatchupWeekId, setForceMatchupWeekId] = useState<number | null>(null);
@@ -668,6 +672,21 @@ export default function LeagueAdminPage() {
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleClearResults = async () => {
+    if (!clearResultsTarget) return;
+    const { weekId, playerMatchupId } = clearResultsTarget;
+    setError('');
+    try {
+      await clearPlayerMatchupResults(league.id, weekId, playerMatchupId);
+      setSuccess('Results cleared — the captain can report this match again.');
+      setClearResultsTarget(null);
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+      setClearResultsTarget(null);
     }
   };
 
@@ -1470,6 +1489,22 @@ export default function LeagueAdminPage() {
                                   >
                                     {pm.is_double_loss ? 'Clear Double Loss' : 'Mark Double Loss'}
                                   </Button>
+                                  {(pm.games.length > 0 || pm.result_confirmed) && (
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      color="warning"
+                                      onClick={() =>
+                                        setClearResultsTarget({
+                                          weekId: week.id,
+                                          playerMatchupId: pm.id,
+                                          label: `${pm.player1.name} vs ${pm.player2.name}`,
+                                        })
+                                      }
+                                    >
+                                      Clear Results
+                                    </Button>
+                                  )}
                                 </Box>
                               );
                             })}
@@ -1874,6 +1909,25 @@ export default function LeagueAdminPage() {
         <DialogActions>
           <Button onClick={() => setDeleteWeekId(null)}>Cancel</Button>
           <Button onClick={() => deleteWeekId && handleDeleteWeek(deleteWeekId)} variant="contained" color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={clearResultsTarget !== null} onClose={() => setClearResultsTarget(null)}>
+        <DialogTitle>Clear Match Results?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This deletes every reported game for {clearResultsTarget?.label} and removes the
+            result confirmation, so a captain can report the match again from scratch. Deck
+            selections and pre-match choices (strikes, bids, picks) are kept.
+          </Typography>
+          <Typography sx={{ mt: 2 }} color="text.secondary" variant="body2">
+            If this week already completed, it reopens so the results can be re-entered.
+            The action is recorded in the admin log.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setClearResultsTarget(null)}>Cancel</Button>
+          <Button onClick={handleClearResults} variant="contained" color="warning">Clear Results</Button>
         </DialogActions>
       </Dialog>
 

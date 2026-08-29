@@ -2423,6 +2423,71 @@ def set_double_loss(league_id, week_id, player_matchup_id):
     return jsonify(serialize_player_matchup(pm, viewer_is_admin=True))
 
 
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/player-matchups/<int:player_matchup_id>/results",
+    methods=["DELETE"],
+)
+@login_required
+def clear_player_matchup_results(league_id, week_id, player_matchup_id):
+    """Admin endpoint to wipe a PlayerMatchup's reported games so it can be re-reported.
+
+    Only the reported result is cleared: the MatchGame rows and the confirmation
+    stamp. Pre-match state (strikes, Triad/Moirai picks, adaptive bids, deck
+    selections) is deliberately left alone, because report_game validates the
+    re-entered games against it -- clearing it would block the captain from
+    reporting rather than let them start over. The underlying tracker_game rows
+    are left alone too; unlinking them here should not delete public game logs.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    if not _is_league_admin(league, get_effective_user()):
+        return jsonify({"error": "Admin access required"}), 403
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    pm = db.session.get(PlayerMatchup, player_matchup_id)
+    if not pm or not pm.week_matchup_id or pm.week_matchup.week_id != week.id:
+        return jsonify({"error": "Player matchup not found"}), 404
+
+    game_count = len(pm.games)
+    was_confirmed = pm.result_confirmed_at is not None
+    if not game_count and not was_confirmed:
+        return jsonify({"error": "This matchup has no reported results"}), 400
+
+    for game in list(pm.games):
+        db.session.delete(game)
+    pm.games = []
+    pm.result_confirmed_at = None
+    pm.result_confirmed_by_id = None
+
+    # Reporting requires a published week, so a week that auto-completed on the
+    # final result has to reopen or the captain has nowhere to re-enter it.
+    reopened = False
+    if week.status == WeekStatus.COMPLETED.value:
+        week.status = WeekStatus.PUBLISHED.value
+        reopened = True
+        if league.status == LeagueStatus.PLAYOFFS.value:
+            league.status = LeagueStatus.ACTIVE.value
+
+    details = (
+        f"player_matchup_id={player_matchup_id} "
+        f"({pm.player1.name} vs {pm.player2.name}) "
+        f"games_cleared={game_count} was_confirmed={was_confirmed}"
+    )
+    if reopened:
+        details += " week_reopened=True"
+    _log_admin_action(
+        league.id,
+        week.id,
+        get_effective_user().id,
+        "match_results_cleared",
+        details,
+    )
+    db.session.commit()
+    return jsonify(serialize_player_matchup(pm, viewer_is_admin=True))
+
+
 @blueprint.route("/<int:league_id>/weeks/<int:week_id>/publish", methods=["POST"])
 @login_required
 def publish_week(league_id, week_id):

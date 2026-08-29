@@ -397,6 +397,17 @@ export async function setPlayerMatchupDoubleLoss(
   return data;
 }
 
+export async function clearPlayerMatchupResults(
+  leagueId: number,
+  weekId: number,
+  playerMatchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.delete(
+    `/leagues/${leagueId}/weeks/${weekId}/player-matchups/${playerMatchupId}/results`,
+  );
+  return data;
+}
+
 export async function removeDeckSelection(
   leagueId: number,
   weekId: number,
