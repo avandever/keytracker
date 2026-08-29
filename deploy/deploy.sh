@@ -6,7 +6,9 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 IMAGE_NAME="keytracker"
 CONTAINER_NAME="keytracker"
 VITE_RECAPTCHA_SITE_KEY="6LfZAXksAAAAAOycX9ZMlksKsKKyyMTAXZnZxJo9"
-LOG_FILE="$REPO_DIR/deploy/deploy.log"
+# Overridable so a human can run this without write access to the webhook's
+# root-owned deploy.log; the webhook itself still gets the default path.
+LOG_FILE="${LOG_FILE:-$REPO_DIR/deploy/deploy.log}"
 
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$LOG_FILE"; }
 
