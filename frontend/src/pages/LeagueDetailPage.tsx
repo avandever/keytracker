@@ -446,7 +446,11 @@ export default function LeagueDetailPage() {
       const winsNeeded = Math.ceil(week.best_of_n / 2);
       for (const wm of week.matchups) {
         const team1MemberIds = new Set(wm.team1.members.map((m) => m.user.id));
-        const totalMatchups = wm.player_matchups.filter((pm) => !pm.is_double_loss && pm.result_confirmed).length;
+        // Denominator for the clinch check: every matchup on the slate, including
+        // unreported ones and double losses. Counting only confirmed results would
+        // let a team clear "majority" off the first report of the week; counting a
+        // double loss as absent would lower the bar for the rest of the week.
+        const totalMatchups = wm.player_matchups.length;
         let team1Wins = 0;
         let team2Wins = 0;
         let featureWinnerId: number | null = null;
@@ -474,6 +478,8 @@ export default function LeagueDetailPage() {
         // Only award bonus when outcome is certain:
         // - team won strictly more than half the total matchups, OR
         // - team won exactly half AND also won the feature match (tiebreaker)
+        // Double losses are unwinnable slots that still count in the total, so a
+        // week with enough of them can end with neither team taking the bonus.
         let t1Bonus = 0;
         let t2Bonus = 0;
         const team1WonMajority = team1Wins > totalMatchups / 2;
