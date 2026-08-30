@@ -3643,7 +3643,29 @@ def submit_deck_selection(league_id, week_id):
     if target_team and (
         week.team_max_raw_amber is not None or week.team_min_raw_amber is not None
     ):
+        # Raw aember comes from DoK, so a deck we have never enriched has none and
+        # used to slip past the cap entirely. Fetch it now rather than skip.
+        if not deck.dok or deck.dok.raw_amber is None:
+            try:
+                update_sas_scores(deck, force=True, use_prod=True)
+            except Exception as e:
+                logger.warning(
+                    "Failed to fetch DoK data for deck %s: %s", deck.kf_id, e
+                )
         deck_raw_amber = deck.dok.raw_amber if deck.dok else None
+        if deck_raw_amber is None:
+            return (
+                jsonify(
+                    {
+                        "error": (
+                            "Could not fetch this deck's raw aember from Decks of "
+                            "KeyForge, so it cannot be checked against the team "
+                            "aember limit. Please try again in a moment."
+                        )
+                    }
+                ),
+                400,
+            )
         if deck_raw_amber is not None:
             team_user_ids = {m.user_id for m in target_team.members}
             teammate_sels = PlayerDeckSelection.query.filter(
@@ -3651,24 +3673,54 @@ def submit_deck_selection(league_id, week_id):
                 PlayerDeckSelection.user_id.in_(team_user_ids),
                 PlayerDeckSelection.user_id != target_user_id,
             ).all()
-            team_total = deck_raw_amber
-            for ts in teammate_sels:
-                if ts.deck and ts.deck.dok and ts.deck.dok.raw_amber is not None:
-                    team_total += ts.deck.dok.raw_amber
             # Also include this user's other slots (for multi-slot formats)
             own_other_sels = PlayerDeckSelection.query.filter(
                 PlayerDeckSelection.week_id == week.id,
                 PlayerDeckSelection.user_id == target_user_id,
                 PlayerDeckSelection.slot_number != slot_number,
             ).all()
-            for os in own_other_sels:
-                if os.deck and os.deck.dok and os.deck.dok.raw_amber is not None:
-                    team_total += os.deck.dok.raw_amber
+
+            def _selection_raw_amber(sel):
+                """Raw aember for an already-submitted deck, enriching if needed.
+
+                Normally a no-op: every deck submitted since on-demand enrichment
+                landed already has DoK data. It only does work for selections made
+                before that, which would otherwise be silently worth zero and let
+                the team slip over the cap.
+                """
+                if not sel.deck:
+                    return None
+                if not sel.deck.dok or sel.deck.dok.raw_amber is None:
+                    try:
+                        update_sas_scores(sel.deck, force=True, use_prod=True)
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to fetch DoK data for teammate deck %s: %s",
+                            sel.deck.kf_id,
+                            e,
+                        )
+                return (
+                    sel.deck.dok.raw_amber
+                    if sel.deck.dok and sel.deck.dok.raw_amber is not None
+                    else None
+                )
+
+            team_total = deck_raw_amber
+            uncounted = 0
+            for sel in list(teammate_sels) + list(own_other_sels):
+                raw = _selection_raw_amber(sel)
+                if raw is None:
+                    uncounted += 1
+                else:
+                    team_total += raw
+            # The total is a floor when a teammate's deck could not be priced, so
+            # say so instead of reporting it as exact.
+            approx = f" (plus {uncounted} deck(s) with no DoK data)" if uncounted else ""
             if week.team_max_raw_amber is not None and team_total > week.team_max_raw_amber:
                 return (
                     jsonify(
                         {
-                            "error": f"Team total raw aember would be {team_total}, exceeding the maximum of {week.team_max_raw_amber} (this deck has {deck_raw_amber})"
+                            "error": f"Team total raw aember would be {team_total}{approx}, exceeding the maximum of {week.team_max_raw_amber} (this deck has {deck_raw_amber})"
                         }
                     ),
                     400,
@@ -3677,7 +3729,7 @@ def submit_deck_selection(league_id, week_id):
                 return (
                     jsonify(
                         {
-                            "error": f"Team total raw aember would be {team_total}, below the minimum of {week.team_min_raw_amber} (this deck has {deck_raw_amber})"
+                            "error": f"Team total raw aember would be {team_total}{approx}, below the minimum of {week.team_min_raw_amber} (this deck has {deck_raw_amber})"
                         }
                     ),
                     400,
