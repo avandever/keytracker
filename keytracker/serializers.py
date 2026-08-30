@@ -135,6 +135,7 @@ def serialize_deck_summary(deck: Deck) -> dict:
         "expansion_name": EXPANSION_ID_TO_ABBR.get(deck.expansion, "Unknown"),
         "sas_rating": deck.sas_rating,
         "aerc_score": deck.aerc_score,
+        "raw_amber": deck.dok.raw_amber if deck.dok else None,
         "mv_url": deck.mv_url,
         "dok_url": deck.dok_url,
         "houses": sorted(
@@ -260,6 +261,72 @@ def serialize_league_detail(
         for w in sorted(league.weeks, key=lambda w: w.week_number)
     ]
     return data
+
+
+def _team_amber_budget(week: LeagueWeek, team_id) -> dict:
+    """Running total of a team's raw aember for a week that caps or floors it.
+
+    The cap is otherwise invisible until submission fails, so this reports what
+    the team has already claimed, what is left, and who spent it. Decks whose
+    DoK data has not landed yet are counted separately rather than as zero --
+    the submission check skips them too, so the total is a lower bound and
+    saying so is better than quietly under-reporting.
+    """
+    if week.team_max_raw_amber is None and week.team_min_raw_amber is None:
+        return None
+    if not team_id:
+        return None
+    team = next((t for t in week.league.teams if t.id == team_id), None)
+    if not team:
+        return None
+
+    members = {
+        m.user_id: {
+            "user_id": m.user_id,
+            "name": m.user.name if m.user else None,
+            "decks": [],
+            "subtotal": 0,
+        }
+        for m in team.members
+    }
+    claimed = 0
+    unknown_decks = 0
+    for ds in week.deck_selections:
+        entry = members.get(ds.user_id)
+        if entry is None:
+            continue
+        raw = None
+        if ds.deck and ds.deck.dok and ds.deck.dok.raw_amber is not None:
+            raw = ds.deck.dok.raw_amber
+        entry["decks"].append(
+            {
+                "slot_number": ds.slot_number,
+                "deck_name": ds.deck.name if ds.deck else None,
+                "raw_amber": raw,
+            }
+        )
+        if raw is None:
+            unknown_decks += 1
+        else:
+            claimed += raw
+            entry["subtotal"] += raw
+
+    for entry in members.values():
+        entry["decks"].sort(key=lambda d: d["slot_number"])
+
+    return {
+        "team_id": team_id,
+        "max_raw_amber": week.team_max_raw_amber,
+        "min_raw_amber": week.team_min_raw_amber,
+        "claimed": claimed,
+        "remaining": (
+            week.team_max_raw_amber - claimed
+            if week.team_max_raw_amber is not None
+            else None
+        ),
+        "unknown_decks": unknown_decks,
+        "members": sorted(members.values(), key=lambda m: (m["name"] or "").lower()),
+    }
 
 
 def _allowed_houses_for_week(week: LeagueWeek, allowed_sets) -> list:
@@ -458,6 +525,9 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         # Houses a deck this week could actually contain, so pickers offer the
         # sets in play rather than every house that has ever existed.
         "allowed_houses": _allowed_houses_for_week(week, allowed_sets),
+        # Own team only -- this exposes teammates' deck aember, which is exactly
+        # the data the opponent redaction above is protecting.
+        "team_amber_budget": _team_amber_budget(week, viewer_own_team_id),
         # Oubliette bans stay secret from opponents. A viewer sees their own,
         # and their own team's, the same way deck selections are shared within
         # a team so a captain can enter them. Opponent bans surface on the

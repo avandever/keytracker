@@ -163,6 +163,22 @@ export interface GameDetail extends GameSummary {
   card_images: Record<string, string>;
 }
 
+export interface TeamAmberBudget {
+  team_id: number;
+  max_raw_amber: number | null;
+  min_raw_amber: number | null;
+  claimed: number;
+  remaining: number | null;
+  /** Selected decks with no DoK data, so claimed is a lower bound. */
+  unknown_decks: number;
+  members: {
+    user_id: number;
+    name: string | null;
+    subtotal: number;
+    decks: { slot_number: number; deck_name: string | null; raw_amber: number | null }[];
+  }[];
+}
+
 export interface DeckSummary {
   kf_id: string;
   name: string;
@@ -170,6 +186,8 @@ export interface DeckSummary {
   expansion_name: string;
   sas_rating: number | null;
   aerc_score: number | null;
+  /** Null when the deck has no DoK data yet. */
+  raw_amber?: number | null;
   mv_url: string;
   dok_url: string;
   db_id?: number;
@@ -502,6 +520,9 @@ export interface LeagueWeek {
   feature_match_applies?: boolean;
   /** Houses a deck legal for this week could contain, from its allowed sets. */
   allowed_houses?: string[];
+  /** Viewer's own team's raw aember spend against the week's cap/floor.
+   *  Null when the week sets neither, or the viewer is not on a team. */
+  team_amber_budget?: TeamAmberBudget | null;
   /** Oubliette: the viewer's own banned house. Never another player's. */
   my_oubliette_ban?: string | null;
   /** Oubliette: bans for the viewer's own team, so captains can enter them. */

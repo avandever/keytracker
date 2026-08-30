@@ -63,6 +63,7 @@ import {
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
+import TeamAmberBudgetPanel from '../components/TeamAmberBudgetPanel';
 import { getWeekDescription } from '../utils/formatDescriptions';
 import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
@@ -980,6 +981,8 @@ export default function MyTeamPage() {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2, whiteSpace: 'pre-line' }}>{desc}</Typography>
             ) : null;
           })()}
+
+          {week.team_amber_budget && <TeamAmberBudgetPanel budget={week.team_amber_budget} />}
 
           {/* Feature player designation (even team_size leagues only) */}
           {showFeature && (
