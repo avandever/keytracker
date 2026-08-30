@@ -2003,7 +2003,8 @@ export default function MyLeagueInfoPage() {
   return (
     <Container maxWidth="sm" sx={{ mt: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 1 }}>
+        {/* Up to the league page, not wherever the browser happens to have been. */}
+        <IconButton onClick={() => navigate('..')} size="small" sx={{ mr: 1 }}>
           <ArrowBackIcon />
         </IconButton>
         <Typography variant="h4">{league.name}</Typography>

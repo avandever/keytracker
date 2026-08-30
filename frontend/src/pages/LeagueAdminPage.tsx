@@ -959,7 +959,8 @@ export default function LeagueAdminPage() {
     <Container maxWidth="md" sx={{ mt: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <IconButton onClick={() => navigate(-1)} size="small" sx={{ mr: 1 }}>
+          {/* Up to the league page, not wherever the browser happens to have been. */}
+          <IconButton onClick={() => navigate('..')} size="small" sx={{ mr: 1 }}>
             <ArrowBackIcon />
           </IconButton>
           <Typography variant="h4">Admin: {league.name}</Typography>
