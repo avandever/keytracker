@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
@@ -64,6 +64,8 @@ import {
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import TeamAmberBudgetPanel from '../components/TeamAmberBudgetPanel';
+import OutstandingMatchesTab from '../components/OutstandingMatchesTab';
+import { currentWeekOf } from './MyLeagueInfoPage';
 import { getWeekDescription } from '../utils/formatDescriptions';
 import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
@@ -113,6 +115,27 @@ function sasRangeStr(rMin: number, rMax: number | null) {
 const TOKEN_SETS = new Set([855, 600]);
 const PROPHECY_EXPANSION_ID = 886;
 
+/** Weeks in tab order: live weeks first, then the rest by number. */
+export function sortWeeksForTabs(weeks: LeagueWeek[]): LeagueWeek[] {
+  const active = new Set(['curation', 'thief', 'deck_selection', 'team_paired', 'pairing', 'published']);
+  return [...weeks].sort((a, b) => {
+    const aActive = active.has(a.status) ? 0 : 1;
+    const bActive = active.has(b.status) ? 0 : 1;
+    if (aActive !== bActive) return aActive - bActive;
+    return a.week_number - b.week_number;
+  });
+}
+
+/** Tab slugs, in render order, so ?tab= can name a tab instead of counting them. */
+function myTeamTabKeys(league: LeagueDetail): string[] {
+  return [
+    'membership',
+    ...sortWeeksForTabs(league.weeks || []).map((w) => `week-${w.week_number}`),
+    'log',
+    ...(league.is_captain ? ['outstanding'] : []),
+  ];
+}
+
 export default function MyTeamPage() {
   const leagueId = useLeagueNumericId();
   const { user } = useAuth();
@@ -123,10 +146,9 @@ export default function MyTeamPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [editName, setEditName] = useState('');
-  const [weekTab, setWeekTab] = useState(() => {
-    const t = parseInt(searchParams.get('tab') ?? '0', 10);
-    return isNaN(t) ? 0 : t;
-  });
+  // Resolved once the league loads, since the tab list depends on it.
+  const [weekTab, setWeekTab] = useState(0);
+  const initialTabApplied = useRef(false);
 
   // Available sets for constraint display
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
@@ -196,6 +218,32 @@ export default function MyTeamPage() {
   }, [leagueId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Resolve the starting tab once the league is known: an explicit ?tab= wins,
+  // otherwise open on the week actually being played. Runs once so a later
+  // refresh cannot yank the user off the tab they clicked.
+  useEffect(() => {
+    if (!league || initialTabApplied.current) return;
+    const keys = myTeamTabKeys(league);
+    const raw = searchParams.get('tab');
+    let idx: number | null = null;
+    if (raw) {
+      const byName = keys.indexOf(raw.toLowerCase());
+      if (byName >= 0) {
+        idx = byName;
+      } else {
+        // Old links used the bare tab index; keep them working.
+        const n = parseInt(raw, 10);
+        if (!isNaN(n) && n >= 0 && n < keys.length) idx = n;
+      }
+    }
+    if (idx === null) {
+      const current = currentWeekOf(league);
+      if (current) idx = keys.indexOf(`week-${current.week_number}`);
+    }
+    setWeekTab(idx != null && idx >= 0 ? idx : 0);
+    initialTabApplied.current = true;
+  }, [league, searchParams]);
 
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
@@ -269,6 +317,7 @@ export default function MyTeamPage() {
   const isCaptain = league.is_captain;
   const weeks = league.weeks || [];
   const logTabIdx = weeks.length + 1;
+  const outstandingTabIdx = weeks.length + 2;
 
   const handleOpenLogTab = () => {
     if (deckEntryLog === null && !deckEntryLogLoading) {
@@ -2117,13 +2166,7 @@ export default function MyTeamPage() {
     );
   };
 
-  const activeStatuses = new Set(['curation', 'thief', 'deck_selection', 'team_paired', 'pairing', 'published']);
-  const sortedWeeks = [...weeks].sort((a, b) => {
-    const aActive = activeStatuses.has(a.status) ? 0 : 1;
-    const bActive = activeStatuses.has(b.status) ? 0 : 1;
-    if (aActive !== bActive) return aActive - bActive;
-    return a.week_number - b.week_number;
-  });
+  const sortedWeeks = sortWeeksForTabs(weeks);
 
   return (
     <Container maxWidth="md" sx={{ mt: 3 }}>
@@ -2140,7 +2183,7 @@ export default function MyTeamPage() {
 
       <Tabs
         value={weekTab}
-        onChange={(_, v) => { setWeekTab(v); setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true }); if (v === logTabIdx) handleOpenLogTab(); }}
+        onChange={(_, v) => { setWeekTab(v); const key = myTeamTabKeys(league)[v] ?? String(v); setSearchParams((prev) => { prev.set('tab', key); return prev; }, { replace: true }); if (v === logTabIdx) handleOpenLogTab(); }}
         sx={{ mb: 2 }}
         variant="scrollable"
         scrollButtons="auto"
@@ -2161,6 +2204,7 @@ export default function MyTeamPage() {
           />
         ))}
         <Tab value={logTabIdx} label="Log" />
+        {isCaptain && <Tab value={outstandingTabIdx} label="Outstanding Matches" />}
       </Tabs>
 
       {weekTab === 0 && (
@@ -2264,7 +2308,18 @@ export default function MyTeamPage() {
         </>
       )}
 
-      {weekTab > 0 && weekTab !== logTabIdx && sortedWeeks[weekTab - 1] && renderWeekContent(sortedWeeks[weekTab - 1])}
+      {weekTab > 0 && weekTab !== logTabIdx && weekTab !== outstandingTabIdx && sortedWeeks[weekTab - 1] && renderWeekContent(sortedWeeks[weekTab - 1])}
+
+      {weekTab === outstandingTabIdx && isCaptain && (
+        <OutstandingMatchesTab
+          leagueId={leagueId}
+          league={league}
+          myTeamId={myTeam.id}
+          onChanged={refresh}
+          setError={setError}
+          setSuccess={setSuccess}
+        />
+      )}
 
       {weekTab === logTabIdx && (
         <Card>
