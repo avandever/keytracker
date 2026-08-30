@@ -76,6 +76,22 @@ import { deckSlotsForFormat } from '../utils/deckSlots';
 const TOKEN_SETS = new Set([855, 600]);
 const PROPHECY_EXPANSION_ID = 886;
 
+/** The week a player would actually be acting on: the earliest one still live. */
+export function currentWeekOf(league: LeagueDetail) {
+  return (league.weeks || []).find(
+    (w) => w.status !== 'completed' && w.status !== 'setup',
+  );
+}
+
+/** Tab slugs, in render order, so ?tab= can name a tab instead of counting them. */
+function tabKeysFor(league: LeagueDetail): string[] {
+  return [
+    'team',
+    ...(league.fee_amount != null ? ['fee'] : []),
+    ...(league.weeks || []).map((w) => `week-${w.week_number}`),
+  ];
+}
+
 export default function MyLeagueInfoPage() {
   const leagueId = useLeagueNumericId();
   const { user } = useAuth();
@@ -88,10 +104,9 @@ export default function MyLeagueInfoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [activeTab, setActiveTab] = useState(() => {
-    const t = parseInt(searchParams.get('tab') ?? '0', 10);
-    return isNaN(t) ? 0 : t;
-  });
+  // Resolved once the league loads, since the tab list depends on it.
+  const [activeTab, setActiveTab] = useState(0);
+  const initialTabApplied = useRef(false);
 
   // Deck selection
   const [deckUrl, setDeckUrl] = useState('');
@@ -171,6 +186,32 @@ export default function MyLeagueInfoPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
+
+  // Resolve the starting tab once the league is known: an explicit ?tab= wins,
+  // otherwise open on the week actually being played. Runs once so a later
+  // refresh cannot yank the user off the tab they clicked.
+  useEffect(() => {
+    if (!league || initialTabApplied.current) return;
+    const keys = tabKeysFor(league);
+    const raw = searchParams.get('tab');
+    let idx: number | null = null;
+    if (raw) {
+      const byName = keys.indexOf(raw.toLowerCase());
+      if (byName >= 0) {
+        idx = byName;
+      } else {
+        // Old links used the bare tab index; keep them working.
+        const n = parseInt(raw, 10);
+        if (!isNaN(n) && n >= 0 && n < keys.length) idx = n;
+      }
+    }
+    if (idx === null) {
+      const current = currentWeekOf(league);
+      if (current) idx = keys.indexOf(`week-${current.week_number}`);
+    }
+    setActiveTab(idx != null && idx >= 0 ? idx : 0);
+    initialTabApplied.current = true;
+  }, [league, searchParams]);
 
   // Pre-populate thief steal selections from server data on first load
   useEffect(() => {
@@ -2020,7 +2061,8 @@ export default function MyLeagueInfoPage() {
         value={activeTab}
         onChange={(_, v) => {
           setActiveTab(v);
-          setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true });
+          const key = tabKeysFor(league)[v] ?? String(v);
+          setSearchParams((prev) => { prev.set('tab', key); return prev; }, { replace: true });
         }}
         sx={{ mb: 2 }}
         variant="scrollable"
