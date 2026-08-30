@@ -1852,6 +1852,9 @@ export default function MyTeamPage() {
                     {s.deck && (
                       <Link href={s.deck.mv_url} target="_blank" rel="noopener" variant="caption">MV</Link>
                     )}
+                    {s.deck?.dok_url && (
+                      <Link href={s.deck.dok_url} target="_blank" rel="noopener" variant="caption">DoK</Link>
+                    )}
                     <Typography variant="caption" color="text.secondary">
                       (suggested by {suggester?.user.name ?? `User ${s.suggesting_user_id}`})
                     </Typography>
