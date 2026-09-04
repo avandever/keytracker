@@ -2049,3 +2049,178 @@ class CollectionSyncJob(db.Model):
     alliance_decks = db.Column(db.Integer, nullable=True)
     error = db.Column(db.Text, nullable=True)
     user = db.relationship("User", backref="collection_sync_jobs")
+
+
+class FantasyLeagueStatus(PyEnum):
+    SETUP = "setup"  # commissioner configuring; costs not published yet
+    OPEN = "open"  # entries accepted, rosters hidden from everyone else
+    LOCKED = "locked"  # rosters public and frozen, scoring live
+    COMPLETED = "completed"
+
+
+class FantasyLeague(db.Model):
+    """A fantasy competition scoring the real players of one League.
+
+    Separate from the league it scores: its commissioner need not be a league
+    admin, and entrants need not be playing in the league at all.
+    """
+
+    __tablename__ = "tracker_fantasy_league"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), nullable=False, index=True
+    )
+    name = db.Column(db.String(120), nullable=False)
+    commissioner_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    status = db.Column(
+        db.String(20), nullable=False, default=FantasyLeagueStatus.SETUP.value
+    )
+    # The arbitrary point at which rosters freeze and become public. Advisory
+    # until the commissioner actually moves the league to LOCKED.
+    roster_lock_at = db.Column(db.DateTime, nullable=True)
+    allow_late_entry = db.Column(db.Boolean, nullable=False, default=True)
+
+    # --- roster rules ---
+    roster_size = db.Column(db.Integer, nullable=False, default=7)
+    salary_cap = db.Column(db.Integer, nullable=False, default=20)
+
+    # --- cost curve ---
+    # Costs come from a previous season's wins, floored for newcomers and
+    # capped so one dominant player cannot eat an entire roster budget.
+    cost_source_league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), nullable=True
+    )
+    cost_min = db.Column(db.Integer, nullable=False, default=2)
+    cost_max = db.Column(db.Integer, nullable=False, default=7)
+
+    # --- scoring (mirrors keytracker.fantasy.ScoringConfig) ---
+    points_per_match_win = db.Column(db.Integer, nullable=False, default=1)
+    # Null disables the weekly bonus.
+    weekly_threshold = db.Column(db.Integer, nullable=True, default=4)
+    weekly_threshold_bonus = db.Column(db.Integer, nullable=False, default=1)
+    captain_bonus_enabled = db.Column(db.Boolean, nullable=False, default=True)
+    # Feature wins counted as ordinary wins in ABR 12, so weighting them is a
+    # new decision rather than a restoration.
+    feature_win_bonus = db.Column(db.Integer, nullable=False, default=0)
+    # JSON list of [max_teams_holding_player, points]; null uses the defaults in
+    # keytracker.fantasy. A null max_teams means "no upper bound".
+    scarcity_bands = db.Column(db.Text, nullable=True)
+    scarcity_bonus_enabled = db.Column(db.Boolean, nullable=False, default=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+
+    league = db.relationship("League", foreign_keys=[league_id])
+    cost_source_league = db.relationship("League", foreign_keys=[cost_source_league_id])
+    commissioner = db.relationship("User", foreign_keys=[commissioner_id])
+    teams = db.relationship(
+        "FantasyTeam", back_populates="fantasy_league", cascade="all, delete-orphan"
+    )
+    player_costs = db.relationship(
+        "FantasyPlayerCost",
+        back_populates="fantasy_league",
+        cascade="all, delete-orphan",
+    )
+
+
+class FantasyPlayerCost(db.Model):
+    """What one real player costs to draft in one fantasy league.
+
+    Generated from the source season's results, then editable by the
+    commissioner before entries open.
+    """
+
+    __tablename__ = "tracker_fantasy_player_cost"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    fantasy_league_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_fantasy_league.id"),
+        nullable=False,
+        index=True,
+    )
+    player_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    cost = db.Column(db.Integer, nullable=False)
+    # Newcomers are the ones the scarcity bonus applies to.
+    is_new_player = db.Column(db.Boolean, nullable=False, default=False)
+    # Wins in the source season, kept so an edited cost can be compared with
+    # what it was derived from.
+    source_wins = db.Column(db.Integer, nullable=True)
+
+    fantasy_league = db.relationship("FantasyLeague", back_populates="player_costs")
+    player = db.relationship("User", foreign_keys=[player_user_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "fantasy_league_id", "player_user_id", name="uq_fantasy_player_cost"
+        ),
+    )
+
+
+class FantasyTeam(db.Model):
+    __tablename__ = "tracker_fantasy_team"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    fantasy_league_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_fantasy_league.id"),
+        nullable=False,
+        index=True,
+    )
+    manager_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    name = db.Column(db.String(120), nullable=False)
+    # Set for a manager who joined mid-season; null means they were in from the
+    # start. Scoring uses it to decide which weeks count.
+    joined_week_number = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+
+    fantasy_league = db.relationship("FantasyLeague", back_populates="teams")
+    manager = db.relationship("User", foreign_keys=[manager_user_id])
+    roster = db.relationship(
+        "FantasyRosterSlot", back_populates="team", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        # One entry per manager, so nobody can flood the field and skew the
+        # scarcity counts every other team is scored against.
+        db.UniqueConstraint(
+            "fantasy_league_id", "manager_user_id", name="uq_fantasy_team_manager"
+        ),
+    )
+
+
+class FantasyRosterSlot(db.Model):
+    """One drafted player on one fantasy team.
+
+    Cost and newcomer status are snapshotted at draft time: the commissioner can
+    still correct the cost table afterwards without silently rewriting the price
+    somebody already paid.
+    """
+
+    __tablename__ = "tracker_fantasy_roster_slot"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    fantasy_team_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_fantasy_team.id"), nullable=False, index=True
+    )
+    player_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    slot_number = db.Column(db.Integer, nullable=False)
+    is_captain = db.Column(db.Boolean, nullable=False, default=False)
+    cost_at_draft = db.Column(db.Integer, nullable=False, default=0)
+    is_new_at_draft = db.Column(db.Boolean, nullable=False, default=False)
+
+    team = db.relationship("FantasyTeam", back_populates="roster")
+    player = db.relationship("User", foreign_keys=[player_user_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "fantasy_team_id", "player_user_id", name="uq_fantasy_roster_player"
+        ),
+        db.UniqueConstraint(
+            "fantasy_team_id", "slot_number", name="uq_fantasy_roster_slot"
+        ),
+    )
