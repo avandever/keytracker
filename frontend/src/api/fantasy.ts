@@ -42,6 +42,8 @@ export interface FantasyLeague {
   roster_size: number;
   salary_cap: number;
   cost_source_league_id: number | null;
+  /** A pre-tracker season, when there is no league row to point at. */
+  cost_source_key: string | null;
   cost_min: number;
   cost_max: number;
   points_per_match_win: number;
@@ -74,6 +76,12 @@ export interface FantasyStandingRow {
   weekly: number[];
 }
 
+/** Seasons that predate the tracker but can still price players. */
+export async function listCostSources(): Promise<{ key: string; label: string }[]> {
+  const { data } = await apiClient.get('/fantasy/cost-sources');
+  return data;
+}
+
 export async function listFantasyLeagues(leagueId?: number): Promise<FantasyLeague[]> {
   const { data } = await apiClient.get('/fantasy/', {
     params: leagueId ? { league_id: leagueId } : undefined,
@@ -90,6 +98,7 @@ export async function createFantasyLeague(payload: {
   league_id: number;
   name: string;
   cost_source_league_id?: number | null;
+  cost_source_key?: string | null;
 }): Promise<FantasyLeague> {
   const { data } = await apiClient.post('/fantasy/', payload);
   return data;

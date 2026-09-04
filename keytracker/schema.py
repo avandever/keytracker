@@ -2092,6 +2092,10 @@ class FantasyLeague(db.Model):
     cost_source_league_id = db.Column(
         db.Integer, db.ForeignKey("tracker_league.id"), nullable=True
     )
+    # For seasons that predate the tracker and so have no League row of their
+    # own; a key into keytracker.fantasy_seasons. Ignored when a source league
+    # is set, since real results beat transcribed ones.
+    cost_source_key = db.Column(db.String(32), nullable=True)
     cost_min = db.Column(db.Integer, nullable=False, default=2)
     cost_max = db.Column(db.Integer, nullable=False, default=7)
 

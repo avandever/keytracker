@@ -18,6 +18,7 @@ import logging
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
 
+from keytracker.fantasy_seasons import HISTORICAL_SEASON_LABELS
 from keytracker.fantasy_service import (
     generate_player_costs,
     roster_validation_error,
@@ -141,6 +142,7 @@ def _serialize_league(fl, viewer=None, include_teams=True):
         "roster_size": fl.roster_size,
         "salary_cap": fl.salary_cap,
         "cost_source_league_id": fl.cost_source_league_id,
+        "cost_source_key": fl.cost_source_key,
         "cost_min": fl.cost_min,
         "cost_max": fl.cost_max,
         "points_per_match_win": fl.points_per_match_win,
@@ -168,6 +170,14 @@ def _serialize_league(fl, viewer=None, include_teams=True):
 # --------------------------------------------------------------------------
 # Fantasy leagues
 # --------------------------------------------------------------------------
+
+
+@blueprint.route("/cost-sources", methods=["GET"])
+def list_cost_sources():
+    """Seasons that predate the tracker and can still price players."""
+    return jsonify(
+        [{"key": k, "label": v} for k, v in sorted(HISTORICAL_SEASON_LABELS.items())]
+    )
 
 
 @blueprint.route("/", methods=["GET"])
@@ -202,12 +212,17 @@ def create_fantasy_league():
     if not name:
         return jsonify({"error": "name is required"}), 400
 
+    source_key = (data.get("cost_source_key") or "").strip() or None
+    if source_key and source_key not in HISTORICAL_SEASON_LABELS:
+        return jsonify({"error": f"Unknown season {source_key}"}), 400
+
     effective = get_effective_user()
     fl = FantasyLeague(
         league_id=league.id,
         name=name,
         commissioner_id=effective.id,
         cost_source_league_id=data.get("cost_source_league_id"),
+        cost_source_key=source_key,
     )
     db.session.add(fl)
     db.session.commit()
@@ -221,6 +236,7 @@ _EDITABLE = {
     "roster_size": int,
     "salary_cap": int,
     "cost_source_league_id": lambda v: int(v) if v is not None else None,
+    "cost_source_key": lambda v: (v or "").strip() or None,
     "cost_min": int,
     "cost_max": int,
     "points_per_match_win": int,

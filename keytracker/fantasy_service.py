@@ -89,6 +89,66 @@ def season_win_counts(league: League) -> Dict[int, int]:
     return counts
 
 
+def _historical_season_wins(
+    season_key: str, league: League
+) -> Tuple[Dict[int, int], Set[int]]:
+    """Win counts for a season the tracker never held, keyed by tracker user id.
+
+    Those seasons live in a spreadsheet, so the only join back to real accounts
+    is the player's name. Matching is case- and space-insensitive; anyone who
+    cannot be matched is simply absent, which makes them a newcomer -- the same
+    treatment a genuinely new player gets, and the reason the commissioner can
+    correct the cost table before opening entries.
+
+    Returns (wins by user id, the set of user ids that played that season).
+    """
+    from keytracker.fantasy_seasons import HISTORICAL_SEASON_WINS
+
+    by_name = HISTORICAL_SEASON_WINS.get(season_key)
+    if not by_name:
+        return {}, set()
+
+    normalised = {_norm_identity(name): wins for name, wins in by_name.items()}
+    wins: Dict[int, int] = {}
+    participants: Set[int] = set()
+    for team in league.teams:
+        for member in team.members:
+            user = member.user
+            if not user:
+                continue
+            found = None
+            for candidate in _identity_candidates(user):
+                if candidate in normalised:
+                    found = normalised[candidate]
+                    break
+            if found is None:
+                continue
+            wins[member.user_id] = found
+            participants.add(member.user_id)
+    return wins, participants
+
+
+def _norm_identity(value) -> str:
+    return (value or "").strip().lower().replace(" ", "")
+
+
+def _identity_candidates(user) -> Set[str]:
+    """Every name this user might have appeared under in an old spreadsheet.
+
+    People sign up under one handle and play under another, so matching on the
+    display name alone strands anyone whose account name differs from the name
+    the league secretary typed. Discord, TCO and DoK handles are all fair game.
+    """
+    values = {user.name, user.discord_username}
+    for tco in getattr(user, "tco_usernames", None) or []:
+        values.add(tco.username)
+    if user.dok_profile_url:
+        # .../users/<handle>, possibly with a trailing slash or query.
+        tail = user.dok_profile_url.split("?")[0].rstrip("/").rsplit("/", 1)[-1]
+        values.add(tail)
+    return {_norm_identity(v) for v in values if v}
+
+
 def generate_player_costs(
     fl: FantasyLeague, replace: bool = True
 ) -> List[FantasyPlayerCost]:
@@ -116,6 +176,10 @@ def generate_player_costs(
         for team in fl.cost_source_league.teams:
             for member in team.members:
                 source_participants.add(member.user_id)
+    elif fl.cost_source_key:
+        source_wins, source_participants = _historical_season_wins(
+            fl.cost_source_key, league
+        )
 
     if replace:
         FantasyPlayerCost.query.filter_by(fantasy_league_id=fl.id).delete()

@@ -39,7 +39,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { isoToLocalInput, localInputToIso } from '../utils/deadlines';
 import type { FantasyLeague } from '../api/fantasy';
-import { createFantasyLeague, listFantasyLeagues } from '../api/fantasy';
+import { createFantasyLeague, listFantasyLeagues, listCostSources } from '../api/fantasy';
 import { listLeagues } from '../api/leagues';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
@@ -149,7 +149,10 @@ export default function LeagueAdminPage() {
   const [fantasyLeagues, setFantasyLeagues] = useState<FantasyLeague[]>([]);
   const [otherLeagues, setOtherLeagues] = useState<{ id: number; name: string }[]>([]);
   const [newFantasyName, setNewFantasyName] = useState('');
-  const [newFantasySourceId, setNewFantasySourceId] = useState<number | ''>('');
+  // Either "league:<id>" for a season the tracker holds, or "season:<key>" for
+  // one that predates it.
+  const [newFantasySource, setNewFantasySource] = useState('');
+  const [costSources, setCostSources] = useState<{ key: string; label: string }[]>([]);
 
   // Team creation
   const [newTeamName, setNewTeamName] = useState('');
@@ -265,6 +268,7 @@ export default function LeagueAdminPage() {
   useEffect(() => {
     if (!leagueId) return;
     listFantasyLeagues(leagueId).then(setFantasyLeagues).catch(() => {});
+    listCostSources().then(setCostSources).catch(() => {});
     listLeagues()
       .then((all) => setOtherLeagues(all.filter((l) => l.id !== leagueId)))
       .catch(() => {});
@@ -310,7 +314,12 @@ export default function LeagueAdminPage() {
       const created = await createFantasyLeague({
         league_id: league.id,
         name,
-        cost_source_league_id: newFantasySourceId === '' ? null : newFantasySourceId,
+        cost_source_league_id: newFantasySource.startsWith('league:')
+          ? parseInt(newFantasySource.slice('league:'.length), 10)
+          : null,
+        cost_source_key: newFantasySource.startsWith('season:')
+          ? newFantasySource.slice('season:'.length)
+          : null,
       });
       setFantasyLeagues((prev) => [...prev, created]);
       setNewFantasyName('');
@@ -1335,18 +1344,23 @@ export default function LeagueAdminPage() {
                   size="small"
                   sx={{ minWidth: 220 }}
                 />
-                <FormControl size="small" sx={{ minWidth: 200 }}>
+                <FormControl size="small" sx={{ minWidth: 240 }}>
                   <InputLabel>Costs from</InputLabel>
                   <Select
                     label="Costs from"
-                    value={newFantasySourceId}
-                    onChange={(e) => setNewFantasySourceId(e.target.value as number | '')}
+                    value={newFantasySource}
+                    onChange={(e) => setNewFantasySource(e.target.value)}
                   >
                     <MenuItem value="">
                       <em>No previous season</em>
                     </MenuItem>
                     {otherLeagues.map((l) => (
-                      <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>
+                      <MenuItem key={l.id} value={`league:${l.id}`}>{l.name}</MenuItem>
+                    ))}
+                    {/* Seasons the tracker never held, transcribed from their
+                        league spreadsheets. */}
+                    {costSources.map((s) => (
+                      <MenuItem key={s.key} value={`season:${s.key}`}>{s.label}</MenuItem>
                     ))}
                   </Select>
                 </FormControl>

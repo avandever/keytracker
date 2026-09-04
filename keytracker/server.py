@@ -277,6 +277,17 @@ with app.app_context():
                             "ALTER TABLE tracker_league_week ADD COLUMN match_completion_deadline DATETIME"
                         )
                     )
+        if inspector.has_table("tracker_fantasy_league"):
+            columns = {
+                c["name"] for c in inspector.get_columns("tracker_fantasy_league")
+            }
+            with db.engine.begin() as conn:
+                if "cost_source_key" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_fantasy_league ADD COLUMN cost_source_key VARCHAR(32)"
+                        )
+                    )
         if inspector.has_table("tracker_set"):
             columns = {c["name"] for c in inspector.get_columns("tracker_set")}
             with db.engine.begin() as conn:
