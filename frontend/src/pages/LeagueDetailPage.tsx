@@ -27,6 +27,7 @@ import {
 } from '@mui/material';
 import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport, getSignupDiscordCheck, startDraft, confirmMatchResult } from '../api/leagues';
 import type { SignupDiscordStatus } from '../api/leagues';
+import { listFantasyLeagues } from '../api/fantasy';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
 import { getWeekDescription } from '../utils/formatDescriptions';
@@ -116,6 +117,7 @@ export default function LeagueDetailPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
+  const [hasFantasy, setHasFantasy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [errorNeedsProfile, setErrorNeedsProfile] = useState(false);
@@ -142,6 +144,14 @@ export default function LeagueDetailPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
+  // Only offer the fantasy link when this league actually has one. Failing
+  // quietly is right: a missing fantasy competition is not an error here.
+  useEffect(() => {
+    if (!leagueId) return;
+    listFantasyLeagues(leagueId)
+      .then((rows) => setHasFantasy(rows.length > 0))
+      .catch(() => setHasFantasy(false));
+  }, [leagueId]);
 
   const handleSignup = async () => {
     setSignupDialogOpen(false);
@@ -1196,6 +1206,12 @@ export default function LeagueDetailPage() {
               My Team
             </Button>
           </>
+        )}
+        {/* Open to everyone: you do not have to be playing to run a fantasy team. */}
+        {hasFantasy && (
+          <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/fantasy`}>
+            Fantasy League
+          </Button>
         )}
       </Box>
 
