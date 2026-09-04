@@ -54,6 +54,8 @@ export interface FantasyLeague {
   rosters_public: boolean;
   team_count: number;
   teams?: FantasyTeam[];
+  /** The creator first (is_creator), then co-commissioners. */
+  commissioners: { user_id: number; name: string | null; is_creator: boolean }[];
 }
 
 export interface FantasyStandingRow {
@@ -106,6 +108,24 @@ export async function setFantasyStatus(
   status: FantasyLeague['status'],
 ): Promise<FantasyLeague> {
   const { data } = await apiClient.post(`/fantasy/${id}/status`, { status });
+  return data;
+}
+
+export async function addFantasyCommissioner(
+  id: number,
+  userId: number,
+): Promise<FantasyLeague> {
+  const { data } = await apiClient.post(`/fantasy/${id}/commissioners`, {
+    user_id: userId,
+  });
+  return data;
+}
+
+export async function removeFantasyCommissioner(
+  id: number,
+  userId: number,
+): Promise<FantasyLeague> {
+  const { data } = await apiClient.delete(`/fantasy/${id}/commissioners/${userId}`);
   return data;
 }
 

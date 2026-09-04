@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -38,6 +39,8 @@ import type {
   FantasyTeam,
 } from '../api/fantasy';
 import {
+  addFantasyCommissioner,
+  removeFantasyCommissioner,
   listFantasyLeagues,
   getFantasyCosts,
   getFantasyLeague,
@@ -87,6 +90,9 @@ export default function FantasyLeaguePage() {
   const [captainId, setCaptainId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [newCommissioner, setNewCommissioner] = useState<
+    string | { label: string; id: number } | null
+  >(null);
 
   // Resolve which fantasy league to show before anything else loads.
   useEffect(() => {
@@ -525,6 +531,84 @@ export default function FantasyLeaguePage() {
               undone.
             </Typography>
           )}
+        </CardContent>
+      </Card>
+
+      <Card sx={{ mb: 2 }}>
+        <CardContent>
+          <Typography variant="subtitle2" gutterBottom>
+            Commissioners
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+            {league.commissioners.map((c) => (
+              <Chip
+                key={c.user_id}
+                label={`${c.name ?? c.user_id}${c.is_creator ? ' (creator)' : ''}`}
+                size="small"
+                onDelete={
+                  c.is_creator
+                    ? undefined
+                    : async () => {
+                        setError('');
+                        try {
+                          setLeague(await removeFantasyCommissioner(league.id, c.user_id));
+                          setSuccess('Co-commissioner removed.');
+                        } catch (e: any) {
+                          setError(e.response?.data?.error || e.message);
+                        }
+                      }
+                }
+              />
+            ))}
+          </Box>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+            <Autocomplete
+              freeSolo
+              size="small"
+              sx={{ flex: 1 }}
+              options={costs.map((c) => ({
+                label: c.player_name ?? String(c.player_user_id),
+                id: c.player_user_id,
+              }))}
+              value={newCommissioner}
+              onChange={(_, v) => setNewCommissioner(v)}
+              isOptionEqualToValue={(o, v) =>
+                typeof o !== 'string' && typeof v !== 'string' && o.id === v.id
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Add a co-commissioner"
+                  helperText="A league player by name, or any user's id"
+                />
+              )}
+            />
+            <Button
+              sx={{ mt: 0.5 }}
+              onClick={async () => {
+                // Either a picked player, or a raw id typed for someone who is
+                // not playing in the league.
+                const picked =
+                  typeof newCommissioner === 'string'
+                    ? parseInt(newCommissioner, 10)
+                    : newCommissioner?.id;
+                if (!picked || isNaN(picked)) {
+                  setError('Pick a player or enter a numeric user id');
+                  return;
+                }
+                setError('');
+                try {
+                  setLeague(await addFantasyCommissioner(league.id, picked));
+                  setNewCommissioner(null);
+                  setSuccess('Co-commissioner added.');
+                } catch (e: any) {
+                  setError(e.response?.data?.error || e.message);
+                }
+              }}
+            >
+              Add
+            </Button>
+          </Box>
         </CardContent>
       </Card>
 

@@ -2122,6 +2122,11 @@ class FantasyLeague(db.Model):
         back_populates="fantasy_league",
         cascade="all, delete-orphan",
     )
+    commissioners = db.relationship(
+        "FantasyCommissioner",
+        back_populates="fantasy_league",
+        cascade="all, delete-orphan",
+    )
 
 
 class FantasyPlayerCost(db.Model):
@@ -2222,5 +2227,33 @@ class FantasyRosterSlot(db.Model):
         ),
         db.UniqueConstraint(
             "fantasy_team_id", "slot_number", name="uq_fantasy_roster_slot"
+        ),
+    )
+
+
+class FantasyCommissioner(db.Model):
+    """Someone who can run a fantasy league besides its creator.
+
+    The creator stays on FantasyLeague.commissioner_id so a league always has an
+    owner who cannot be removed; everyone here is an equal co-commissioner in
+    what they may do.
+    """
+
+    __tablename__ = "tracker_fantasy_commissioner"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    fantasy_league_id = db.Column(
+        db.Integer,
+        db.ForeignKey("tracker_fantasy_league.id"),
+        nullable=False,
+        index=True,
+    )
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+
+    fantasy_league = db.relationship("FantasyLeague", back_populates="commissioners")
+    user = db.relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "fantasy_league_id", "user_id", name="uq_fantasy_commissioner"
         ),
     )

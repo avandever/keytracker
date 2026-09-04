@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link as RouterLink } from 'react-router-dom';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
   Container,
@@ -38,6 +38,9 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { isoToLocalInput, localInputToIso } from '../utils/deadlines';
+import type { FantasyLeague } from '../api/fantasy';
+import { createFantasyLeague, listFantasyLeagues } from '../api/fantasy';
+import { listLeagues } from '../api/leagues';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -142,6 +145,11 @@ export default function LeagueAdminPage() {
 
   // Co-admin management
   const [newAdminUserId, setNewAdminUserId] = useState('');
+  // Fantasy league creation
+  const [fantasyLeagues, setFantasyLeagues] = useState<FantasyLeague[]>([]);
+  const [otherLeagues, setOtherLeagues] = useState<{ id: number; name: string }[]>([]);
+  const [newFantasyName, setNewFantasyName] = useState('');
+  const [newFantasySourceId, setNewFantasySourceId] = useState<number | ''>('');
 
   // Team creation
   const [newTeamName, setNewTeamName] = useState('');
@@ -252,6 +260,15 @@ export default function LeagueAdminPage() {
   }, [leagueId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+  // Existing fantasy leagues, and the other seasons whose results could price
+  // players. Both fail quietly: neither is essential to administering a league.
+  useEffect(() => {
+    if (!leagueId) return;
+    listFantasyLeagues(leagueId).then(setFantasyLeagues).catch(() => {});
+    listLeagues()
+      .then((all) => setOtherLeagues(all.filter((l) => l.id !== leagueId)))
+      .catch(() => {});
+  }, [leagueId]);
 
   useEffect(() => {
     getSets().then(setAvailableSets).catch(() => {});
@@ -281,6 +298,29 @@ export default function LeagueAdminPage() {
   tabLabels[teamsIdx] = 'Teams';
   tabLabels[signupsIdx] = `Signups (${league.signups.length})`;
   tabLabels[weeksIdx] = `Weeks (${league.weeks?.length || 0})`;
+
+  const handleCreateFantasy = async () => {
+    const name = newFantasyName.trim();
+    if (!name) {
+      setError('Give the fantasy league a name');
+      return;
+    }
+    setError('');
+    try {
+      const created = await createFantasyLeague({
+        league_id: league.id,
+        name,
+        cost_source_league_id: newFantasySourceId === '' ? null : newFantasySourceId,
+      });
+      setFantasyLeagues((prev) => [...prev, created]);
+      setNewFantasyName('');
+      setSuccess(
+        'Fantasy league created. Generate player costs on its page, then open it for entries.',
+      );
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
 
   const handleAddAdmin = async () => {
     const uid = parseInt(newAdminUserId, 10);
@@ -1252,6 +1292,71 @@ export default function LeagueAdminPage() {
                 />
                 <Button variant="contained" onClick={handleAddAdmin}>Add Co-Admin</Button>
               </Box>
+            </CardContent>
+          </Card>
+
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>Fantasy League</Typography>
+              {fantasyLeagues.length > 0 ? (
+                <>
+                  {fantasyLeagues.map((fl) => (
+                    <Box key={fl.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="body2">{fl.name}</Typography>
+                      <Chip label={fl.status} size="small" />
+                      <Typography variant="caption" color="text.secondary">
+                        run by {fl.commissioner_name}
+                      </Typography>
+                      <Button
+                        size="small"
+                        component={RouterLink}
+                        to={`${league.url_name ? `/league/${league.url_name}` : `/league/by_id/${league.id}`}/fantasy?fl=${fl.id}`}
+                      >
+                        Manage
+                      </Button>
+                    </Box>
+                  ))}
+                  <Typography variant="caption" color="text.secondary">
+                    Costs, entries and co-commissioners are managed on the fantasy page.
+                  </Typography>
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  Let people draft a team of this league&apos;s players and score points as
+                  they play. Whoever creates it becomes its commissioner and can add
+                  co-commissioners afterwards — they do not have to be a league admin.
+                </Typography>
+              )}
+              <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                <TextField
+                  label="Fantasy league name"
+                  value={newFantasyName}
+                  onChange={(e) => setNewFantasyName(e.target.value)}
+                  size="small"
+                  sx={{ minWidth: 220 }}
+                />
+                <FormControl size="small" sx={{ minWidth: 200 }}>
+                  <InputLabel>Costs from</InputLabel>
+                  <Select
+                    label="Costs from"
+                    value={newFantasySourceId}
+                    onChange={(e) => setNewFantasySourceId(e.target.value as number | '')}
+                  >
+                    <MenuItem value="">
+                      <em>No previous season</em>
+                    </MenuItem>
+                    {otherLeagues.map((l) => (
+                      <MenuItem key={l.id} value={l.id}>{l.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Button variant="contained" onClick={handleCreateFantasy}>
+                  Create Fantasy League
+                </Button>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                Player costs are derived from wins in the season you pick here.
+              </Typography>
             </CardContent>
           </Card>
 

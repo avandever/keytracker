@@ -25,6 +25,7 @@ from keytracker.fantasy_service import (
 )
 from keytracker.routes.leagues import get_effective_user
 from keytracker.schema import (
+    FantasyCommissioner,
     FantasyLeague,
     FantasyLeagueStatus,
     FantasyPlayerCost,
@@ -55,10 +56,13 @@ def _get_or_404(fantasy_league_id):
 
 
 def _is_commissioner(fl, user=None):
+    """The creator, or anyone they have added as a co-commissioner."""
     user = user or get_effective_user()
-    return bool(
-        user and getattr(user, "is_authenticated", False) and fl.commissioner_id == user.id
-    )
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if fl.commissioner_id == user.id:
+        return True
+    return any(c.user_id == user.id for c in fl.commissioners)
 
 
 def _rosters_visible_to(fl, user):
@@ -113,6 +117,23 @@ def _serialize_league(fl, viewer=None, include_teams=True):
         "commissioner_id": fl.commissioner_id,
         "commissioner_name": fl.commissioner.name if fl.commissioner else None,
         "viewer_is_commissioner": _is_commissioner(fl, viewer),
+        # The creator first, then co-commissioners. is_creator marks the one who
+        # cannot be removed.
+        "commissioners": [
+            {
+                "user_id": fl.commissioner_id,
+                "name": fl.commissioner.name if fl.commissioner else None,
+                "is_creator": True,
+            }
+        ]
+        + [
+            {
+                "user_id": c.user_id,
+                "name": c.user.name if c.user else None,
+                "is_creator": False,
+            }
+            for c in fl.commissioners
+        ],
         "roster_lock_at": (
             fl.roster_lock_at.isoformat() + "Z" if fl.roster_lock_at else None
         ),
@@ -330,6 +351,63 @@ def set_status(fantasy_league_id):
         )
 
     fl.status = target
+    db.session.commit()
+    return jsonify(_serialize_league(fl))
+
+
+# --------------------------------------------------------------------------
+# Co-commissioners
+# --------------------------------------------------------------------------
+
+
+@blueprint.route("/<int:fantasy_league_id>/commissioners", methods=["POST"])
+@login_required
+def add_commissioner(fantasy_league_id):
+    fl, err = _get_or_404(fantasy_league_id)
+    if err:
+        return err
+    if not _is_commissioner(fl):
+        return jsonify({"error": "Commissioner access required"}), 403
+
+    data = request.get_json(silent=True) or {}
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+    target = db.session.get(User, user_id)
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+    if target.id == fl.commissioner_id:
+        return jsonify({"error": "Already the commissioner"}), 409
+    existing = FantasyCommissioner.query.filter_by(
+        fantasy_league_id=fl.id, user_id=target.id
+    ).first()
+    if existing:
+        return jsonify({"error": "Already a commissioner"}), 409
+
+    db.session.add(FantasyCommissioner(fantasy_league_id=fl.id, user_id=target.id))
+    db.session.commit()
+    return jsonify(_serialize_league(fl)), 201
+
+
+@blueprint.route(
+    "/<int:fantasy_league_id>/commissioners/<int:user_id>", methods=["DELETE"]
+)
+@login_required
+def remove_commissioner(fantasy_league_id, user_id):
+    fl, err = _get_or_404(fantasy_league_id)
+    if err:
+        return err
+    if not _is_commissioner(fl):
+        return jsonify({"error": "Commissioner access required"}), 403
+    if user_id == fl.commissioner_id:
+        # Someone has to own the league, and the creator is that someone.
+        return jsonify({"error": "Cannot remove the league's creator"}), 400
+    row = FantasyCommissioner.query.filter_by(
+        fantasy_league_id=fl.id, user_id=user_id
+    ).first()
+    if not row:
+        return jsonify({"error": "Not a commissioner of this league"}), 404
+    db.session.delete(row)
     db.session.commit()
     return jsonify(_serialize_league(fl))
 
