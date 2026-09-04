@@ -37,8 +37,10 @@ import type {
   FantasyPlayerCost,
   FantasyStandingRow,
   FantasyTeam,
+  FantasyUserMatch,
 } from '../api/fantasy';
 import {
+  searchFantasyUsers,
   addFantasyCommissioner,
   removeFantasyCommissioner,
   listFantasyLeagues,
@@ -90,9 +92,10 @@ export default function FantasyLeaguePage() {
   const [captainId, setCaptainId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
-  const [newCommissioner, setNewCommissioner] = useState<
-    string | { label: string; id: number } | null
-  >(null);
+  const [newCommissioner, setNewCommissioner] = useState<FantasyUserMatch | null>(null);
+  const [userQuery, setUserQuery] = useState('');
+  const [userMatches, setUserMatches] = useState<FantasyUserMatch[]>([]);
+  const [userSearching, setUserSearching] = useState(false);
 
   // Resolve which fantasy league to show before anything else loads.
   useEffect(() => {
@@ -150,6 +153,26 @@ export default function FantasyLeaguePage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Debounced so typing a name is not one request per keystroke.
+  useEffect(() => {
+    const q = userQuery.trim();
+    if (!id || !league?.viewer_is_commissioner || q.length < 2) {
+      setUserMatches([]);
+      return;
+    }
+    setUserSearching(true);
+    const timer = setTimeout(() => {
+      searchFantasyUsers(id, q)
+        .then(setUserMatches)
+        .catch(() => setUserMatches([]))
+        .finally(() => setUserSearching(false));
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      setUserSearching(false);
+    };
+  }, [id, userQuery, league?.viewer_is_commissioner]);
 
   const costById = useMemo(
     () => new Map(costs.map((c) => [c.player_user_id, c])),
@@ -563,43 +586,50 @@ export default function FantasyLeaguePage() {
           </Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
             <Autocomplete
-              freeSolo
               size="small"
               sx={{ flex: 1 }}
-              options={costs.map((c) => ({
-                label: c.player_name ?? String(c.player_user_id),
-                id: c.player_user_id,
-              }))}
+              // Searched server-side rather than filtered from a preloaded list:
+              // a commissioner need not be playing in the league, so the
+              // candidates are every account, not this league's players.
+              options={userMatches}
+              filterOptions={(x) => x}
+              loading={userSearching}
               value={newCommissioner}
               onChange={(_, v) => setNewCommissioner(v)}
-              isOptionEqualToValue={(o, v) =>
-                typeof o !== 'string' && typeof v !== 'string' && o.id === v.id
+              onInputChange={(_, value, reason) => {
+                if (reason !== 'input') return;
+                setUserQuery(value);
+              }}
+              getOptionLabel={(o) =>
+                o.discord_username && o.discord_username !== o.name
+                  ? `${o.name ?? o.user_id} (${o.discord_username})`
+                  : String(o.name ?? o.user_id)
+              }
+              isOptionEqualToValue={(o, v) => o.user_id === v.user_id}
+              noOptionsText={
+                userQuery.trim().length < 2 ? 'Type at least two letters' : 'No matches'
               }
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label="Add a co-commissioner"
-                  helperText="A league player by name, or any user's id"
+                  helperText="Search by name, Discord handle or TCO username"
                 />
               )}
             />
             <Button
               sx={{ mt: 0.5 }}
+              disabled={!newCommissioner}
               onClick={async () => {
-                // Either a picked player, or a raw id typed for someone who is
-                // not playing in the league.
-                const picked =
-                  typeof newCommissioner === 'string'
-                    ? parseInt(newCommissioner, 10)
-                    : newCommissioner?.id;
-                if (!picked || isNaN(picked)) {
-                  setError('Pick a player or enter a numeric user id');
-                  return;
-                }
+                if (!newCommissioner) return;
                 setError('');
                 try {
-                  setLeague(await addFantasyCommissioner(league.id, picked));
+                  setLeague(
+                    await addFantasyCommissioner(league.id, newCommissioner.user_id),
+                  );
                   setNewCommissioner(null);
+                  setUserQuery('');
+                  setUserMatches([]);
                   setSuccess('Co-commissioner added.');
                 } catch (e: any) {
                   setError(e.response?.data?.error || e.message);

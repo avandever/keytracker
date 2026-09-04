@@ -33,6 +33,7 @@ from keytracker.schema import (
     FantasyRosterSlot,
     FantasyTeam,
     League,
+    TcoUsername,
     User,
     db,
 )
@@ -374,6 +375,57 @@ def set_status(fantasy_league_id):
 # --------------------------------------------------------------------------
 # Co-commissioners
 # --------------------------------------------------------------------------
+
+
+@blueprint.route("/<int:fantasy_league_id>/user-search", methods=["GET"])
+@login_required
+def search_users(fantasy_league_id):
+    """Find accounts to appoint as co-commissioners.
+
+    Searches the handles a person is actually known by, not just their display
+    name, since a commissioner need not be playing in the league and may be
+    recognised by their Discord or TCO handle. Restricted to commissioners so
+    this is not a general directory of the site's users.
+    """
+    fl, err = _get_or_404(fantasy_league_id)
+    if err:
+        return err
+    if not _is_commissioner(fl):
+        return jsonify({"error": "Commissioner access required"}), 403
+
+    query = (request.args.get("q") or "").strip()
+    if len(query) < 2:
+        return jsonify([])
+    like = f"%{query}%"
+
+    matches = (
+        User.query.filter(
+            db.or_(User.name.ilike(like), User.discord_username.ilike(like))
+        )
+        .order_by(User.name)
+        .limit(20)
+        .all()
+    )
+    found = {u.id: u for u in matches}
+    if len(found) < 20:
+        for row in (
+            TcoUsername.query.filter(TcoUsername.username.ilike(like))
+            .limit(20 - len(found))
+            .all()
+        ):
+            if row.user and row.user.id not in found:
+                found[row.user.id] = row.user
+
+    return jsonify(
+        [
+            {
+                "user_id": u.id,
+                "name": u.name,
+                "discord_username": u.discord_username,
+            }
+            for u in sorted(found.values(), key=lambda u: (u.name or "").lower())
+        ]
+    )
 
 
 @blueprint.route("/<int:fantasy_league_id>/commissioners", methods=["POST"])

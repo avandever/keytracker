@@ -120,6 +120,20 @@ export async function setFantasyStatus(
   return data;
 }
 
+export interface FantasyUserMatch {
+  user_id: number;
+  name: string | null;
+  discord_username: string | null;
+}
+
+export async function searchFantasyUsers(
+  id: number,
+  q: string,
+): Promise<FantasyUserMatch[]> {
+  const { data } = await apiClient.get(`/fantasy/${id}/user-search`, { params: { q } });
+  return data;
+}
+
 export async function addFantasyCommissioner(
   id: number,
   userId: number,
