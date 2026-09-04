@@ -12,6 +12,7 @@ from keytracker.routes import (
     api,
     api_v2,
     auth,
+    fantasy,
     leagues,
 )
 from keytracker.routes.mv_proxy import mv_proxy_bp
@@ -345,6 +346,7 @@ app.register_blueprint(auth.blueprint)
 app.register_blueprint(api.blueprint)
 app.register_blueprint(api_v2.blueprint)
 app.register_blueprint(leagues.blueprint)
+app.register_blueprint(fantasy.blueprint)
 app.register_blueprint(mv_proxy_bp, url_prefix="/api/master-vault")
 app.register_blueprint(standalone_bp)
 app.register_blueprint(auction_bp)
