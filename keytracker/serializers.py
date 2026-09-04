@@ -449,6 +449,16 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             if week.required_card_names
             else None
         ),
+        "deck_submission_deadline": (
+            week.deck_submission_deadline.isoformat() + "Z"
+            if week.deck_submission_deadline
+            else None
+        ),
+        "match_completion_deadline": (
+            week.match_completion_deadline.isoformat() + "Z"
+            if week.match_completion_deadline
+            else None
+        ),
         "custom_description": week.custom_description,
         "hide_standard_description": week.hide_standard_description,
         "thief_floor_team_id": thief_floor_team_id,

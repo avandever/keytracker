@@ -116,6 +116,26 @@ def _get_league_or_404(league_id):
     return league, None
 
 
+def _parse_deadline(value):
+    """Parse an ISO 8601 deadline from the client into a naive UTC datetime.
+
+    Returns (value, error). Null clears the deadline. The client sends UTC with
+    a trailing Z; everything is stored naive UTC to match the other datetime
+    columns, so the offset is applied and then dropped rather than ignored.
+    """
+    if value in (None, ""):
+        return None, None
+    if not isinstance(value, str):
+        return None, "must be an ISO 8601 datetime string or null"
+    try:
+        parsed = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None, "must be an ISO 8601 datetime string or null"
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    return parsed, None
+
+
 def _log_admin_action(league_id, week_id, user_id, action_type, details=None):
     """Record an admin action in the league admin log."""
     import datetime
@@ -1632,6 +1652,15 @@ def create_week(league_id):
         else None
     )
 
+    deck_submission_deadline, err = _parse_deadline(data.get("deck_submission_deadline"))
+    if err:
+        return jsonify({"error": f"deck_submission_deadline: {err}"}), 400
+    match_completion_deadline, err = _parse_deadline(
+        data.get("match_completion_deadline")
+    )
+    if err:
+        return jsonify({"error": f"match_completion_deadline: {err}"}), 400
+
     week = LeagueWeek(
         league_id=league.id,
         week_number=max_week + 1,
@@ -1653,6 +1682,8 @@ def create_week(league_id):
         team_max_raw_amber=data.get("team_max_raw_amber"),
         team_min_raw_amber=data.get("team_min_raw_amber"),
         required_card_names=required_card_names_json,
+        deck_submission_deadline=deck_submission_deadline,
+        match_completion_deadline=match_completion_deadline,
     )
     db.session.add(week)
     db.session.commit()
@@ -1830,6 +1861,12 @@ def update_week(league_id, week_id):
             week.required_card_names = json.dumps(data["required_card_names"])
         else:
             week.required_card_names = None
+    for field in ("deck_submission_deadline", "match_completion_deadline"):
+        if field in data:
+            parsed, err = _parse_deadline(data[field])
+            if err:
+                return jsonify({"error": f"{field}: {err}"}), 400
+            setattr(week, field, parsed)
     if "custom_description" in data:
         week.custom_description = data["custom_description"] or None
     if "hide_standard_description" in data:

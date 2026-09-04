@@ -1,5 +1,6 @@
 import { Chip } from '@mui/material';
 import type { KeyforgeSetInfo, LeagueWeek } from '../types';
+import { formatDeadline, isPast } from '../utils/deadlines';
 
 interface WeekConstraintsProps {
   week: LeagueWeek;
@@ -40,6 +41,29 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
   }
   if (week.team_min_raw_amber != null) {
     chips.push(<Chip key="team-min-amber" label={`Team Min Aember: ${week.team_min_raw_amber}`} size={size} variant="outlined" />);
+  }
+  // Deadlines are advisory, so a passed one is coloured but never blocking.
+  if (week.deck_submission_deadline) {
+    chips.push(
+      <Chip
+        key="deck-deadline"
+        label={`Decks due: ${formatDeadline(week.deck_submission_deadline)}`}
+        size={size}
+        variant="outlined"
+        color={isPast(week.deck_submission_deadline) ? 'error' : 'warning'}
+      />,
+    );
+  }
+  if (week.match_completion_deadline) {
+    chips.push(
+      <Chip
+        key="match-deadline"
+        label={`Matches due: ${formatDeadline(week.match_completion_deadline)}`}
+        size={size}
+        variant="outlined"
+        color={isPast(week.match_completion_deadline) ? 'error' : 'warning'}
+      />,
+    );
   }
   if (week.required_card_names && week.required_card_names.length > 0) {
     chips.push(<Chip key="required-cards" label={`Required Cards: ${week.required_card_names.length}`} size={size} variant="outlined" color="info" />);

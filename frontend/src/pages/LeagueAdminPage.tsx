@@ -37,6 +37,7 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { isoToLocalInput, localInputToIso } from '../utils/deadlines';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -185,6 +186,9 @@ export default function LeagueAdminPage() {
   // Team aember constraints
   const [weekTeamMaxAmber, setWeekTeamMaxAmber] = useState('');
   const [weekTeamMinAmber, setWeekTeamMinAmber] = useState('');
+  // Deadlines (held as datetime-local strings in the admin's own timezone)
+  const [weekDeckDeadline, setWeekDeckDeadline] = useState('');
+  const [weekMatchDeadline, setWeekMatchDeadline] = useState('');
   // Required card list
   const [weekRequiredCards, setWeekRequiredCards] = useState<string[]>([]);
   const [cardSearchQuery, setCardSearchQuery] = useState('');
@@ -467,6 +471,8 @@ export default function LeagueAdminPage() {
     setWeekSasLadderFeatureRung('');
     setWeekTeamMaxAmber('');
     setWeekTeamMinAmber('');
+    setWeekDeckDeadline('');
+    setWeekMatchDeadline('');
     setWeekRequiredCards([]);
     setCardSearchQuery('');
     setCardSearchResults([]);
@@ -492,6 +498,8 @@ export default function LeagueAdminPage() {
     setWeekSasLadderFeatureRung(week.sas_ladder_feature_rung != null ? String(week.sas_ladder_feature_rung) : '');
     setWeekTeamMaxAmber(week.team_max_raw_amber != null ? String(week.team_max_raw_amber) : '');
     setWeekTeamMinAmber(week.team_min_raw_amber != null ? String(week.team_min_raw_amber) : '');
+    setWeekDeckDeadline(isoToLocalInput(week.deck_submission_deadline));
+    setWeekMatchDeadline(isoToLocalInput(week.match_completion_deadline));
     setWeekRequiredCards(week.required_card_names || []);
     setCardSearchQuery('');
     setCardSearchResults([]);
@@ -527,6 +535,8 @@ export default function LeagueAdminPage() {
         ? parseInt(weekSasLadderFeatureRung, 10) || null : null,
       team_max_raw_amber: weekTeamMaxAmber ? parseInt(weekTeamMaxAmber, 10) : null,
       team_min_raw_amber: weekTeamMinAmber ? parseInt(weekTeamMinAmber, 10) : null,
+      deck_submission_deadline: localInputToIso(weekDeckDeadline),
+      match_completion_deadline: localInputToIso(weekMatchDeadline),
       required_card_names: weekRequiredCards.length > 0 ? weekRequiredCards : null,
       custom_description: weekCustomDescription.trim() || null,
       hide_standard_description: weekHideStandardDescription,
@@ -1779,6 +1789,28 @@ export default function LeagueAdminPage() {
                 type="number"
                 size="small"
                 fullWidth
+              />
+            </Box>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <TextField
+                label="Deck Submission Deadline"
+                helperText="Your local time. Shown to players in theirs."
+                value={weekDeckDeadline}
+                onChange={(e) => setWeekDeckDeadline(e.target.value)}
+                type="datetime-local"
+                size="small"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Match Completion Deadline"
+                helperText="Your local time. Shown to players in theirs."
+                value={weekMatchDeadline}
+                onChange={(e) => setWeekMatchDeadline(e.target.value)}
+                type="datetime-local"
+                size="small"
+                fullWidth
+                InputLabelProps={{ shrink: true }}
               />
             </Box>
             <Box>

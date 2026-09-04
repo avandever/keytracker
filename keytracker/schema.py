@@ -1063,6 +1063,10 @@ class LeagueWeek(db.Model):
     team_min_raw_amber = db.Column(db.Integer, nullable=True)
     # Required card list (JSON list of card names)
     required_card_names = db.Column(db.Text, nullable=True)
+    # Deadlines, UTC. Advisory: nothing is blocked when one passes, they drive
+    # the "what still needs doing" displays.
+    deck_submission_deadline = db.Column(db.DateTime, nullable=True)
+    match_completion_deadline = db.Column(db.DateTime, nullable=True)
     # Description
     custom_description = db.Column(db.Text, nullable=True)
     hide_standard_description = db.Column(db.Boolean, nullable=False, default=False)

@@ -264,6 +264,18 @@ with app.app_context():
                             "ALTER TABLE tracker_league_week ADD COLUMN required_card_names TEXT"
                         )
                     )
+                if "deck_submission_deadline" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league_week ADD COLUMN deck_submission_deadline DATETIME"
+                        )
+                    )
+                if "match_completion_deadline" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league_week ADD COLUMN match_completion_deadline DATETIME"
+                        )
+                    )
         if inspector.has_table("tracker_set"):
             columns = {c["name"] for c in inspector.get_columns("tracker_set")}
             with db.engine.begin() as conn:
