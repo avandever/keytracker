@@ -18,6 +18,7 @@ import {
   Avatar,
   Switch,
   Chip,
+  Tooltip,
   Tab,
   Tabs,
   Link,
@@ -833,6 +834,9 @@ export default function MyTeamPage() {
       const updated = await addDeckSuggestion(league.id, weekId, url);
       setSuggestionUrls((prev) => ({ ...prev, [weekId]: '' }));
       setLeague((prev) => prev ? { ...prev, weeks: prev.weeks!.map((w) => w.id === weekId ? updated : w) } : prev);
+      // The suggestion is accepted either way; the warning says it could not
+      // actually be played this week.
+      if (updated.warning) setError(updated.warning);
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
     }
@@ -1906,6 +1910,13 @@ export default function MyTeamPage() {
                     )}
                     {s.deck?.dok_url && (
                       <Link href={s.deck.dok_url} target="_blank" rel="noopener" variant="caption">DoK</Link>
+                    )}
+                    {/* A suggestion can go stale after it is made, so this is
+                        shown on the list rather than only at submission. */}
+                    {(s.conflicts?.length ?? 0) > 0 && (
+                      <Tooltip title={s.conflicts!.join(' ')}>
+                        <Chip label="Unavailable" size="small" color="warning" variant="outlined" />
+                      </Tooltip>
                     )}
                     <Typography variant="caption" color="text.secondary">
                       (suggested by {suggester?.user.name ?? `User ${s.suggesting_user_id}`})

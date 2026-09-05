@@ -4492,6 +4492,12 @@ def add_deck_suggestion(league_id, week_id):
     if existing:
         return jsonify({"error": "This deck has already been suggested for your team"}), 400
 
+    # A deck already spent in an earlier week, or lined up by a teammate for
+    # another one, cannot actually be played here. Say so rather than accepting
+    # it silently -- but still accept it, since a team may want to discuss a
+    # deck before working out it is unavailable.
+    conflicts = _check_deck_cross_week_conflicts(league, week, deck, user_team)
+
     db.session.add(
         DeckSuggestion(
             week_id=week.id,
@@ -4503,7 +4509,10 @@ def add_deck_suggestion(league_id, week_id):
     db.session.commit()
     db.session.refresh(week)
     viewer = effective if current_user.is_authenticated else None
-    return jsonify(serialize_league_week(week, viewer=viewer))
+    payload = serialize_league_week(week, viewer=viewer)
+    if conflicts:
+        payload["warning"] = " ".join(conflicts)
+    return jsonify(payload)
 
 
 @blueprint.route(

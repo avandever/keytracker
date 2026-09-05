@@ -523,6 +523,8 @@ export interface LeagueWeek {
   feature_match_applies?: boolean;
   /** Houses a deck legal for this week could contain, from its allowed sets. */
   allowed_houses?: string[];
+  /** Set when an accepted deck suggestion cannot actually be played this week. */
+  warning?: string;
   /** Viewer's own team's raw aember spend against the week's cap/floor.
    *  Null when the week sets neither, or the viewer is not on a team. */
   team_amber_budget?: TeamAmberBudget | null;
@@ -539,6 +541,8 @@ export interface LeagueWeek {
     team_id: number;
     suggesting_user_id: number;
     deck: DeckSummary | null;
+    /** Why this deck could not be played this week; empty when it is available. */
+    conflicts?: string[];
   }[];
 }
 

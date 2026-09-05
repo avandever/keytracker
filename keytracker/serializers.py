@@ -27,8 +27,10 @@ from keytracker.schema import (
     PlatonicCardInSet,
     KeyforgeHouse,
     TeamDeckEntryLog,
+    User,
     db,
 )
+from flask import g, has_app_context
 from sqlalchemy import select
 import json
 
@@ -261,6 +263,63 @@ def serialize_league_detail(
         for w in sorted(league.weeks, key=lambda w: w.week_number)
     ]
     return data
+
+
+# Formats where a deck is drawn from a pool rather than brought, so the
+# once-per-league rule does not apply. Mirrors submit_deck_selection.
+_SEALED_FORMATS = ("sealed_archon", "sealed_alliance")
+
+
+def _suggestion_conflicts(week: LeagueWeek) -> dict:
+    """Deck id -> reasons that deck cannot be played this week.
+
+    The same rules submit_deck_selection enforces: a deck used in an earlier
+    non-sealed week is spent, and one a teammate has lined up for another week
+    is spoken for. Suggesting such a deck is not blocked -- a team may still
+    want to talk about it -- but it should never look available.
+
+    Computed once for the whole week and cached on the request, since every
+    suggestion asks the same question.
+    """
+    if week.format_type in _SEALED_FORMATS:
+        return {}
+
+    cache_key = f"_suggestion_conflicts_{week.id}"
+    cached = getattr(g, cache_key, None) if has_app_context() else None
+    if cached is not None:
+        return cached
+
+    deck_ids = {ds.deck_id for ds in week.deck_suggestions if ds.deck_id}
+    conflicts: dict = {}
+    if deck_ids:
+        rows = (
+            db.session.query(PlayerDeckSelection, LeagueWeek, User)
+            .join(LeagueWeek, PlayerDeckSelection.week_id == LeagueWeek.id)
+            .join(User, PlayerDeckSelection.user_id == User.id)
+            .filter(
+                PlayerDeckSelection.deck_id.in_(deck_ids),
+                LeagueWeek.league_id == week.league_id,
+                LeagueWeek.id != week.id,
+                ~LeagueWeek.format_type.in_(_SEALED_FORMATS),
+            )
+            .all()
+        )
+        for sel, other_week, user in rows:
+            if other_week.week_number < week.week_number:
+                message = (
+                    f"Already used in {other_week.name or f'Week {other_week.week_number}'} "
+                    f"(Week {other_week.week_number}) by {user.name}"
+                )
+            else:
+                message = (
+                    f"Selected for {other_week.name or f'Week {other_week.week_number}'} "
+                    f"(Week {other_week.week_number}) by {user.name}"
+                )
+            conflicts.setdefault(sel.deck_id, []).append(message)
+
+    if has_app_context():
+        setattr(g, cache_key, conflicts)
+    return conflicts
 
 
 def _team_amber_budget(week: LeagueWeek, team_id) -> dict:
@@ -497,6 +556,11 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
                 "team_id": ds.team_id,
                 "suggesting_user_id": ds.suggesting_user_id,
                 "deck": serialize_deck_summary(ds.deck) if ds.deck else None,
+                # Why this deck could not actually be played this week, if so.
+                # Recomputed on every read rather than stored, because a
+                # suggestion that was fine when made goes stale as soon as
+                # somebody selects that deck for another week.
+                "conflicts": _suggestion_conflicts(week).get(ds.deck_id, []),
             }
             for ds in week.deck_suggestions
             if viewer_is_admin or (viewer_team_id is not None and ds.team_id == viewer_team_id)
