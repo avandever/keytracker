@@ -72,12 +72,15 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
     // player guess what "3 required" means.
     const parts = [
       ...(week.required_card_names ?? []),
+      // Nothing is abbreviated here: a player reading the requirement needs to
+      // know every card that would satisfy it, so an unlabelled group spells
+      // out all its values rather than the first few and an ellipsis.
       ...(week.required_card_categories ?? []).map(
         (c) =>
           c.label ||
           [c.rarities, c.traits, c.card_types, c.card_titles]
             .filter((v): v is string[] => !!v && v.length > 0)
-            .map((v) => v.slice(0, 3).join('/') + (v.length > 3 ? '…' : ''))
+            .map((v) => v.join('/'))
             .join(' ') ||
           'any card',
       ),
@@ -89,15 +92,21 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
         size={size}
         variant="outlined"
         color="info"
-        // A chip keeps its label on one line, and this one can list fifteen
-        // cards, so it runs off the edge of the card it sits on. Let it grow
-        // downwards instead of sideways.
+        // A chip keeps its label on one line and ellipsises the overflow, and
+        // this one can list fifteen cards. Wrap instead, and disarm the
+        // ellipsis explicitly -- leaving overflow hidden would still clip the
+        // text anywhere the chip's height is constrained.
         sx={{
           height: 'auto',
           maxWidth: '100%',
+          // Inside a flex row a chip will not shrink below its content unless
+          // told it may, which is what forces the clip on the admin week list.
+          minWidth: 0,
           '& .MuiChip-label': {
             display: 'block',
             whiteSpace: 'normal',
+            overflow: 'visible',
+            textOverflow: 'clip',
             overflowWrap: 'anywhere',
             py: 0.5,
           },
