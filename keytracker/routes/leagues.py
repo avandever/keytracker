@@ -3264,6 +3264,29 @@ SIN_CARD_TITLES = [
 # More Mutation and Dark Millennium.
 GIGANTIC_CARD_TYPES = ["Gigantic Creature Base", "Gigantic Creature Art"]
 
+# Groups that are a fixed set of cards rather than anything the card data marks.
+# Listed rather than pattern-matched: "Master of" would also catch Master of the
+# Grey, and a trait could widen under a future set.
+BREW_CARD_TITLES = [
+    "Alaka’s Brew",
+    "Chieftain’s Brew",
+    "Cowfyne’s Brew",
+    "Groke’s Brew",
+    "Gron’s Brew",
+    "Mogghunter’s Brew",
+    "Narp’s Brew",
+    "Shorty’s Brew",
+]
+KEY_IMP_CARD_TITLES = ["Bronze Key Imp", "Gold Key Imp", "Silver Key Imp"]
+MASTER_CARD_TITLES = ["Master of 1", "Master of 2", "Master of 3"]
+MONUMENT_CARD_TITLES = [
+    "Monument to Faust",
+    "Monument to Ludo",
+    "Monument to Octavia",
+    "Monument to Primus",
+    "Monument to Shrix",
+]
+
 # Offered in the week editor so common requirements are one click rather than a
 # hand-assembled filter.
 CARD_CATEGORY_PRESETS = [
@@ -3277,11 +3300,73 @@ CARD_CATEGORY_PRESETS = [
         "name": "A gigantic creature",
         "category": {"label": "a gigantic creature", "card_types": GIGANTIC_CARD_TYPES},
     },
+    {
+        "key": "anomaly",
+        "name": "An anomaly",
+        "category": {"label": "an anomaly", "is_anomaly": True},
+    },
+    {
+        "key": "brew",
+        "name": "A Brew",
+        "category": {"label": "a Brew", "card_titles": BREW_CARD_TITLES},
+    },
+    {
+        "key": "key_imp",
+        "name": "A Key Imp",
+        "category": {"label": "a Key Imp", "card_titles": KEY_IMP_CARD_TITLES},
+    },
+    {
+        "key": "master",
+        "name": "A Master of 1/2/3",
+        "category": {"label": "a Master of 1, 2 or 3", "card_titles": MASTER_CARD_TITLES},
+    },
+    {
+        "key": "monument",
+        "name": "A Monument",
+        "category": {"label": "a Monument", "card_titles": MONUMENT_CARD_TITLES},
+    },
+    {
+        "key": "dexus_sinestra",
+        "name": "Dexus / Sinestra",
+        "category": {"label": "Dexus or Sinestra", "card_titles": ["Dexus", "Sinestra"]},
+    },
+    {
+        "key": "mender",
+        "name": "Mender / Soultender",
+        "category": {
+            "label": "Mender or Soultender",
+            "card_titles": ["Mender", "Soultender"],
+        },
+    },
+    {
+        "key": "ivan_clawde",
+        "name": "Even Ivan / Odd Clawde",
+        "category": {
+            "label": "Even Ivan or Odd Clawde",
+            "card_titles": ["Even Ivan", "Odd Clawde"],
+        },
+    },
+    {
+        "key": "flounderight_soleft",
+        "name": "Flounderight / Soleft",
+        "category": {
+            "label": "Flounderight or Soleft",
+            "card_titles": ["Flounderight", "Soleft"],
+        },
+    },
 ]
 
 # Every field a category may carry. All the match fields are lists, so one
 # category can span several traits, types, sets or named cards.
-_CATEGORY_MATCH_FIELDS = ("traits", "card_types", "rarities", "expansions", "card_titles")
+_CATEGORY_MATCH_FIELDS = (
+    "traits",
+    "card_types",
+    "rarities",
+    "expansions",
+    "card_titles",
+    "houses",
+    "is_anomaly",
+)
 _CATEGORY_FIELDS = ("label",) + _CATEGORY_MATCH_FIELDS
 # Tolerated from older payloads and hand-written calls.
 _CATEGORY_SINGULAR_ALIASES = {
@@ -3290,6 +3375,7 @@ _CATEGORY_SINGULAR_ALIASES = {
     "rarity": "rarities",
     "expansion": "expansions",
     "card_title": "card_titles",
+    "house": "houses",
 }
 
 
@@ -3318,7 +3404,12 @@ def _clean_card_categories(raw):
         label = (entry.get("label") or "").strip()
         if label:
             category["label"] = label
-        for field in ("traits", "card_types", "rarities", "card_titles"):
+        if entry.get("is_anomaly") is not None:
+            # Only True is meaningful: "not an anomaly" is not a requirement
+            # anyone would set, and storing False would look like a filter.
+            if bool(entry["is_anomaly"]):
+                category["is_anomaly"] = True
+        for field in ("traits", "card_types", "rarities", "card_titles", "houses"):
             values = entry.get(field)
             if values in (None, "", []):
                 continue
@@ -3346,6 +3437,15 @@ def _clean_card_categories(raw):
     return cleaned, None
 
 
+def _norm_card_title(title) -> str:
+    """Compare card titles without tripping over the apostrophe.
+
+    Card data uses a typographic apostrophe -- Alaka’s Brew -- so a list typed
+    with a plain one would silently match nothing.
+    """
+    return (title or "").strip().lower().replace("’", "'").replace("ʼ", "'")
+
+
 def _card_matches_category(card, category) -> bool:
     """Does one card in a deck satisfy one required-card category?
 
@@ -3357,8 +3457,15 @@ def _card_matches_category(card, category) -> bool:
     if not any(category.get(f) for f in _CATEGORY_MATCH_FIELDS):
         return False
 
-    titles = {t.lower() for t in category.get("card_titles") or []}
-    if titles and (card.card_title or "").lower() not in titles:
+    titles = {_norm_card_title(t) for t in category.get("card_titles") or []}
+    if titles and _norm_card_title(card.card_title) not in titles:
+        return False
+
+    houses = {h.lower() for h in category.get("houses") or []}
+    if houses and (card.natural_house or "").lower() not in houses:
+        return False
+
+    if category.get("is_anomaly") and not card.is_anomaly:
         return False
 
     traits = {t.lower() for t in category.get("traits") or []}
@@ -3419,7 +3526,9 @@ def _describe_category(category, index=None) -> str:
     if label:
         return label
     bits = []
-    for field in ("rarities", "traits", "card_types", "card_titles"):
+    if category.get("is_anomaly"):
+        bits.append("an anomaly")
+    for field in ("rarities", "traits", "houses", "card_types", "card_titles"):
         values = category.get(field) or []
         if values:
             bits.append("/".join(values[:3]) + ("..." if len(values) > 3 else ""))

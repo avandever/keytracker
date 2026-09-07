@@ -178,6 +178,9 @@ export interface RequiredCardCategory {
   expansions?: number[];
   /** Named cards forming one category, for lists that must not drift. */
   card_titles?: string[];
+  houses?: string[];
+  /** Anomalies are a property of the printing, not the card. */
+  is_anomaly?: boolean;
 }
 
 export interface CardCategoryPreset {
