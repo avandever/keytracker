@@ -75,7 +75,10 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
       ...(week.required_card_categories ?? []).map(
         (c) =>
           c.label ||
-          [c.rarity, c.trait, c.card_type].filter(Boolean).join(' ') ||
+          [c.rarities, c.traits, c.card_types, c.card_titles]
+            .filter((v): v is string[] => !!v && v.length > 0)
+            .map((v) => v.slice(0, 3).join('/') + (v.length > 3 ? '…' : ''))
+            .join(' ') ||
           'any card',
       ),
     ];

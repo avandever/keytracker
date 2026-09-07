@@ -165,15 +165,25 @@ export interface GameDetail extends GameSummary {
 
 /**
  * A kind of card a week can require, instead of naming every card that counts.
- * A card qualifies when it matches every field that is set, so rarity
- * "Special" plus card_type "Upgrade" means a special upgrade, not either one.
+ * A card qualifies when it matches every field that is set, so rarities
+ * ["Special"] plus card_types ["Upgrade"] means a special upgrade, not either
+ * one. Within a field the values are alternatives, which is how one category
+ * covers both halves of a gigantic creature.
  */
 export interface RequiredCardCategory {
   label?: string;
-  trait?: string;
-  card_type?: string;
-  rarity?: string;
-  expansion?: number;
+  traits?: string[];
+  card_types?: string[];
+  rarities?: string[];
+  expansions?: number[];
+  /** Named cards forming one category, for lists that must not drift. */
+  card_titles?: string[];
+}
+
+export interface CardCategoryPreset {
+  key: string;
+  name: string;
+  category: RequiredCardCategory;
 }
 
 export interface TeamAmberBudget {

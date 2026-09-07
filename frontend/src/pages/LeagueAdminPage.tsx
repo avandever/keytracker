@@ -39,7 +39,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { isoToLocalInput, localInputToIso } from '../utils/deadlines';
 import type { FantasyLeague } from '../api/fantasy';
-import type { RequiredCardCategory } from '../types';
+import type { RequiredCardCategory, CardCategoryPreset } from '../types';
 import { createFantasyLeague, listFantasyLeagues, listCostSources } from '../api/fantasy';
 import { listLeagues, getCardCategoryOptions } from '../api/leagues';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -208,7 +208,8 @@ export default function LeagueAdminPage() {
     traits: string[];
     card_types: string[];
     rarities: string[];
-  }>({ traits: [], card_types: [], rarities: [] });
+    presets: CardCategoryPreset[];
+  }>({ traits: [], card_types: [], rarities: [], presets: [] });
   const [cardSearchQuery, setCardSearchQuery] = useState('');
   const [cardSearchResults, setCardSearchResults] = useState<string[]>([]);
   const [cardSearchLoading, setCardSearchLoading] = useState(false);
@@ -2002,49 +2003,62 @@ export default function LeagueAdminPage() {
                     weekCardCategories.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
                   );
                 return (
-                  <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                     <Autocomplete
-                      size="small"
-                      sx={{ minWidth: 160 }}
-                      options={cardCategoryOptions.traits}
-                      value={cat.trait ?? null}
-                      onChange={(_e, v) => update({ trait: v ?? undefined })}
-                      renderInput={(p) => <TextField {...p} label="Trait" />}
-                    />
-                    <Autocomplete
+                      multiple
                       size="small"
                       sx={{ minWidth: 180 }}
-                      options={cardCategoryOptions.card_types}
-                      value={cat.card_type ?? null}
-                      onChange={(_e, v) => update({ card_type: v ?? undefined })}
-                      renderInput={(p) => <TextField {...p} label="Card type" />}
+                      options={cardCategoryOptions.traits}
+                      value={cat.traits ?? []}
+                      onChange={(_e, v) => update({ traits: v.length ? v : undefined })}
+                      renderInput={(p) => <TextField {...p} label="Traits" />}
                     />
                     <Autocomplete
+                      multiple
                       size="small"
-                      sx={{ minWidth: 140 }}
-                      options={cardCategoryOptions.rarities}
-                      value={cat.rarity ?? null}
-                      onChange={(_e, v) => update({ rarity: v ?? undefined })}
-                      renderInput={(p) => <TextField {...p} label="Rarity" />}
+                      sx={{ minWidth: 220 }}
+                      options={cardCategoryOptions.card_types}
+                      value={cat.card_types ?? []}
+                      onChange={(_e, v) => update({ card_types: v.length ? v : undefined })}
+                      renderInput={(p) => <TextField {...p} label="Card types" />}
                     />
-                    <FormControl size="small" sx={{ minWidth: 140 }}>
-                      <InputLabel>Set</InputLabel>
-                      <Select
-                        label="Set"
-                        value={cat.expansion === undefined ? '' : String(cat.expansion)}
-                        onChange={(e) =>
-                          update({
-                            expansion:
-                              e.target.value === '' ? undefined : Number(e.target.value),
-                          })
-                        }
-                      >
-                        <MenuItem value=""><em>Any set</em></MenuItem>
-                        {availableSets.map((s) => (
-                          <MenuItem key={s.number} value={String(s.number)}>{s.shortname}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <Autocomplete
+                      multiple
+                      size="small"
+                      sx={{ minWidth: 160 }}
+                      options={cardCategoryOptions.rarities}
+                      value={cat.rarities ?? []}
+                      onChange={(_e, v) => update({ rarities: v.length ? v : undefined })}
+                      renderInput={(p) => <TextField {...p} label="Rarities" />}
+                    />
+                    <Autocomplete
+                      multiple
+                      size="small"
+                      sx={{ minWidth: 180 }}
+                      options={availableSets.map((s) => s.number)}
+                      getOptionLabel={(n) =>
+                        availableSets.find((s) => s.number === n)?.shortname ?? String(n)
+                      }
+                      value={cat.expansions ?? []}
+                      onChange={(_e, v) => update({ expansions: v.length ? v : undefined })}
+                      renderInput={(p) => <TextField {...p} label="Sets" />}
+                    />
+                    {/* Named cards inside a category: the list stays fixed even if
+                        a later set prints something that would match a trait. */}
+                    <Autocomplete
+                      multiple
+                      freeSolo
+                      size="small"
+                      sx={{ minWidth: 220 }}
+                      options={[] as string[]}
+                      value={cat.card_titles ?? []}
+                      onChange={(_e, v) =>
+                        update({ card_titles: v.length ? (v as string[]) : undefined })
+                      }
+                      renderInput={(p) => (
+                        <TextField {...p} label="Named cards" placeholder="type and press enter" />
+                      )}
+                    />
                     <TextField
                       size="small"
                       label="Label (optional)"
@@ -2063,12 +2077,30 @@ export default function LeagueAdminPage() {
                   </Box>
                 );
               })}
-              <Button
-                size="small"
-                onClick={() => setWeekCardCategories([...weekCardCategories, {}])}
-              >
-                Add Category
-              </Button>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Button
+                  size="small"
+                  onClick={() => setWeekCardCategories([...weekCardCategories, {}])}
+                >
+                  Add Category
+                </Button>
+                {cardCategoryOptions.presets.map((p) => (
+                  <Button
+                    key={p.key}
+                    size="small"
+                    variant="outlined"
+                    onClick={() =>
+                      setWeekCardCategories([...weekCardCategories, { ...p.category }])
+                    }
+                  >
+                    + {p.name}
+                  </Button>
+                ))}
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                Within a team, one player claims a whole category: if someone brings a
+                gigantic creature, nobody else on that team can bring one that week.
+              </Typography>
             </Box>
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>

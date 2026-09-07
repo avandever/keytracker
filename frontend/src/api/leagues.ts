@@ -18,6 +18,7 @@ import type {
   DeckExportWeek,
   DeckEntryLogEntry,
   RequiredCardCategory,
+  CardCategoryPreset,
 } from '../types';
 
 export async function listLeagues(): Promise<LeagueSummary[]> {
@@ -276,6 +277,7 @@ export async function getCardCategoryOptions(): Promise<{
   traits: string[];
   card_types: string[];
   rarities: string[];
+  presets: CardCategoryPreset[];
 }> {
   const { data } = await apiClient.get('/leagues/card-category-options');
   return data;
