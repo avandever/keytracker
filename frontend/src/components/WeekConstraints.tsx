@@ -89,6 +89,19 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
         size={size}
         variant="outlined"
         color="info"
+        // A chip keeps its label on one line, and this one can list fifteen
+        // cards, so it runs off the edge of the card it sits on. Let it grow
+        // downwards instead of sideways.
+        sx={{
+          height: 'auto',
+          maxWidth: '100%',
+          '& .MuiChip-label': {
+            display: 'block',
+            whiteSpace: 'normal',
+            overflowWrap: 'anywhere',
+            py: 0.5,
+          },
+        }}
       />,
     );
   }
