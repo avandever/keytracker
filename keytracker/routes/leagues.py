@@ -3278,6 +3278,43 @@ BREW_CARD_TITLES = [
     "Shorty’s Brew",
 ]
 KEY_IMP_CARD_TITLES = ["Bronze Key Imp", "Gold Key Imp", "Silver Key Imp"]
+
+# The Age of Ascension Sanctum cycle. Listed rather than matched on "Ambassador",
+# which would also pull in Ambassador Liu, an unrelated Star Alliance mutant.
+AMBASSADOR_CARD_TITLES = [
+    "Brobnar Ambassador",
+    "Dis Ambassador",
+    "Logos Ambassador",
+    "Mars Ambassador",
+    "Shadows Ambassador",
+    "Untamed Ambassador",
+]
+
+# The Worlds Collide Shadows cycle. Matching on "Plant" would also catch Xyp the
+# Implanter and Loyalty Implants.
+PLANT_CARD_TITLES = [
+    "Brobnar Plant",
+    "Dis Plant",
+    "Logos Plant",
+    "Saurian Plant",
+    "Star Alliance Plant",
+    "Untamed Plant",
+]
+
+# <Character>'s Blaster, the Worlds Collide Star Alliance upgrades. Deliberately
+# excludes Officer's, Z-Ray, Gamma and Hallowed Blaster, which are not part of
+# the cycle.
+BLASTER_CARD_TITLES = [
+    "Chan’s Blaster",
+    "Frane’s Blaster",
+    "Garcia’s Blaster",
+    "Ingram’s Blaster",
+    "Khrkhar’s Blaster",
+    "Kirby’s Blaster",
+    "Molina’s Blaster",
+    "Qincan’s Blaster",
+    "Walls’ Blaster",
+]
 MASTER_CARD_TITLES = ["Master of 1", "Master of 2", "Master of 3"]
 MONUMENT_CARD_TITLES = [
     "Monument to Faust",
@@ -3353,6 +3390,29 @@ CARD_CATEGORY_PRESETS = [
             "label": "Flounderight or Soleft",
             "card_titles": ["Flounderight", "Soleft"],
         },
+    },
+    {
+        # By trait, not by list: unlike the Sins, the Shards are an open cycle --
+        # Age of Ascension printed seven and Æmber Skies added three more, so a
+        # future Shard should count without anyone editing this.
+        "key": "shard",
+        "name": "A Shard",
+        "category": {"label": "a Shard", "traits": ["Shard"]},
+    },
+    {
+        "key": "ambassador",
+        "name": "An Ambassador",
+        "category": {"label": "an Ambassador", "card_titles": AMBASSADOR_CARD_TITLES},
+    },
+    {
+        "key": "plant",
+        "name": "A Plant",
+        "category": {"label": "a Plant", "card_titles": PLANT_CARD_TITLES},
+    },
+    {
+        "key": "blaster",
+        "name": "A Blaster",
+        "category": {"label": "a Blaster", "card_titles": BLASTER_CARD_TITLES},
     },
 ]
 
