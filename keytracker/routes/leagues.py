@@ -3324,6 +3324,100 @@ MONUMENT_CARD_TITLES = [
     "Monument to Shrix",
 ]
 
+# AEmber Skies special creatures that belong to no house -- each is printed
+# in all seven of that set houses, which is what marks them out. 23 of them.
+SKYBEAST_CARD_TITLES = [
+    'Akugyo',
+    'Alien Puffer',
+    'Anvil Crawler',
+    'Beehemoth',
+    'Blue Æmberdrake',
+    'Colossipede',
+    'Falcron',
+    'Grinder Swarm',
+    'Grizzled Wyvern',
+    'Hungry Hippogriff',
+    'Icarus 2.0',
+    'Impzilla',
+    'Lancet',
+    'Malifi Dragon',
+    'Naja',
+    'Red Æmberdrake',
+    'Rorqual',
+    'Screeyan',
+    'Sentient Cloud',
+    'Titanarpon',
+    'Tyrannus Aquilae',
+    'Volax',
+    'Yellow Æmberdrake',
+]
+
+# Grim Reminders houseless Specters. The Specter trait alone is too wide:
+# Mender and Soultender share it but are ordinary Geistoid cards. 11 of them.
+REVENANT_CARD_TITLES = [
+    'Cincinnatus Resurrexit',
+    'Duma the Returned',
+    'Encounter Golem',
+    'Ghostly Dr. Verokter',
+    'Immortal Greking',
+    'Phantom Drummernaut',
+    'Portalmonster',
+    'Qyxxlyxx Grave Master',
+    'Revived Ză-Orhă',
+    'Spectral Ruth',
+    'Xenos Darkshadow',
+]
+
+# The Mass Mutation hybrid grid: one X prefix and one Y suffix per house,
+# each house taking the six X values from the other houses with its own Y.
+# Seven houses by six variants is 42; the same-house diagonal is never
+# printed. Excludes Bull-wark, Cyber-Clone, Ensign El-Samra and Shrink-ray
+# Technician, which are hyphenated mutants outside the grid.
+XY_MUTANT_CARD_TITLES = [
+    'Dino-Alien',
+    'Dino-Beast',
+    'Dino-Bot',
+    'Dino-Fiend',
+    'Dino-Knight',
+    'Dino-Thief',
+    'Dæmo-Alien',
+    'Dæmo-Beast',
+    'Dæmo-Bot',
+    'Dæmo-Knight',
+    'Dæmo-Saurus',
+    'Dæmo-Thief',
+    'Lyco-Alien',
+    'Lyco-Bot',
+    'Lyco-Fiend',
+    'Lyco-Knight',
+    'Lyco-Saurus',
+    'Lyco-Thief',
+    'Sacro-Alien',
+    'Sacro-Beast',
+    'Sacro-Bot',
+    'Sacro-Fiend',
+    'Sacro-Saurus',
+    'Sacro-Thief',
+    'Techno-Alien',
+    'Techno-Beast',
+    'Techno-Fiend',
+    'Techno-Knight',
+    'Techno-Saurus',
+    'Techno-Thief',
+    'Umbra-Alien',
+    'Umbra-Beast',
+    'Umbra-Bot',
+    'Umbra-Fiend',
+    'Umbra-Knight',
+    'Umbra-Saurus',
+    'Xeno-Beast',
+    'Xeno-Bot',
+    'Xeno-Fiend',
+    'Xeno-Knight',
+    'Xeno-Saurus',
+    'Xeno-Thief',
+]
+
 # Offered in the week editor so common requirements are one click rather than a
 # hand-assembled filter.
 CARD_CATEGORY_PRESETS = [
@@ -3413,6 +3507,21 @@ CARD_CATEGORY_PRESETS = [
         "key": "blaster",
         "name": "A Blaster",
         "category": {"label": "a Blaster", "card_titles": BLASTER_CARD_TITLES},
+    },
+    {
+        "key": "skybeast",
+        "name": "A Skybeast",
+        "category": {"label": "a Skybeast", "card_titles": SKYBEAST_CARD_TITLES},
+    },
+    {
+        "key": "revenant",
+        "name": "A Revenant",
+        "category": {"label": "a Revenant", "card_titles": REVENANT_CARD_TITLES},
+    },
+    {
+        "key": "xy_mutant",
+        "name": "An X-Y Mutant",
+        "category": {"label": "an X-Y Mutant", "card_titles": XY_MUTANT_CARD_TITLES},
     },
 ]
 
