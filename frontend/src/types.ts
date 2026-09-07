@@ -163,6 +163,19 @@ export interface GameDetail extends GameSummary {
   card_images: Record<string, string>;
 }
 
+/**
+ * A kind of card a week can require, instead of naming every card that counts.
+ * A card qualifies when it matches every field that is set, so rarity
+ * "Special" plus card_type "Upgrade" means a special upgrade, not either one.
+ */
+export interface RequiredCardCategory {
+  label?: string;
+  trait?: string;
+  card_type?: string;
+  rarity?: string;
+  expansion?: number;
+}
+
 export interface TeamAmberBudget {
   team_id: number;
   max_raw_amber: number | null;
@@ -505,6 +518,7 @@ export interface LeagueWeek {
   team_max_raw_amber: number | null;
   team_min_raw_amber: number | null;
   required_card_names: string[] | null;
+  required_card_categories?: RequiredCardCategory[] | null;
   /** UTC ISO. Advisory deadlines set by a league admin. */
   deck_submission_deadline?: string | null;
   match_completion_deadline?: string | null;

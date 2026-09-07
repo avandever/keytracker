@@ -65,8 +65,29 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
       />,
     );
   }
-  if (week.required_card_names && week.required_card_names.length > 0) {
-    chips.push(<Chip key="required-cards" label={`Required Cards: ${week.required_card_names.length}`} size={size} variant="outlined" color="info" />);
+  const requiredCount =
+    (week.required_card_names?.length ?? 0) + (week.required_card_categories?.length ?? 0);
+  if (requiredCount > 0) {
+    // Categories describe themselves, so spell them out rather than making a
+    // player guess what "3 required" means.
+    const parts = [
+      ...(week.required_card_names ?? []),
+      ...(week.required_card_categories ?? []).map(
+        (c) =>
+          c.label ||
+          [c.rarity, c.trait, c.card_type].filter(Boolean).join(' ') ||
+          'any card',
+      ),
+    ];
+    chips.push(
+      <Chip
+        key="required-cards"
+        label={`Required: ${parts.join(' / ')}`}
+        size={size}
+        variant="outlined"
+        color="info"
+      />,
+    );
   }
   if (week.format_type === 'sas_ladder' && week.sas_ladder_maxes && week.sas_ladder_maxes.length > 0) {
     const numRungs = week.sas_ladder_maxes.length + 1;

@@ -17,6 +17,7 @@ import type {
   CompletedMatchDecks,
   DeckExportWeek,
   DeckEntryLogEntry,
+  RequiredCardCategory,
 } from '../types';
 
 export async function listLeagues(): Promise<LeagueSummary[]> {
@@ -250,6 +251,7 @@ export async function createWeek(
     team_max_raw_amber?: number | null;
     team_min_raw_amber?: number | null;
     required_card_names?: string[] | null;
+    required_card_categories?: RequiredCardCategory[] | null;
   },
 ): Promise<LeagueWeek> {
   const { data } = await apiClient.post(`/leagues/${leagueId}/weeks`, payload);
@@ -266,6 +268,16 @@ export async function revertToSetup(
 
 export async function searchCards(query: string): Promise<string[]> {
   const { data } = await apiClient.get('/leagues/cards/search', { params: { q: query } });
+  return data;
+}
+
+/** Traits, card types and rarities an admin can build a card category from. */
+export async function getCardCategoryOptions(): Promise<{
+  traits: string[];
+  card_types: string[];
+  rarities: string[];
+}> {
+  const { data } = await apiClient.get('/leagues/card-category-options');
   return data;
 }
 

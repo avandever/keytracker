@@ -39,8 +39,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { isoToLocalInput, localInputToIso } from '../utils/deadlines';
 import type { FantasyLeague } from '../api/fantasy';
+import type { RequiredCardCategory } from '../types';
 import { createFantasyLeague, listFantasyLeagues, listCostSources } from '../api/fantasy';
-import { listLeagues } from '../api/leagues';
+import { listLeagues, getCardCategoryOptions } from '../api/leagues';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -202,6 +203,12 @@ export default function LeagueAdminPage() {
   const [weekMatchDeadline, setWeekMatchDeadline] = useState('');
   // Required card list
   const [weekRequiredCards, setWeekRequiredCards] = useState<string[]>([]);
+  const [weekCardCategories, setWeekCardCategories] = useState<RequiredCardCategory[]>([]);
+  const [cardCategoryOptions, setCardCategoryOptions] = useState<{
+    traits: string[];
+    card_types: string[];
+    rarities: string[];
+  }>({ traits: [], card_types: [], rarities: [] });
   const [cardSearchQuery, setCardSearchQuery] = useState('');
   const [cardSearchResults, setCardSearchResults] = useState<string[]>([]);
   const [cardSearchLoading, setCardSearchLoading] = useState(false);
@@ -269,6 +276,7 @@ export default function LeagueAdminPage() {
     if (!leagueId) return;
     listFantasyLeagues(leagueId).then(setFantasyLeagues).catch(() => {});
     listCostSources().then(setCostSources).catch(() => {});
+    getCardCategoryOptions().then(setCardCategoryOptions).catch(() => {});
     listLeagues()
       .then((all) => setOtherLeagues(all.filter((l) => l.id !== leagueId)))
       .catch(() => {});
@@ -523,6 +531,7 @@ export default function LeagueAdminPage() {
     setWeekDeckDeadline('');
     setWeekMatchDeadline('');
     setWeekRequiredCards([]);
+    setWeekCardCategories([]);
     setCardSearchQuery('');
     setCardSearchResults([]);
     setWeekCustomDescription('');
@@ -550,6 +559,7 @@ export default function LeagueAdminPage() {
     setWeekDeckDeadline(isoToLocalInput(week.deck_submission_deadline));
     setWeekMatchDeadline(isoToLocalInput(week.match_completion_deadline));
     setWeekRequiredCards(week.required_card_names || []);
+    setWeekCardCategories(week.required_card_categories || []);
     setCardSearchQuery('');
     setCardSearchResults([]);
     setWeekCustomDescription(week.custom_description ?? '');
@@ -587,6 +597,7 @@ export default function LeagueAdminPage() {
       deck_submission_deadline: localInputToIso(weekDeckDeadline),
       match_completion_deadline: localInputToIso(weekMatchDeadline),
       required_card_names: weekRequiredCards.length > 0 ? weekRequiredCards : null,
+      required_card_categories: weekCardCategories.length > 0 ? weekCardCategories : null,
       custom_description: weekCustomDescription.trim() || null,
       hide_standard_description: weekHideStandardDescription,
     };
@@ -1975,6 +1986,89 @@ export default function LeagueAdminPage() {
                   />
                 ))}
               </Box>
+
+              <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5 }}>
+                Or by category {weekCardCategories.length > 0 ? `(${weekCardCategories.length})` : ''}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                For requirements that cannot be listed card by card — a Sin, a gigantic
+                creature, a special-rarity upgrade from one set. A card counts when it
+                matches every field you set here, and a deck qualifies by containing any
+                named card <em>or</em> any card matching any category.
+              </Typography>
+              {weekCardCategories.map((cat, idx) => {
+                const update = (patch: Partial<RequiredCardCategory>) =>
+                  setWeekCardCategories(
+                    weekCardCategories.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
+                  );
+                return (
+                  <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Autocomplete
+                      size="small"
+                      sx={{ minWidth: 160 }}
+                      options={cardCategoryOptions.traits}
+                      value={cat.trait ?? null}
+                      onChange={(_e, v) => update({ trait: v ?? undefined })}
+                      renderInput={(p) => <TextField {...p} label="Trait" />}
+                    />
+                    <Autocomplete
+                      size="small"
+                      sx={{ minWidth: 180 }}
+                      options={cardCategoryOptions.card_types}
+                      value={cat.card_type ?? null}
+                      onChange={(_e, v) => update({ card_type: v ?? undefined })}
+                      renderInput={(p) => <TextField {...p} label="Card type" />}
+                    />
+                    <Autocomplete
+                      size="small"
+                      sx={{ minWidth: 140 }}
+                      options={cardCategoryOptions.rarities}
+                      value={cat.rarity ?? null}
+                      onChange={(_e, v) => update({ rarity: v ?? undefined })}
+                      renderInput={(p) => <TextField {...p} label="Rarity" />}
+                    />
+                    <FormControl size="small" sx={{ minWidth: 140 }}>
+                      <InputLabel>Set</InputLabel>
+                      <Select
+                        label="Set"
+                        value={cat.expansion === undefined ? '' : String(cat.expansion)}
+                        onChange={(e) =>
+                          update({
+                            expansion:
+                              e.target.value === '' ? undefined : Number(e.target.value),
+                          })
+                        }
+                      >
+                        <MenuItem value=""><em>Any set</em></MenuItem>
+                        {availableSets.map((s) => (
+                          <MenuItem key={s.number} value={String(s.number)}>{s.shortname}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <TextField
+                      size="small"
+                      label="Label (optional)"
+                      sx={{ minWidth: 160 }}
+                      value={cat.label ?? ''}
+                      onChange={(e) => update({ label: e.target.value || undefined })}
+                    />
+                    <IconButton
+                      size="small"
+                      onClick={() =>
+                        setWeekCardCategories(weekCardCategories.filter((_c, i) => i !== idx))
+                      }
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                );
+              })}
+              <Button
+                size="small"
+                onClick={() => setWeekCardCategories([...weekCardCategories, {}])}
+              >
+                Add Category
+              </Button>
             </Box>
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>

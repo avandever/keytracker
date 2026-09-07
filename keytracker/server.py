@@ -265,6 +265,12 @@ with app.app_context():
                             "ALTER TABLE tracker_league_week ADD COLUMN required_card_names TEXT"
                         )
                     )
+                if "required_card_categories" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league_week ADD COLUMN required_card_categories TEXT"
+                        )
+                    )
                 if "deck_submission_deadline" not in columns:
                     conn.execute(
                         text(

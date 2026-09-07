@@ -508,6 +508,11 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             if week.required_card_names
             else None
         ),
+        "required_card_categories": (
+            json.loads(week.required_card_categories)
+            if week.required_card_categories
+            else None
+        ),
         "deck_submission_deadline": (
             week.deck_submission_deadline.isoformat() + "Z"
             if week.deck_submission_deadline

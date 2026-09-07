@@ -1652,6 +1652,15 @@ def create_week(league_id):
         else None
     )
 
+    required_categories, err = _clean_card_categories(
+        data.get("required_card_categories")
+    )
+    if err:
+        return jsonify({"error": err}), 400
+    required_card_categories_json = (
+        json.dumps(required_categories) if required_categories else None
+    )
+
     deck_submission_deadline, err = _parse_deadline(data.get("deck_submission_deadline"))
     if err:
         return jsonify({"error": f"deck_submission_deadline: {err}"}), 400
@@ -1682,6 +1691,7 @@ def create_week(league_id):
         team_max_raw_amber=data.get("team_max_raw_amber"),
         team_min_raw_amber=data.get("team_min_raw_amber"),
         required_card_names=required_card_names_json,
+        required_card_categories=required_card_categories_json,
         deck_submission_deadline=deck_submission_deadline,
         match_completion_deadline=match_completion_deadline,
     )
@@ -1861,6 +1871,11 @@ def update_week(league_id, week_id):
             week.required_card_names = json.dumps(data["required_card_names"])
         else:
             week.required_card_names = None
+    if "required_card_categories" in data:
+        cleaned, err = _clean_card_categories(data["required_card_categories"])
+        if err:
+            return jsonify({"error": err}), 400
+        week.required_card_categories = json.dumps(cleaned) if cleaned else None
     for field in ("deck_submission_deadline", "match_completion_deadline"):
         if field in data:
             parsed, err = _parse_deadline(data[field])
@@ -3203,6 +3218,142 @@ def clear_alliance_selection(league_id, week_id):
 # --- Deck selection ---
 
 
+@blueprint.route("/card-category-options", methods=["GET"])
+def card_category_options():
+    """Traits, card types and rarities an admin can build a category from.
+
+    Served from the card data rather than hardcoded, so a new set's traits show
+    up on their own.
+    """
+    from keytracker.schema import KeyforgeCardType, KeyforgeRarity, Trait
+
+    return jsonify(
+        {
+            "traits": [
+                t.name for t in Trait.query.order_by(Trait.name).all() if t.name
+            ],
+            "card_types": [
+                t.name
+                for t in KeyforgeCardType.query.order_by(KeyforgeCardType.name).all()
+                if t.name
+            ],
+            "rarities": [
+                r.name
+                for r in KeyforgeRarity.query.order_by(KeyforgeRarity.name).all()
+                if r.name
+            ],
+        }
+    )
+
+
+_CATEGORY_FIELDS = ("label", "trait", "card_type", "rarity", "expansion")
+
+
+def _clean_card_categories(raw):
+    """Validate and normalise required-card categories from the admin UI.
+
+    Returns (categories, error). A category with no filters set is dropped
+    rather than stored, since it would match every card and quietly turn the
+    requirement off.
+    """
+    if raw in (None, "", []):
+        return [], None
+    if not isinstance(raw, list):
+        return None, "required_card_categories must be a list"
+
+    cleaned = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            return None, "each required card category must be an object"
+        unknown = set(entry) - set(_CATEGORY_FIELDS)
+        if unknown:
+            return None, f"unknown category field(s): {', '.join(sorted(unknown))}"
+        category = {}
+        for field in ("label", "trait", "card_type", "rarity"):
+            value = (entry.get(field) or "").strip()
+            if value:
+                category[field] = value
+        expansion = entry.get("expansion")
+        if expansion not in (None, ""):
+            try:
+                category["expansion"] = int(expansion)
+            except (TypeError, ValueError):
+                return None, "category expansion must be a set number"
+        if not any(f in category for f in ("trait", "card_type", "rarity", "expansion")):
+            continue
+        cleaned.append(category)
+    return cleaned, None
+
+
+def _card_matches_category(card, category) -> bool:
+    """Does one card in a deck satisfy one required-card category?
+
+    A category is a set of optional filters and a card must match every one that
+    is set, so {"rarity": "Special", "card_type": "Upgrade"} means a special
+    upgrade rather than anything special or any upgrade. An empty category would
+    match everything, so it never counts.
+    """
+    trait = (category.get("trait") or "").strip().lower()
+    card_type = (category.get("card_type") or "").strip().lower()
+    rarity = (category.get("rarity") or "").strip().lower()
+    expansion = category.get("expansion")
+    if not (trait or card_type or rarity or expansion):
+        return False
+
+    if trait:
+        names = {(t.name or "").lower() for t in (card.traits or [])}
+        if trait not in names:
+            return False
+    if card_type and (card.card_type or "").lower() != card_type:
+        return False
+    if rarity and (card.rarity or "").lower() != rarity:
+        return False
+    if expansion is not None and card.expansion != expansion:
+        return False
+    return True
+
+
+def _qualifying_card_titles(deck, required_names, categories) -> set:
+    """Titles of the deck's cards that satisfy the week's required-card rule.
+
+    Names and categories form a single pool: a deck qualifies by containing any
+    named card OR any card matching any category. That is what makes "a special
+    rarity card" expressible -- several shapes of the same requirement rather
+    than several separate requirements.
+    """
+    wanted = {n.lower() for n in (required_names or [])}
+    matched = set()
+    for card in deck.cards_from_assoc or []:
+        title = card.card_title
+        if not title:
+            continue
+        if title.lower() in wanted:
+            matched.add(title)
+            continue
+        for category in categories or []:
+            if _card_matches_category(card, category):
+                matched.add(title)
+                break
+    return matched
+
+
+def _describe_card_requirement(required_names, categories) -> str:
+    """How the week's requirement should read in an error message."""
+    parts = list(required_names or [])
+    for category in categories or []:
+        label = (category.get("label") or "").strip()
+        if label:
+            parts.append(label)
+            continue
+        bits = [
+            str(category.get(field))
+            for field in ("rarity", "trait", "card_type")
+            if category.get(field)
+        ]
+        parts.append(" ".join(bits) if bits else "a qualifying card")
+    return ", ".join(parts)
+
+
 def _check_deck_cross_week_conflicts(league, week, deck, target_team):
     """
     Returns a list of human-readable conflict error strings, or an empty list if clean.
@@ -3772,31 +3923,48 @@ def submit_deck_selection(league_id, week_id):
                     400,
                 )
 
-    # Validate required card list
-    if week.required_card_names:
+    # Validate required cards: named cards and categories are one pool.
+    if week.required_card_names or week.required_card_categories:
         try:
-            required_names = json.loads(week.required_card_names)
+            required_names = json.loads(week.required_card_names or "[]")
         except (json.JSONDecodeError, TypeError):
             required_names = []
-        if required_names:
-            required_set = {n.lower() for n in required_names}
-            deck_card_titles = {
-                c.card_title.lower()
-                for c in (deck.cards_from_assoc or [])
-                if c.card_title
+        try:
+            required_categories = json.loads(week.required_card_categories or "[]")
+        except (json.JSONDecodeError, TypeError):
+            required_categories = []
+        if required_names or required_categories:
+            matched_titles = _qualifying_card_titles(
+                deck, required_names, required_categories
+            )
+            # Uniqueness below is deliberately limited to named cards. A named
+            # card is a scarce thing a team shares out, but a category says
+            # "bring something of this kind" -- and the cards that satisfy one
+            # are often not a choice. A deck with the Sins has a random three to
+            # seven of them, so requiring teammates to hold disjoint sets would
+            # fail submissions for reasons nobody can act on.
+            named_lower = {n.lower() for n in required_names}
+            matched_cards = {
+                t.lower() for t in matched_titles if t.lower() in named_lower
             }
-            matched_cards = required_set & deck_card_titles
-            if not matched_cards:
+            if not matched_titles:
+                wanted = _describe_card_requirement(
+                    required_names, required_categories
+                )
                 return (
                     jsonify(
                         {
-                            "error": "Deck must contain at least one card from the required list"
+                            "error": (
+                                "Deck must contain at least one of the required "
+                                f"cards: {wanted}"
+                            )
                         }
                     ),
                     400,
                 )
-            # Team uniqueness: each required card can only appear in one player's deck
-            if target_team:
+            # Team uniqueness: each required NAMED card can only appear in one
+            # player's deck. Category matches are exempt, per the note above.
+            if target_team and matched_cards:
                 team_user_ids = {m.user_id for m in target_team.members} - {
                     target_user_id
                 }

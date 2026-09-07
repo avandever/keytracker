@@ -1063,6 +1063,11 @@ class LeagueWeek(db.Model):
     team_min_raw_amber = db.Column(db.Integer, nullable=True)
     # Required card list (JSON list of card names)
     required_card_names = db.Column(db.Text, nullable=True)
+    # Required card categories: JSON list of {label, trait, card_type, rarity,
+    # expansion}, any field optional. A card satisfies a category when it
+    # matches every field the category sets. Lets a week ask for "a Sin" or "a
+    # gigantic creature" rather than listing every card that qualifies.
+    required_card_categories = db.Column(db.Text, nullable=True)
     # Deadlines, UTC. Advisory: nothing is blocked when one passes, they drive
     # the "what still needs doing" displays.
     deck_submission_deadline = db.Column(db.DateTime, nullable=True)
