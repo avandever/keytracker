@@ -3424,48 +3424,48 @@ CARD_CATEGORY_PRESETS = [
     {
         "key": "sins",
         "name": "A Deadly Sin",
-        "category": {"label": "a Deadly Sin", "card_titles": SIN_CARD_TITLES},
+        "category": {"preset": "sins", "label": "a Deadly Sin", "card_titles": SIN_CARD_TITLES},
     },
     {
         "key": "gigantic",
         "name": "A gigantic creature",
-        "category": {"label": "a gigantic creature", "card_types": GIGANTIC_CARD_TYPES},
+        "category": {"preset": "gigantic", "label": "a gigantic creature", "card_types": GIGANTIC_CARD_TYPES},
     },
     {
         "key": "anomaly",
         "name": "An anomaly",
-        "category": {"label": "an anomaly", "is_anomaly": True},
+        "category": {"preset": "anomaly", "label": "an anomaly", "is_anomaly": True},
     },
     {
         "key": "brew",
         "name": "A Brew",
-        "category": {"label": "a Brew", "card_titles": BREW_CARD_TITLES},
+        "category": {"preset": "brew", "label": "a Brew", "card_titles": BREW_CARD_TITLES},
     },
     {
         "key": "key_imp",
         "name": "A Key Imp",
-        "category": {"label": "a Key Imp", "card_titles": KEY_IMP_CARD_TITLES},
+        "category": {"preset": "key_imp", "label": "a Key Imp", "card_titles": KEY_IMP_CARD_TITLES},
     },
     {
         "key": "master",
         "name": "A Master of 1/2/3",
-        "category": {"label": "a Master of 1, 2 or 3", "card_titles": MASTER_CARD_TITLES},
+        "category": {"preset": "master", "label": "a Master of 1, 2 or 3", "card_titles": MASTER_CARD_TITLES},
     },
     {
         "key": "monument",
         "name": "A Monument",
-        "category": {"label": "a Monument", "card_titles": MONUMENT_CARD_TITLES},
+        "category": {"preset": "monument", "label": "a Monument", "card_titles": MONUMENT_CARD_TITLES},
     },
     {
         "key": "dexus_sinestra",
         "name": "Dexus / Sinestra",
-        "category": {"label": "Dexus or Sinestra", "card_titles": ["Dexus", "Sinestra"]},
+        "category": {"preset": "dexus_sinestra", "label": "Dexus or Sinestra", "card_titles": ["Dexus", "Sinestra"]},
     },
     {
         "key": "mender",
         "name": "Mender / Soultender",
         "category": {
-            "label": "Mender or Soultender",
+            "preset": "mender", "label": "Mender or Soultender",
             "card_titles": ["Mender", "Soultender"],
         },
     },
@@ -3473,7 +3473,7 @@ CARD_CATEGORY_PRESETS = [
         "key": "ivan_clawde",
         "name": "Even Ivan / Odd Clawde",
         "category": {
-            "label": "Even Ivan or Odd Clawde",
+            "preset": "ivan_clawde", "label": "Even Ivan or Odd Clawde",
             "card_titles": ["Even Ivan", "Odd Clawde"],
         },
     },
@@ -3481,7 +3481,7 @@ CARD_CATEGORY_PRESETS = [
         "key": "flounderight_soleft",
         "name": "Flounderight / Soleft",
         "category": {
-            "label": "Flounderight or Soleft",
+            "preset": "flounderight_soleft", "label": "Flounderight or Soleft",
             "card_titles": ["Flounderight", "Soleft"],
         },
     },
@@ -3491,37 +3491,37 @@ CARD_CATEGORY_PRESETS = [
         # future Shard should count without anyone editing this.
         "key": "shard",
         "name": "A Shard",
-        "category": {"label": "a Shard", "traits": ["Shard"]},
+        "category": {"preset": "shard", "label": "a Shard", "traits": ["Shard"]},
     },
     {
         "key": "ambassador",
         "name": "An Ambassador",
-        "category": {"label": "an Ambassador", "card_titles": AMBASSADOR_CARD_TITLES},
+        "category": {"preset": "ambassador", "label": "an Ambassador", "card_titles": AMBASSADOR_CARD_TITLES},
     },
     {
         "key": "plant",
         "name": "A Plant",
-        "category": {"label": "a Plant", "card_titles": PLANT_CARD_TITLES},
+        "category": {"preset": "plant", "label": "a Plant", "card_titles": PLANT_CARD_TITLES},
     },
     {
         "key": "blaster",
         "name": "A Blaster",
-        "category": {"label": "a Blaster", "card_titles": BLASTER_CARD_TITLES},
+        "category": {"preset": "blaster", "label": "a Blaster", "card_titles": BLASTER_CARD_TITLES},
     },
     {
         "key": "skybeast",
         "name": "A Skybeast",
-        "category": {"label": "a Skybeast", "card_titles": SKYBEAST_CARD_TITLES},
+        "category": {"preset": "skybeast", "label": "a Skybeast", "card_titles": SKYBEAST_CARD_TITLES},
     },
     {
         "key": "revenant",
         "name": "A Revenant",
-        "category": {"label": "a Revenant", "card_titles": REVENANT_CARD_TITLES},
+        "category": {"preset": "revenant", "label": "a Revenant", "card_titles": REVENANT_CARD_TITLES},
     },
     {
         "key": "xy_mutant",
         "name": "An X-Y Mutant",
-        "category": {"label": "an X-Y Mutant", "card_titles": XY_MUTANT_CARD_TITLES},
+        "category": {"preset": "xy_mutant", "label": "an X-Y Mutant", "card_titles": XY_MUTANT_CARD_TITLES},
     },
 ]
 
@@ -3536,7 +3536,10 @@ _CATEGORY_MATCH_FIELDS = (
     "houses",
     "is_anomaly",
 )
-_CATEGORY_FIELDS = ("label",) + _CATEGORY_MATCH_FIELDS
+# "preset" is carried through untouched: it records which known group a category
+# came from so the editor can show it as one chip rather than its 42 cards. It
+# is not a filter, so it never affects matching.
+_CATEGORY_FIELDS = ("label", "preset") + _CATEGORY_MATCH_FIELDS
 # Tolerated from older payloads and hand-written calls.
 _CATEGORY_SINGULAR_ALIASES = {
     "trait": "traits",
@@ -3573,6 +3576,9 @@ def _clean_card_categories(raw):
         label = (entry.get("label") or "").strip()
         if label:
             category["label"] = label
+        preset = (entry.get("preset") or "").strip()
+        if preset:
+            category["preset"] = preset
         if entry.get("is_anomaly") is not None:
             # Only True is meaningful: "not an anomaly" is not a requirement
             # anyone would set, and storing False would look like a filter.

@@ -204,8 +204,6 @@ export default function LeagueAdminPage() {
   // Required card list
   const [weekRequiredCards, setWeekRequiredCards] = useState<string[]>([]);
   const [weekCardCategories, setWeekCardCategories] = useState<RequiredCardCategory[]>([]);
-  // Indexes of long card-group categories the admin has chosen to expand.
-  const [expandedCategories, setExpandedCategories] = useState<number[]>([]);
   const [cardCategoryOptions, setCardCategoryOptions] = useState<{
     traits: string[];
     card_types: string[];
@@ -535,7 +533,6 @@ export default function LeagueAdminPage() {
     setWeekMatchDeadline('');
     setWeekRequiredCards([]);
     setWeekCardCategories([]);
-    setExpandedCategories([]);
     setCardSearchQuery('');
     setCardSearchResults([]);
     setWeekCustomDescription('');
@@ -1954,9 +1951,31 @@ export default function LeagueAdminPage() {
               <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
                 Each deck must contain at least one card from this list. Within a team, each card can only appear in one player&apos;s deck.
               </Typography>
+              {/* Known groups sit in the same box as individual cards: a Skybeast
+                  is a requirement in the same sense Plague Rat is, so searching
+                  for one should not mean finding a different control. */}
               <Autocomplete
                 freeSolo
-                options={cardSearchResults}
+                options={[
+                  ...cardCategoryOptions.presets
+                    .filter(
+                      (p) =>
+                        cardSearchQuery.length >= 2 &&
+                        p.name.toLowerCase().includes(cardSearchQuery.toLowerCase()) &&
+                        !weekCardCategories.some((c) => c.preset === p.key),
+                    )
+                    .map((p) => `group:${p.key}`),
+                  ...cardSearchResults,
+                ]}
+                getOptionLabel={(option) => {
+                  if (typeof option !== 'string') return '';
+                  if (!option.startsWith('group:')) return option;
+                  const preset = cardCategoryOptions.presets.find(
+                    (p) => p.key === option.slice('group:'.length),
+                  );
+                  const size = preset?.category.card_titles?.length;
+                  return preset ? `${preset.name}${size ? ` (${size} cards)` : ''}` : option;
+                }}
                 inputValue={cardSearchQuery}
                 onInputChange={(_e, value) => {
                   setCardSearchQuery(value);
@@ -1968,19 +1987,53 @@ export default function LeagueAdminPage() {
                   }
                 }}
                 onChange={(_e, value) => {
-                  if (value && typeof value === 'string' && !weekRequiredCards.includes(value)) {
-                    setWeekRequiredCards([...weekRequiredCards, value]);
+                  if (value && typeof value === 'string') {
+                    if (value.startsWith('group:')) {
+                      const preset = cardCategoryOptions.presets.find(
+                        (p) => p.key === value.slice('group:'.length),
+                      );
+                      if (preset) {
+                        setWeekCardCategories([
+                          ...weekCardCategories,
+                          { ...preset.category },
+                        ]);
+                      }
+                    } else if (!weekRequiredCards.includes(value)) {
+                      setWeekRequiredCards([...weekRequiredCards, value]);
+                    }
                   }
                   setCardSearchQuery('');
                   setCardSearchResults([]);
                 }}
                 loading={cardSearchLoading}
                 renderInput={(params) => (
-                  <TextField {...params} label="Search cards to add" size="small" />
+                  <TextField
+                    {...params}
+                    label="Search cards or groups to add"
+                    size="small"
+                    helperText="Individual cards, or a known group like a Skybeast or an X-Y Mutant"
+                  />
                 )}
                 size="small"
               />
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                {weekCardCategories.map((cat, idx) => (
+                  <Chip
+                    key={`cat-${idx}`}
+                    // Coloured so a group reads differently from a single card:
+                    // one player claims a whole group, where cards are claimed
+                    // individually.
+                    color="info"
+                    label={
+                      (cat.label || 'card group') +
+                      (cat.card_titles ? ` · ${cat.card_titles.length} cards` : '')
+                    }
+                    size="small"
+                    onDelete={() =>
+                      setWeekCardCategories(weekCardCategories.filter((_c, i) => i !== idx))
+                    }
+                  />
+                ))}
                 {weekRequiredCards.map((card) => (
                   <Chip
                     key={card}
@@ -1990,165 +2043,12 @@ export default function LeagueAdminPage() {
                   />
                 ))}
               </Box>
-
-              <Typography variant="subtitle2" sx={{ mt: 2, mb: 0.5 }}>
-                Or by category {weekCardCategories.length > 0 ? `(${weekCardCategories.length})` : ''}
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
-                For requirements that cannot be listed card by card — a Sin, a gigantic
-                creature, a special-rarity upgrade from one set. A card counts when it
-                matches every field you set here, and a deck qualifies by containing any
-                named card <em>or</em> any card matching any category.
-              </Typography>
-              {weekCardCategories.map((cat, idx) => {
-                const update = (patch: Partial<RequiredCardCategory>) =>
-                  setWeekCardCategories(
-                    weekCardCategories.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
-                  );
-                const remove = () =>
-                  setWeekCardCategories(weekCardCategories.filter((_c, i) => i !== idx));
-                // A known group is a long fixed list -- 42 cards for the X-Y
-                // Mutants -- so show what it is rather than 42 chips to scroll
-                // past. Expanded on request for anyone who wants to check it.
-                const longList = (cat.card_titles?.length ?? 0) > 6;
-                if (longList && !expandedCategories.includes(idx)) {
-                  return (
-                    <Box
-                      key={idx}
-                      sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center', flexWrap: 'wrap', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
-                    >
-                      <Chip label={cat.label || 'Card group'} size="small" color="info" />
-                      <Typography variant="body2" color="text.secondary">
-                        {cat.card_titles!.length} cards, any one of which qualifies
-                      </Typography>
-                      <Button
-                        size="small"
-                        onClick={() => setExpandedCategories([...expandedCategories, idx])}
-                      >
-                        Show cards
-                      </Button>
-                      <IconButton size="small" onClick={remove} sx={{ ml: 'auto' }}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  );
-                }
-                return (
-                  <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                    <Autocomplete
-                      multiple
-                      size="small"
-                      sx={{ minWidth: 180 }}
-                      options={cardCategoryOptions.traits}
-                      value={cat.traits ?? []}
-                      onChange={(_e, v) => update({ traits: v.length ? v : undefined })}
-                      renderInput={(p) => <TextField {...p} label="Traits" />}
-                    />
-                    <Autocomplete
-                      multiple
-                      size="small"
-                      sx={{ minWidth: 220 }}
-                      options={cardCategoryOptions.card_types}
-                      value={cat.card_types ?? []}
-                      onChange={(_e, v) => update({ card_types: v.length ? v : undefined })}
-                      renderInput={(p) => <TextField {...p} label="Card types" />}
-                    />
-                    <Autocomplete
-                      multiple
-                      size="small"
-                      sx={{ minWidth: 160 }}
-                      options={cardCategoryOptions.rarities}
-                      value={cat.rarities ?? []}
-                      onChange={(_e, v) => update({ rarities: v.length ? v : undefined })}
-                      renderInput={(p) => <TextField {...p} label="Rarities" />}
-                    />
-                    <Autocomplete
-                      multiple
-                      size="small"
-                      sx={{ minWidth: 180 }}
-                      options={availableSets.map((s) => s.number)}
-                      getOptionLabel={(n) =>
-                        availableSets.find((s) => s.number === n)?.shortname ?? String(n)
-                      }
-                      value={cat.expansions ?? []}
-                      onChange={(_e, v) => update({ expansions: v.length ? v : undefined })}
-                      renderInput={(p) => <TextField {...p} label="Sets" />}
-                    />
-                    {/* Named cards inside a category: the list stays fixed even if
-                        a later set prints something that would match a trait. */}
-                    <Autocomplete
-                      multiple
-                      freeSolo
-                      size="small"
-                      sx={{ minWidth: 220 }}
-                      options={[] as string[]}
-                      value={cat.card_titles ?? []}
-                      onChange={(_e, v) =>
-                        update({ card_titles: v.length ? (v as string[]) : undefined })
-                      }
-                      renderInput={(p) => (
-                        <TextField {...p} label="Named cards" placeholder="type and press enter" />
-                      )}
-                    />
-                    <TextField
-                      size="small"
-                      label="Label (optional)"
-                      sx={{ minWidth: 160 }}
-                      value={cat.label ?? ''}
-                      onChange={(e) => update({ label: e.target.value || undefined })}
-                    />
-                    <IconButton
-                      size="small"
-                      onClick={() =>
-                        setWeekCardCategories(weekCardCategories.filter((_c, i) => i !== idx))
-                      }
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                );
-              })}
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                {/* A dropdown rather than a button each: there are enough known
-                    groups now that a row of buttons would swamp the dialog. */}
-                <FormControl size="small" sx={{ minWidth: 260 }}>
-                  <InputLabel>Add a known group</InputLabel>
-                  <Select
-                    label="Add a known group"
-                    value=""
-                    onChange={(e) => {
-                      const preset = cardCategoryOptions.presets.find(
-                        (p) => p.key === e.target.value,
-                      );
-                      if (preset) {
-                        setWeekCardCategories([
-                          ...weekCardCategories,
-                          { ...preset.category },
-                        ]);
-                      }
-                    }}
-                  >
-                    {cardCategoryOptions.presets.map((p) => (
-                      <MenuItem key={p.key} value={p.key}>
-                        {p.name}
-                        {p.category.card_titles
-                          ? ` (${p.category.card_titles.length} cards)`
-                          : ''}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <Button
-                  size="small"
-                  onClick={() => setWeekCardCategories([...weekCardCategories, {}])}
-                >
-                  Add Custom Category
-                </Button>
-              </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                Within a team, one player claims a whole category: if someone brings a
-                gigantic creature, nobody else on that team can bring one that week.
-              </Typography>
+              {weekCardCategories.length > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                  A group counts once per team: if one player brings a card from it,
+                  nobody else on that team can.
+                </Typography>
+              )}
             </Box>
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>

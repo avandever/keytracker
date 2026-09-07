@@ -172,6 +172,8 @@ export interface GameDetail extends GameSummary {
  */
 export interface RequiredCardCategory {
   label?: string;
+  /** Which known group this came from, so the editor shows one chip, not 42. */
+  preset?: string;
   traits?: string[];
   card_types?: string[];
   rarities?: string[];
