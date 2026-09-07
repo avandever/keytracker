@@ -3279,6 +3279,8 @@ BREW_CARD_TITLES = [
 ]
 KEY_IMP_CARD_TITLES = ["Bronze Key Imp", "Gold Key Imp", "Silver Key Imp"]
 
+AEMBER_SKIES_EXPANSION = 800
+
 # The Age of Ascension Sanctum cycle. Listed rather than matched on "Ambassador",
 # which would also pull in Ambassador Liu, an unrelated Star Alliance mutant.
 AMBASSADOR_CARD_TITLES = [
@@ -3522,6 +3524,21 @@ CARD_CATEGORY_PRESETS = [
         "key": "xy_mutant",
         "name": "An X-Y Mutant",
         "category": {"preset": "xy_mutant", "label": "an X-Y Mutant", "card_titles": XY_MUTANT_CARD_TITLES},
+    },
+    {
+        # The 16 upgrades Æmber Skies ships bring in. Expressed as the rule
+        # rather than a list, because the rule IS the definition -- every
+        # special-rarity upgrade in that set -- and the set is closed, so
+        # pinning the expansion keeps a later reprint from widening it.
+        "key": "as_ship_upgrade",
+        "name": "An Æmber Skies ship upgrade",
+        "category": {
+            "preset": "as_ship_upgrade",
+            "label": "an Æmber Skies ship upgrade",
+            "rarities": ["Special"],
+            "card_types": ["Upgrade"],
+            "expansions": [AEMBER_SKIES_EXPANSION],
+        },
     },
 ]
 
