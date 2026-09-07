@@ -204,6 +204,8 @@ export default function LeagueAdminPage() {
   // Required card list
   const [weekRequiredCards, setWeekRequiredCards] = useState<string[]>([]);
   const [weekCardCategories, setWeekCardCategories] = useState<RequiredCardCategory[]>([]);
+  // Indexes of long card-group categories the admin has chosen to expand.
+  const [expandedCategories, setExpandedCategories] = useState<number[]>([]);
   const [cardCategoryOptions, setCardCategoryOptions] = useState<{
     traits: string[];
     card_types: string[];
@@ -533,6 +535,7 @@ export default function LeagueAdminPage() {
     setWeekMatchDeadline('');
     setWeekRequiredCards([]);
     setWeekCardCategories([]);
+    setExpandedCategories([]);
     setCardSearchQuery('');
     setCardSearchResults([]);
     setWeekCustomDescription('');
@@ -2002,6 +2005,34 @@ export default function LeagueAdminPage() {
                   setWeekCardCategories(
                     weekCardCategories.map((c, i) => (i === idx ? { ...c, ...patch } : c)),
                   );
+                const remove = () =>
+                  setWeekCardCategories(weekCardCategories.filter((_c, i) => i !== idx));
+                // A known group is a long fixed list -- 42 cards for the X-Y
+                // Mutants -- so show what it is rather than 42 chips to scroll
+                // past. Expanded on request for anyone who wants to check it.
+                const longList = (cat.card_titles?.length ?? 0) > 6;
+                if (longList && !expandedCategories.includes(idx)) {
+                  return (
+                    <Box
+                      key={idx}
+                      sx={{ display: 'flex', gap: 1, mb: 1, alignItems: 'center', flexWrap: 'wrap', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}
+                    >
+                      <Chip label={cat.label || 'Card group'} size="small" color="info" />
+                      <Typography variant="body2" color="text.secondary">
+                        {cat.card_titles!.length} cards, any one of which qualifies
+                      </Typography>
+                      <Button
+                        size="small"
+                        onClick={() => setExpandedCategories([...expandedCategories, idx])}
+                      >
+                        Show cards
+                      </Button>
+                      <IconButton size="small" onClick={remove} sx={{ ml: 'auto' }}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  );
+                }
                 return (
                   <Box key={idx} sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                     <Autocomplete
@@ -2078,24 +2109,41 @@ export default function LeagueAdminPage() {
                 );
               })}
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* A dropdown rather than a button each: there are enough known
+                    groups now that a row of buttons would swamp the dialog. */}
+                <FormControl size="small" sx={{ minWidth: 260 }}>
+                  <InputLabel>Add a known group</InputLabel>
+                  <Select
+                    label="Add a known group"
+                    value=""
+                    onChange={(e) => {
+                      const preset = cardCategoryOptions.presets.find(
+                        (p) => p.key === e.target.value,
+                      );
+                      if (preset) {
+                        setWeekCardCategories([
+                          ...weekCardCategories,
+                          { ...preset.category },
+                        ]);
+                      }
+                    }}
+                  >
+                    {cardCategoryOptions.presets.map((p) => (
+                      <MenuItem key={p.key} value={p.key}>
+                        {p.name}
+                        {p.category.card_titles
+                          ? ` (${p.category.card_titles.length} cards)`
+                          : ''}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
                 <Button
                   size="small"
                   onClick={() => setWeekCardCategories([...weekCardCategories, {}])}
                 >
-                  Add Category
+                  Add Custom Category
                 </Button>
-                {cardCategoryOptions.presets.map((p) => (
-                  <Button
-                    key={p.key}
-                    size="small"
-                    variant="outlined"
-                    onClick={() =>
-                      setWeekCardCategories([...weekCardCategories, { ...p.category }])
-                    }
-                  >
-                    + {p.name}
-                  </Button>
-                ))}
               </Box>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
                 Within a team, one player claims a whole category: if someone brings a
