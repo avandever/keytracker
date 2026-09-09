@@ -17,6 +17,7 @@ import {
   IconButton,
   LinearProgress,
   MenuItem,
+  Paper,
   Select,
   Tab,
   Table,
@@ -303,27 +304,6 @@ export default function FantasyLeaguePage() {
           sx={{ mb: 2 }}
         />
 
-        <Box sx={{ mb: 2 }}>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
-            <Typography variant="subtitle2">
-              {picks.length} of {league.roster_size} players
-            </Typography>
-            <Typography
-              variant="body2"
-              color={remaining < 0 ? 'error' : 'text.secondary'}
-            >
-              {spent} of {league.salary_cap} spent — {remaining} left
-            </Typography>
-            {remaining < 0 && <Chip label="Over cap" size="small" color="error" />}
-          </Box>
-          <LinearProgress
-            variant="determinate"
-            value={Math.min(100, (spent / league.salary_cap) * 100)}
-            color={remaining < 0 ? 'error' : 'primary'}
-            sx={{ height: 6, borderRadius: 3 }}
-          />
-        </Box>
-
         {picks.length > 0 && (
           <Box sx={{ mb: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
@@ -397,20 +377,70 @@ export default function FantasyLeaguePage() {
           </TableBody>
         </Table>
 
-        <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-          <Button
-            variant="contained"
-            disabled={!canSubmit || submitting}
-            onClick={handleSubmit}
-          >
-            {myTeam ? 'Update Entry' : 'Submit Entry'}
-          </Button>
-          {myTeam && entriesOpen && (
-            <Button color="error" onClick={() => setWithdrawOpen(true)}>
-              Withdraw
-            </Button>
+        {/* The player list runs to dozens of rows, so the budget and the submit
+            button follow the reader down it rather than sitting at the bottom
+            where a pick means scrolling to find out whether it fits. */}
+        <Paper
+          elevation={6}
+          sx={{
+            position: 'sticky',
+            bottom: 0,
+            zIndex: 2,
+            mt: 2,
+            p: 1.5,
+            borderTop: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
+            <Typography variant="subtitle2">
+              {picks.length} of {league.roster_size} players
+            </Typography>
+            <Typography
+              variant="body2"
+              color={remaining < 0 ? 'error' : 'text.secondary'}
+            >
+              {spent} of {league.salary_cap} spent — {remaining} left
+            </Typography>
+            {remaining < 0 && <Chip label="Over cap" size="small" color="error" />}
+            <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+              {myTeam && entriesOpen && (
+                <Button size="small" color="error" onClick={() => setWithdrawOpen(true)}>
+                  Withdraw
+                </Button>
+              )}
+              <Button
+                variant="contained"
+                size="small"
+                disabled={!canSubmit || submitting}
+                onClick={handleSubmit}
+              >
+                {myTeam ? 'Update Entry' : 'Submit Entry'}
+              </Button>
+            </Box>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={Math.min(100, (spent / league.salary_cap) * 100)}
+            color={remaining < 0 ? 'error' : 'primary'}
+            sx={{ height: 6, borderRadius: 3 }}
+          />
+          {/* Why the button is disabled is otherwise invisible once the list is
+              long enough to hide the captain picker. */}
+          {entriesOpen && !canSubmit && (
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              {!teamName.trim()
+                ? 'Name your team to submit.'
+                : picks.length !== league.roster_size
+                  ? `Pick ${league.roster_size - picks.length} more player${
+                      league.roster_size - picks.length === 1 ? '' : 's'
+                    }.`
+                  : remaining < 0
+                    ? `Over the cap by ${-remaining}.`
+                    : 'Choose a captain to submit.'}
+            </Typography>
           )}
-        </Box>
+        </Paper>
       </>
     );
   };
