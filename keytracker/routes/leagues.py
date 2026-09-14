@@ -42,6 +42,7 @@ from keytracker.schema import (
     UserDeckCollection,
     TOKEN_EXPANSION_IDS,
     PROPHECY_EXPANSION_ID,
+    SEALED_WEEK_FORMATS,
 )
 from keytracker.serializers import (
     serialize_league_summary,
@@ -2307,7 +2308,7 @@ def generate_player_matchups(league_id, week_id):
             )
 
     # Pre-flight: verify no selected deck has been used in a prior week
-    SEALED_FORMATS = (WeekFormat.SEALED_ARCHON.value, WeekFormat.SEALED_ALLIANCE.value)
+    SEALED_FORMATS = SEALED_WEEK_FORMATS
     if week.format_type not in SEALED_FORMATS:
         pairing_conflicts = (
             db.session.query(PlayerDeckSelection, LeagueWeek, User, Deck)
@@ -3744,7 +3745,7 @@ def _check_deck_cross_week_conflicts(league, week, deck, target_team):
     Error 1: Deck was selected in any earlier non-sealed week (any team/user).
     Error 2: Deck is selected in any other non-sealed week by any member of target_team.
     """
-    SEALED_FORMATS = (WeekFormat.SEALED_ARCHON.value, WeekFormat.SEALED_ALLIANCE.value)
+    SEALED_FORMATS = SEALED_WEEK_FORMATS
 
     # Skip check entirely if the current week is sealed
     if week.format_type in SEALED_FORMATS:

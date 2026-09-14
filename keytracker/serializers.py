@@ -20,6 +20,7 @@ from keytracker.schema import (
     ThiefSteal,
     LeagueAdminLog,
     EXPANSION_ID_TO_ABBR,
+    SEALED_WEEK_FORMATS,
 )
 from keytracker.schema import (
     StandaloneMatch,
@@ -267,7 +268,7 @@ def serialize_league_detail(
 
 # Formats where a deck is drawn from a pool rather than brought, so the
 # once-per-league rule does not apply. Mirrors submit_deck_selection.
-_SEALED_FORMATS = ("sealed_archon", "sealed_alliance")
+_SEALED_FORMATS = SEALED_WEEK_FORMATS
 
 
 def _suggestion_conflicts(week: LeagueWeek) -> dict:

@@ -880,6 +880,17 @@ class WeekFormat(PyEnum):
     TERTIATE = "tertiate"
 
 
+# Weeks played from a generated sealed pool. Pool decks are dealt out, not
+# chosen, so the rule barring a deck from being played in more than one week
+# does not apply to them -- in either direction.
+SEALED_WEEK_FORMATS = (
+    WeekFormat.SEALED_ARCHON.value,
+    WeekFormat.SEALED_ALLIANCE.value,
+    WeekFormat.TEAM_SEALED.value,
+    WeekFormat.TEAM_SEALED_ALLIANCE.value,
+)
+
+
 class WeekStatus(PyEnum):
     SETUP = "setup"
     CURATION = "curation"
