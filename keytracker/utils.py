@@ -1769,6 +1769,16 @@ def add_dok_deck_from_dict(skip_commit: bool = False, save_prod_id: bool = False
         db.session.commit()
 
 
+def _normalize_house_name(name: str) -> str:
+    """Key a house name so DoK's spelling and ours compare equal.
+
+    DoK returns a multi-word house with the space removed ("StarAlliance")
+    while we store the printed name ("Star Alliance"), so matching the two
+    literally silently drops those pods.
+    """
+    return "".join((name or "").split()).casefold()
+
+
 def _update_pod_sas_from_synergy_details(deck: Deck, synergy_details: list) -> None:
     """Populate PodStats.sas_rating from synergyDetails returned by the local DoK API."""
     house_sas: dict[str, float] = {}
@@ -1776,10 +1786,14 @@ def _update_pod_sas_from_synergy_details(deck: Deck, synergy_details: list) -> N
         house = item.get("house")
         if not house:
             continue
-        house_sas[house] = house_sas.get(house, 0.0) + item.get("aercScore", 0.0) * item.get("copies", 1)
+        key = _normalize_house_name(house)
+        house_sas[key] = house_sas.get(key, 0.0) + item.get("aercScore", 0.0) * item.get(
+            "copies", 1
+        )
     for pod in deck.pod_stats:
-        if pod.house in house_sas:
-            pod.sas_rating = round(house_sas[pod.house])
+        key = _normalize_house_name(pod.house)
+        if key in house_sas:
+            pod.sas_rating = round(house_sas[key])
 
 
 def calculate_pod_stats(deck: Deck) -> None:
