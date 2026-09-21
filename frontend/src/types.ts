@@ -657,7 +657,12 @@ export interface TertiatePurgeChoiceInfo {
   choosing_user_id: number;
   purged_house: string;
   game_number: number;
+  /** Set when a player entered this pair after the game was played off-site. */
+  recorded_by_id?: number | null;
 }
+
+/** Stored when players could not recall a purge for an off-site game. */
+export const TERTIATE_PURGE_NOT_RECORDED = '__not_recorded__';
 
 export interface DeckSelectionInfo {
   id: number;

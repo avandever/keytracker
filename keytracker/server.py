@@ -294,6 +294,18 @@ with app.app_context():
                             "ALTER TABLE tracker_fantasy_league ADD COLUMN cost_source_key VARCHAR(32)"
                         )
                     )
+        if inspector.has_table("tertiate_house_purge"):
+            columns = {
+                c["name"] for c in inspector.get_columns("tertiate_house_purge")
+            }
+            with db.engine.begin() as conn:
+                if "recorded_by_id" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tertiate_house_purge "
+                            "ADD COLUMN recorded_by_id INTEGER NULL"
+                        )
+                    )
         if inspector.has_table("tracker_set"):
             columns = {c["name"] for c in inspector.get_columns("tracker_set")}
             with db.engine.begin() as conn:

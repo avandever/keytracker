@@ -926,6 +926,7 @@ def serialize_player_matchup(
             "choosing_user_id": p.choosing_user_id,
             "purged_house": p.purged_house,
             "game_number": p.game_number,
+            "recorded_by_id": getattr(p, "recorded_by_id", None),
         }
         for p in visible_purges
     ]

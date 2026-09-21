@@ -42,6 +42,7 @@ import {
   reportGame,
   submitStrike,
   submitTertiatePurge,
+  submitTertiatePurgeRetroactive,
   getSealedPool,
   getSets,
   submitAllianceSelection,
@@ -68,6 +69,7 @@ import type {
   PlayerMatchupInfo,
   DeckSelectionInfo,
 } from '../types';
+import { TERTIATE_PURGE_NOT_RECORDED } from '../types';
 import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
 import { filterCollectionForConstraints } from '../utils/collectionFilter';
@@ -130,6 +132,14 @@ export default function MyLeagueInfoPage() {
   // Triad: strike selection and deck pickers
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
   const [tertiateHouseSelection, setTertiateHouseSelection] = useState('');
+  // Recording a Tertiate game that was played away from the site.
+  const [retroPurgeMatchupId, setRetroPurgeMatchupId] = useState<number | null>(null);
+  const [retroMyHouse, setRetroMyHouse] = useState('');
+  const [retroOppHouse, setRetroOppHouse] = useState('');
+  const [retroForgetting, setRetroForgetting] = useState(false);
+  const [retroSaving, setRetroSaving] = useState(false);
+  const purgeLabel = (house: string) =>
+    house === TERTIATE_PURGE_NOT_RECORDED ? 'not recorded' : house;
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
   const [reportP2DeckId, setReportP2DeckId] = useState<number | ''>('');
 
@@ -377,6 +387,43 @@ export default function MyLeagueInfoPage() {
       handleMatchupUpdate(updatedPm);
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const closeRetroPurge = () => {
+    setRetroPurgeMatchupId(null);
+    setRetroMyHouse('');
+    setRetroOppHouse('');
+    setRetroForgetting(false);
+  };
+
+  const handleSubmitRetroPurge = async (
+    matchup: PlayerMatchupInfo,
+    notRecorded: boolean,
+  ) => {
+    setError('');
+    setSuccess('');
+    setRetroSaving(true);
+    try {
+      const iAmPlayer1 = matchup.player1.id === effectiveUserId;
+      const body = notRecorded
+        ? { not_recorded: true }
+        : {
+            player1_house: iAmPlayer1 ? retroMyHouse : retroOppHouse,
+            player2_house: iAmPlayer1 ? retroOppHouse : retroMyHouse,
+          };
+      const updatedPm = await submitTertiatePurgeRetroactive(league.id, matchup.id, body);
+      setSuccess(
+        notRecorded
+          ? 'Recorded as not remembered — you can report the game now.'
+          : 'Purges recorded — you can report the game now.',
+      );
+      closeRetroPurge();
+      handleMatchupUpdate(updatedPm);
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    } finally {
+      setRetroSaving(false);
     }
   };
 
@@ -1543,6 +1590,10 @@ export default function MyLeagueInfoPage() {
                 const opponentId = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.id : myMatchup.player1.id;
                 const opponentSel = week.deck_selections.find((ds) => ds.user_id === opponentId && ds.slot_number === 1);
                 const opponentHouses = opponentSel?.deck?.houses || [];
+                // Entering a game played off-site means naming both purges, so
+                // the viewer's own houses are needed too.
+                const mySel = week.deck_selections.find((ds) => ds.user_id === effectiveUserId && ds.slot_number === 1);
+                const myHouses = mySel?.deck?.houses || [];
 
                 // Past game purge results (all games already played)
                 const pastPurges = allPurges.filter((p) => p.game_number < nextGameNum);
@@ -1587,7 +1638,7 @@ export default function MyLeagueInfoPage() {
                       </Box>
                     ) : myPurgeThisGame && !bothPurgedThisGame ? (
                       <Typography variant="body2" color="text.secondary">
-                        You chose to purge <strong>{myPurgeThisGame.purged_house}</strong>. Waiting for opponent...
+                        You chose to purge <strong>{purgeLabel(myPurgeThisGame.purged_house)}</strong>. Waiting for opponent...
                       </Typography>
                     ) : bothPurgedThisGame ? (
                       <Box>
@@ -1597,12 +1648,103 @@ export default function MyLeagueInfoPage() {
                           const victimSel = week.deck_selections.find((ds) => ds.user_id === victimId && ds.slot_number === 1);
                           return (
                             <Typography key={p.choosing_user_id} variant="body2">
-                              {chooser.name} purged <strong>{p.purged_house}</strong> from {victimSel?.deck?.name || "opponent's deck"}
+                              {chooser.name} purged <strong>{purgeLabel(p.purged_house)}</strong> from {victimSel?.deck?.name || "opponent's deck"}
                             </Typography>
                           );
                         })}
                       </Box>
                     ) : null}
+                    {!bothPurgedThisGame && (
+                      <Box sx={{ mt: 1 }}>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setRetroPurgeMatchupId(myMatchup.id);
+                            setRetroForgetting(false);
+                            setRetroMyHouse('');
+                            setRetroOppHouse('');
+                          }}
+                        >
+                          Already played this game?
+                        </Button>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          Record both purges yourself if you did the bans away from the site.
+                        </Typography>
+                      </Box>
+                    )}
+                    <Dialog open={retroPurgeMatchupId === myMatchup.id} onClose={closeRetroPurge} maxWidth="xs" fullWidth>
+                      <DialogTitle>Record purges for Game {nextGameNum}</DialogTitle>
+                      <DialogContent>
+                        {!retroForgetting ? (
+                          <Box sx={{ pt: 1 }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                              Enter the house each of you purged. This records the pair for
+                              both players so the game can be reported.
+                            </Typography>
+                            <FormControl size="small" fullWidth sx={{ mb: 2 }}>
+                              <InputLabel>House you purged</InputLabel>
+                              <Select
+                                label="House you purged"
+                                value={retroMyHouse}
+                                onChange={(e) => setRetroMyHouse(e.target.value)}
+                              >
+                                {opponentHouses.map((h) => <MenuItem key={h} value={h}>{h}</MenuItem>)}
+                              </Select>
+                            </FormControl>
+                            <FormControl size="small" fullWidth>
+                              <InputLabel>House they purged</InputLabel>
+                              <Select
+                                label="House they purged"
+                                value={retroOppHouse}
+                                onChange={(e) => setRetroOppHouse(e.target.value)}
+                              >
+                                {myHouses.map((h) => <MenuItem key={h} value={h}>{h}</MenuItem>)}
+                              </Select>
+                            </FormControl>
+                          </Box>
+                        ) : (
+                          <Box sx={{ pt: 1 }}>
+                            <Typography variant="body2">
+                              This records Game {nextGameNum} as <strong>not remembered</strong> for
+                              both players. The purges stay blank in the match history rather than
+                              being guessed at.
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                              Only do this if you genuinely cannot recall which houses were purged.
+                            </Typography>
+                          </Box>
+                        )}
+                      </DialogContent>
+                      <DialogActions>
+                        <Button onClick={closeRetroPurge} disabled={retroSaving}>Cancel</Button>
+                        {!retroForgetting ? (
+                          <>
+                            <Button color="warning" onClick={() => setRetroForgetting(true)} disabled={retroSaving}>
+                              I don't remember
+                            </Button>
+                            <Button
+                              variant="contained"
+                              disabled={!retroMyHouse || !retroOppHouse || retroSaving}
+                              onClick={() => handleSubmitRetroPurge(myMatchup, false)}
+                            >
+                              Save
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button onClick={() => setRetroForgetting(false)} disabled={retroSaving}>Back</Button>
+                            <Button
+                              variant="contained"
+                              color="warning"
+                              disabled={retroSaving}
+                              onClick={() => handleSubmitRetroPurge(myMatchup, true)}
+                            >
+                              Confirm: not remembered
+                            </Button>
+                          </>
+                        )}
+                      </DialogActions>
+                    </Dialog>
                     {pastGameNums.length > 0 && (
                       <Box sx={{ mt: 1.5, pt: 1, borderTop: 1, borderColor: 'divider' }}>
                         <Typography variant="caption" color="text.secondary">Previous purges:</Typography>
@@ -1614,7 +1756,7 @@ export default function MyLeagueInfoPage() {
                               {gPurges.map((p) => {
                                 const chooser = p.choosing_user_id === myMatchup.player1.id ? myMatchup.player1 : myMatchup.player2;
                                 return (
-                                  <Typography key={p.choosing_user_id} variant="caption"> {chooser.name} → {p.purged_house}</Typography>
+                                  <Typography key={p.choosing_user_id} variant="caption"> {chooser.name} → {purgeLabel(p.purged_house)}</Typography>
                                 );
                               })}
                             </Box>

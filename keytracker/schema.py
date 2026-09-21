@@ -1642,11 +1642,18 @@ class TertiateHousePurge(db.Model):
     )
     game_number = db.Column(db.Integer, nullable=False, default=1)
     purged_house = db.Column(db.Text, nullable=False)
+    # Set when one player entered this pair after the fact for a game played
+    # away from the site, so a recalled choice is never mistaken for a secret
+    # one submitted before the game.
+    recorded_by_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=True
+    )
 
     player_matchup = db.relationship(
         "PlayerMatchup", back_populates="tertiate_purge_choices"
     )
     choosing_user = db.relationship("User", foreign_keys=[choosing_user_id])
+    recorded_by = db.relationship("User", foreign_keys=[recorded_by_id])
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -1656,6 +1663,12 @@ class TertiateHousePurge(db.Model):
             name="uq_tertiate_house_purge",
         ),
     )
+
+
+# Stands in for a purge the players could not recall when entering a game they
+# played away from the site. The pair still has to exist for the game to be
+# reportable, so the gap is recorded rather than invented.
+TERTIATE_PURGE_NOT_RECORDED = "__not_recorded__"
 
 
 class SealedPoolDeck(db.Model):

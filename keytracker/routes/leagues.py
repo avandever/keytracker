@@ -6052,6 +6052,143 @@ def submit_tertiate_purge(league_id, matchup_id):
     return jsonify(serialize_player_matchup(pm, viewer=effective))
 
 
+@blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/tertiate-purge/retroactive",
+    methods=["POST"],
+)
+@login_required
+def submit_tertiate_purge_retroactive(league_id, matchup_id):
+    """Record both purges for a Tertiate game that was played away from the site.
+
+    The normal flow has each player submit their own choice in secret before the
+    game, which is no help once the game has already been played elsewhere: the
+    pair can never be completed, and a game cannot be reported without it. Here
+    one player enters both houses from memory. Only when they say outright that
+    they cannot recall them is the pair stored as not recorded, so a forgotten
+    purge stays visibly forgotten instead of being invented.
+
+    A choice a player already submitted for the game is kept as-is; only the
+    missing side is filled in.
+    """
+    from keytracker.schema import TertiateHousePurge as TertiateHousePurgeModel
+    from keytracker.schema import TERTIATE_PURGE_NOT_RECORDED
+
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.TERTIATE.value:
+        return jsonify({"error": "Only for Tertiate format"}), 400
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
+    is_participant = effective.id in (pm.player1_id, pm.player2_id)
+    # Captains report on behalf of their team, so they need the same way past a
+    # missing purge that the players have.
+    is_captain_of_matchup = False
+    if not is_admin and not is_participant and wm:
+        for team_id in (wm.team1_id, wm.team2_id):
+            team = db.session.get(Team, team_id)
+            if team and any(
+                m.user_id == effective.id and m.is_captain for m in team.members
+            ):
+                is_captain_of_matchup = True
+                break
+    if not is_admin and not is_participant and not is_captain_of_matchup:
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    if not pm.player1_started or not pm.player2_started:
+        return jsonify({"error": "Both players must start the match first"}), 400
+
+    game_number = len(pm.games) + 1
+    existing = TertiateHousePurgeModel.query.filter_by(
+        player_matchup_id=pm.id, game_number=game_number
+    ).all()
+    already = {p.choosing_user_id for p in existing}
+    if pm.player1_id in already and pm.player2_id in already:
+        return (
+            jsonify({"error": "Both purges are already recorded for this game"}),
+            400,
+        )
+
+    data = request.get_json(silent=True) or {}
+    not_recorded = bool(data.get("not_recorded"))
+
+    def _houses_of(user_id):
+        sel = PlayerDeckSelection.query.filter_by(
+            week_id=week.id, user_id=user_id, slot_number=1
+        ).first()
+        if not sel or not sel.deck:
+            return None
+        return {ps.house for ps in sel.deck.pod_stats if ps.house != "Archon Power"}
+
+    # A purge is chosen FROM the opponent's deck, so each player's choice is
+    # validated against the other player's houses.
+    houses = {
+        pm.player1_id: _houses_of(pm.player2_id),
+        pm.player2_id: _houses_of(pm.player1_id),
+    }
+
+    chosen = {}
+    if not not_recorded:
+        raw = {
+            pm.player1_id: (data.get("player1_house") or "").strip(),
+            pm.player2_id: (data.get("player2_house") or "").strip(),
+        }
+        for user_id in (pm.player1_id, pm.player2_id):
+            if user_id in already:
+                continue
+            house = raw.get(user_id)
+            if not house:
+                return (
+                    jsonify(
+                        {
+                            "error": "Both players' purged houses are required, "
+                            "unless you record them as not remembered"
+                        }
+                    ),
+                    400,
+                )
+            valid = houses.get(user_id)
+            if valid is None:
+                return jsonify({"error": "A deck selection is missing"}), 400
+            if house not in valid:
+                return (
+                    jsonify(
+                        {"error": f"'{house}' is not a house in the opposing deck"}
+                    ),
+                    400,
+                )
+            chosen[user_id] = house
+
+    for user_id in (pm.player1_id, pm.player2_id):
+        if user_id in already:
+            continue
+        db.session.add(
+            TertiateHousePurgeModel(
+                player_matchup_id=pm.id,
+                choosing_user_id=user_id,
+                game_number=game_number,
+                purged_house=(
+                    TERTIATE_PURGE_NOT_RECORDED if not_recorded else chosen[user_id]
+                ),
+                recorded_by_id=effective.id,
+            )
+        )
+    db.session.commit()
+    db.session.refresh(pm)
+
+    return jsonify(serialize_player_matchup(pm, viewer=effective))
+
+
 # --- Match flow ---
 
 

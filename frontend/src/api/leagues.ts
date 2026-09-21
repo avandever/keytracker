@@ -782,6 +782,18 @@ export async function submitTertiatePurge(
   return data;
 }
 
+export async function submitTertiatePurgeRetroactive(
+  leagueId: number,
+  matchupId: number,
+  body: { player1_house?: string; player2_house?: string; not_recorded?: boolean },
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/tertiate-purge/retroactive`,
+    body,
+  );
+  return data;
+}
+
 export async function getTeamDeckEntryLog(
   leagueId: number,
   teamId: number,
