@@ -3702,11 +3702,11 @@ def _qualifying_card_titles(deck, required_names, categories) -> set:
     rarity card" expressible -- several shapes of the same requirement rather
     than several separate requirements.
     """
-    wanted = {n.lower() for n in (required_names or [])}
+    wanted = {_norm_card_title(n) for n in (required_names or [])}
     matched = {
         card.card_title
         for card in deck.cards_from_assoc or []
-        if card.card_title and card.card_title.lower() in wanted
+        if card.card_title and _norm_card_title(card.card_title) in wanted
     }
     for titles in _deck_category_matches(deck, categories).values():
         matched |= titles
@@ -4326,9 +4326,11 @@ def submit_deck_selection(league_id, week_id):
             # "a gigantic creature" for the whole team that week, rather than
             # only the particular one they brought.
             category_matches = _deck_category_matches(deck, required_categories)
-            named_lower = {n.lower() for n in required_names}
+            named_lower = {_norm_card_title(n) for n in required_names}
             matched_cards = {
-                t.lower() for t in matched_titles if t.lower() in named_lower
+                _norm_card_title(t)
+                for t in matched_titles
+                if _norm_card_title(t) in named_lower
             }
             if not matched_titles:
                 wanted = _describe_card_requirement(
@@ -4363,7 +4365,7 @@ def submit_deck_selection(league_id, week_id):
                         name = u.name if u else "a teammate"
 
                         ts_titles = {
-                            c.card_title.lower()
+                            _norm_card_title(c.card_title)
                             for c in (ts.deck.cards_from_assoc or [])
                             if c.card_title
                         }
@@ -4371,7 +4373,9 @@ def submit_deck_selection(league_id, week_id):
                         if conflicts:
                             conflict_names = ", ".join(
                                 sorted(
-                                    n for n in required_names if n.lower() in conflicts
+                                    n
+                                    for n in required_names
+                                    if _norm_card_title(n) in conflicts
                                 )
                             )
                             return (
