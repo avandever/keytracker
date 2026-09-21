@@ -3423,6 +3423,29 @@ XY_MUTANT_CARD_TITLES = [
 
 # Offered in the week editor so common requirements are one click rather than a
 # hand-assembled filter.
+# The upgrades that come attached to Æmber Skies ships. Matched by name
+# because they are reprinted outside Æmber Skies and a deck carries whichever
+# printing it was dealt.
+AS_SHIP_UPGRADE_CARD_TITLES = [
+    "Armored Spikes",
+    "Banshee Suit",
+    "Bigger Guns for Everyone",
+    "Efficient Æmber Burner",
+    "Ethereal Adaptor",
+    "Gamma Blaster",
+    "Holo-Camo",
+    "Lateral Thrusters",
+    "Pendra’s Box",
+    "Reallocation Accessory",
+    "Requisition Writ",
+    "Stealth Modifications",
+    "Suggestion Box",
+    "Tomb of Agony",
+    "Torpefying Harpoon",
+    "Void Shields",
+]
+
+
 CARD_CATEGORY_PRESETS = [
     {
         "key": "sins",
@@ -3527,18 +3550,18 @@ CARD_CATEGORY_PRESETS = [
         "category": {"preset": "xy_mutant", "label": "an X-Y Mutant", "card_titles": XY_MUTANT_CARD_TITLES},
     },
     {
-        # The 16 upgrades Æmber Skies ships bring in. Expressed as the rule
-        # rather than a list, because the rule IS the definition -- every
-        # special-rarity upgrade in that set -- and the set is closed, so
-        # pinning the expansion keeps a later reprint from widening it.
+        # The 16 upgrades Æmber Skies ships bring in, named outright. Deriving
+        # them from "special-rarity upgrade in Æmber Skies" reads like the
+        # definition but is not: the same upgrades are reprinted in Tokens of
+        # Change, Crucible Clash and the Vault Masters sets, and a deck carries
+        # whichever printing it was dealt, so pinning the expansion threw out
+        # real copies of these very cards.
         "key": "as_ship_upgrade",
         "name": "An Æmber Skies ship upgrade",
         "category": {
             "preset": "as_ship_upgrade",
             "label": "an Æmber Skies ship upgrade",
-            "rarities": ["Special"],
-            "card_types": ["Upgrade"],
-            "expansions": [AEMBER_SKIES_EXPANSION],
+            "card_titles": AS_SHIP_UPGRADE_CARD_TITLES,
         },
     },
 ]
