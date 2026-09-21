@@ -471,18 +471,22 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         for ds in week.deck_selections:
             if ds.user_id != viewer.id and ds.user_id not in viewer_team_member_ids:
                 redacted_opponent_ids.add(ds.user_id)
-    # For Tertiate specifically, also hide opponent decks until both players have started
-    # (even after the week is published)
+    # Tertiate hides an opponent's deck until both players have started, and
+    # reveals it from that point on -- each player picks a house to purge from
+    # the other's deck before every game, so they have to be able to see it.
+    # That reveal has to override the blanket rule above, which would otherwise
+    # keep the deck hidden until the week completed and leave both players
+    # unable to purge, and so unable to report the match at all.
     if viewer and not viewer_is_admin and week.format_type == "tertiate":
         for wm in week.matchups:
             for pm in wm.player_matchups:
                 if pm.player1_id == viewer.id or pm.player2_id == viewer.id:
-                    if not (pm.player1_started and pm.player2_started):
-                        opponent_id = (
-                            pm.player2_id
-                            if pm.player1_id == viewer.id
-                            else pm.player1_id
-                        )
+                    opponent_id = (
+                        pm.player2_id if pm.player1_id == viewer.id else pm.player1_id
+                    )
+                    if pm.player1_started and pm.player2_started:
+                        redacted_opponent_ids.discard(opponent_id)
+                    else:
                         redacted_opponent_ids.add(opponent_id)
 
     data = {
