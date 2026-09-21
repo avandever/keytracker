@@ -3280,7 +3280,6 @@ BREW_CARD_TITLES = [
 ]
 KEY_IMP_CARD_TITLES = ["Bronze Key Imp", "Gold Key Imp", "Silver Key Imp"]
 
-AEMBER_SKIES_EXPANSION = 800
 
 # The Age of Ascension Sanctum cycle. Listed rather than matched on "Ambassador",
 # which would also pull in Ambassador Liu, an unrelated Star Alliance mutant.
