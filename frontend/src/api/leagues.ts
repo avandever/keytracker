@@ -782,6 +782,18 @@ export async function submitTertiatePurge(
   return data;
 }
 
+/** Start a match for both players because it was played away from the site. */
+export async function markMatchAlreadyPlayed(
+  leagueId: number,
+  matchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/already-played`,
+    {},
+  );
+  return data;
+}
+
 export async function submitTertiatePurgeRetroactive(
   leagueId: number,
   matchupId: number,

@@ -43,6 +43,7 @@ import {
   submitStrike,
   submitTertiatePurge,
   submitTertiatePurgeRetroactive,
+  markMatchAlreadyPlayed,
   getSealedPool,
   getSets,
   submitAllianceSelection,
@@ -138,6 +139,7 @@ export default function MyLeagueInfoPage() {
   const [retroOppHouse, setRetroOppHouse] = useState('');
   const [retroForgetting, setRetroForgetting] = useState(false);
   const [retroSaving, setRetroSaving] = useState(false);
+  const [alreadyPlayedOpen, setAlreadyPlayedOpen] = useState(false);
   const purgeLabel = (house: string) =>
     house === TERTIATE_PURGE_NOT_RECORDED ? 'not recorded' : house;
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
@@ -424,6 +426,19 @@ export default function MyLeagueInfoPage() {
       setError(e.response?.data?.error || e.message);
     } finally {
       setRetroSaving(false);
+    }
+  };
+
+  const handleAlreadyPlayed = async (matchupId: number) => {
+    setError('');
+    setSuccess('');
+    try {
+      const updated = await markMatchAlreadyPlayed(league.id, matchupId);
+      setSuccess('Recorded as already played — you can enter the result now.');
+      setAlreadyPlayedOpen(false);
+      handleMatchupUpdate(updated);
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
     }
   };
 
@@ -1498,6 +1513,42 @@ export default function MyLeagueInfoPage() {
                       Start Match
                     </Button>
                   )}
+                  {/* Waiting on the other player is a dead end if the match was
+                      played away from the site, so offer a way past it. */}
+                  {!(myMatchup.player1_started && myMatchup.player2_started) && (
+                    <Box sx={{ mb: 2 }}>
+                      <Button size="small" onClick={() => setAlreadyPlayedOpen(true)}>
+                        We already played
+                      </Button>
+                    </Box>
+                  )}
+                  <Dialog
+                    open={alreadyPlayedOpen}
+                    onClose={() => setAlreadyPlayedOpen(false)}
+                    maxWidth="xs"
+                    fullWidth
+                  >
+                    <DialogTitle>Record this match as already played?</DialogTitle>
+                    <DialogContent>
+                      <Alert severity="warning" sx={{ mb: 2 }}>
+                        Only do this if the match really was played.
+                      </Alert>
+                      <Typography variant="body2">
+                        The match will be started for both players so the result can be
+                        entered. This skips the deck reveal and any pre-game choices the
+                        format normally runs through on the site.
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        It is recorded in the league admin log, with your name against it.
+                      </Typography>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button onClick={() => setAlreadyPlayedOpen(false)}>Cancel</Button>
+                      <Button variant="contained" onClick={() => handleAlreadyPlayed(myMatchup.id)}>
+                        Continue
+                      </Button>
+                    </DialogActions>
+                  </Dialog>
                 </>
               )}
 

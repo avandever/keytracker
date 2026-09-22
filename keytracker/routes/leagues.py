@@ -6079,6 +6079,84 @@ def submit_tertiate_purge(league_id, matchup_id):
 
 
 @blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/already-played", methods=["POST"]
+)
+@login_required
+def mark_match_already_played(league_id, matchup_id):
+    """Start a match on behalf of both players because it was played elsewhere.
+
+    Formats with a pre-match step require both players to press Start, which
+    is how the site knows the deck reveal and any pre-game choices happened in
+    the right order. A match played away from the site never gets those
+    presses, and then it cannot be reported at all -- "Both players must start
+    before reporting games" with nothing the players can do about it.
+
+    This says outright that the match already happened. It is logged, with who
+    said so, since it skips a step the format otherwise depends on.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.status != WeekStatus.PUBLISHED.value:
+        return jsonify({"error": "Week is not published"}), 400
+
+    effective = get_effective_user()
+    is_admin = _is_league_admin(league, effective)
+    is_participant = effective.id in (pm.player1_id, pm.player2_id)
+    is_captain_of_matchup = False
+    if not is_admin and not is_participant and wm:
+        for team_id in (wm.team1_id, wm.team2_id):
+            team = db.session.get(Team, team_id)
+            if team and any(
+                m.user_id == effective.id and m.is_captain for m in team.members
+            ):
+                is_captain_of_matchup = True
+                break
+    if not is_admin and not is_participant and not is_captain_of_matchup:
+        return jsonify({"error": "You are not in this matchup"}), 403
+
+    if pm.player1_started and pm.player2_started:
+        return jsonify(serialize_player_matchup(pm, viewer=effective))
+
+    started_for = [
+        p.name
+        for p, already in (
+            (pm.player1, pm.player1_started),
+            (pm.player2, pm.player2_started),
+        )
+        if not already
+    ]
+    pm.player1_started = True
+    pm.player2_started = True
+
+    if (
+        week.format_type == WeekFormat.NORDIC_HEXAD.value
+        and pm.nordic_hexad_phase is None
+    ):
+        pm.nordic_hexad_phase = 1
+
+    _log_admin_action(
+        league.id,
+        week.id,
+        effective.id,
+        "match_marked_already_played",
+        f"player_matchup_id={pm.id} "
+        f"({pm.player1.name} vs {pm.player2.name}) "
+        f"started_for={','.join(started_for)}",
+    )
+    db.session.commit()
+    db.session.refresh(pm)
+    return jsonify(serialize_player_matchup(pm, viewer=effective))
+
+
+@blueprint.route(
     "/<int:league_id>/matches/<int:matchup_id>/tertiate-purge/retroactive",
     methods=["POST"],
 )
