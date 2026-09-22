@@ -477,17 +477,40 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
     # That reveal has to override the blanket rule above, which would otherwise
     # keep the deck hidden until the week completed and leave both players
     # unable to purge, and so unable to report the match at all.
+    #
+    # A captain of either team in the match sees the same thing once both have
+    # started. By then the two players have already shown each other their
+    # decks, so there is nothing left to keep from the captain -- and a captain
+    # entering the purges for a match played off-site has to name a house from
+    # each deck.
     if viewer and not viewer_is_admin and week.format_type == "tertiate":
+        captain_team_ids = {
+            team.id
+            for team in week.league.teams
+            if any(m.user_id == viewer.id and m.is_captain for m in team.members)
+        }
         for wm in week.matchups:
+            captains_here = bool(
+                captain_team_ids & {wm.team1_id, wm.team2_id}
+            )
             for pm in wm.player_matchups:
-                if pm.player1_id == viewer.id or pm.player2_id == viewer.id:
-                    opponent_id = (
+                in_match = viewer.id in (pm.player1_id, pm.player2_id)
+                if not in_match and not captains_here:
+                    continue
+                both_started = pm.player1_started and pm.player2_started
+                if in_match:
+                    others = {
                         pm.player2_id if pm.player1_id == viewer.id else pm.player1_id
-                    )
-                    if pm.player1_started and pm.player2_started:
-                        redacted_opponent_ids.discard(opponent_id)
-                    else:
-                        redacted_opponent_ids.add(opponent_id)
+                    }
+                else:
+                    # Captaining one side: the teammate is visible anyway, so
+                    # this is really about the player on the other team.
+                    others = {pm.player1_id, pm.player2_id} - {viewer.id}
+                for other_id in others:
+                    if both_started:
+                        redacted_opponent_ids.discard(other_id)
+                    elif in_match:
+                        redacted_opponent_ids.add(other_id)
 
     data = {
         "id": week.id,
