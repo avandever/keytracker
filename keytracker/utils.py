@@ -849,7 +849,7 @@ def _find_deck_by_cards(card_names: set) -> Optional["Deck"]:
             row[0]
             for row in db.session.query(CardInDeck.deck_id)
             .join(PlatonicCard, CardInDeck.platonic_card_id == PlatonicCard.id)
-            .filter(PlatonicCard.card_title == name)
+            .filter(PlatonicCard.card_title.in_(card_title_variants(name)))
             .all()
         )
         if not ids:
@@ -896,7 +896,7 @@ def _find_deck_for_pod(card_names: list, house_name: str) -> Optional["Deck"]:
             .join(PlatonicCardInSet, CardInDeck.card_in_set_id == PlatonicCardInSet.id)
             .join(KeyforgeHouse, PlatonicCardInSet.kf_house_id == KeyforgeHouse.id)
             .filter(
-                PlatonicCard.card_title == name,
+                PlatonicCard.card_title.in_(card_title_variants(name)),
                 KeyforgeHouse.name == house_name,
             )
             .all()
@@ -1196,7 +1196,7 @@ def _find_printing(title, house_name, expansion_int, card_data):
         PlatonicCardInSet.query.join(
             PlatonicCard, PlatonicCardInSet.card_id == PlatonicCard.id
         )
-        .filter(PlatonicCard.card_title == title)
+        .filter(PlatonicCard.card_title.in_(card_title_variants(title)))
         .all()
     )
     if not candidates:
@@ -1383,6 +1383,24 @@ def update_sas_scores(
         current_app.logger.debug(f"Received text:\n{response.text}")
         return False
     return True
+
+
+def card_title_variants(title: str) -> list:
+    """Every apostrophe spelling of a card title that may be stored.
+
+    Card data uses a typographic apostrophe, but thirteen cards also exist
+    under a plain one as a second row, with printings and deck slots split
+    across the two. A lookup for one spelling therefore finds only part of the
+    truth: searching for Flint's Stash missed 78 decks.
+
+    Returns the spellings to match on, so a lookup can use IN and still hit the
+    index -- unlike normalising the column, which could not.
+    """
+    if not title:
+        return []
+    plain = title.replace("\u2019", "'").replace("\u02bc", "'")
+    curly = plain.replace("'", "\u2019")
+    return list(dict.fromkeys([title, plain, curly]))
 
 
 def deck_name_to_id(deck_name: str) -> str:

@@ -38,6 +38,7 @@ from keytracker.serializers import (
 )
 from keytracker.utils import (
     add_player_filters,
+    card_title_variants,
     add_game_sort,
     BadLog,
     basic_stats_to_game,
@@ -431,7 +432,11 @@ def _card_filter_subquery(spec):
         card_ids = [
             row[0]
             for row in db.session.query(PlatonicCard.id)
-            .filter(func.lower(PlatonicCard.card_title) == name.lower())
+            .filter(
+                func.lower(PlatonicCard.card_title).in_(
+                    [v.lower() for v in card_title_variants(name)]
+                )
+            )
             .all()
         ]
         if not card_ids:
