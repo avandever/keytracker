@@ -45,6 +45,7 @@ from keytracker.schema import (
     SEALED_WEEK_FORMATS,
 )
 from keytracker.serializers import (
+    _preload_league_graph,
     serialize_league_summary,
     serialize_league_detail,
     serialize_league_week,
@@ -385,6 +386,11 @@ def get_my_league_info(league_id):
             weeks[-1] if weeks else None,
         )
 
+    # Only the week being shown is serialised, so only that week is preloaded.
+    # Held until the payload is built: the identity map keeps weak references.
+    _preloaded = _preload_league_graph(  # noqa: F841
+        league, weeks=[wanted] if wanted else []
+    )
     data = serialize_league_summary(league)
     data["teams"] = (
         [serialize_team_detail(my_team)] if my_team else []

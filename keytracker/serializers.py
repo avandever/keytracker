@@ -269,7 +269,7 @@ def serialize_league_summary(league: League) -> dict:
     }
 
 
-def _preload_league_graph(league: League) -> list:
+def _preload_league_graph(league: League, weeks=None) -> list:
     """Load the whole league page's relationships in a few queries.
 
     Serialising a league walks every player matchup and touches ten
@@ -282,13 +282,17 @@ def _preload_league_graph(league: League) -> list:
     Nothing here changes what is serialised; it only decides when the rows are
     fetched.
 
+    Pass ``weeks`` to preload only part of the league -- a page showing one
+    week has no use for the other six.
+
     The loaded rows are returned, and the caller has to hold on to them: the
     session's identity map keeps only weak references, so rows nothing else
     refers to are collected again -- taking their loaded relationships with
     them -- and the lazy loads all come back.
     """
     keep_alive: list = []
-    matchup_ids = [wm.id for week in league.weeks for wm in week.matchups]
+    weeks = league.weeks if weeks is None else list(weeks)
+    matchup_ids = [wm.id for week in weeks for wm in week.matchups]
     if matchup_ids:
         keep_alive += PlayerMatchup.query.options(
             selectinload(PlayerMatchup.games),
@@ -306,14 +310,11 @@ def _preload_league_graph(league: League) -> list:
         ).filter(PlayerMatchup.week_matchup_id.in_(matchup_ids)).all()
 
     deck_ids = {
-        ds.deck_id
-        for week in league.weeks
-        for ds in week.deck_selections
-        if ds.deck_id
+        ds.deck_id for week in weeks for ds in week.deck_selections if ds.deck_id
     }
     deck_ids |= {
         sugg.deck_id
-        for week in league.weeks
+        for week in weeks
         for sugg in week.deck_suggestions
         if sugg.deck_id
     }
