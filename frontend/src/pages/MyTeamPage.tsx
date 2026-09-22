@@ -993,6 +993,12 @@ export default function MyTeamPage() {
     const isWeekEditable = week.format_type === 'thief'
       ? thiefEditableStatuses.has(week.status)
       : week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
+    // Once pairings publish the window has closed for players, but the
+    // backend still accepts a deck from a captain of that player's team, or a
+    // league admin, so someone who missed the deadline does not forfeit. The
+    // entry is recorded as a late one either way.
+    const canEnterDecksLate =
+      week.status === 'published' && (isCaptain || league.is_admin);
     const maxSlots = deckSlotsForFormat(week.format_type);
     const showFeature = league.team_size % 2 === 0 &&
       week.format_type !== 'sas_ladder' &&
@@ -1344,9 +1350,21 @@ export default function MyTeamPage() {
             );
           })()}
 
+          {canEnterDecksLate && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Deck selection has closed for this week. You can still enter a deck for a
+              player who missed the deadline — it is recorded as a late entry in the team
+              deck entry log.
+            </Alert>
+          )}
+
           {myTeam.members.map((m) => {
             const isMe = m.user.id === user.id;
-            const canEditMember = isWeekEditable && (isMe || isCaptain || myTeam.allow_peer_deck_entry);
+            // Late entry is for captains and admins only: peer entry and
+            // entering your own deck both stop when pairings publish.
+            const canEditMember =
+              (isWeekEditable && (isMe || isCaptain || myTeam.allow_peer_deck_entry)) ||
+              canEnterDecksLate;
             const selections = getMemberSelections(week, m.user.id);
             return (
               <Box key={m.id} sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
