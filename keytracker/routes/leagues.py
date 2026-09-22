@@ -265,6 +265,158 @@ def get_league(league_id):
     return etag_response(data)
 
 
+def _scope_week_to_viewer(week_data: dict, my_team_id, my_user_ids: set) -> dict:
+    """Strip a serialised week down to what one player needs to see.
+
+    My Info shows a player their own match, their own team's decks and the
+    week's rules. The full week also carries every other pairing in the league,
+    which that page reads none of -- on ABR 15 it is the bulk of the payload.
+
+    Filtering the serialised dict rather than querying differently keeps every
+    visibility rule in serialize_league_week: whatever is redacted there stays
+    redacted here.
+    """
+    kept_matchups = []
+    opponent_ids: set = set()
+    for wm in week_data.get("matchups") or []:
+        team_ids = {wm.get("team1", {}).get("id"), wm.get("team2", {}).get("id")}
+        if my_team_id not in team_ids:
+            continue
+        pms = [
+            pm
+            for pm in (wm.get("player_matchups") or [])
+            if pm.get("player1", {}).get("id") in my_user_ids
+            or pm.get("player2", {}).get("id") in my_user_ids
+        ]
+        for pm in pms:
+            opponent_ids.add(pm.get("player1", {}).get("id"))
+            opponent_ids.add(pm.get("player2", {}).get("id"))
+        kept_matchups.append({**wm, "player_matchups": pms})
+
+    visible_users = my_user_ids | opponent_ids
+    scoped = dict(week_data)
+    scoped["matchups"] = kept_matchups
+    scoped["deck_selections"] = [
+        ds
+        for ds in (week_data.get("deck_selections") or [])
+        if ds.get("user_id") in visible_users
+    ]
+    scoped["deck_suggestions"] = [
+        sugg
+        for sugg in (week_data.get("deck_suggestions") or [])
+        if sugg.get("team_id") == my_team_id
+    ]
+    scoped["sas_ladder_assignments"] = [
+        a
+        for a in (week_data.get("sas_ladder_assignments") or [])
+        if a.get("user_id") in visible_users
+    ]
+    scoped["detail_loaded"] = True
+    return scoped
+
+
+def _week_stub(week) -> dict:
+    """Enough of a week to label its tab, without loading the week."""
+    return {
+        "id": week.id,
+        "league_id": week.league_id,
+        "week_number": week.week_number,
+        "name": week.name,
+        "format_type": week.format_type,
+        "status": week.status,
+        "best_of_n": week.best_of_n,
+        "matchups": [],
+        "deck_selections": [],
+        "deck_suggestions": [],
+        "feature_designations": [
+            {
+                "team_id": fd.team_id,
+                "user_id": fd.user_id,
+            }
+            for fd in (week.feature_designations or [])
+        ],
+        "detail_loaded": False,
+    }
+
+
+@blueprint.route("/<int:league_id>/my-info", methods=["GET"])
+@login_required
+def get_my_league_info(league_id):
+    """The My Info page's own view of a league: one player, one week.
+
+    The league endpoint answers with every team, every pairing and every week,
+    which is what the league page wants and roughly four times what this page
+    reads. This page also polls while a match is live, so the difference is
+    paid over and over.
+
+    Weeks other than the one being looked at come back as stubs, carrying only
+    what labels a tab; ``detail_loaded`` says which is which, so an empty list
+    is never mistaken for "nothing there".
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    effective = get_effective_user()
+
+    member = (
+        TeamMember.query.join(Team)
+        .filter(Team.league_id == league.id, TeamMember.user_id == effective.id)
+        .first()
+    )
+    my_team = db.session.get(Team, member.team_id) if member else None
+    my_user_ids = {m.user_id for m in my_team.members} if my_team else {effective.id}
+
+    weeks = sorted(league.weeks, key=lambda w: w.week_number)
+    requested_id = request.args.get("week_id", type=int)
+    wanted = None
+    if requested_id is not None:
+        wanted = next((w for w in weeks if w.id == requested_id), None)
+        if wanted is None:
+            return jsonify({"error": "Week not found"}), 404
+    else:
+        # Same week the page opens on: the first still in play.
+        wanted = next(
+            (
+                w
+                for w in weeks
+                if w.status
+                not in (WeekStatus.COMPLETED.value, WeekStatus.SETUP.value)
+            ),
+            weeks[-1] if weeks else None,
+        )
+
+    data = serialize_league_summary(league)
+    data["teams"] = (
+        [serialize_team_detail(my_team)] if my_team else []
+    )
+    data["signups"] = []
+    data["admins"] = [serialize_user_brief(a.user) for a in league.admins]
+    data["weeks"] = [
+        (
+            _scope_week_to_viewer(
+                serialize_league_week(w, viewer=effective),
+                my_team.id if my_team else None,
+                my_user_ids,
+            )
+            if wanted is not None and w.id == wanted.id
+            else _week_stub(w)
+        )
+        for w in weeks
+    ]
+    data["scoped"] = "me"
+    data["loaded_week_id"] = wanted.id if wanted else None
+    data["is_admin"] = _is_league_admin(league, effective)
+    data["is_signed_up"] = (
+        LeagueSignup.query.filter_by(
+            league_id=league.id, user_id=effective.id
+        ).first()
+        is not None
+    )
+    data["my_team_id"] = my_team.id if my_team else None
+    data["is_captain"] = bool(member.is_captain) if member else False
+    return etag_response(data)
+
+
 @blueprint.route("/<int:league_id>", methods=["PUT"])
 @login_required
 def update_league(league_id):

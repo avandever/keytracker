@@ -782,6 +782,22 @@ export async function submitTertiatePurge(
   return data;
 }
 
+/**
+ * The My Info page's own view: this player's team, and one week in full.
+ *
+ * Every other week comes back as a stub with `detail_loaded: false`, so the
+ * tabs can be drawn without paying for the whole league.
+ */
+export async function getMyLeagueInfo(
+  leagueId: number,
+  weekId?: number | null,
+): Promise<LeagueDetail> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/my-info`, {
+    params: weekId ? { week_id: weekId } : undefined,
+  });
+  return data;
+}
+
 /** Start a match for both players because it was played away from the site. */
 export async function markMatchAlreadyPlayed(
   leagueId: number,

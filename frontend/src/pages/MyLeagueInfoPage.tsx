@@ -35,7 +35,7 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
-  getLeague,
+  getMyLeagueInfo,
   submitDeckSelection,
   removeDeckSelection,
   startMatch,
@@ -170,12 +170,18 @@ export default function MyLeagueInfoPage() {
   const [weekBanInput, setWeekBanInput] = useState<Record<number, string>>({});
 
   const refreshCountRef = useRef(0);
-  const refresh = useCallback(() => {
+  // Which week the page is showing. Kept in a ref so a refresh triggered by an
+  // action -- or by the poller -- reloads the week being looked at rather than
+  // snapping back to the server's default.
+  const shownWeekRef = useRef<number | null>(null);
+  const refresh = useCallback((weekId?: number | null) => {
     setSealedPools({});
+    const target = weekId ?? shownWeekRef.current;
     const count = ++refreshCountRef.current;
-    getLeague(leagueId)
+    getMyLeagueInfo(leagueId, target)
       .then((l) => {
         if (count === refreshCountRef.current) {
+          shownWeekRef.current = l.loaded_week_id ?? null;
           setLeague(l);
           setError('');
           setSuccess('');
@@ -224,6 +230,15 @@ export default function MyLeagueInfoPage() {
     setActiveTab(idx != null && idx >= 0 ? idx : 0);
     initialTabApplied.current = true;
   }, [league, searchParams]);
+
+  // Weeks arrive as tab stubs; the one being looked at is fetched on demand.
+  useEffect(() => {
+    if (!league) return;
+    const weekStart = 1 + (league.fee_amount != null ? 1 : 0);
+    const week = (league.weeks || [])[activeTab - weekStart];
+    if (!week || week.detail_loaded) return;
+    refresh(week.id);
+  }, [activeTab, league, refresh]);
 
   // Pre-populate thief steal selections from server data on first load
   useEffect(() => {

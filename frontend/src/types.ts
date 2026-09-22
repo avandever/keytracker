@@ -353,6 +353,10 @@ export interface LeagueSummary {
 }
 
 export interface LeagueDetail extends LeagueSummary {
+  /** Present when the payload is trimmed to one player (the My Info endpoint). */
+  scoped?: LeagueScope;
+  /** Which week came back with its detail filled in. */
+  loaded_week_id?: number | null;
   teams: TeamDetail[];
   signups: SignupInfo[];
   admins: UserBrief[];
@@ -532,6 +536,8 @@ export interface LeagueWeek {
   no_keycheat: boolean | null;
   team_max_raw_amber: number | null;
   team_min_raw_amber: number | null;
+  /** False on a week returned as a tab stub: its lists are empty, not known to be empty. */
+  detail_loaded?: boolean;
   required_card_names: string[] | null;
   required_card_categories?: RequiredCardCategory[] | null;
   /** UTC ISO. Advisory deadlines set by a league admin. */
@@ -663,6 +669,9 @@ export interface TertiatePurgeChoiceInfo {
 
 /** Stored when players could not recall a purge for an off-site game. */
 export const TERTIATE_PURGE_NOT_RECORDED = '__not_recorded__';
+
+/** Set to 'me' on a league payload trimmed to one player's own view. */
+export type LeagueScope = 'me';
 
 export interface DeckSelectionInfo {
   id: number;
