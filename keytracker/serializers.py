@@ -33,6 +33,7 @@ from keytracker.schema import (
 )
 from flask import g, has_app_context
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload, selectinload
 import json
 
 
@@ -246,9 +247,77 @@ def serialize_league_summary(league: League) -> dict:
     }
 
 
+def _preload_league_graph(league: League) -> list:
+    """Load the whole league page's relationships in a few queries.
+
+    Serialising a league walks every player matchup and touches ten
+    relationships on each, then every deck selection and touches the deck, its
+    DoK row and its pods. Left to lazy loading that is thousands of round
+    trips -- for ABR 15, over four thousand, and about twenty seconds. Fetching
+    them up front puts the same rows in the session, so the attribute access
+    during serialisation is already answered.
+
+    Nothing here changes what is serialised; it only decides when the rows are
+    fetched.
+
+    The loaded rows are returned, and the caller has to hold on to them: the
+    session's identity map keeps only weak references, so rows nothing else
+    refers to are collected again -- taking their loaded relationships with
+    them -- and the lazy loads all come back.
+    """
+    keep_alive: list = []
+    matchup_ids = [wm.id for week in league.weeks for wm in week.matchups]
+    if matchup_ids:
+        keep_alive += PlayerMatchup.query.options(
+            selectinload(PlayerMatchup.games),
+            selectinload(PlayerMatchup.strikes),
+            selectinload(PlayerMatchup.triad_short_picks),
+            selectinload(PlayerMatchup.adaptive_short_choices),
+            selectinload(PlayerMatchup.exchange_borrows),
+            selectinload(PlayerMatchup.nordic_hexad_actions),
+            selectinload(PlayerMatchup.moirai_assignments),
+            selectinload(PlayerMatchup.tertiate_purge_choices),
+            selectinload(PlayerMatchup.schedule_proposals),
+            selectinload(PlayerMatchup.schedule_confirmation),
+            joinedload(PlayerMatchup.player1),
+            joinedload(PlayerMatchup.player2),
+        ).filter(PlayerMatchup.week_matchup_id.in_(matchup_ids)).all()
+
+    deck_ids = {
+        ds.deck_id
+        for week in league.weeks
+        for ds in week.deck_selections
+        if ds.deck_id
+    }
+    deck_ids |= {
+        sugg.deck_id
+        for week in league.weeks
+        for sugg in week.deck_suggestions
+        if sugg.deck_id
+    }
+    if deck_ids:
+        keep_alive += Deck.query.options(
+            joinedload(Deck.dok),
+            selectinload(Deck.pod_stats),
+        ).filter(Deck.id.in_(deck_ids)).all()
+
+    # Every user on the page is serialised with their TCO names attached.
+    user_ids = {m.user_id for team in league.teams for m in team.members}
+    if user_ids:
+        keep_alive += (
+            User.query.options(selectinload(User.tco_usernames))
+            .filter(User.id.in_(user_ids))
+            .all()
+        )
+    return keep_alive
+
+
 def serialize_league_detail(
     league: League, viewer=None, hide_team_members: bool = False
 ) -> dict:
+    # Bound to a local on purpose: dropping it would let the preloaded rows be
+    # collected before they are read.
+    _preloaded = _preload_league_graph(league)  # noqa: F841
     data = serialize_league_summary(league)
     data["teams"] = [
         serialize_team_detail(t, hide_members=hide_team_members)
@@ -939,11 +1008,15 @@ def serialize_player_matchup(
     for p in tertiate_purges_raw:
         purges_by_game[p.game_number].append(p)
     visible_purges = []
-    for _game_num, game_purges in purges_by_game.items():
+    for _game_num in sorted(purges_by_game):
+        game_purges = purges_by_game[_game_num]
         if len(game_purges) == 2:
             visible_purges.extend(game_purges)
         else:
             visible_purges.extend(p for p in game_purges if p.choosing_user_id == effective_viewer_id)
+    # Ordered explicitly: the rows come back in whatever order they were
+    # fetched in, which is not the same for a lazy load and an eager one.
+    visible_purges.sort(key=lambda p: (p.game_number, p.choosing_user_id))
     data["tertiate_purge_choices"] = [
         {
             "choosing_user_id": p.choosing_user_id,
