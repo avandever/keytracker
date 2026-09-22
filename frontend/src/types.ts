@@ -536,6 +536,7 @@ export interface LeagueWeek {
   no_keycheat: boolean | null;
   team_max_raw_amber: number | null;
   team_min_raw_amber: number | null;
+  substitutions?: SubstitutionInfo[];
   /** False on a week returned as a tab stub: its lists are empty, not known to be empty. */
   detail_loaded?: boolean;
   required_card_names: string[] | null;
@@ -672,6 +673,14 @@ export const TERTIATE_PURGE_NOT_RECORDED = '__not_recorded__';
 
 /** Set to 'me' on a league payload trimmed to one player's own view. */
 export type LeagueScope = 'me';
+
+/** One teammate covering another's match for a week. */
+export interface SubstitutionInfo {
+  id: number;
+  team_id: number;
+  out_user: UserBrief;
+  in_user: UserBrief;
+}
 
 export interface DeckSelectionInfo {
   id: number;

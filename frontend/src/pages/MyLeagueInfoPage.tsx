@@ -627,15 +627,38 @@ export default function MyLeagueInfoPage() {
     }
   };
 
-  const getMyMatchup = (week: LeagueWeek): PlayerMatchupInfo | null => {
+  /** Players whose match this viewer is covering this week. */
+  const coveredPlayerIds = (week: LeagueWeek): number[] =>
+    (week.substitutions || [])
+      .filter((sub) => sub.in_user.id === effectiveUserId)
+      .map((sub) => sub.out_user.id);
+
+  /** Every match this viewer may act on: their own, then any they cover. */
+  const getMyMatchups = (
+    week: LeagueWeek,
+  ): { pm: PlayerMatchupInfo; coveringFor: string | null }[] => {
+    const covered = coveredPlayerIds(week);
+    const own: { pm: PlayerMatchupInfo; coveringFor: string | null }[] = [];
+    const covering: { pm: PlayerMatchupInfo; coveringFor: string | null }[] = [];
     for (const wm of week.matchups) {
       for (const pm of wm.player_matchups) {
         if (pm.player1.id === effectiveUserId || pm.player2.id === effectiveUserId) {
-          return pm;
+          own.push({ pm, coveringFor: null });
+          continue;
         }
+        const forPlayer = [pm.player1, pm.player2].find((p) => covered.includes(p.id));
+        if (forPlayer) covering.push({ pm, coveringFor: forPlayer.name });
       }
     }
-    return null;
+    return [...own, ...covering];
+  };
+
+  // The rest of the week UI is written around a single match. A substitute with
+  // no match of their own gets the one they are covering; one who is playing too
+  // keeps their own here, and sees the covered match in its own card below.
+  const getMyMatchup = (week: LeagueWeek): PlayerMatchupInfo | null => {
+    const all = getMyMatchups(week);
+    return all.length > 0 ? all[0].pm : null;
   };
 
   const getMySelections = (week: LeagueWeek): DeckSelectionInfo[] => {
@@ -1471,12 +1494,22 @@ export default function MyLeagueInfoPage() {
           );
         })()}
 
-        {/* Match section */}
-        {myMatchup && week.status === 'published' && (
-          <Card sx={{ mb: 2 }}>
+        {/* Match section — one card per match, including any being covered. */}
+        {week.status === 'published' && getMyMatchups(week).map(({ pm: myMatchup, coveringFor }) => (
+          <Card key={myMatchup.id} sx={{ mb: 2 }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Typography variant="h6">My Match</Typography>
+                <Typography variant="h6">
+                  {coveringFor ? `Covering for ${coveringFor}` : 'My Match'}
+                </Typography>
+                {coveringFor && (
+                  <Chip
+                    label="Substitute"
+                    size="small"
+                    color="info"
+                    title={`The result counts for ${coveringFor}`}
+                  />
+                )}
                 {myMatchup.is_feature && (
                   <Chip label="Feature Match" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.warning.main, 0.12), color: theme.palette.warning.dark })} />
                 )}
@@ -2066,9 +2099,9 @@ export default function MyLeagueInfoPage() {
               )}
             </CardContent>
           </Card>
-        )}
+        ))}
 
-        {!myMatchup && week.status === 'published' && (
+        {getMyMatchups(week).length === 0 && week.status === 'published' && (
           <Alert severity="info">No matchup assigned for this week.</Alert>
         )}
 

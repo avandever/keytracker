@@ -1671,6 +1671,47 @@ class TertiateHousePurge(db.Model):
 TERTIATE_PURGE_NOT_RECORDED = "__not_recorded__"
 
 
+class WeekSubstitution(db.Model):
+    """One player covering another player's match for a week.
+
+    The matchup itself is left alone: the player who was rostered stays on it,
+    and the result is recorded against them, so standings and pairings do not
+    notice. What the substitute gets is the right to act on that match -- to
+    start it, make the pre-game choices, report and verify -- and to see it
+    alongside their own.
+    """
+
+    __tablename__ = "tracker_week_substitution"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    week_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False, index=True
+    )
+    team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
+    # The rostered player, whose match this remains.
+    out_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False
+    )
+    # The teammate covering for them.
+    in_user_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=False, index=True
+    )
+    created_by_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=True
+    )
+    created_at = db.Column(db.DateTime, default=func.now())
+
+    week = db.relationship("LeagueWeek", backref="substitutions")
+    team = db.relationship("Team")
+    out_user = db.relationship("User", foreign_keys=[out_user_id])
+    in_user = db.relationship("User", foreign_keys=[in_user_id])
+    created_by = db.relationship("User", foreign_keys=[created_by_id])
+
+    __table_args__ = (
+        # One cover per player per week; re-designating replaces it.
+        db.UniqueConstraint("week_id", "out_user_id", name="uq_week_substitution"),
+    )
+
+
 class SealedPoolDeck(db.Model):
     __tablename__ = "tracker_sealed_pool_deck"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

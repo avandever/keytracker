@@ -576,6 +576,12 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
     # entering the purges for a match played off-site has to name a house from
     # each deck.
     if viewer and not viewer_is_admin and week.format_type == "tertiate":
+        # Standing in for someone means seeing what they would see.
+        viewer_acts_as = {viewer.id} | {
+            sub.out_user_id
+            for sub in (week.substitutions or [])
+            if sub.in_user_id == viewer.id
+        }
         captain_team_ids = {
             team.id
             for team in week.league.teams
@@ -586,14 +592,12 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
                 captain_team_ids & {wm.team1_id, wm.team2_id}
             )
             for pm in wm.player_matchups:
-                in_match = viewer.id in (pm.player1_id, pm.player2_id)
+                in_match = bool(viewer_acts_as & {pm.player1_id, pm.player2_id})
                 if not in_match and not captains_here:
                     continue
                 both_started = pm.player1_started and pm.player2_started
                 if in_match:
-                    others = {
-                        pm.player2_id if pm.player1_id == viewer.id else pm.player1_id
-                    }
+                    others = {pm.player1_id, pm.player2_id} - viewer_acts_as
                 else:
                     # Captaining one side: the teammate is visible anyway, so
                     # this is really about the player on the other team.
@@ -664,6 +668,15 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "deck_selections": [
             serialize_deck_selection(ds, redact_deck=ds.user_id in redacted_opponent_ids)
             for ds in week.deck_selections
+        ],
+        "substitutions": [
+            {
+                "id": sub.id,
+                "team_id": sub.team_id,
+                "out_user": serialize_user_brief(sub.out_user),
+                "in_user": serialize_user_brief(sub.in_user),
+            }
+            for sub in (week.substitutions or [])
         ],
         "feature_designations": [
             {"team_id": fd.team_id, "user_id": fd.user_id}

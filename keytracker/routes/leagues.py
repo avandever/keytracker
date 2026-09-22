@@ -30,6 +30,7 @@ from keytracker.schema import (
     MatchScheduleConfirmation,
     OublietteBan,
     SasLadderAssignment,
+    WeekSubstitution,
     TeamDeckEntryLog,
     PodStats,
     SignupStatus,
@@ -306,6 +307,11 @@ def _scope_week_to_viewer(week_data: dict, my_team_id, my_user_ids: set) -> dict
         sugg
         for sugg in (week_data.get("deck_suggestions") or [])
         if sugg.get("team_id") == my_team_id
+    ]
+    scoped["substitutions"] = [
+        sub
+        for sub in (week_data.get("substitutions") or [])
+        if sub.get("team_id") == my_team_id
     ]
     scoped["sas_ladder_assignments"] = [
         a
@@ -5769,12 +5775,13 @@ def submit_strike(league_id, matchup_id):
         return jsonify({"error": "Both players must start before striking"}), 400
 
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     # Check not already struck
     existing_strike = StrikeSelection.query.filter_by(
-        player_matchup_id=pm.id, striking_user_id=effective.id
+        player_matchup_id=pm.id, striking_user_id=acting_id
     ).first()
     if existing_strike:
         return jsonify({"error": "You have already submitted a strike"}), 400
@@ -5785,7 +5792,7 @@ def submit_strike(league_id, matchup_id):
         return jsonify({"error": "struck_deck_selection_id is required"}), 400
 
     # Validate: struck deck must belong to the opponent
-    opponent_id = pm.player2_id if effective.id == pm.player1_id else pm.player1_id
+    opponent_id = pm.player2_id if acting_id == pm.player1_id else pm.player1_id
     struck_sel = db.session.get(PlayerDeckSelection, struck_selection_id)
     if (
         not struck_sel
@@ -5796,7 +5803,7 @@ def submit_strike(league_id, matchup_id):
 
     strike = StrikeSelection(
         player_matchup_id=pm.id,
-        striking_user_id=effective.id,
+        striking_user_id=acting_id,
         struck_deck_selection_id=struck_selection_id,
     )
     db.session.add(strike)
@@ -5829,7 +5836,8 @@ def submit_triad_short_pick(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -5839,13 +5847,13 @@ def submit_triad_short_pick(league_id, matchup_id):
 
     from keytracker.match_helpers import validate_triad_short_pick
 
-    error = validate_triad_short_pick(pm, effective.id, picked_selection_id)
+    error = validate_triad_short_pick(pm, acting_id, picked_selection_id)
     if error:
         return jsonify({"error": error}), 400
 
     pick = TriadShortPickModel(
         player_matchup_id=pm.id,
-        picking_user_id=effective.id,
+        picking_user_id=acting_id,
         picked_deck_selection_id=picked_selection_id,
     )
     db.session.add(pick)
@@ -5881,7 +5889,8 @@ def submit_oubliette_banned_house(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -5890,14 +5899,14 @@ def submit_oubliette_banned_house(league_id, matchup_id):
         return jsonify({"error": "banned_house is required"}), 400
 
     user_sels = PlayerDeckSelection.query.filter_by(
-        week_id=week.id, user_id=effective.id
+        week_id=week.id, user_id=acting_id
     ).all()
 
-    error = validate_oubliette_ban(pm, effective.id, banned_house, user_sels)
+    error = validate_oubliette_ban(pm, acting_id, banned_house, user_sels)
     if error:
         return jsonify({"error": error}), 400
 
-    is_p1 = effective.id == pm.player1_id
+    is_p1 = acting_id == pm.player1_id
     if is_p1:
         pm.oubliette_p1_banned_house = banned_house
     else:
@@ -5941,7 +5950,8 @@ def submit_adaptive_short_choice(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -5952,15 +5962,15 @@ def submit_adaptive_short_choice(league_id, matchup_id):
     if week.format_type == WeekFormat.MOIRAI.value:
         from keytracker.match_helpers import validate_moirai_adaptive_choice
 
-        error = validate_moirai_adaptive_choice(pm, effective.id, chosen_sel_id)
+        error = validate_moirai_adaptive_choice(pm, acting_id, chosen_sel_id)
     else:
-        error = validate_adaptive_short_choice(pm, effective.id, chosen_sel_id)
+        error = validate_adaptive_short_choice(pm, acting_id, chosen_sel_id)
     if error:
         return jsonify({"error": error}), 400
 
     choice = ASC(
         player_matchup_id=pm.id,
-        choosing_user_id=effective.id,
+        choosing_user_id=acting_id,
         chosen_deck_selection_id=chosen_sel_id,
     )
     db.session.add(choice)
@@ -6004,7 +6014,8 @@ def submit_adaptive_short_bid(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -6012,7 +6023,7 @@ def submit_adaptive_short_bid(league_id, matchup_id):
     concede = bool(data.get("concede", False))
 
     success, error = validate_adaptive_short_bid(
-        pm, effective.id, chains=chains, concede=concede
+        pm, acting_id, chains=chains, concede=concede
     )
     if not success:
         return jsonify({"error": error}), 400
@@ -6046,7 +6057,8 @@ def submit_moirai_assignments(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -6054,7 +6066,7 @@ def submit_moirai_assignments(league_id, matchup_id):
     if not isinstance(assignments, list):
         return jsonify({"error": "assignments must be a list"}), 400
 
-    new_assignments, error = validate_moirai_assignments(pm, effective.id, assignments)
+    new_assignments, error = validate_moirai_assignments(pm, acting_id, assignments)
     if error:
         return jsonify({"error": error}), 400
 
@@ -6090,7 +6102,8 @@ def submit_exchange_borrow(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -6098,13 +6111,13 @@ def submit_exchange_borrow(league_id, matchup_id):
     if not isinstance(borrowed_deck_selection_id, int):
         return jsonify({"error": "borrowed_deck_selection_id is required"}), 400
 
-    error = validate_exchange_borrow(pm, effective.id, borrowed_deck_selection_id)
+    error = validate_exchange_borrow(pm, acting_id, borrowed_deck_selection_id)
     if error:
         return jsonify({"error": error}), 400
 
     borrow = ExchangeBorrowModel(
         player_matchup_id=pm.id,
-        borrowing_user_id=effective.id,
+        borrowing_user_id=acting_id,
         borrowed_deck_selection_id=borrowed_deck_selection_id,
     )
     db.session.add(borrow)
@@ -6137,7 +6150,8 @@ def submit_nordic_action(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -6149,13 +6163,13 @@ def submit_nordic_action(league_id, matchup_id):
             400,
         )
 
-    error = validate_nordic_action(pm, effective.id, phase, target_deck_selection_id)
+    error = validate_nordic_action(pm, acting_id, phase, target_deck_selection_id)
     if error:
         return jsonify({"error": error}), 400
 
     action = NordicHexadActionModel(
         player_matchup_id=pm.id,
-        player_id=effective.id,
+        player_id=acting_id,
         phase=phase,
         target_deck_selection_id=target_deck_selection_id,
     )
@@ -6190,7 +6204,8 @@ def submit_tertiate_purge(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     if not pm.player1_started or not pm.player2_started:
@@ -6201,7 +6216,7 @@ def submit_tertiate_purge(league_id, matchup_id):
 
     # Check not already submitted for this game
     existing = TertiateHousePurgeModel.query.filter_by(
-        player_matchup_id=pm.id, choosing_user_id=effective.id, game_number=game_number
+        player_matchup_id=pm.id, choosing_user_id=acting_id, game_number=game_number
     ).first()
     if existing:
         return jsonify({"error": "You have already submitted your purge choice for this game"}), 400
@@ -6212,7 +6227,7 @@ def submit_tertiate_purge(league_id, matchup_id):
         return jsonify({"error": "purged_house is required"}), 400
 
     # Validate: the chosen house must be in the opponent's deck
-    opponent_id = pm.player2_id if effective.id == pm.player1_id else pm.player1_id
+    opponent_id = pm.player2_id if acting_id == pm.player1_id else pm.player1_id
     opponent_sel = PlayerDeckSelection.query.filter_by(
         week_id=week.id, user_id=opponent_id, slot_number=1
     ).first()
@@ -6225,7 +6240,7 @@ def submit_tertiate_purge(league_id, matchup_id):
 
     purge = TertiateHousePurgeModel(
         player_matchup_id=pm.id,
-        choosing_user_id=effective.id,
+        choosing_user_id=acting_id,
         game_number=game_number,
         purged_house=purged_house,
     )
@@ -6267,7 +6282,7 @@ def mark_match_already_played(league_id, matchup_id):
 
     effective = get_effective_user()
     is_admin = _is_league_admin(league, effective)
-    is_participant = effective.id in (pm.player1_id, pm.player2_id)
+    is_participant = _acting_player_id(pm, effective.id) is not None
     is_captain_of_matchup = False
     if not is_admin and not is_participant and wm:
         for team_id in (wm.team1_id, wm.team2_id):
@@ -6352,7 +6367,7 @@ def submit_tertiate_purge_retroactive(league_id, matchup_id):
 
     effective = get_effective_user()
     is_admin = _is_league_admin(league, effective)
-    is_participant = effective.id in (pm.player1_id, pm.player2_id)
+    is_participant = _acting_player_id(pm, effective.id) is not None
     # Captains report on behalf of their team, so they need the same way past a
     # missing purge that the players have.
     is_captain_of_matchup = False
@@ -6451,6 +6466,148 @@ def submit_tertiate_purge_retroactive(league_id, matchup_id):
     return jsonify(serialize_player_matchup(pm, viewer=effective))
 
 
+def _acting_player_id(pm, user_id):
+    """Which of a matchup's two players this user may act as, if any.
+
+    A player acts as themselves. A substitute designated for the week acts as
+    the player they are covering, so a strike, a purge, a bid or a result is
+    recorded against the player whose match it is -- the substitution is a
+    matter of who may press the buttons, not of who played whom in the
+    standings.
+
+    Returns None for anyone with no business in the match.
+    """
+    if user_id in (pm.player1_id, pm.player2_id):
+        return user_id
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if week is None:
+        return None
+    sub = WeekSubstitution.query.filter(
+        WeekSubstitution.week_id == week.id,
+        WeekSubstitution.in_user_id == user_id,
+        WeekSubstitution.out_user_id.in_([pm.player1_id, pm.player2_id]),
+    ).first()
+    return sub.out_user_id if sub else None
+
+
+@blueprint.route("/<int:league_id>/weeks/<int:week_id>/substitutions", methods=["POST"])
+@login_required
+def create_week_substitution(league_id, week_id):
+    """Designate a teammate to cover someone's match for this week."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    out_user_id = data.get("out_user_id")
+    in_user_id = data.get("in_user_id")
+    if not out_user_id or not in_user_id:
+        return jsonify({"error": "out_user_id and in_user_id are required"}), 400
+    if out_user_id == in_user_id:
+        return jsonify({"error": "A player cannot substitute for themselves"}), 400
+
+    out_member = (
+        TeamMember.query.join(Team)
+        .filter(Team.league_id == league.id, TeamMember.user_id == out_user_id)
+        .first()
+    )
+    in_member = (
+        TeamMember.query.join(Team)
+        .filter(Team.league_id == league.id, TeamMember.user_id == in_user_id)
+        .first()
+    )
+    if not out_member or not in_member:
+        return jsonify({"error": "Both players must be in this league"}), 400
+    if out_member.team_id != in_member.team_id:
+        return jsonify({"error": "A substitute must be on the same team"}), 400
+
+    effective = get_effective_user()
+    team = db.session.get(Team, out_member.team_id)
+    is_admin = _is_league_admin(league, effective)
+    is_captain = any(
+        m.user_id == effective.id and m.is_captain for m in team.members
+    )
+    if not is_admin and not is_captain:
+        return jsonify({"error": "Captain or admin access required"}), 403
+
+    existing = WeekSubstitution.query.filter_by(
+        week_id=week.id, out_user_id=out_user_id
+    ).first()
+    if existing:
+        existing.in_user_id = in_user_id
+        existing.created_by_id = effective.id
+        sub = existing
+    else:
+        sub = WeekSubstitution(
+            week_id=week.id,
+            team_id=team.id,
+            out_user_id=out_user_id,
+            in_user_id=in_user_id,
+            created_by_id=effective.id,
+        )
+        db.session.add(sub)
+
+    out_user = db.session.get(User, out_user_id)
+    in_user = db.session.get(User, in_user_id)
+    _log_admin_action(
+        league.id,
+        week.id,
+        effective.id,
+        "substitution_set",
+        f"{in_user.name} covers {out_user.name}'s match",
+    )
+    db.session.commit()
+    db.session.refresh(week)
+    return jsonify(serialize_league_week(week, viewer=effective))
+
+
+@blueprint.route(
+    "/<int:league_id>/weeks/<int:week_id>/substitutions/<int:out_user_id>",
+    methods=["DELETE"],
+)
+@login_required
+def delete_week_substitution(league_id, week_id, out_user_id):
+    """Undo a substitution, handing the match back to the rostered player."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    week = db.session.get(LeagueWeek, week_id)
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Week not found"}), 404
+    sub = WeekSubstitution.query.filter_by(
+        week_id=week.id, out_user_id=out_user_id
+    ).first()
+    if not sub:
+        return jsonify({"error": "No substitution for that player"}), 404
+
+    effective = get_effective_user()
+    team = db.session.get(Team, sub.team_id)
+    is_admin = _is_league_admin(league, effective)
+    is_captain = team is not None and any(
+        m.user_id == effective.id and m.is_captain for m in team.members
+    )
+    if not is_admin and not is_captain:
+        return jsonify({"error": "Captain or admin access required"}), 403
+
+    out_user = db.session.get(User, sub.out_user_id)
+    in_user = db.session.get(User, sub.in_user_id)
+    db.session.delete(sub)
+    _log_admin_action(
+        league.id,
+        week.id,
+        effective.id,
+        "substitution_cleared",
+        f"{in_user.name} no longer covers {out_user.name}'s match",
+    )
+    db.session.commit()
+    db.session.refresh(week)
+    return jsonify(serialize_league_week(week, viewer=effective))
+
+
 # --- Match flow ---
 
 
@@ -6473,9 +6630,11 @@ def start_match(league_id, matchup_id):
         return jsonify({"error": "Week is not published yet"}), 400
 
     effective = get_effective_user()
-    if effective.id == pm.player1_id:
+    # A substitute starts the match as the player they are covering.
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id == pm.player1_id:
         pm.player1_started = True
-    elif effective.id == pm.player2_id:
+    elif acting_id == pm.player2_id:
         pm.player2_started = True
     else:
         # Allow admin to start for either player
@@ -6557,7 +6716,8 @@ def propose_schedule_times(league_id, matchup_id):
     if err:
         return err
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
     data = request.get_json(silent=True) or {}
     times_raw = data.get("times", [])
@@ -6574,13 +6734,13 @@ def propose_schedule_times(league_id, matchup_id):
             return jsonify({"error": f"Invalid datetime: {t}"}), 400
 
     MatchScheduleProposal.query.filter_by(
-        player_matchup_id=pm.id, proposed_by_user_id=effective.id
+        player_matchup_id=pm.id, proposed_by_user_id=acting_id
     ).delete()
     for dt in parsed_times:
         db.session.add(
             MatchScheduleProposal(
                 player_matchup_id=pm.id,
-                proposed_by_user_id=effective.id,
+                proposed_by_user_id=acting_id,
                 proposed_time=dt,
             )
         )
@@ -6600,10 +6760,11 @@ def clear_schedule_proposals(league_id, matchup_id):
     if err:
         return err
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
     MatchScheduleProposal.query.filter_by(
-        player_matchup_id=pm.id, proposed_by_user_id=effective.id
+        player_matchup_id=pm.id, proposed_by_user_id=acting_id
     ).delete()
     db.session.commit()
     db.session.refresh(pm)
@@ -6621,7 +6782,8 @@ def confirm_schedule_time(league_id, matchup_id):
     if err:
         return err
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
     data = request.get_json(silent=True) or {}
     time_raw = data.get("time")
@@ -6636,7 +6798,7 @@ def confirm_schedule_time(league_id, matchup_id):
     except (ValueError, AttributeError):
         return jsonify({"error": f"Invalid datetime: {time_raw}"}), 400
 
-    opponent_id = pm.player2_id if effective.id == pm.player1_id else pm.player1_id
+    opponent_id = pm.player2_id if acting_id == pm.player1_id else pm.player1_id
     opponent_proposals = MatchScheduleProposal.query.filter_by(
         player_matchup_id=pm.id, proposed_by_user_id=opponent_id
     ).all()
@@ -6647,13 +6809,13 @@ def confirm_schedule_time(league_id, matchup_id):
     existing = MatchScheduleConfirmation.query.filter_by(player_matchup_id=pm.id).first()
     if existing:
         existing.confirmed_time = requested_dt
-        existing.confirmed_by_user_id = effective.id
+        existing.confirmed_by_user_id = acting_id
     else:
         db.session.add(
             MatchScheduleConfirmation(
                 player_matchup_id=pm.id,
                 confirmed_time=requested_dt,
-                confirmed_by_user_id=effective.id,
+                confirmed_by_user_id=acting_id,
             )
         )
     db.session.commit()
@@ -6672,7 +6834,8 @@ def clear_schedule_confirmation(league_id, matchup_id):
     if err:
         return err
     effective = get_effective_user()
-    if effective.id not in (pm.player1_id, pm.player2_id):
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
     MatchScheduleConfirmation.query.filter_by(player_matchup_id=pm.id).delete()
     db.session.commit()
@@ -6731,7 +6894,7 @@ def report_game(league_id, matchup_id):
 
     effective = get_effective_user()
     is_admin = _is_league_admin(league, effective)
-    is_participant = effective.id in (pm.player1_id, pm.player2_id)
+    is_participant = _acting_player_id(pm, effective.id) is not None
     # Captains report on behalf of their team, which is what the team match
     # reporting section on My Info offers them.
     is_captain_of_matchup = False
@@ -7203,8 +7366,8 @@ def submit_adaptive_bid(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
-    is_participant = effective.id in (pm.player1_id, pm.player2_id)
-    if not is_participant:
+    acting_id = _acting_player_id(pm, effective.id)
+    if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
     data = request.get_json(silent=True) or {}
@@ -7214,7 +7377,7 @@ def submit_adaptive_bid(league_id, matchup_id):
     from keytracker.match_helpers import validate_adaptive_bid
 
     success, error = validate_adaptive_bid(
-        pm, effective.id, chains=chains, concede=concede
+        pm, acting_id, chains=chains, concede=concede
     )
     if not success:
         return jsonify({"error": error}), 400

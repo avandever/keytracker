@@ -59,6 +59,8 @@ import {
   removeCurationDeck,
   submitSteals,
   submitTertiatePurge,
+  setWeekSubstitution,
+  clearWeekSubstitution,
   confirmMatchResult,
   getTeamDeckEntryLog,
 } from '../api/leagues';
@@ -175,6 +177,8 @@ export default function MyTeamPage() {
   const [teamSealedPools, setTeamSealedPools] = useState<Record<string, TeamSealedPoolEntry[]>>({});
   // Sealed selection state: keyed by `${weekId}-${userId}-${slotNumber}`
   const [sealedSelections, setSealedSelections] = useState<Record<string, number>>({});
+  // Pending substitute choice, keyed by week and the player being covered.
+  const [subSelections, setSubSelections] = useState<Record<string, number>>({});
 
   // Thief: curation deck submission URLs, keyed by `${weekId}-${slot}`
   const [curationDeckUrls, setCurationDeckUrls] = useState<Record<string, string>>({});
@@ -988,6 +992,31 @@ export default function MyTeamPage() {
     }
   };
 
+  const handleSetSubstitute = async (weekId: number, outUserId: number, inUserId: number) => {
+    setError('');
+    setSuccess('');
+    try {
+      await setWeekSubstitution(league.id, weekId, outUserId, inUserId);
+      setSuccess('Substitute set.');
+      setSubSelections((prev) => ({ ...prev, [`${weekId}-${outUserId}`]: 0 }));
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleClearSubstitute = async (weekId: number, outUserId: number) => {
+    setError('');
+    setSuccess('');
+    try {
+      await clearWeekSubstitution(league.id, weekId, outUserId);
+      setSuccess('Substitute removed.');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const renderWeekContent = (week: LeagueWeek) => {
     const thiefEditableStatuses = new Set(['curation', 'thief', 'deck_selection', 'team_paired', 'pairing']);
     const isWeekEditable = week.format_type === 'thief'
@@ -1377,7 +1406,60 @@ export default function MyTeamPage() {
                     {isMe ? ' (you)' : ''}
                   </Typography>
                   {m.is_captain && <Chip label="Captain" size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.primary.main, 0.12), color: theme.palette.primary.dark })} />}
+                  {(() => {
+                    const sub = (week.substitutions || []).find((x) => x.out_user.id === m.user.id);
+                    return sub ? (
+                      <Chip label={`Sub: ${sub.in_user.name}`} size="small" color="info" />
+                    ) : null;
+                  })()}
                 </Box>
+
+                {/* Captains can hand a match to a teammate for the week. The
+                    result still counts for the player who was rostered. */}
+                {(isCaptain || league.is_admin) && week.status === 'published' && (() => {
+                  const sub = (week.substitutions || []).find((x) => x.out_user.id === m.user.id);
+                  const subKey = `${week.id}-${m.user.id}`;
+                  if (sub) {
+                    return (
+                      <Box sx={{ ml: 4, mb: 1, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {sub.in_user.name} is covering this match; the result counts for {m.user.name}.
+                        </Typography>
+                        <Button size="small" onClick={() => handleClearSubstitute(week.id, m.user.id)}>
+                          Remove sub
+                        </Button>
+                      </Box>
+                    );
+                  }
+                  const others = myTeam.members.filter((other) => other.user.id !== m.user.id);
+                  if (others.length === 0) return null;
+                  return (
+                    <Box sx={{ ml: 4, mb: 1, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <FormControl size="small" sx={{ minWidth: 160 }}>
+                        <InputLabel>Sub in</InputLabel>
+                        <Select
+                          label="Sub in"
+                          value={subSelections[subKey] || ''}
+                          onChange={(e) =>
+                            setSubSelections((prev) => ({ ...prev, [subKey]: Number(e.target.value) }))
+                          }
+                        >
+                          {others.map((other) => (
+                            <MenuItem key={other.user.id} value={other.user.id}>{other.user.name}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={!subSelections[subKey]}
+                        onClick={() => handleSetSubstitute(week.id, m.user.id, subSelections[subKey])}
+                      >
+                        Assign sub
+                      </Button>
+                    </Box>
+                  );
+                })()}
 
                 {/* Sealed pool display (sealed_archon and sealed_alliance) */}
                 {(week.format_type === 'sealed_archon' || week.format_type === 'sealed_alliance') && (() => {

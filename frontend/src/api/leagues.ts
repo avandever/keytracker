@@ -798,6 +798,32 @@ export async function getMyLeagueInfo(
   return data;
 }
 
+/** Designate a teammate to cover someone's match for a week. */
+export async function setWeekSubstitution(
+  leagueId: number,
+  weekId: number,
+  outUserId: number,
+  inUserId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/weeks/${weekId}/substitutions`,
+    { out_user_id: outUserId, in_user_id: inUserId },
+  );
+  return data;
+}
+
+/** Hand a match back to the player who was rostered for it. */
+export async function clearWeekSubstitution(
+  leagueId: number,
+  weekId: number,
+  outUserId: number,
+): Promise<LeagueWeek> {
+  const { data } = await apiClient.delete(
+    `/leagues/${leagueId}/weeks/${weekId}/substitutions/${outUserId}`,
+  );
+  return data;
+}
+
 /** Start a match for both players because it was played away from the site. */
 export async function markMatchAlreadyPlayed(
   leagueId: number,
