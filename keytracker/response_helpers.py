@@ -13,9 +13,18 @@ def etag_response(data):
     resp = jsonify(data)
     body = resp.get_data()
     etag = '"' + hashlib.md5(body).hexdigest() + '"'
+    # "no-cache" means store it but check before reusing, which is what makes
+    # the ETag worth having: without it the browser has no instruction to
+    # revalidate, so it either refetches in full or serves something stale.
+    # "private" keeps a per-user payload out of any shared cache.
+    cache_control = "private, no-cache"
     if _matches(request.headers.get("If-None-Match"), etag):
-        return Response(status=304, headers={"ETag": etag})
+        return Response(
+            status=304,
+            headers={"ETag": etag, "Cache-Control": cache_control},
+        )
     resp.headers["ETag"] = etag
+    resp.headers["Cache-Control"] = cache_control
     return resp
 
 
