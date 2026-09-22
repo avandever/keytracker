@@ -2079,6 +2079,14 @@ export default function MyTeamPage() {
                             const opponentHouses = opponentSel?.deck?.houses || [];
                             const houseSelectKey = pm.id;
                             const nextGameNum = pm.games.length + 1;
+                            // A decided match has no next game, so nothing should
+                            // be offered for one -- the purges already made stay
+                            // on show as the record of how it was played.
+                            const purgeWinsNeeded = Math.ceil(week.best_of_n / 2);
+                            const matchDecided =
+                              pm.is_double_loss ||
+                              pm.games.filter((g) => g.winner_id === pm.player1.id).length >= purgeWinsNeeded ||
+                              pm.games.filter((g) => g.winner_id === pm.player2.id).length >= purgeWinsNeeded;
                             const purgesThisGame = allPurges.filter((p) => p.game_number === nextGameNum);
                             const myPurgeThisGame = purgesThisGame.find((p) => p.choosing_user_id === user?.id);
                             const bothPurgedThisGame = purgesThisGame.length === 2;
@@ -2089,7 +2097,11 @@ export default function MyTeamPage() {
                                 {/* Show opponent deck to viewer — only after both have started */}
                                 {isInMatchup && bothStarted && opponentSel?.deck && (
                                   <Box sx={{ mb: 1 }}>
-                                    <Typography variant="caption" color="text.secondary">Opponent's deck (choose a house to purge for Game {nextGameNum}):</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {matchDecided
+                                        ? "Opponent's deck:"
+                                        : `Opponent's deck (choose a house to purge for Game ${nextGameNum}):`}
+                                    </Typography>
                                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 0.5, flexWrap: 'wrap' }}>
                                       {opponentSel.deck.houses && <HouseIcons houses={opponentSel.deck.houses} />}
                                       <Typography variant="body2">{opponentSel.deck.name}</Typography>
@@ -2100,7 +2112,7 @@ export default function MyTeamPage() {
                                   </Box>
                                 )}
                                 {/* Purge selection — only for participants, only after both started, only if not yet submitted for this game */}
-                                {isInMatchup && bothStarted && !myPurgeThisGame && !bothPurgedThisGame && opponentHouses.length > 0 && (
+                                {isInMatchup && bothStarted && !matchDecided && !myPurgeThisGame && !bothPurgedThisGame && opponentHouses.length > 0 && (
                                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
                                     <FormControl size="small" sx={{ minWidth: 140 }}>
                                       <InputLabel>Purge house</InputLabel>
@@ -2145,11 +2157,11 @@ export default function MyTeamPage() {
                                   </Box>
                                 )}
                                 {/* Waiting state */}
-                                {isInMatchup && bothStarted && myPurgeThisGame && !bothPurgedThisGame && (
+                                {isInMatchup && bothStarted && !matchDecided && myPurgeThisGame && !bothPurgedThisGame && (
                                   <Typography variant="body2" color="text.secondary">Waiting for opponent to choose for Game {nextGameNum}...</Typography>
                                 )}
                                 {/* Reveal for current game */}
-                                {bothPurgedThisGame && (
+                                {!matchDecided && bothPurgedThisGame && (
                                   <Box>
                                     {purgesThisGame.map((p) => {
                                       const chooser = p.choosing_user_id === pm.player1.id ? pm.player1 : pm.player2;
