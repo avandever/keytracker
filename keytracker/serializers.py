@@ -32,7 +32,7 @@ from keytracker.schema import (
     db,
 )
 from flask import g, has_app_context
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload, selectinload
 import json
 
@@ -195,13 +195,35 @@ def serialize_team_member(member: TeamMember) -> dict:
     }
 
 
+def _late_deck_entry_counts(league_id) -> dict:
+    """Late deck entries per team, counted once for the whole league.
+
+    A league page serialises the same handful of teams dozens of times -- once
+    at the top and again inside every week matchup -- so counting per call was
+    56 COUNT queries on one page.
+    """
+    cache_key = f"_late_deck_entries_{league_id}"
+    cached = getattr(g, cache_key, None) if has_app_context() else None
+    if cached is not None:
+        return cached
+    rows = (
+        db.session.query(TeamDeckEntryLog.team_id, func.count(TeamDeckEntryLog.id))
+        .join(Team, Team.id == TeamDeckEntryLog.team_id)
+        .filter(Team.league_id == league_id, TeamDeckEntryLog.action == "added_late")
+        .group_by(TeamDeckEntryLog.team_id)
+        .all()
+    )
+    counts = {team_id: n for team_id, n in rows}
+    if has_app_context():
+        setattr(g, cache_key, counts)
+    return counts
+
+
 def serialize_team_detail(team: Team, hide_members: bool = False) -> dict:
     # How often this team's captains have entered a deck after pairings went
     # out. The privilege exists so a missed deadline does not kill a match,
     # but it should be visible rather than quiet.
-    late_deck_entries = TeamDeckEntryLog.query.filter_by(
-        team_id=team.id, action="added_late"
-    ).count()
+    late_deck_entries = _late_deck_entry_counts(team.league_id).get(team.id, 0)
     return {
         "id": team.id,
         "name": team.name,
