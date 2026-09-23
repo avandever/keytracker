@@ -627,6 +627,13 @@ export default function MyLeagueInfoPage() {
     }
   };
 
+  /** A match the viewer may act on, and who they are acting as in it. */
+  type MyMatch = {
+    pm: PlayerMatchupInfo;
+    coveringFor: string | null;
+    actingId: number | undefined;
+  };
+
   /** Players whose match this viewer is covering this week. */
   const coveredPlayerIds = (week: LeagueWeek): number[] =>
     (week.substitutions || [])
@@ -634,20 +641,28 @@ export default function MyLeagueInfoPage() {
       .map((sub) => sub.out_user.id);
 
   /** Every match this viewer may act on: their own, then any they cover. */
-  const getMyMatchups = (
-    week: LeagueWeek,
-  ): { pm: PlayerMatchupInfo; coveringFor: string | null }[] => {
+  /**
+   * Every match this viewer may act on: their own, then any they cover.
+   *
+   * `actingId` is the player they are for that match -- themselves normally,
+   * the covered player when standing in. Everything that asks "which side am
+   * I on" has to use it, or a substitute is treated as a bystander in the
+   * match they are playing.
+   */
+  const getMyMatchups = (week: LeagueWeek): MyMatch[] => {
     const covered = coveredPlayerIds(week);
-    const own: { pm: PlayerMatchupInfo; coveringFor: string | null }[] = [];
-    const covering: { pm: PlayerMatchupInfo; coveringFor: string | null }[] = [];
+    const own: MyMatch[] = [];
+    const covering: MyMatch[] = [];
     for (const wm of week.matchups) {
       for (const pm of wm.player_matchups) {
         if (pm.player1.id === effectiveUserId || pm.player2.id === effectiveUserId) {
-          own.push({ pm, coveringFor: null });
+          own.push({ pm, coveringFor: null, actingId: effectiveUserId });
           continue;
         }
         const forPlayer = [pm.player1, pm.player2].find((p) => covered.includes(p.id));
-        if (forPlayer) covering.push({ pm, coveringFor: forPlayer.name });
+        if (forPlayer) {
+          covering.push({ pm, coveringFor: forPlayer.name, actingId: forPlayer.id });
+        }
       }
     }
     return [...own, ...covering];
@@ -1331,18 +1346,20 @@ export default function MyLeagueInfoPage() {
         </Card>
 
         {/* Opponent's decks (triad, after match starts) */}
-        {week.format_type === 'triad' && myMatchup && myMatchup.player1_started && myMatchup.player2_started && (() => {
-          const opponentId = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.id : myMatchup.player1.id;
-          const opponentName = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.name : myMatchup.player1.name;
+        {week.format_type === 'triad' && getMyMatchups(week)
+          .filter(({ pm }) => pm.player1_started && pm.player2_started)
+          .map(({ pm: myMatchup, actingId, coveringFor }) => {
+          const opponentId = myMatchup.player1.id === actingId ? myMatchup.player2.id : myMatchup.player1.id;
+          const opponentName = myMatchup.player1.id === actingId ? myMatchup.player2.name : myMatchup.player1.name;
           const opponentSelections = week.deck_selections.filter((ds) => ds.user_id === opponentId);
           const strickenIds = new Set(myMatchup.strikes.map((s) => s.struck_deck_selection_id));
           const bothStruck = myMatchup.strikes.length >= 2;
           if (opponentSelections.length === 0) return null;
           return (
-            <Card sx={{ mb: 2 }}>
+            <Card key={myMatchup.id} sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>
-                  {opponentName}'s Decks
+                  {opponentName}'s Decks{coveringFor ? ` (covering for ${coveringFor})` : ''}
                 </Typography>
                 {opponentSelections.map((ds) => {
                   const isStruck = bothStruck && strickenIds.has(ds.id);
@@ -1382,13 +1399,13 @@ export default function MyLeagueInfoPage() {
               </CardContent>
             </Card>
           );
-        })()}
+        })}
 
         {/* Oubliette: ban a house, then see which decks survive both bans */}
-        {week.format_type === 'oubliette' && myMatchup && week.status === 'published'
-          && myMatchup.player1_started && myMatchup.player2_started && (() => {
-          const pm = myMatchup;
-          const iAmP1 = pm.player1.id === effectiveUserId;
+        {week.format_type === 'oubliette' && week.status === 'published' && getMyMatchups(week)
+          .filter(({ pm }) => pm.player1_started && pm.player2_started)
+          .map(({ pm, actingId }) => {
+          const iAmP1 = pm.player1.id === actingId;
           const myBan = iAmP1 ? pm.oubliette_p1_banned_house : pm.oubliette_p2_banned_house;
           const oppBan = iAmP1 ? pm.oubliette_p2_banned_house : pm.oubliette_p1_banned_house;
           const myEligible = iAmP1 ? pm.oubliette_p1_eligible_deck_ids : pm.oubliette_p2_eligible_deck_ids;
@@ -1425,7 +1442,7 @@ export default function MyLeagueInfoPage() {
           });
 
           return (
-            <Card sx={{ mb: 2 }}>
+            <Card key={pm.id} sx={{ mb: 2 }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom>Oubliette — Banned Houses</Typography>
                 {!myBan && (
@@ -1492,10 +1509,10 @@ export default function MyLeagueInfoPage() {
               </CardContent>
             </Card>
           );
-        })()}
+        })}
 
         {/* Match section — one card per match, including any being covered. */}
-        {week.status === 'published' && getMyMatchups(week).map(({ pm: myMatchup, coveringFor }) => (
+        {week.status === 'published' && getMyMatchups(week).map(({ pm: myMatchup, coveringFor, actingId }) => (
           <Card key={myMatchup.id} sx={{ mb: 2 }}>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -1519,7 +1536,7 @@ export default function MyLeagueInfoPage() {
                   <Avatar src={myMatchup.player1.avatar_url || undefined} sx={{ width: 32, height: 32 }}>
                     {myMatchup.player1.name?.[0]}
                   </Avatar>
-                  <Typography fontWeight={myMatchup.player1.id === effectiveUserId ? 'bold' : 'normal'}>
+                  <Typography fontWeight={myMatchup.player1.id === actingId ? 'bold' : 'normal'}>
                     {myMatchup.player1.name}
                   </Typography>
                 </Box>
@@ -1528,7 +1545,7 @@ export default function MyLeagueInfoPage() {
                   <Avatar src={myMatchup.player2.avatar_url || undefined} sx={{ width: 32, height: 32 }}>
                     {myMatchup.player2.name?.[0]}
                   </Avatar>
-                  <Typography fontWeight={myMatchup.player2.id === effectiveUserId ? 'bold' : 'normal'}>
+                  <Typography fontWeight={myMatchup.player2.id === actingId ? 'bold' : 'normal'}>
                     {myMatchup.player2.name}
                   </Typography>
                 </Box>
@@ -1555,8 +1572,8 @@ export default function MyLeagueInfoPage() {
                       );
                     })}
                   </Box>
-                  {((myMatchup.player1.id === effectiveUserId && !myMatchup.player1_started) ||
-                    (myMatchup.player2.id === effectiveUserId && !myMatchup.player2_started)) && (
+                  {((myMatchup.player1.id === actingId && !myMatchup.player1_started) ||
+                    (myMatchup.player2.id === actingId && !myMatchup.player2_started)) && (
                     <Button variant="contained" onClick={() => handleStartMatch(myMatchup.id)} sx={{ mb: 2 }}>
                       Start Match
                     </Button>
@@ -1600,19 +1617,19 @@ export default function MyLeagueInfoPage() {
                 </>
               )}
 
-              {effectiveUserId && !isMatchDecided(myMatchup, week.best_of_n) && (
+              {actingId && !isMatchDecided(myMatchup, week.best_of_n) && (
                 <MatchSchedulingSection
                   leagueId={league.id}
                   pm={myMatchup}
-                  myUserId={effectiveUserId}
+                  myUserId={actingId}
                   onUpdate={handleMatchupUpdate}
                 />
               )}
 
               {/* Triad Strike Phase */}
               {week.format_type === 'triad' && myMatchup.player1_started && myMatchup.player2_started && (() => {
-                const myStrike = myMatchup.strikes.find((s) => s.striking_user_id === effectiveUserId);
-                const opponentId = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.id : myMatchup.player1.id;
+                const myStrike = myMatchup.strikes.find((s) => s.striking_user_id === actingId);
+                const opponentId = myMatchup.player1.id === actingId ? myMatchup.player2.id : myMatchup.player1.id;
                 const opponentSelections = week.deck_selections.filter((ds) => ds.user_id === opponentId);
                 const opponentStrike = myMatchup.strikes.find((s) => s.striking_user_id === opponentId);
                 const bothStruck = myMatchup.strikes.length >= 2;
@@ -1684,14 +1701,14 @@ export default function MyLeagueInfoPage() {
                 const nextGameNum = myMatchup.games.length + 1;
                 const allPurges = myMatchup.tertiate_purge_choices || [];
                 const purgesThisGame = allPurges.filter((p) => p.game_number === nextGameNum);
-                const myPurgeThisGame = purgesThisGame.find((p) => p.choosing_user_id === effectiveUserId);
+                const myPurgeThisGame = purgesThisGame.find((p) => p.choosing_user_id === actingId);
                 const bothPurgedThisGame = purgesThisGame.length === 2;
-                const opponentId = myMatchup.player1.id === effectiveUserId ? myMatchup.player2.id : myMatchup.player1.id;
+                const opponentId = myMatchup.player1.id === actingId ? myMatchup.player2.id : myMatchup.player1.id;
                 const opponentSel = week.deck_selections.find((ds) => ds.user_id === opponentId && ds.slot_number === 1);
                 const opponentHouses = opponentSel?.deck?.houses || [];
                 // Entering a game played off-site means naming both purges, so
                 // the viewer's own houses are needed too.
-                const mySel = week.deck_selections.find((ds) => ds.user_id === effectiveUserId && ds.slot_number === 1);
+                const mySel = week.deck_selections.find((ds) => ds.user_id === actingId && ds.slot_number === 1);
                 const myHouses = mySel?.deck?.houses || [];
 
                 // Past game purge results (all games already played)
