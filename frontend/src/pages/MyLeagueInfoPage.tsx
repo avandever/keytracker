@@ -140,6 +140,10 @@ export default function MyLeagueInfoPage() {
   const [retroForgetting, setRetroForgetting] = useState(false);
   const [retroSaving, setRetroSaving] = useState(false);
   const [alreadyPlayedOpen, setAlreadyPlayedOpen] = useState(false);
+  // Purges entered from the captain's team reporting section, keyed by
+  // matchup and side.
+  const [teamPurgeHouses, setTeamPurgeHouses] = useState<Record<string, string>>({});
+  const [teamPurgeNoneFor, setTeamPurgeNoneFor] = useState<number | null>(null);
   const purgeLabel = (house: string) =>
     house === TERTIATE_PURGE_NOT_RECORDED ? 'not recorded' : house;
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
@@ -441,6 +445,34 @@ export default function MyLeagueInfoPage() {
       setError(e.response?.data?.error || e.message);
     } finally {
       setRetroSaving(false);
+    }
+  };
+
+  /**
+   * Record the purges for a game nobody can play out: a concession before the
+   * bans were made, or a pair neither player can recall. Without them the
+   * game cannot be reported at all.
+   */
+  const handleTeamRetroPurge = async (pm: PlayerMatchupInfo, noneMade: boolean) => {
+    setError('');
+    setSuccess('');
+    try {
+      const body = noneMade
+        ? { not_recorded: true }
+        : {
+            player1_house: teamPurgeHouses[`${pm.id}-1`],
+            player2_house: teamPurgeHouses[`${pm.id}-2`],
+          };
+      await submitTertiatePurgeRetroactive(league.id, pm.id, body);
+      setSuccess(
+        noneMade
+          ? 'Recorded as no purges for this game — you can report it now.'
+          : 'Purges recorded — you can report the game now.',
+      );
+      setTeamPurgeNoneFor(null);
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
     }
   };
 
@@ -2221,10 +2253,86 @@ export default function MyLeagueInfoPage() {
                       const purgesForNextGame = (pm.tertiate_purge_choices || []).filter((p) => p.game_number === nextGameNum);
                       const tertiateReady = week.format_type !== 'tertiate' || purgesForNextGame.length >= 2;
                       if (!tertiateReady) {
+                        const housesOf = (userId: number) =>
+                          week.deck_selections.find(
+                            (ds) => ds.user_id === userId && ds.slot_number === 1,
+                          )?.deck?.houses || [];
+                        // Each player purges from the other player's deck.
+                        const p1Options = housesOf(pm.player2.id);
+                        const p2Options = housesOf(pm.player1.id);
+                        const canName = p1Options.length > 0 && p2Options.length > 0;
+                        const k1 = `${pm.id}-1`;
+                        const k2 = `${pm.id}-2`;
                         return (
-                          <Alert severity="info" sx={{ mt: 1 }}>
-                            Waiting for both players to submit purge choices for Game {nextGameNum}.
-                          </Alert>
+                          <Box sx={{ mt: 1, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                            <Alert severity="info" sx={{ mb: 1 }}>
+                              Game {nextGameNum} needs both purge choices before it can be reported.
+                              The players can enter them from their own match, or you can record them here.
+                            </Alert>
+                            {canName && (
+                              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+                                <FormControl size="small" sx={{ minWidth: 190 }}>
+                                  <InputLabel>{`${pm.player1.name} purged`}</InputLabel>
+                                  <Select
+                                    label={`${pm.player1.name} purged`}
+                                    value={teamPurgeHouses[k1] || ''}
+                                    onChange={(e) =>
+                                      setTeamPurgeHouses((prev) => ({ ...prev, [k1]: e.target.value }))
+                                    }
+                                  >
+                                    {p1Options.map((h) => <MenuItem key={h} value={h}>{h}</MenuItem>)}
+                                  </Select>
+                                </FormControl>
+                                <FormControl size="small" sx={{ minWidth: 190 }}>
+                                  <InputLabel>{`${pm.player2.name} purged`}</InputLabel>
+                                  <Select
+                                    label={`${pm.player2.name} purged`}
+                                    value={teamPurgeHouses[k2] || ''}
+                                    onChange={(e) =>
+                                      setTeamPurgeHouses((prev) => ({ ...prev, [k2]: e.target.value }))
+                                    }
+                                  >
+                                    {p2Options.map((h) => <MenuItem key={h} value={h}>{h}</MenuItem>)}
+                                  </Select>
+                                </FormControl>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  disabled={!teamPurgeHouses[k1] || !teamPurgeHouses[k2]}
+                                  onClick={() => handleTeamRetroPurge(pm, false)}
+                                >
+                                  Save purges
+                                </Button>
+                              </Box>
+                            )}
+                            {teamPurgeNoneFor === pm.id ? (
+                              <Box>
+                                <Typography variant="body2">
+                                  Record Game {nextGameNum} with <strong>no purges</strong> for either
+                                  player. Use this when the game was conceded before the bans were
+                                  made, or when neither player can recall them — the houses stay
+                                  blank rather than being guessed at.
+                                </Typography>
+                                <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                                  <Button size="small" onClick={() => setTeamPurgeNoneFor(null)}>
+                                    Back
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    color="warning"
+                                    onClick={() => handleTeamRetroPurge(pm, true)}
+                                  >
+                                    Confirm: no purges for this game
+                                  </Button>
+                                </Box>
+                              </Box>
+                            ) : (
+                              <Button size="small" color="warning" onClick={() => setTeamPurgeNoneFor(pm.id)}>
+                                No purges were made
+                              </Button>
+                            )}
+                          </Box>
                         );
                       }
                       return (
