@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# -E so the ERR trap is inherited; pipefail so a failing step in a `| tee`
+# pipeline is not hidden by tee's success.
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -11,6 +13,16 @@ VITE_RECAPTCHA_SITE_KEY="6LfZAXksAAAAAOycX9ZMlksKsKKyyMTAXZnZxJo9"
 LOG_FILE="${LOG_FILE:-$REPO_DIR/deploy/deploy.log}"
 
 log() { echo "[$(date -Iseconds)] $*" | tee -a "$LOG_FILE"; }
+
+# Without this a failed deploy just stops mid-log, and whoever reads it later
+# has to work out that the missing lines are the story.
+on_error() {
+  local code=$?
+  local line=$1
+  log "=== Deploy FAILED at line $line (exit $code) ==="
+  exit "$code"
+}
+trap 'on_error $LINENO' ERR
 
 log "=== Deploy triggered ==="
 
@@ -49,4 +61,5 @@ else
 fi
 
 log "=== Deploy complete ==="
+exit 0
 

@@ -12,12 +12,41 @@ import json
 import os
 import subprocess
 import sys
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "")
 DEPLOY_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "deploy.sh")
 PORT = int(os.environ.get("WEBHOOK_PORT", "9867"))
 DEPLOY_BRANCH = "refs/heads/main"
+
+
+def run_deploy(trigger: str) -> None:
+    """Run the deploy and say how it went.
+
+    Fire-and-forget with the output thrown away means a failed deploy looks
+    exactly like a successful one from here: the listener says "Deploy
+    started" and nothing ever contradicts it. Waiting for the script costs
+    nothing -- this runs on its own thread, and GitHub has already had its
+    200 -- and turns a silent failure into a line in the log.
+    """
+    try:
+        result = subprocess.run(
+            ["bash", DEPLOY_SCRIPT],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except Exception as exc:  # noqa: BLE001 - the listener must survive this
+        print(f"Deploy for {trigger} could not be started: {exc}", flush=True)
+        return
+    if result.returncode == 0:
+        print(f"Deploy for {trigger} succeeded", flush=True)
+        return
+    print(f"Deploy for {trigger} FAILED (exit {result.returncode})", flush=True)
+    tail = (result.stdout or "").strip().splitlines()[-20:]
+    for line in tail:
+        print(f"  | {line}", flush=True)
 
 
 def verify_signature(payload: bytes, signature: str) -> bool:
@@ -83,12 +112,11 @@ class WebhookHandler(BaseHTTPRequestHandler):
         head_commit = data.get("head_commit", {}).get("message", "").split("\n")[0]
         print(f"Deploy triggered by {pusher}: {head_commit}", flush=True)
 
-        subprocess.Popen(
-            ["bash", DEPLOY_SCRIPT],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
+        threading.Thread(
+            target=run_deploy,
+            args=(f"{pusher}: {head_commit}",),
+            daemon=True,
+        ).start()
 
         self.send_response(200)
         self.end_headers()
