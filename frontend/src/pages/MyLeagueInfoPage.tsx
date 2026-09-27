@@ -58,6 +58,7 @@ import HouseIcons from '../components/HouseIcons';
 import MatchSchedulingSection from '../components/MatchSchedulingSection';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import TeamAmberBudgetPanel from '../components/TeamAmberBudgetPanel';
+import SpecialsPanel from '../components/SpecialsPanel';
 import { getWeekDescription } from '../utils/formatDescriptions';
 import { banOptions } from '../utils/houses';
 import type { SealedPoolEntry } from '../api/leagues';
@@ -760,6 +761,7 @@ export default function MyLeagueInfoPage() {
             })()}
 
             {week.team_amber_budget && <TeamAmberBudgetPanel budget={week.team_amber_budget} />}
+            {week.required_card_usage && <SpecialsPanel usage={week.required_card_usage} />}
 
             {/* Current selections */}
             {mySelections.length > 0 && (

@@ -24,6 +24,7 @@ from keytracker.schema import (
 )
 from keytracker.schema import (
     StandaloneMatch,
+    CardInDeck,
     PlatonicCard,
     PlatonicCardInSet,
     KeyforgeHouse,
@@ -34,6 +35,12 @@ from keytracker.schema import (
 from flask import g, has_app_context
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload, selectinload
+from keytracker.card_requirements import (
+    _deck_category_matches,
+    _describe_category,
+    _norm_card_title,
+    _qualifying_card_titles,
+)
 import json
 
 
@@ -415,6 +422,141 @@ def _suggestion_conflicts(week: LeagueWeek) -> dict:
     return conflicts
 
 
+def _required_card_usage(week: LeagueWeek, team_id) -> dict:
+    """Which of the week's required cards the team has already spent.
+
+    A required-card week is a shared pool: each named card can be used by one
+    player, and each category by one player, so every deck submitted takes
+    something off the table. Without this a player has to open each teammate's
+    deck and work out what is left for them -- which is how it was.
+
+    Reported per team, and only to a viewer on that team.
+    """
+    try:
+        names = json.loads(week.required_card_names or "[]")
+    except (json.JSONDecodeError, TypeError):
+        names = []
+    try:
+        categories = json.loads(week.required_card_categories or "[]")
+    except (json.JSONDecodeError, TypeError):
+        categories = []
+    if not names and not categories:
+        return {}
+
+    cache_key = f"_required_usage_{week.id}_{team_id}"
+    cached = getattr(g, cache_key, None) if has_app_context() else None
+    if cached is not None:
+        return cached
+
+    team = db.session.get(Team, team_id) if team_id else None
+    member_ids = {m.user_id for m in team.members} if team else set()
+
+    # Matching reads every card's traits, type, rarity and expansion. Left to
+    # lazy loading that is a query per card per deck -- it took this from half
+    # a second to nearly six. Fetched in one pass instead, and held until the
+    # answer is built, since the identity map keeps only weak references.
+    deck_ids = {
+        sel.deck_id
+        for sel in week.deck_selections
+        if sel.deck_id and sel.user_id in member_ids
+    }
+    deck_ids |= {
+        sugg.deck_id
+        for sugg in week.deck_suggestions
+        if sugg.deck_id and sugg.team_id == team_id
+    }
+    keep_alive = []
+    if deck_ids:
+        keep_alive = (
+            CardInDeck.query.options(
+                selectinload(CardInDeck.platonic_card).selectinload(
+                    PlatonicCard.traits
+                ),
+                selectinload(CardInDeck.platonic_card).joinedload(
+                    PlatonicCard.kf_house
+                ),
+                selectinload(CardInDeck.platonic_card).joinedload(
+                    PlatonicCard.kf_card_type
+                ),
+                selectinload(CardInDeck.card_in_set).joinedload(
+                    PlatonicCardInSet.kf_rarity
+                ),
+            )
+            .filter(CardInDeck.deck_id.in_(deck_ids))
+            .all()
+        )
+
+    # What each teammate's submitted deck takes off the table.
+    claims: dict = {}
+    for sel in week.deck_selections:
+        if sel.user_id not in member_ids or not sel.deck:
+            continue
+        user = db.session.get(User, sel.user_id)
+        for title in _qualifying_card_titles(sel.deck, names, []):
+            claims.setdefault(("card", _norm_card_title(title)), (user, sel.deck))
+        for index in _deck_category_matches(sel.deck, categories):
+            claims.setdefault(("category", index), (user, sel.deck))
+
+    items = []
+    for name in names:
+        holder = claims.get(("card", _norm_card_title(name)))
+        items.append(
+            {
+                "key": f"card:{_norm_card_title(name)}",
+                "label": name,
+                "kind": "card",
+                "claimed_by": serialize_user_brief(holder[0]) if holder else None,
+                "deck_name": holder[1].name if holder else None,
+            }
+        )
+    for index, category in enumerate(categories):
+        holder = claims.get(("category", index))
+        items.append(
+            {
+                "key": f"category:{index}",
+                "label": _describe_category(category, index),
+                "kind": "category",
+                "claimed_by": serialize_user_brief(holder[0]) if holder else None,
+                "deck_name": holder[1].name if holder else None,
+            }
+        )
+
+    # And what each deck the team is considering would take.
+    suggestions = []
+    for sugg in week.deck_suggestions:
+        if sugg.team_id != team_id or not sugg.deck:
+            continue
+        keys = [
+            f"card:{_norm_card_title(t)}"
+            for t in _qualifying_card_titles(sugg.deck, names, [])
+        ]
+        keys += [
+            f"category:{index}"
+            for index in _deck_category_matches(sugg.deck, categories)
+        ]
+        by_key = {item["key"]: item for item in items}
+        suggestions.append(
+            {
+                "deck_id": sugg.deck_id,
+                "would_claim": [
+                    {
+                        "key": key,
+                        "label": by_key[key]["label"],
+                        "taken": by_key[key]["claimed_by"] is not None,
+                    }
+                    for key in keys
+                    if key in by_key
+                ],
+            }
+        )
+
+    usage = {"items": items, "suggestions": suggestions}
+    keep_alive.clear()
+    if has_app_context():
+        setattr(g, cache_key, usage)
+    return usage
+
+
 def _team_amber_budget(week: LeagueWeek, team_id) -> dict:
     """Running total of a team's raw aember for a week that caps or floors it.
 
@@ -669,6 +811,13 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             serialize_deck_selection(ds, redact_deck=ds.user_id in redacted_opponent_ids)
             for ds in week.deck_selections
         ],
+        "required_card_usage": (
+            # viewer_own_team_id, not viewer_team_id: an admin is usually
+            # playing too, and their own team's pool is theirs to see.
+            _required_card_usage(week, viewer_own_team_id)
+            if viewer_own_team_id
+            else {}
+        ),
         "substitutions": [
             {
                 "id": sub.id,

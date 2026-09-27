@@ -68,6 +68,7 @@ import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import CaptainHud from '../components/CaptainHud';
 import TeamAmberBudgetPanel from '../components/TeamAmberBudgetPanel';
+import SpecialsPanel from '../components/SpecialsPanel';
 import OutstandingMatchesTab from '../components/OutstandingMatchesTab';
 import { currentWeekOf } from './MyLeagueInfoPage';
 import { getWeekDescription } from '../utils/formatDescriptions';
@@ -1077,6 +1078,7 @@ export default function MyTeamPage() {
           })()}
 
           {week.team_amber_budget && <TeamAmberBudgetPanel budget={week.team_amber_budget} />}
+          {week.required_card_usage && <SpecialsPanel usage={week.required_card_usage} />}
 
           {/* Feature player designation (even team_size leagues only) */}
           {showFeature && (
@@ -2019,6 +2021,20 @@ export default function MyTeamPage() {
                     )}
                     {/* A suggestion can go stale after it is made, so this is
                         shown on the list rather than only at submission. */}
+                    {/* Which of the week's required cards this deck would
+                        use up, so a reader can tell at a glance whether it
+                        still fits alongside what the team has submitted. */}
+                    {(week.required_card_usage?.suggestions || [])
+                      .find((u) => u.deck_id === s.deck?.db_id)
+                      ?.would_claim.map((claim) => (
+                        <Chip
+                          key={claim.key}
+                          size="small"
+                          variant="outlined"
+                          color={claim.taken ? 'default' : 'success'}
+                          label={claim.taken ? `${claim.label} (taken)` : claim.label}
+                        />
+                      ))}
                     {(s.conflicts?.length ?? 0) > 0 && (
                       <Tooltip title={s.conflicts!.join(' ')}>
                         <Chip label="Unavailable" size="small" color="warning" variant="outlined" />

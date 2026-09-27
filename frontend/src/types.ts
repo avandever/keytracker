@@ -536,6 +536,7 @@ export interface LeagueWeek {
   no_keycheat: boolean | null;
   team_max_raw_amber: number | null;
   team_min_raw_amber: number | null;
+  required_card_usage?: RequiredCardUsage;
   substitutions?: SubstitutionInfo[];
   /** False on a week returned as a tab stub: its lists are empty, not known to be empty. */
   detail_loaded?: boolean;
@@ -673,6 +674,27 @@ export const TERTIATE_PURGE_NOT_RECORDED = '__not_recorded__';
 
 /** Set to 'me' on a league payload trimmed to one player's own view. */
 export type LeagueScope = 'me';
+
+/** One required card or category, and who on the team has claimed it. */
+export interface RequiredCardUsageItem {
+  key: string;
+  label: string;
+  kind: 'card' | 'category';
+  claimed_by: UserBrief | null;
+  deck_name: string | null;
+}
+
+/** What a suggested deck would take from the pool. */
+export interface RequiredCardSuggestion {
+  deck_id: number;
+  would_claim: { key: string; label: string; taken: boolean }[];
+}
+
+/** The week's required cards seen as a shared pool, for the viewer's team. */
+export interface RequiredCardUsage {
+  items?: RequiredCardUsageItem[];
+  suggestions?: RequiredCardSuggestion[];
+}
 
 /** One teammate covering another's match for a week. */
 export interface SubstitutionInfo {
