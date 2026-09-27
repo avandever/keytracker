@@ -66,6 +66,7 @@ import {
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
+import CaptainHud from '../components/CaptainHud';
 import TeamAmberBudgetPanel from '../components/TeamAmberBudgetPanel';
 import OutstandingMatchesTab from '../components/OutstandingMatchesTab';
 import { currentWeekOf } from './MyLeagueInfoPage';
@@ -1062,6 +1063,11 @@ export default function MyTeamPage() {
             <Chip label={`Bo${week.best_of_n}`} size="small" variant="outlined" />
             <Chip label={week.status.replace('_', ' ')} size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
             <WeekConstraints week={week} sets={sets} />
+
+            {/* What the captain still has to chase, gathered in one place. */}
+            {(isCaptain || league.is_admin) && week.detail_loaded !== false && (
+              <CaptainHud week={week} myTeam={myTeam} />
+            )}
           </Box>
           {(() => {
             const desc = getWeekDescription(week.format_type, week.custom_description, week.hide_standard_description);
