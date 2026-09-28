@@ -702,14 +702,6 @@ export default function MyLeagueInfoPage() {
     return [...own, ...covering];
   };
 
-  // The rest of the week UI is written around a single match. A substitute with
-  // no match of their own gets the one they are covering; one who is playing too
-  // keeps their own here, and sees the covered match in its own card below.
-  const getMyMatchup = (week: LeagueWeek): PlayerMatchupInfo | null => {
-    const all = getMyMatchups(week);
-    return all.length > 0 ? all[0].pm : null;
-  };
-
   const getMySelections = (week: LeagueWeek): DeckSelectionInfo[] => {
     return week.deck_selections.filter((ds) => ds.user_id === effectiveUserId);
   };
@@ -731,7 +723,10 @@ export default function MyLeagueInfoPage() {
 
   const renderWeekContent = (week: LeagueWeek) => {
     const mySelections = getMySelections(week);
-    const myMatchup = getMyMatchup(week);
+    // Strikes against the viewer's own decks come from the viewer's own match.
+    // getMyMatchup falls back to a covered match for a substitute who is not
+    // playing, which is the wrong match to read their own decks against.
+    const myOwnMatchup = getMyMatchups(week).find((m) => !m.coveringFor)?.pm ?? null;
     const needsStart = NEEDS_START_MATCH.has(week.format_type);
     const isCaptain = myMember?.is_captain ?? false;
     const canSelectDeck = week.status === 'deck_selection' || week.status === 'team_paired' || week.status === 'pairing';
@@ -768,8 +763,10 @@ export default function MyLeagueInfoPage() {
             {mySelections.length > 0 && (
               <Box sx={{ mb: 2 }}>
                 {mySelections.map((sel) => {
-                  const bothStruck = !!myMatchup && myMatchup.strikes.length >= 2;
-                  const strickenIds = myMatchup ? new Set(myMatchup.strikes.map((s) => s.struck_deck_selection_id)) : new Set<number>();
+                  const bothStruck = !!myOwnMatchup && myOwnMatchup.strikes.length >= 2;
+                  const strickenIds = myOwnMatchup
+                    ? new Set(myOwnMatchup.strikes.map((s) => s.struck_deck_selection_id))
+                    : new Set<number>();
                   const isStruck = bothStruck && strickenIds.has(sel.id);
                   return (
                     <Box key={sel.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, opacity: isStruck ? 0.5 : 1, textDecoration: isStruck ? 'line-through' : 'none' }}>
@@ -820,6 +817,73 @@ export default function MyLeagueInfoPage() {
                 )}
               </Box>
             )}
+
+            {/* A substitute plays the deck the rostered player submitted, so
+                they need to see it -- and, in a format with strikes, which of
+                them survived. */}
+            {getMyMatchups(week)
+              .filter((m) => m.coveringFor)
+              .map(({ pm, actingId, coveringFor }) => {
+                const theirSelections = week.deck_selections.filter(
+                  (ds) => ds.user_id === actingId,
+                );
+                if (theirSelections.length === 0) return null;
+                const bothStruck = pm.strikes.length >= 2;
+                const strickenIds = new Set(
+                  pm.strikes.map((st) => st.struck_deck_selection_id),
+                );
+                return (
+                  <Box key={pm.id} sx={{ mb: 2 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      Covering for {coveringFor} — the deck{theirSelections.length > 1 ? 's' : ''} you are playing:
+                    </Typography>
+                    {theirSelections.map((sel) => {
+                      const isStruck = bothStruck && strickenIds.has(sel.id);
+                      return (
+                        <Box
+                          key={sel.id}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                            mb: 1,
+                            opacity: isStruck ? 0.5 : 1,
+                            textDecoration: isStruck ? 'line-through' : 'none',
+                          }}
+                        >
+                          {maxSlots > 1 && (
+                            <Chip label={`Slot ${sel.slot_number}`} size="small" variant="outlined" />
+                          )}
+                          {sel.deck?.houses && <HouseIcons houses={sel.deck.houses} />}
+                          <Typography variant="body2">{sel.deck?.name || 'Unknown deck'}</Typography>
+                          {sel.deck?.sas_rating != null && (
+                            <Chip label={`SAS: ${sel.deck.sas_rating}`} size="small" variant="outlined" />
+                          )}
+                          {sel.deck && (
+                            <Box sx={{ display: 'flex', gap: 0.5 }}>
+                              <Link href={sel.deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</Link>
+                              <Link href={sel.deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</Link>
+                            </Box>
+                          )}
+                          {isStruck && (
+                            <Chip
+                              label="Struck"
+                              size="small"
+                              sx={(theme) => ({
+                                bgcolor: alpha(theme.palette.error.main, 0.12),
+                                color: theme.palette.error.dark,
+                              })}
+                            />
+                          )}
+                        </Box>
+                      );
+                    })}
+                    {maxSlots > 1 && theirSelections.length > 1 && (
+                      <CombinedSas selections={theirSelections} />
+                    )}
+                  </Box>
+                );
+              })}
 
             {/* Submit new deck */}
             {canSelectDeck && mySelections.length < maxSlots &&
