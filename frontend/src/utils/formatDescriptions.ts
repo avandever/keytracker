@@ -24,7 +24,7 @@ export const FORMAT_DESCRIPTIONS: Record<string, string> = {
   reversal:
     "Your opponent will play the deck you submit, and you'll play theirs. Choose accordingly!",
   oubliette:
-    "Submit two decks and name a banned house. Decks that contain your banned house cannot be used by your opponent — and vice versa.",
+    "Submit two decks and name a banned house. Both bans apply to both players: you cannot play a deck containing your own banned house, or your opponent's. Keep your ban out of your own decks, and give your two decks different houses — if your opponent bans a house both your decks share, you have nothing legal to play.",
   adaptive_short:
     "A single game where both players bid chains for the right to choose which deck they play. Higher bidder pays the chains cost and picks first.",
   exchange:

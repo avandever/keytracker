@@ -815,6 +815,28 @@ export default function MyLeagueInfoPage() {
                 {maxSlots > 1 && mySelections.length > 1 && (
                   <CombinedSas selections={mySelections} />
                 )}
+
+                {/* Two decks sharing a house is legal, but it hands the
+                    opponent a ban that leaves nothing to play. */}
+                {week.format_type === 'oubliette' && mySelections.length > 1 && (() => {
+                  const counts = new Map<string, number>();
+                  for (const sel of mySelections) {
+                    for (const house of new Set(sel.deck?.houses || [])) {
+                      counts.set(house, (counts.get(house) || 0) + 1);
+                    }
+                  }
+                  const shared = [...counts.entries()]
+                    .filter(([, n]) => n === mySelections.length)
+                    .map(([house]) => house);
+                  if (shared.length === 0) return null;
+                  return (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      Both your decks contain {shared.join(' and ')}. If your opponent bans{' '}
+                      {shared.length > 1 ? 'one of those houses' : shared[0]}, you will have no
+                      legal deck and will forfeit the match.
+                    </Alert>
+                  );
+                })()}
               </Box>
             )}
 

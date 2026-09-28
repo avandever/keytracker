@@ -4385,6 +4385,28 @@ def submit_deck_selection(league_id, week_id):
                     400,
                 )
 
+    # Oubliette: a ban binds the player who made it too. The ban is checked
+    # against their decks when it is set, but only against the decks submitted
+    # by then -- a second deck added afterwards went unchecked, which let a
+    # player end up holding the house they had banned.
+    if week.format_type == WeekFormat.OUBLIETTE.value:
+        from keytracker.match_helpers import get_deck_houses
+
+        own_ban = OublietteBan.query.filter_by(
+            week_id=week.id, user_id=target_user_id
+        ).first()
+        if own_ban and own_ban.banned_house:
+            if own_ban.banned_house in get_deck_houses(deck):
+                return (
+                    jsonify(
+                        {
+                            "error": f"This deck contains {own_ban.banned_house}, "
+                            "which you banned. Your own ban applies to you as well."
+                        }
+                    ),
+                    400,
+                )
+
     # Validate required cards: named cards and categories are one pool.
     if week.required_card_names or week.required_card_categories:
         try:
