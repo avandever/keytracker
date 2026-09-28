@@ -28,6 +28,7 @@ import {
 import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport, getSignupDiscordCheck, startDraft, confirmMatchResult } from '../api/leagues';
 import type { SignupDiscordStatus } from '../api/leagues';
 import { listFantasyLeagues } from '../api/fantasy';
+import { getPlayoffSetup } from '../api/playoffs';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
 import { getWeekDescription } from '../utils/formatDescriptions';
@@ -118,6 +119,7 @@ export default function LeagueDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [hasFantasy, setHasFantasy] = useState(false);
+  const [hasPlayoffs, setHasPlayoffs] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [errorNeedsProfile, setErrorNeedsProfile] = useState(false);
@@ -151,6 +153,15 @@ export default function LeagueDetailPage() {
     listFantasyLeagues(leagueId)
       .then((rows) => setHasFantasy(rows.length > 0))
       .catch(() => setHasFantasy(false));
+  }, [leagueId]);
+
+  // Same again for the playoffs: the link appears once brackets exist, and a
+  // league that never sets them up simply never shows it.
+  useEffect(() => {
+    if (!leagueId) return;
+    getPlayoffSetup(leagueId)
+      .then((setup) => setHasPlayoffs(setup.brackets.length > 0))
+      .catch(() => setHasPlayoffs(false));
   }, [leagueId]);
 
   const handleSignup = async () => {
@@ -1206,6 +1217,12 @@ export default function LeagueDetailPage() {
               My Team
             </Button>
           </>
+        )}
+        {/* The brackets are worth looking at whether or not you are in them. */}
+        {hasPlayoffs && (
+          <Button variant="outlined" component={RouterLink} to={`${leagueBaseUrl(league)}/playoffs`}>
+            Playoffs
+          </Button>
         )}
         {/* Open to everyone: you do not have to be playing to run a fantasy team. */}
         {hasFantasy && (

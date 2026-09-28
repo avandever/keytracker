@@ -37,6 +37,7 @@ import StandaloneMatchPage from './pages/StandaloneMatchPage';
 import TimingLeaderboardPage from './pages/TimingLeaderboardPage';
 import MyCollectionPage from './pages/MyCollectionPage';
 import FantasyLeaguePage from './pages/FantasyLeaguePage';
+import PlayoffsPage from './pages/PlayoffsPage';
 import AuctionListPage from './pages/AuctionListPage';
 import AuctionPage from './pages/AuctionPage';
 import LoginPage from './pages/LoginPage';
@@ -131,6 +132,7 @@ export default function App() {
                 <Route path="my-info" element={<RequireAuth><MyLeagueInfoPage /></RequireAuth>} />
                 <Route path="my-team" element={<RequireAuth><MyTeamPage /></RequireAuth>} />
                 <Route path="fantasy" element={<FantasyLeaguePage />} />
+                <Route path="playoffs" element={<PlayoffsPage />} />
               </Route>
               <Route path="/league/:leagueName" element={<LeagueByNameWrapper />}>
                 <Route index element={<LeagueDetailPage />} />
@@ -139,6 +141,7 @@ export default function App() {
                 <Route path="my-info" element={<RequireAuth><MyLeagueInfoPage /></RequireAuth>} />
                 <Route path="my-team" element={<RequireAuth><MyTeamPage /></RequireAuth>} />
                 <Route path="fantasy" element={<FantasyLeaguePage />} />
+                <Route path="playoffs" element={<PlayoffsPage />} />
               </Route>
               <Route path="/admin/users" element={<RequireAuth><UserAdminPage /></RequireAuth>} />
               <Route path="/matches" element={<StandaloneMatchesPage />} />
