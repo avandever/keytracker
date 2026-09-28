@@ -1909,6 +1909,28 @@ export default function MyTeamPage() {
                   </Box>
                 )}
 
+                {/* Two decks sharing a house is legal, but the opponent only
+                    has to ban it to leave this player nothing to field. */}
+                {week.format_type === 'oubliette' && selections.length > 1 && (() => {
+                  const counts = new Map<string, number>();
+                  for (const sel of selections) {
+                    for (const house of new Set(sel.deck?.houses || [])) {
+                      counts.set(house, (counts.get(house) || 0) + 1);
+                    }
+                  }
+                  const shared = [...counts.entries()]
+                    .filter(([, n]) => n === selections.length)
+                    .map(([house]) => house);
+                  if (shared.length === 0) return null;
+                  return (
+                    <Alert severity="warning" sx={{ ml: 4, mt: 0.5 }}>
+                      Both decks contain {shared.join(' and ')} — if the opponent bans{' '}
+                      {shared.length > 1 ? 'one of those houses' : shared[0]},{' '}
+                      {m.user.name} has no legal deck and forfeits.
+                    </Alert>
+                  );
+                })()}
+
                 {/* Oubliette: the banned house is part of this player's
                     submission, so captains enter it here beside their decks. */}
                 {week.format_type === 'oubliette' && (() => {
