@@ -1827,6 +1827,47 @@ class PlayoffAssignment(db.Model):
     )
 
 
+class PlayoffMatch(db.Model):
+    """One slot in a bracket's tree.
+
+    The whole tree is created by the draw, so a round-one match already knows
+    which round-two match its winner feeds, and everyone can see who they would
+    meet. Later rounds start with their teams unknown and fill in as results
+    land. A bye is a match with one team and a winner already set.
+    """
+
+    __tablename__ = "tracker_playoff_match"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    bracket_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_playoff_bracket.id"), nullable=False, index=True
+    )
+    round_number = db.Column(db.Integer, nullable=False)
+    # Position within the round, counting from zero.
+    slot_index = db.Column(db.Integer, nullable=False)
+    team1_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=True)
+    team2_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=True)
+    winner_team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=True)
+    is_consolation = db.Column(db.Boolean, nullable=False, default=False)
+    is_bye = db.Column(db.Boolean, nullable=False, default=False)
+    # The match as played, once a round has been paired.
+    player_matchup_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_player_matchup.id"), nullable=True
+    )
+
+    bracket = db.relationship("PlayoffBracket", backref="matches")
+    team1 = db.relationship("Team", foreign_keys=[team1_id])
+    team2 = db.relationship("Team", foreign_keys=[team2_id])
+    winner_team = db.relationship("Team", foreign_keys=[winner_team_id])
+    player_matchup = db.relationship("PlayerMatchup")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "bracket_id", "round_number", "slot_index", "is_consolation",
+            name="uq_playoff_match_slot",
+        ),
+    )
+
+
 class SealedPoolDeck(db.Model):
     __tablename__ = "tracker_sealed_pool_deck"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

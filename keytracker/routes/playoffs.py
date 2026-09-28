@@ -8,9 +8,18 @@ that setup; drawing the brackets and playing the rounds come after.
 
 import datetime
 import json
+import random
 
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
+
+from keytracker.playoff_draw import (
+    bracket_size,
+    byes_needed,
+    draw_all,
+    round_one_pairs,
+    rounds_needed,
+)
 
 from keytracker.routes.leagues import (
     _get_league_or_404,
@@ -23,6 +32,7 @@ from keytracker.schema import (
     PlayoffBracket,
     PlayoffByePolicy,
     PlayoffConfig,
+    PlayoffMatch,
     PlayoffQualifier,
     Team,
     TeamMember,
@@ -385,3 +395,241 @@ def set_playoff_assignments(league_id):
     db.session.refresh(league)
     ordered = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
     return jsonify({"brackets": [_serialize_bracket(b) for b in ordered]})
+
+
+def _serialize_match(match):
+    return {
+        "id": match.id,
+        "round_number": match.round_number,
+        "slot_index": match.slot_index,
+        "team1_id": match.team1_id,
+        "team2_id": match.team2_id,
+        "winner_team_id": match.winner_team_id,
+        "is_bye": bool(match.is_bye),
+        "is_consolation": bool(match.is_consolation),
+        "player_matchup_id": match.player_matchup_id,
+    }
+
+
+def _bye_teams_by_policy(league, config, brackets, qualifier_ids, rng):
+    """Which teams sit out round one, per the league's chosen policy.
+
+    Returns a function of (bracket index, bye counts so far), which is what the
+    draw wants; returning None leaves the draw to spread them evenly itself.
+    """
+    need = byes_needed(len(qualifier_ids))
+    if not need:
+        return None
+    policy = config.bye_policy
+
+    if policy == PlayoffByePolicy.TEAM_RECORD.value:
+        # The confirmed order is the regular season's finish.
+        chosen = list(qualifier_ids[:need])
+        return lambda index, counts: chosen
+
+    if policy == PlayoffByePolicy.PLAYER_RECORD.value:
+        from keytracker.fantasy_service import season_win_counts
+
+        wins = season_win_counts(league)
+
+        def by_player(index, counts):
+            bracket = brackets[index]
+            ranked = []
+            for team_id in qualifier_ids:
+                assignment = next(
+                    (a for a in bracket.assignments if a.team_id == team_id), None
+                )
+                ranked.append(
+                    (wins.get(assignment.user_id, 0) if assignment else -1, team_id)
+                )
+            # Most wins first; ties fall back to the confirmed order.
+            ranked.sort(key=lambda pair: (-pair[0], qualifier_ids.index(pair[1])))
+            return [team_id for _score, team_id in ranked[:need]]
+
+        return by_player
+
+    if policy == PlayoffByePolicy.ADMIN.value:
+        return "admin"
+    return None
+
+
+@blueprint.route("/<int:league_id>/playoffs/draw", methods=["POST"])
+@login_required
+def draw_playoffs(league_id):
+    """Draw every bracket at once, fixing the whole tree.
+
+    Placement is drawn rather than seeded, and balanced so that across the
+    brackets no pair of teams meets in round one much more often than any
+    other. Every round is created now, so a team can see who they would meet
+    later; the later matches simply have no teams in them yet.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if not _is_league_admin(league, effective):
+        return jsonify({"error": "Admin access required"}), 403
+    config = _config_for(league, create=True)
+    if _locked(config):
+        return jsonify({"error": "The brackets are already drawn"}), 400
+
+    brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
+    qualifiers = sorted(league.playoff_qualifiers, key=lambda q: q.position)
+    qualifier_ids = [q.team_id for q in qualifiers]
+
+    if len(brackets) != league.team_size:
+        return (
+            jsonify(
+                {
+                    "error": f"{league.team_size} brackets are needed, one per player; "
+                    f"{len(brackets)} are defined"
+                }
+            ),
+            400,
+        )
+    if len(qualifier_ids) != config.teams_advancing:
+        return (
+            jsonify({"error": f"{config.teams_advancing} teams must be confirmed"}),
+            400,
+        )
+    missing = []
+    for bracket in brackets:
+        assigned = {a.team_id for a in bracket.assignments}
+        for team_id in qualifier_ids:
+            if team_id not in assigned:
+                team = db.session.get(Team, team_id)
+                missing.append(f"{team.name if team else team_id} in bracket {bracket.bracket_number}")
+    if missing:
+        return (
+            jsonify({"error": "Every team needs a player in every bracket. Missing: "
+                              + ", ".join(missing[:8])
+                              + ("..." if len(missing) > 8 else "")}),
+            400,
+        )
+
+    data = request.get_json(silent=True) or {}
+    rng = random.Random(data.get("seed"))
+    byes_for = _bye_teams_by_policy(league, config, brackets, qualifier_ids, rng)
+    if byes_for == "admin":
+        supplied = data.get("byes")
+        if not isinstance(supplied, dict):
+            return (
+                jsonify({"error": "This league assigns byes by hand: send byes as "
+                                  "{bracket_number: [team_id, ...]}"}),
+                400,
+            )
+        need = byes_needed(len(qualifier_ids))
+        by_number = {}
+        for key, team_ids in supplied.items():
+            if not isinstance(team_ids, list) or len(team_ids) != need:
+                return jsonify({"error": f"Each bracket needs {need} bye(s)"}), 400
+            for team_id in team_ids:
+                if team_id not in qualifier_ids:
+                    return jsonify({"error": f"Team {team_id} is not in the playoffs"}), 400
+            by_number[int(key)] = team_ids
+        for bracket in brackets:
+            if bracket.bracket_number not in by_number:
+                return (
+                    jsonify({"error": f"No byes given for bracket {bracket.bracket_number}"}),
+                    400,
+                )
+        byes_for = lambda index, counts: by_number[brackets[index].bracket_number]
+
+    drawn = draw_all(qualifier_ids, len(brackets), byes_for=byes_for, rng=rng)
+    size = bracket_size(len(qualifier_ids))
+    total_rounds = rounds_needed(len(qualifier_ids))
+
+    PlayoffMatch.query.filter(
+        PlayoffMatch.bracket_id.in_([b.id for b in brackets])
+    ).delete(synchronize_session=False)
+    db.session.flush()
+
+    for bracket, slots in zip(brackets, drawn):
+        first_round = []
+        for index, (a, b) in enumerate(round_one_pairs(slots)):
+            match = PlayoffMatch(
+                bracket_id=bracket.id,
+                round_number=1,
+                slot_index=index,
+                team1_id=a,
+                team2_id=b,
+                is_bye=(a is None or b is None),
+                winner_team_id=(a or b) if (a is None or b is None) else None,
+            )
+            db.session.add(match)
+            first_round.append(match)
+        # Later rounds are empty until results arrive; a bye's winner is known
+        # now, so it is written straight into the next round.
+        previous = first_round
+        for round_number in range(2, total_rounds + 1):
+            slots_this_round = size // (2 ** round_number)
+            current = []
+            for index in range(slots_this_round):
+                match = PlayoffMatch(
+                    bracket_id=bracket.id, round_number=round_number, slot_index=index
+                )
+                db.session.add(match)
+                current.append(match)
+            for index, earlier in enumerate(previous):
+                if earlier.winner_team_id:
+                    target = current[index // 2]
+                    if index % 2 == 0:
+                        target.team1_id = earlier.winner_team_id
+                    else:
+                        target.team2_id = earlier.winner_team_id
+            previous = current
+        if config.consolation_enabled and total_rounds >= 2:
+            db.session.add(
+                PlayoffMatch(
+                    bracket_id=bracket.id,
+                    round_number=total_rounds,
+                    slot_index=0,
+                    is_consolation=True,
+                )
+            )
+
+    config.drawn_at = datetime.datetime.utcnow()
+    _log_admin_action(
+        league.id, None, effective.id, "playoff_draw",
+        f"{len(brackets)} bracket(s), {len(qualifier_ids)} teams, {total_rounds} round(s)",
+    )
+    db.session.commit()
+    db.session.refresh(league)
+    return jsonify(_bracket_tree(league))
+
+
+def _bracket_tree(league):
+    """The drawn brackets, round by round."""
+    brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
+    teams = {t.id: t.name for t in league.teams}
+    config = _config_for(league)
+    qualifiers = sorted(league.playoff_qualifiers, key=lambda q: q.position)
+    return {
+        "rounds": rounds_needed(len(qualifiers)) if qualifiers else 0,
+        "teams": teams,
+        "drawn_at": (
+            config.drawn_at.isoformat() + "Z" if config and config.drawn_at else None
+        ),
+        "brackets": [
+            {
+                **_serialize_bracket(bracket),
+                "matches": [
+                    _serialize_match(m)
+                    for m in sorted(
+                        bracket.matches,
+                        key=lambda m: (m.round_number, m.is_consolation, m.slot_index),
+                    )
+                ],
+            }
+            for bracket in brackets
+        ],
+    }
+
+
+@blueprint.route("/<int:league_id>/playoffs/brackets/tree", methods=["GET"])
+def get_bracket_tree(league_id):
+    """The drawn brackets, for display."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    return jsonify(_bracket_tree(league))
