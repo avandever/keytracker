@@ -76,11 +76,28 @@ auth.init_oauth(app)
 
 # Add google_id and avatar_url columns if they don't exist (migration)
 with app.app_context():
+    # Two gunicorn masters start at once -- one for HTTP, one for HTTPS -- and
+    # both set the schema up. Left to race, MySQL answers the second CREATE
+    # with "table was skipped since its definition is being modified by
+    # concurrent DDL", those workers fail to boot, and the HTTPS listener the
+    # public site is proxied to never comes up. A named lock makes the second
+    # one wait instead.
+    _schema_lock_held = False
+    try:
+        from sqlalchemy import text as _sa_text
+
+        if db.engine.dialect.name == "mysql":
+            db.session.execute(_sa_text("SELECT GET_LOCK('keytracker_schema', 60)"))
+            db.session.commit()
+            _schema_lock_held = True
+    except Exception:  # noqa: BLE001 - the lock is a courtesy, not a requirement
+        db.session.rollback()
     try:
         db.create_all()
     except Exception as e:  # noqa: BLE001
-        # Multiple gunicorn workers may race to create tables; ignore "already exists"
-        if "already exists" not in str(e):
+        # Tolerate losing the race anyway, in case the lock was unavailable.
+        raced = ("already exists", "concurrent DDL", "Duplicate column")
+        if not any(marker in str(e) for marker in raced):
             raise
     try:
         from sqlalchemy import inspect as sa_inspect, text
@@ -338,6 +355,15 @@ with app.app_context():
                         )
     except Exception:
         pass
+    finally:
+        if _schema_lock_held:
+            try:
+                from sqlalchemy import text as _sa_text
+
+                db.session.execute(_sa_text("SELECT RELEASE_LOCK('keytracker_schema')"))
+                db.session.commit()
+            except Exception:  # noqa: BLE001 - it expires with the connection
+                db.session.rollback()
 
 
 @login_manager.unauthorized_handler
