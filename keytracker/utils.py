@@ -2192,15 +2192,22 @@ def add_cards_v2_new(
             )
             pc = add_decks_cache["platonic_card"].get(card_json["card_title"])
             if pc is None:
+                # Matched across apostrophe spellings: an exact match is how
+                # thirteen cards ended up stored twice, once per spelling,
+                # with their printings and deck slots split between the two.
+                title_options = card_title_variants(card_json["card_title"])
                 if override is None:
-                    pc = PlatonicCard.query.filter_by(
-                        card_title=card_json["card_title"]
+                    pc = PlatonicCard.query.filter(
+                        PlatonicCard.card_title.in_(title_options)
                     ).first()
                 else:
-                    pc = PlatonicCard.query.filter_by(
-                        card_title=card_json["card_title"],
-                        house=override.house,
-                    ).first()
+                    pc = (
+                        PlatonicCard.query.filter(
+                            PlatonicCard.card_title.in_(title_options)
+                        )
+                        .filter_by(house=override.house)
+                        .first()
+                    )
             if pc is None:
                 current_app.logger.info(
                     f"Creating new platonic card: {card_json['card_title']}"
