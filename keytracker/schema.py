@@ -1712,6 +1712,121 @@ class WeekSubstitution(db.Model):
     )
 
 
+class PlayoffByePolicy(PyEnum):
+    """How the teams sitting out a round are chosen, when the count is odd."""
+
+    RANDOM_EVEN = "random_even"
+    TEAM_RECORD = "team_record"
+    ADMIN = "admin"
+    PLAYER_RECORD = "player_record"
+
+
+class PlayoffConfig(db.Model):
+    """How one league runs its playoffs.
+
+    The playoffs are not a longer regular season: several brackets run at once,
+    one per player on a team, each in its own format, and each advances on its
+    own. This row holds the decisions that apply to all of them.
+    """
+
+    __tablename__ = "tracker_playoff_config"
+    league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), primary_key=True
+    )
+    teams_advancing = db.Column(db.Integer, nullable=False, default=4)
+    # Points a win is worth, by round: the first entry is round one. A round
+    # past the end of the list is worth the last entry.
+    points_per_round = db.Column(db.Text, nullable=True)
+    consolation_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    consolation_points = db.Column(db.Integer, nullable=False, default=1)
+    bye_policy = db.Column(
+        db.String(20), nullable=False, default=PlayoffByePolicy.RANDOM_EVEN.value
+    )
+    # Set once the draw has been made, after which brackets and assignments
+    # are fixed.
+    drawn_at = db.Column(db.DateTime, nullable=True)
+
+    league = db.relationship("League", backref=db.backref("playoff_config", uselist=False))
+
+
+class PlayoffQualifier(db.Model):
+    """A team through to the playoffs, in the order an admin confirmed.
+
+    The order does not decide who plays whom -- placement is drawn per bracket
+    -- but it settles ties by hand and feeds the bye policies that reward the
+    regular season.
+    """
+
+    __tablename__ = "tracker_playoff_qualifier"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), nullable=False, index=True
+    )
+    team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
+    position = db.Column(db.Integer, nullable=False)
+
+    league = db.relationship("League", backref="playoff_qualifiers")
+    team = db.relationship("Team")
+
+    __table_args__ = (
+        db.UniqueConstraint("league_id", "team_id", name="uq_playoff_qualifier_team"),
+        db.UniqueConstraint("league_id", "position", name="uq_playoff_qualifier_pos"),
+    )
+
+
+class PlayoffBracket(db.Model):
+    """One of the parallel brackets, and the format it is played in.
+
+    There are as many brackets as a team has players, so every player is in
+    exactly one, for the whole playoffs.
+    """
+
+    __tablename__ = "tracker_playoff_bracket"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    league_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_league.id"), nullable=False, index=True
+    )
+    bracket_number = db.Column(db.Integer, nullable=False)
+    name = db.Column(db.String(100), nullable=True)
+    format_type = db.Column(db.String(30), nullable=False)
+    best_of_n = db.Column(db.Integer, nullable=False, default=1)
+
+    league = db.relationship("League", backref="playoff_brackets")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "league_id", "bracket_number", name="uq_playoff_bracket_number"
+        ),
+    )
+
+
+class PlayoffAssignment(db.Model):
+    """Which player a team puts in a given bracket, chosen by its captain."""
+
+    __tablename__ = "tracker_playoff_assignment"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    bracket_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_playoff_bracket.id"), nullable=False, index=True
+    )
+    team_id = db.Column(db.Integer, db.ForeignKey("tracker_team.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
+    assigned_by_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_user.id"), nullable=True
+    )
+    created_at = db.Column(db.DateTime, default=func.now())
+
+    bracket = db.relationship("PlayoffBracket", backref="assignments")
+    team = db.relationship("Team")
+    user = db.relationship("User", foreign_keys=[user_id])
+    assigned_by = db.relationship("User", foreign_keys=[assigned_by_id])
+
+    __table_args__ = (
+        # One player per team per bracket, and a player is only in one bracket.
+        db.UniqueConstraint("bracket_id", "team_id", name="uq_playoff_assignment_team"),
+        db.UniqueConstraint("bracket_id", "user_id", name="uq_playoff_assignment_user"),
+    )
+
+
 class SealedPoolDeck(db.Model):
     __tablename__ = "tracker_sealed_pool_deck"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
