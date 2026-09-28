@@ -53,6 +53,32 @@ docker run -d --name keytracker \
   keytracker
 ```
 
+### Deploy Webhook
+
+A push to `main` is deployed automatically: GitHub posts to
+`https://tracker.ancientbearrepublic.com/webhook`, the proxy forwards it to
+port 9867 on this machine, and `deploy/webhook.py` runs `deploy/deploy.sh`.
+
+It runs as a container rather than through `deploy/keytracker-webhook.service`
+(installing that unit needs root, which is not available here). The repo is
+mounted over the image's copy so the listener always runs the current code:
+
+```bash
+docker run -d --name keytracker-webhook --restart always \
+  -e WEBHOOK_SECRET="$(sed -n 's/^Environment=WEBHOOK_SECRET=//p' deploy/keytracker-webhook.service)" \
+  -v /home/andrew/tracker:/tracker \
+  -v /home/andrew/.ssh:/root/.ssh:ro \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -p 9867:9867 \
+  keytracker-webhook
+```
+
+The SSH mount is what lets `git pull` reach the remote; the docker socket is
+what lets `deploy.sh` rebuild and restart the app container.
+
+`docker logs keytracker-webhook` says whether each deploy succeeded or failed,
+and `deploy/deploy.log` has the detail.
+
 ### Alliance Restricted List Population
 
 To add cards to the Alliance Restricted List (run from project root):
