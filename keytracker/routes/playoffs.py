@@ -102,14 +102,15 @@ def get_playoffs(league_id):
     brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
     qualifiers = sorted(league.playoff_qualifiers, key=lambda q: q.position)
 
-    viewer = None
-    try:
-        viewer = get_effective_user()
-    except Exception:  # noqa: BLE001 - anonymous viewers may read the setup
+    # Anyone may read the setup. get_effective_user hands back Flask-Login's
+    # anonymous user rather than None, and that object is truthy but has no id,
+    # so it has to be flattened before anything asks who it is.
+    viewer = get_effective_user()
+    if getattr(viewer, "id", None) is None:
         viewer = None
     my_team_id = None
     is_captain = False
-    if viewer is not None and getattr(viewer, "id", None):
+    if viewer is not None:
         member = (
             TeamMember.query.join(Team)
             .filter(Team.league_id == league.id, TeamMember.user_id == viewer.id)
