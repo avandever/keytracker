@@ -145,6 +145,7 @@ export default function MyLeagueInfoPage() {
   // matchup and side.
   const [teamPurgeHouses, setTeamPurgeHouses] = useState<Record<string, string>>({});
   const [teamPurgeNoneFor, setTeamPurgeNoneFor] = useState<number | null>(null);
+  const [teamAlreadyPlayedFor, setTeamAlreadyPlayedFor] = useState<number | null>(null);
   const purgeLabel = (house: string) =>
     house === TERTIATE_PURGE_NOT_RECORDED ? 'not recorded' : house;
   const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
@@ -2250,6 +2251,48 @@ export default function MyLeagueInfoPage() {
                         })}
                       </Box>
                     )}
+                    {needsStart && !(pm.player1_started && pm.player2_started) && (
+                      <Box sx={{ mt: 1, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                        <Alert severity="info" sx={{ mb: 1 }}>
+                          This has not been started on the site, so it cannot be reported yet. The
+                          players can start it from their own match, or you can record it as
+                          already played.
+                        </Alert>
+                        {teamAlreadyPlayedFor === pm.id ? (
+                          <Box>
+                            <Typography variant="body2">
+                              Only do this if the match really was played. It starts the match for
+                              both players, skipping the deck reveal and any pre-game choices, and
+                              is recorded in the league admin log with your name against it.
+                            </Typography>
+                            <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                              <Button size="small" onClick={() => setTeamAlreadyPlayedFor(null)}>
+                                Cancel
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="contained"
+                                onClick={async () => {
+                                  await handleAlreadyPlayed(pm.id);
+                                  setTeamAlreadyPlayedFor(null);
+                                }}
+                              >
+                                Continue
+                              </Button>
+                            </Box>
+                          </Box>
+                        ) : (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => setTeamAlreadyPlayedFor(pm.id)}
+                          >
+                            We already played
+                          </Button>
+                        )}
+                      </Box>
+                    )}
+
                     {(!needsStart || (pm.player1_started && pm.player2_started)) && (() => {
                       const nextGameNum = pm.games.length + 1;
                       const purgesForNextGame = (pm.tertiate_purge_choices || []).filter((p) => p.game_number === nextGameNum);
