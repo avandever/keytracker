@@ -358,9 +358,13 @@ def serialize_league_detail(
         for s in sorted(league.signups, key=lambda s: s.signup_order)
     ]
     data["admins"] = [serialize_user_brief(a.user) for a in league.admins]
+    # A playoff round is stored as one week per bracket. They are shown as
+    # brackets on their own page, so they stay out of the week list rather than
+    # adding a tab per bracket per round.
     data["weeks"] = [
         serialize_league_week(w, viewer=viewer)
         for w in sorted(league.weeks, key=lambda w: w.week_number)
+        if getattr(w, "playoff_bracket_id", None) is None
     ]
     return data
 

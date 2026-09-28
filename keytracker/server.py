@@ -312,6 +312,25 @@ with app.app_context():
                             "ALTER TABLE tracker_fantasy_league ADD COLUMN cost_source_key VARCHAR(32)"
                         )
                     )
+        if inspector.has_table("tracker_league_week"):
+            columns = {
+                c["name"] for c in inspector.get_columns("tracker_league_week")
+            }
+            with db.engine.begin() as conn:
+                if "playoff_bracket_id" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league_week "
+                            "ADD COLUMN playoff_bracket_id INTEGER NULL"
+                        )
+                    )
+                if "playoff_round" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league_week "
+                            "ADD COLUMN playoff_round INTEGER NULL"
+                        )
+                    )
         if inspector.has_table("tertiate_house_purge"):
             columns = {
                 c["name"] for c in inspector.get_columns("tertiate_house_purge")

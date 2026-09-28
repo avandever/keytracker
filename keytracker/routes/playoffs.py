@@ -28,6 +28,8 @@ from keytracker.routes.leagues import (
     get_effective_user,
 )
 from keytracker.schema import (
+    LeagueWeek,
+    PlayerMatchup,
     PlayoffAssignment,
     PlayoffBracket,
     PlayoffByePolicy,
@@ -38,6 +40,8 @@ from keytracker.schema import (
     TeamMember,
     User,
     WeekFormat,
+    WeekMatchup,
+    WeekStatus,
     db,
 )
 
@@ -633,3 +637,208 @@ def get_bracket_tree(league_id):
     if err:
         return err
     return jsonify(_bracket_tree(league))
+
+
+def _match_winner_team_id(match):
+    """Which team won this playoff match, or None while it is undecided.
+
+    A result has to be verified before it moves a team along: advancing on an
+    unverified one would build the next round on something a captain has not
+    agreed to yet.
+    """
+    if match.is_bye:
+        return match.winner_team_id
+    pm = match.player_matchup
+    if pm is None or pm.is_double_loss or pm.result_confirmed_at is None:
+        return None
+    week = pm.week_matchup.week if pm.week_matchup else None
+    best_of = week.best_of_n if week else 1
+    wins_needed = (best_of // 2) + 1
+    p1 = sum(1 for g in pm.games if g.winner_id == pm.player1_id)
+    p2 = sum(1 for g in pm.games if g.winner_id == pm.player2_id)
+    if p1 >= wins_needed:
+        return match.team1_id
+    if p2 >= wins_needed:
+        return match.team2_id
+    return None
+
+
+def _resolve_round(bracket, round_number, total_rounds, consolation_enabled):
+    """Write a finished round's winners into the next one.
+
+    Returns the matches still waiting on a verified result.
+    """
+    matches = sorted(
+        [
+            m
+            for m in bracket.matches
+            if m.round_number == round_number and not m.is_consolation
+        ],
+        key=lambda m: m.slot_index,
+    )
+    next_round = {
+        m.slot_index: m
+        for m in bracket.matches
+        if m.round_number == round_number + 1 and not m.is_consolation
+    }
+    consolation = next(
+        (m for m in bracket.matches if m.is_consolation), None
+    )
+    pending = []
+    for match in matches:
+        winner = _match_winner_team_id(match)
+        if winner is None:
+            pending.append(match)
+            continue
+        match.winner_team_id = winner
+        loser = match.team2_id if winner == match.team1_id else match.team1_id
+        target = next_round.get(match.slot_index // 2)
+        if target is not None:
+            if match.slot_index % 2 == 0:
+                target.team1_id = winner
+            else:
+                target.team2_id = winner
+        # The consolation match is played by the losers of the round before the
+        # final, which is this one when the final is next.
+        if (
+            consolation_enabled
+            and consolation is not None
+            and round_number + 1 == total_rounds
+            and loser
+        ):
+            if match.slot_index == 0:
+                consolation.team1_id = loser
+            elif match.slot_index == 1:
+                consolation.team2_id = loser
+    return pending
+
+
+def _player_for(bracket, team_id):
+    assignment = next(
+        (a for a in bracket.assignments if a.team_id == team_id), None
+    )
+    return assignment.user_id if assignment else None
+
+
+@blueprint.route("/<int:league_id>/playoffs/rounds/<int:round_number>/start", methods=["POST"])
+@login_required
+def start_playoff_round(league_id, round_number):
+    """Open a round: a week per bracket, and the matches it holds.
+
+    Each bracket is its own format with its own constraints, which is what a
+    week already is, so a round is one week per bracket. They are kept out of
+    the ordinary week list and shown as brackets instead.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if not _is_league_admin(league, effective):
+        return jsonify({"error": "Admin access required"}), 403
+    config = _config_for(league)
+    if not _locked(config):
+        return jsonify({"error": "Draw the brackets first"}), 400
+
+    qualifiers = sorted(league.playoff_qualifiers, key=lambda q: q.position)
+    total_rounds = rounds_needed(len(qualifiers))
+    if round_number < 1 or round_number > total_rounds:
+        return (
+            jsonify({"error": f"This playoff has {total_rounds} round(s)"}),
+            400,
+        )
+
+    brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
+
+    if round_number > 1:
+        waiting = []
+        for bracket in brackets:
+            pending = _resolve_round(
+                bracket, round_number - 1, total_rounds, config.consolation_enabled
+            )
+            for match in pending:
+                label = bracket.name or f"Bracket {bracket.bracket_number}"
+                waiting.append(label)
+        if waiting:
+            unique = sorted(set(waiting))
+            return (
+                jsonify(
+                    {
+                        "error": "Round "
+                        f"{round_number - 1} is not finished and verified in: "
+                        + ", ".join(unique[:6])
+                        + ("..." if len(unique) > 6 else "")
+                    }
+                ),
+                400,
+            )
+        db.session.flush()
+
+    # week_number is unique per league, so each bracket-week takes the next
+    # one rather than sharing a number with the rest of its round.
+    next_number = max([w.week_number for w in league.weeks] or [0]) + 1
+    created_weeks, created_matches = 0, 0
+    for bracket in brackets:
+        week = next(
+            (
+                w
+                for w in league.weeks
+                if w.playoff_bracket_id == bracket.id
+                and w.playoff_round == round_number
+            ),
+            None,
+        )
+        if week is None:
+            label = bracket.name or bracket.format_type
+            week = LeagueWeek(
+                league_id=league.id,
+                week_number=next_number,
+                name=f"{label} — Playoff round {round_number}",
+                format_type=bracket.format_type,
+                best_of_n=bracket.best_of_n,
+                status=WeekStatus.DECK_SELECTION.value,
+                playoff_bracket_id=bracket.id,
+                playoff_round=round_number,
+            )
+            db.session.add(week)
+            db.session.flush()
+            next_number += 1
+            created_weeks += 1
+
+        matches = [
+            m
+            for m in bracket.matches
+            if m.round_number == round_number
+            and not m.is_bye
+            and m.team1_id
+            and m.team2_id
+            and m.player_matchup_id is None
+        ]
+        for match in matches:
+            player1 = _player_for(bracket, match.team1_id)
+            player2 = _player_for(bracket, match.team2_id)
+            if not player1 or not player2:
+                continue
+            wm = WeekMatchup(
+                week_id=week.id, team1_id=match.team1_id, team2_id=match.team2_id
+            )
+            db.session.add(wm)
+            db.session.flush()
+            pm = PlayerMatchup(
+                week_matchup_id=wm.id, player1_id=player1, player2_id=player2
+            )
+            db.session.add(pm)
+            db.session.flush()
+            match.player_matchup_id = pm.id
+            created_matches += 1
+
+    _log_admin_action(
+        league.id, None, effective.id, "playoff_round_started",
+        f"round {round_number}: {created_weeks} week(s), {created_matches} match(es)",
+    )
+    db.session.commit()
+    db.session.refresh(league)
+    tree = _bracket_tree(league)
+    tree["started_round"] = round_number
+    tree["weeks_created"] = created_weeks
+    tree["matches_created"] = created_matches
+    return jsonify(tree)

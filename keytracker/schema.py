@@ -1074,6 +1074,13 @@ class LeagueWeek(db.Model):
     team_min_raw_amber = db.Column(db.Integer, nullable=True)
     # Required card list (JSON list of card names)
     required_card_names = db.Column(db.Text, nullable=True)
+    # A playoff round is played as one week per bracket: each bracket has its
+    # own format and its own constraints, which is exactly what a week is. They
+    # are kept out of the ordinary week list and shown as brackets instead.
+    playoff_bracket_id = db.Column(
+        db.Integer, db.ForeignKey("tracker_playoff_bracket.id"), nullable=True, index=True
+    )
+    playoff_round = db.Column(db.Integer, nullable=True)
     # Required card categories: JSON list of {label, trait, card_type, rarity,
     # expansion}, any field optional. A card satisfies a category when it
     # matches every field the category sets. Lets a week ask for "a Sin" or "a

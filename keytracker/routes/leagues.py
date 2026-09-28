@@ -382,7 +382,11 @@ def get_my_league_info(league_id):
     my_team = db.session.get(Team, member.team_id) if member else None
     my_user_ids = {m.user_id for m in my_team.members} if my_team else {effective.id}
 
-    weeks = sorted(league.weeks, key=lambda w: w.week_number)
+    weeks = [
+        w
+        for w in sorted(league.weeks, key=lambda w: w.week_number)
+        if getattr(w, "playoff_bracket_id", None) is None
+    ]
     requested_id = request.args.get("week_id", type=int)
     wanted = None
     if requested_id is not None:
