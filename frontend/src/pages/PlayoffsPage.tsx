@@ -30,6 +30,7 @@ import {
   drawPlayoffs,
   getPlayoffRoundDecks,
   getPlayoffSetup,
+  getPlayoffStandings,
   getPlayoffTree,
   setPlayoffAssignments,
   setPlayoffBrackets,
@@ -40,6 +41,7 @@ import {
 import type {
   PlayoffRoundDecks,
   PlayoffSetup,
+  PlayoffStandings,
   PlayoffTree,
 } from '../api/playoffs';
 import type { KeyforgeSetInfo, LeagueDetail } from '../types';
@@ -62,6 +64,7 @@ export default function PlayoffsPage() {
   const [tree, setTree] = useState<PlayoffTree | null>(null);
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
   const [decks, setDecks] = useState<PlayoffRoundDecks | null>(null);
+  const [standings, setStandings] = useState<PlayoffStandings | null>(null);
   const [round, setRound] = useState(1);
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -70,11 +73,17 @@ export default function PlayoffsPage() {
   const [deckUrls, setDeckUrls] = useState<Record<string, string>>({});
 
   const refresh = useCallback(() => {
-    Promise.all([getLeague(leagueId), getPlayoffSetup(leagueId), getPlayoffTree(leagueId)])
-      .then(([l, s, t]) => {
+    Promise.all([
+      getLeague(leagueId),
+      getPlayoffSetup(leagueId),
+      getPlayoffTree(leagueId),
+      getPlayoffStandings(leagueId).catch(() => null),
+    ])
+      .then(([l, s, t, st]) => {
         setLeague(l);
         setSetup(s);
         setTree(t);
+        setStandings(st);
       })
       .catch((e) => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
@@ -155,6 +164,7 @@ export default function PlayoffsPage() {
 
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable" scrollButtons="auto">
         <Tab label="Brackets" />
+        <Tab label="Standings" />
         {(setup.my_team_id || setup.is_admin) && <Tab label="My Team" />}
         {(setup.is_admin || setup.is_captain) && <Tab label="Setup" />}
       </Tabs>
@@ -222,7 +232,41 @@ export default function PlayoffsPage() {
         </Box>
       )}
 
-      {tab === 1 && (setup.my_team_id || setup.is_admin) && (
+      {tab === 1 && (
+        <Card>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Playoff standings</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              These start from zero: the regular season decided who is here, not who is ahead.
+              {standings?.points_per_round?.length
+                ? ` A win is worth ${standings.points_per_round.join(', then ')} by round`
+                : ''}
+              {standings && setup.config.consolation_enabled
+                ? `, and ${standings.consolation_points} for third place.`
+                : '.'}
+            </Typography>
+            {(standings?.standings || []).length === 0 && (
+              <Typography color="text.secondary">Nothing yet.</Typography>
+            )}
+            {(standings?.standings || []).map((row, index) => (
+              <Box
+                key={row.team_id}
+                sx={{ display: 'flex', gap: 2, alignItems: 'center', py: 0.5,
+                      borderBottom: '1px solid', borderColor: 'divider' }}
+              >
+                <Typography variant="body2" sx={{ width: 24 }}>{index + 1}</Typography>
+                <Typography variant="body2" sx={{ flexGrow: 1 }}>{row.team_name}</Typography>
+                <Chip size="small" label={`${row.points} pt${row.points === 1 ? '' : 's'}`} />
+                <Typography variant="caption" color="text.secondary">
+                  {row.wins} of {row.matches_played} won
+                </Typography>
+              </Box>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 2 && (setup.my_team_id || setup.is_admin) && (
         <Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
             <FormControl size="small" sx={{ minWidth: 150 }}>
@@ -326,7 +370,7 @@ export default function PlayoffsPage() {
         </Box>
       )}
 
-      {tab === 2 && (setup.is_admin || setup.is_captain) && (
+      {tab === 3 && (setup.is_admin || setup.is_captain) && (
         <PlayoffSetupPanel
           league={league}
           setup={setup}

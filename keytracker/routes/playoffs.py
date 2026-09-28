@@ -1023,3 +1023,82 @@ def get_round_decks(league_id, round_number):
             "rows": rows,
         }
     )
+
+
+def _points_for_round(points, round_number):
+    """What a win in this round is worth.
+
+    A round past the end of the list is worth the last entry, so [2, 1] gives
+    two for a semi-final and one for everything after.
+    """
+    if not points:
+        return 0
+    index = min(round_number, len(points)) - 1
+    return points[max(index, 0)]
+
+
+def _playoff_standings(league):
+    """Playoff points per team.
+
+    The playoffs start from zero: the regular season decides who is here, not
+    who is ahead. Points come only from matches won in the brackets, so with
+    two for a semi-final and one for a final the champion of a bracket has
+    three, the runner-up two, and the third-place winner one.
+
+    Winners are read from the matches themselves rather than only from what a
+    round change wrote down, so the final counts as soon as it is verified --
+    there is no round after it to trigger the bookkeeping.
+    """
+    config = _config_for(league)
+    points = _points_list(config)
+    consolation_points = config.consolation_points if config else 0
+
+    totals = {}
+    for qualifier in league.playoff_qualifiers:
+        totals[qualifier.team_id] = {"points": 0, "wins": 0, "played": 0}
+
+    for bracket in league.playoff_brackets:
+        for match in bracket.matches:
+            if match.is_bye:
+                continue
+            winner = match.winner_team_id or _match_winner_team_id(match)
+            for team_id in (match.team1_id, match.team2_id):
+                if team_id and team_id in totals and match.player_matchup_id:
+                    totals[team_id]["played"] += 1
+            if not winner or winner not in totals:
+                continue
+            value = (
+                consolation_points
+                if match.is_consolation
+                else _points_for_round(points, match.round_number)
+            )
+            totals[winner]["points"] += value
+            totals[winner]["wins"] += 1
+
+    rows = []
+    for team_id, row in totals.items():
+        team = db.session.get(Team, team_id)
+        rows.append(
+            {
+                "team_id": team_id,
+                "team_name": team.name if team else None,
+                "points": row["points"],
+                "wins": row["wins"],
+                "matches_played": row["played"],
+            }
+        )
+    rows.sort(key=lambda r: (-r["points"], -r["wins"], r["team_name"] or ""))
+    return {
+        "standings": rows,
+        "points_per_round": points,
+        "consolation_points": consolation_points,
+    }
+
+
+@blueprint.route("/<int:league_id>/playoffs/standings", methods=["GET"])
+def get_playoff_standings(league_id):
+    """Playoff points, which start from zero rather than carrying the season on."""
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    return jsonify(_playoff_standings(league))

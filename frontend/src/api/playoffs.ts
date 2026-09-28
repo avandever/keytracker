@@ -152,3 +152,23 @@ export async function getPlayoffRoundDecks(
   });
   return data;
 }
+
+export interface PlayoffStandingRow {
+  team_id: number;
+  team_name: string | null;
+  points: number;
+  wins: number;
+  matches_played: number;
+}
+
+export interface PlayoffStandings {
+  standings: PlayoffStandingRow[];
+  points_per_round: number[];
+  consolation_points: number;
+}
+
+/** Playoff points, which start from zero rather than carrying the season on. */
+export async function getPlayoffStandings(leagueId: number): Promise<PlayoffStandings> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/playoffs/standings`);
+  return data;
+}
