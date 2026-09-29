@@ -38,6 +38,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { isoToLocalInput, localInputToIso } from '../utils/deadlines';
+import { WEEK_FORMAT_LABELS as FORMAT_LABELS } from '../utils/formatLabels';
 import type { FantasyLeague } from '../api/fantasy';
 import type { RequiredCardCategory, CardCategoryPreset } from '../types';
 import { createFantasyLeague, listFantasyLeagues, listCostSources } from '../api/fantasy';
@@ -94,25 +95,6 @@ import { alpha } from '@mui/material/styles';
 const getChipSx = (color: string) => (theme: any) => {
   if (!color || color === 'default') return {};
   return { bgcolor: alpha(theme.palette[color]?.main, 0.12), color: theme.palette[color]?.dark };
-};
-
-const FORMAT_LABELS: Record<string, string> = {
-  archon_standard: 'Archon Standard',
-  triad: 'Triad',
-  sealed_archon: 'Sealed Archon',
-  sealed_alliance: 'Sealed Alliance',
-  team_sealed: 'Team Sealed',
-  team_sealed_alliance: 'Team Sealed Alliance',
-  thief: 'Thief',
-  alliance: 'Alliance',
-  sas_ladder: 'SAS Ladder',
-  reversal: 'Reversal',
-  triad_short: 'Triad Short',
-  oubliette: 'Oubliette',
-  adaptive_short: 'Adaptive Short',
-  exchange: 'Exchange',
-  nordic_hexad: 'Nordic Hexad',
-  moirai: 'Moirai',
 };
 
 const STATUS_COLORS: Record<string, 'default' | 'info' | 'warning' | 'success'> = {

@@ -74,6 +74,7 @@ import { currentWeekOf } from './MyLeagueInfoPage';
 import { getWeekDescription } from '../utils/formatDescriptions';
 import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
+import { WEEK_FORMAT_LABELS as FORMAT_LABELS } from '../utils/formatLabels';
 import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo, DeckEntryLogEntry } from '../types';
 import type { SealedPoolEntry, TeamSealedPoolEntry } from '../api/leagues';
 import { alpha } from '@mui/material/styles';
@@ -81,26 +82,6 @@ import useMyCollection from '../hooks/useMyCollection';
 import { filterCollectionForConstraints } from '../utils/collectionFilter';
 import { deckSlotsForFormat } from '../utils/deckSlots';
 import { banOptions } from '../utils/houses';
-
-const FORMAT_LABELS: Record<string, string> = {
-  archon_standard: 'Archon Standard',
-  triad: 'Triad',
-  sealed_archon: 'Sealed Archon',
-  sealed_alliance: 'Sealed Alliance',
-  team_sealed: 'Team Sealed',
-  team_sealed_alliance: 'Team Sealed Alliance',
-  thief: 'Thief',
-  alliance: 'Alliance',
-  sas_ladder: 'SAS Ladder',
-  reversal: 'Reversal',
-  triad_short: 'Triad Short',
-  oubliette: 'Oubliette',
-  adaptive_short: 'Adaptive Short',
-  exchange: 'Exchange',
-  nordic_hexad: 'Nordic Hexad',
-  moirai: 'Moirai',
-  tertiate: 'Tertiate',
-};
 
 function getSasLadderRanges(maxes: number[]): [number, number | null][] {
   const ranges: [number, number | null][] = [];

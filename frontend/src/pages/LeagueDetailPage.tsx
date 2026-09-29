@@ -26,6 +26,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDecks, getLeagueDeckExport, getSignupDiscordCheck, startDraft, confirmMatchResult } from '../api/leagues';
+import { WEEK_FORMAT_LABELS as FORMAT_LABELS } from '../utils/formatLabels';
 import type { SignupDiscordStatus } from '../api/leagues';
 import { listFantasyLeagues } from '../api/fantasy';
 import { getPlayoffSetup } from '../api/playoffs';
@@ -100,12 +101,6 @@ function computeMyMatchTab(league: LeagueDetail, userId: number): number {
 
   return 0;
 }
-
-const FORMAT_LABELS: Record<string, string> = {
-  archon_standard: 'Archon Standard',
-  triad: 'Triad',
-  sealed_archon: 'Sealed Archon',
-};
 
 const getChipSx = (color: string) => (theme: any) => {
   if (!color || color === 'default') return {};
