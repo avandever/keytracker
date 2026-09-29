@@ -238,6 +238,7 @@ export default function PlayoffsPage() {
             <Typography variant="h6" gutterBottom>Playoff standings</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               These start from zero: the regular season decided who is here, not who is ahead.
+              A bye scores the round it came through.
               {standings?.points_per_round?.length
                 ? ` A win is worth ${standings.points_per_round.join(', then ')} by round`
                 : ''}
@@ -259,6 +260,7 @@ export default function PlayoffsPage() {
                 <Chip size="small" label={`${row.points} pt${row.points === 1 ? '' : 's'}`} />
                 <Typography variant="caption" color="text.secondary">
                   {row.wins} of {row.matches_played} won
+                  {row.byes ? `, ${row.byes} bye${row.byes === 1 ? '' : 's'}` : ''}
                 </Typography>
               </Box>
             ))}

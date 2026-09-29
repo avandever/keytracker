@@ -1055,25 +1055,30 @@ def _playoff_standings(league):
 
     totals = {}
     for qualifier in league.playoff_qualifiers:
-        totals[qualifier.team_id] = {"points": 0, "wins": 0, "played": 0}
+        totals[qualifier.team_id] = {"points": 0, "wins": 0, "played": 0, "byes": 0}
 
     for bracket in league.playoff_brackets:
         for match in bracket.matches:
-            if match.is_bye:
-                continue
             winner = match.winner_team_id or _match_winner_team_id(match)
-            for team_id in (match.team1_id, match.team2_id):
-                if team_id and team_id in totals and match.player_matchup_id:
-                    totals[team_id]["played"] += 1
+            if not match.is_bye:
+                for team_id in (match.team1_id, match.team2_id):
+                    if team_id and team_id in totals and match.player_matchup_id:
+                        totals[team_id]["played"] += 1
             if not winner or winner not in totals:
                 continue
+            # A bye scores what the round is worth: nothing was played, but the
+            # team came through that round, and it should not finish behind one
+            # that had to play its way past the same point.
             value = (
                 consolation_points
                 if match.is_consolation
                 else _points_for_round(points, match.round_number)
             )
             totals[winner]["points"] += value
-            totals[winner]["wins"] += 1
+            if match.is_bye:
+                totals[winner]["byes"] += 1
+            else:
+                totals[winner]["wins"] += 1
 
     rows = []
     for team_id, row in totals.items():
@@ -1085,8 +1090,11 @@ def _playoff_standings(league):
                 "points": row["points"],
                 "wins": row["wins"],
                 "matches_played": row["played"],
+                "byes": row["byes"],
             }
         )
+    # Points first, then matches actually won, so a team that played its way
+    # through edges one handed the same total.
     rows.sort(key=lambda r: (-r["points"], -r["wins"], r["team_name"] or ""))
     return {
         "standings": rows,

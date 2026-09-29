@@ -159,6 +159,8 @@ export interface PlayoffStandingRow {
   points: number;
   wins: number;
   matches_played: number;
+  /** Rounds come through without playing; they score, but they are not wins. */
+  byes: number;
 }
 
 export interface PlayoffStandings {
