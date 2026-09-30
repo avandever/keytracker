@@ -16,11 +16,15 @@ import {
   ListItemButton,
   ListItemText,
   Divider,
+  Tooltip,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import FavoriteIcon from '@mui/icons-material/Favorite';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ColorModeToggle from './ColorModeToggle';
+
+const PATREON_URL = 'https://www.patreon.com/AV8R772';
 
 const NAV_LINKS = [
   { label: 'Games', to: '/games' },
@@ -79,6 +83,23 @@ export default function AppBar() {
 
         {/* Spacer on mobile so user controls stay right */}
         <Box sx={{ flexGrow: 1, display: { xs: 'flex', md: 'none' } }} />
+
+        <Tooltip title="Bear Tracks is kept running by its players — thank you!">
+          <Button
+            color="inherit"
+            size="small"
+            component="a"
+            href={PATREON_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            startIcon={<FavoriteIcon fontSize="small" sx={{ color: '#FF424D' }} />}
+            sx={{ textTransform: 'none', mr: 0.5, minWidth: 0 }}
+          >
+            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+              Support on Patreon
+            </Box>
+          </Button>
+        </Tooltip>
 
         <ColorModeToggle />
 
@@ -158,6 +179,21 @@ export default function AppBar() {
                 </ListItemButton>
               </ListItem>
             ))}
+            <Divider />
+            <ListItem disablePadding>
+              <ListItemButton
+                component="a"
+                href={PATREON_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setDrawerOpen(false)}
+              >
+                <ListItemText
+                  primary="Support on Patreon"
+                  secondary="Bear Tracks is kept running by its players"
+                />
+              </ListItemButton>
+            </ListItem>
             {!loading && user && (
               <>
                 <Divider />
