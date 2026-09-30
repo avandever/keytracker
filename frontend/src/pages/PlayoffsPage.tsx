@@ -34,6 +34,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
+  generateSealedPools,
   getCardCategoryOptions,
   getLeague,
   getRestrictedListVersions,
@@ -278,6 +279,7 @@ export default function PlayoffsPage() {
           rlVersions={rlVersions}
           cardPresets={cardCategoryOptions.presets}
           roundLabel={roundLabel}
+          tree={tree}
         />
       )}
     </Container>
@@ -294,6 +296,7 @@ function PlayoffSetupPanel({
   rlVersions,
   cardPresets,
   roundLabel,
+  tree,
 }: {
   league: LeagueDetail;
   setup: PlayoffSetup;
@@ -304,6 +307,7 @@ function PlayoffSetupPanel({
   rlVersions: { id: number; version: number }[];
   cardPresets: CardCategoryPreset[];
   roundLabel: (n: number) => string;
+  tree: PlayoffTree | null;
 }) {
   const drawn = Boolean(setup.config.drawn_at);
   const published = Boolean(setup.config.published_at);
@@ -472,6 +476,15 @@ function PlayoffSetupPanel({
         </Card>
       )}
 
+      {setup.is_admin && (
+        <SealedPoolsPanel
+          tree={tree}
+          leagueId={leagueId}
+          onAct={onAct}
+          roundLabel={roundLabel}
+        />
+      )}
+
       <Dialog open={openingRound !== null} onClose={() => setOpeningRound(null)} maxWidth="xs" fullWidth>
         <DialogTitle>
           Open {openingRound ? roundLabel(openingRound).toLowerCase() : 'round'}
@@ -571,6 +584,9 @@ const EMPTY_BRACKET: BracketRow = {
  * opponent. Mirrors NON_BRACKET_FORMATS in routes/playoffs.py.
  */
 const NON_BRACKET_FORMATS = ['sas_ladder', 'team_sealed', 'team_sealed_alliance', 'thief'];
+
+/** Bracket formats whose decks are dealt from a pool rather than brought. */
+const SEALED_FORMATS = ['sealed_archon', 'sealed_alliance'];
 
 /** Formats played with alliance decks, which a restricted list applies to. */
 function isAllianceFormat(formatType: string): boolean {
@@ -948,5 +964,79 @@ function RequiredCardsField({
         </Typography>
       )}
     </Box>
+  );
+}
+
+
+/**
+ * Sealed pools for the brackets that need them.
+ *
+ * A sealed week's pool is dealt by an admin, and the button for that lives in
+ * the week editor, which playoff weeks are deliberately kept out of. Without
+ * this, a sealed bracket opens with no pool and nobody can submit.
+ */
+function SealedPoolsPanel({
+  tree,
+  leagueId,
+  onAct,
+  roundLabel,
+}: {
+  tree: PlayoffTree | null;
+  leagueId: number;
+  onAct: (what: () => Promise<unknown>, done: string) => Promise<void>;
+  roundLabel: (n: number) => string;
+}) {
+  const rows = (tree?.brackets || []).flatMap((bracket) =>
+    (bracket.weeks || [])
+      .filter((week) => SEALED_FORMATS.includes(week.format_type))
+      .map((week) => ({ bracket, week })),
+  );
+  if (rows.length === 0) return null;
+
+  const pending = rows.filter((row) => !row.week.sealed_pools_generated);
+
+  return (
+    <Card sx={{ mt: 2 }}>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>Sealed pools</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          A sealed bracket needs its pool dealt before anyone can submit. Decks come from
+          that bracket&apos;s allowed sets, as many per player as it asks for.
+        </Typography>
+        {pending.length > 0 && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {pending.length} sealed bracket-week
+            {pending.length === 1 ? ' has' : 's have'} no pool yet.
+          </Alert>
+        )}
+        {rows.map(({ bracket, week }) => (
+          <Box key={week.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+            <Typography variant="body2" sx={{ minWidth: 190 }}>
+              {bracket.name || `Bracket ${bracket.bracket_number}`}
+            </Typography>
+            <Chip size="small" variant="outlined"
+              label={WEEK_FORMAT_LABELS[week.format_type] || week.format_type} />
+            <Chip size="small" variant="outlined"
+              label={week.round_number ? roundLabel(week.round_number) : 'Round ?'} />
+            {week.sealed_pools_generated ? (
+              <Chip size="small" color="success" variant="outlined" label="Pool dealt" />
+            ) : (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() =>
+                  onAct(
+                    () => generateSealedPools(leagueId, week.id),
+                    `Pool dealt for ${bracket.name || `bracket ${bracket.bracket_number}`}.`,
+                  )
+                }
+              >
+                Generate pools
+              </Button>
+            )}
+          </Box>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

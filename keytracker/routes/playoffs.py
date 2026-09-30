@@ -726,6 +726,14 @@ def draw_playoffs(league_id):
 def _bracket_tree(league):
     """The drawn brackets, round by round."""
     brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
+    # The week each bracket plays in each round. The admin week list leaves
+    # playoff weeks out, so anything an admin does to one -- generating a
+    # sealed pool, say -- is driven from here instead.
+    weeks_by_bracket = {}
+    for week in league.weeks:
+        if week.playoff_bracket_id is None:
+            continue
+        weeks_by_bracket.setdefault(week.playoff_bracket_id, []).append(week)
     teams = {t.id: t.name for t in league.teams}
     config = _config_for(league)
     qualifiers = sorted(league.playoff_qualifiers, key=lambda q: q.position)
@@ -738,6 +746,20 @@ def _bracket_tree(league):
         "brackets": [
             {
                 **_serialize_bracket(bracket),
+                "weeks": [
+                    {
+                        "id": week.id,
+                        "week_number": week.week_number,
+                        "round_number": week.playoff_round,
+                        "status": week.status,
+                        "format_type": week.format_type,
+                        "sealed_pools_generated": bool(week.sealed_pools_generated),
+                    }
+                    for week in sorted(
+                        weeks_by_bracket.get(bracket.id, []),
+                        key=lambda w: (w.playoff_round or 0),
+                    )
+                ],
                 "matches": [
                     _serialize_match(m)
                     for m in sorted(

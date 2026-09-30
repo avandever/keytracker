@@ -34,6 +34,18 @@ export interface PlayoffBracketInfo extends PlayoffBracketConstraints {
   best_of_n: number;
   assignments: { id: number; team_id: number; user_id: number; user_name: string | null }[];
   matches?: PlayoffMatchInfo[];
+  /** The week this bracket plays in each round, once the round is open. */
+  weeks?: PlayoffBracketWeek[];
+}
+
+/** One bracket's week in one round, as the setup screen needs it. */
+export interface PlayoffBracketWeek {
+  id: number;
+  week_number: number;
+  round_number: number | null;
+  status: string;
+  format_type: string;
+  sealed_pools_generated: boolean;
 }
 
 export interface PlayoffMatchInfo {
