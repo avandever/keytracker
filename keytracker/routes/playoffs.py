@@ -51,10 +51,16 @@ blueprint = Blueprint("playoffs", __name__, url_prefix="/api/v2/leagues")
 
 DEFAULT_POINTS_PER_ROUND = [1]
 
-# Formats a bracket cannot be run in. The SAS ladder spreads a whole team over
-# rungs, where a bracket is one player from each team playing one opponent, so
-# there is nothing for it to ladder.
-NON_BRACKET_FORMATS = (WeekFormat.SAS_LADDER.value,)
+# Formats a bracket cannot be run in, all for the same reason: they are played
+# by a whole roster, and a bracket is one player from each team playing one
+# opponent. The ladder has nothing to spread over rungs, a team sealed pool has
+# nobody to share it with, and thief has no team to curate or steal from.
+NON_BRACKET_FORMATS = (
+    WeekFormat.SAS_LADDER.value,
+    WeekFormat.TEAM_SEALED.value,
+    WeekFormat.TEAM_SEALED_ALLIANCE.value,
+    WeekFormat.THIEF.value,
+)
 
 
 # The constraints a bracket carries, which its weeks are made with. Text

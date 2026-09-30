@@ -566,10 +566,11 @@ const EMPTY_BRACKET: BracketRow = {
 };
 
 /**
- * Formats a bracket cannot be run in. The SAS ladder spreads a whole team over
- * rungs, where a bracket is one player from each team playing one opponent.
+ * Formats a bracket cannot be run in, all for the same reason: they are played
+ * by a whole roster, and a bracket is one player from each team playing one
+ * opponent. Mirrors NON_BRACKET_FORMATS in routes/playoffs.py.
  */
-const NON_BRACKET_FORMATS = ['sas_ladder'];
+const NON_BRACKET_FORMATS = ['sas_ladder', 'team_sealed', 'team_sealed_alliance', 'thief'];
 
 /** Formats played with alliance decks, which a restricted list applies to. */
 function isAllianceFormat(formatType: string): boolean {
