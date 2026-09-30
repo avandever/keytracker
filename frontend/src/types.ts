@@ -361,6 +361,9 @@ export interface LeagueDetail extends LeagueSummary {
   signups: SignupInfo[];
   admins: UserBrief[];
   weeks: LeagueWeek[];
+  /** The viewer's team's playoff weeks, kept out of `weeks` so they do not
+   *  each claim a week tab. My Team groups them by round. */
+  playoff_weeks?: LeagueWeek[];
   is_admin: boolean;
   is_signed_up: boolean;
   my_team_id: number | null;
@@ -572,6 +575,12 @@ export interface LeagueWeek {
   sas_ladder_assignments?: { id: number; user_id: number; team_id: number; rung_number: number }[];
   custom_description?: string | null;
   hide_standard_description?: boolean;
+  /** Set on the weeks a playoff round makes: one per bracket, grouped into a
+   *  tab per round on My Team rather than a tab each. */
+  playoff_round?: number | null;
+  playoff_bracket_id?: number | null;
+  playoff_bracket_number?: number | null;
+  playoff_bracket_name?: string | null;
   feature_volunteers?: { team_id: number; user_id: number }[];
   deck_suggestions?: {
     id: number;

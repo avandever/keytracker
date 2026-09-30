@@ -331,6 +331,51 @@ with app.app_context():
                             "ADD COLUMN playoff_round INTEGER NULL"
                         )
                     )
+        if inspector.has_table("tracker_playoff_bracket"):
+            columns = {
+                c["name"] for c in inspector.get_columns("tracker_playoff_bracket")
+            }
+            # A bracket carries the same constraints a week does.
+            bracket_columns = [
+                ("allowed_sets", "TEXT NULL"),
+                ("max_sas", "INTEGER NULL"),
+                ("sas_floor", "INTEGER NULL"),
+                ("combined_max_sas", "INTEGER NULL"),
+                ("set_diversity", "BOOLEAN NULL"),
+                ("house_diversity", "BOOLEAN NULL"),
+                ("decks_per_player", "INTEGER NULL"),
+                ("no_keycheat", "BOOLEAN NULL"),
+                ("alliance_restricted_list_version_id", "INTEGER NULL"),
+                ("sas_ladder_maxes", "TEXT NULL"),
+                ("sas_ladder_feature_rung", "INTEGER NULL"),
+                ("team_max_raw_amber", "INTEGER NULL"),
+                ("team_min_raw_amber", "INTEGER NULL"),
+                ("required_card_names", "TEXT NULL"),
+                ("required_card_categories", "TEXT NULL"),
+                ("custom_description", "TEXT NULL"),
+                ("hide_standard_description", "BOOLEAN NULL"),
+            ]
+            with db.engine.begin() as conn:
+                for name, ddl in bracket_columns:
+                    if name not in columns:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE tracker_playoff_bracket "
+                                f"ADD COLUMN {name} {ddl}"
+                            )
+                        )
+        if inspector.has_table("tracker_playoff_config"):
+            columns = {
+                c["name"] for c in inspector.get_columns("tracker_playoff_config")
+            }
+            with db.engine.begin() as conn:
+                if "published_at" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_playoff_config "
+                            "ADD COLUMN published_at DATETIME NULL"
+                        )
+                    )
         if inspector.has_table("tertiate_house_purge"):
             columns = {
                 c["name"] for c in inspector.get_columns("tertiate_house_purge")

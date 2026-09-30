@@ -27,10 +27,8 @@ from keytracker.routes.leagues import (
     _log_admin_action,
     get_effective_user,
 )
-from keytracker.serializers import serialize_deck_selection
 from keytracker.schema import (
     LeagueWeek,
-    PlayerDeckSelection,
     PlayerMatchup,
     PlayoffAssignment,
     PlayoffBracket,
@@ -50,6 +48,37 @@ from keytracker.schema import (
 blueprint = Blueprint("playoffs", __name__, url_prefix="/api/v2/leagues")
 
 DEFAULT_POINTS_PER_ROUND = [1]
+
+
+# The constraints a bracket carries, which its weeks are made with. Text
+# fields hold JSON, the same as on a week.
+_BRACKET_CONSTRAINT_FIELDS = (
+    "allowed_sets",
+    "max_sas",
+    "sas_floor",
+    "combined_max_sas",
+    "set_diversity",
+    "house_diversity",
+    "decks_per_player",
+    "no_keycheat",
+    "alliance_restricted_list_version_id",
+    "sas_ladder_maxes",
+    "sas_ladder_feature_rung",
+    "team_max_raw_amber",
+    "team_min_raw_amber",
+    "required_card_names",
+    "required_card_categories",
+    "custom_description",
+    "hide_standard_description",
+)
+
+# The ones stored as JSON text rather than a scalar.
+_BRACKET_JSON_FIELDS = (
+    "allowed_sets",
+    "sas_ladder_maxes",
+    "required_card_names",
+    "required_card_categories",
+)
 
 
 def _config_for(league, create=False):
@@ -77,6 +106,11 @@ def _serialize_config(league, config):
         "consolation_enabled": bool(config.consolation_enabled) if config else False,
         "consolation_points": config.consolation_points if config else 1,
         "bye_policy": config.bye_policy if config else PlayoffByePolicy.RANDOM_EVEN.value,
+        "published_at": (
+            config.published_at.isoformat() + "Z"
+            if config and config.published_at
+            else None
+        ),
         "drawn_at": (
             config.drawn_at.isoformat() + "Z" if config and config.drawn_at else None
         ),
@@ -86,12 +120,22 @@ def _serialize_config(league, config):
 
 
 def _serialize_bracket(bracket):
+    constraints = {}
+    for field in _BRACKET_CONSTRAINT_FIELDS:
+        value = getattr(bracket, field, None)
+        if field in _BRACKET_JSON_FIELDS and value:
+            try:
+                value = json.loads(value)
+            except (json.JSONDecodeError, TypeError):
+                value = None
+        constraints[field] = value
     return {
         "id": bracket.id,
         "bracket_number": bracket.bracket_number,
         "name": bracket.name,
         "format_type": bracket.format_type,
         "best_of_n": bracket.best_of_n,
+        **constraints,
         "assignments": [
             {
                 "id": a.id,
@@ -215,6 +259,40 @@ def update_playoff_config(league_id):
     return jsonify(_serialize_config(league, config))
 
 
+@blueprint.route("/<int:league_id>/playoffs/publish", methods=["POST"])
+@login_required
+def publish_playoffs(league_id):
+    """Show the setup to the teams, so captains can fill their brackets.
+
+    Setup is done in private -- half-decided formats are not something to put
+    in front of eleven captains -- so the brackets, and the tab a captain
+    assigns players in, only appear once this is done.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if not _is_league_admin(league, effective):
+        return jsonify({"error": "Admin access required"}), 403
+    data = request.get_json(silent=True) or {}
+    publish = bool(data.get("published", True))
+    config = _config_for(league, create=True)
+    if publish and not league.playoff_brackets:
+        return jsonify({"error": "Define the brackets first"}), 400
+    if not publish and _locked(config):
+        return jsonify({"error": "The brackets are drawn; setup is fixed"}), 400
+    config.published_at = datetime.datetime.utcnow() if publish else None
+    _log_admin_action(
+        league.id,
+        None,
+        effective.id,
+        "playoffs_published" if publish else "playoffs_unpublished",
+        None,
+    )
+    db.session.commit()
+    return jsonify(_serialize_config(league, config))
+
+
 @blueprint.route("/<int:league_id>/playoffs/brackets", methods=["PUT"])
 @login_required
 def set_playoff_brackets(league_id):
@@ -256,6 +334,15 @@ def set_playoff_brackets(league_id):
         bracket.name = (entry.get("name") or "").strip() or None
         bracket.format_type = entry["format_type"]
         bracket.best_of_n = entry.get("best_of_n", 1)
+        for field in _BRACKET_CONSTRAINT_FIELDS:
+            if field not in entry:
+                continue
+            value = entry[field]
+            if field in _BRACKET_JSON_FIELDS:
+                value = json.dumps(value) if value else None
+            elif value == "":
+                value = None
+            setattr(bracket, field, value)
         kept.add(index)
     for number, bracket in existing.items():
         if number not in kept:
@@ -800,6 +887,11 @@ def start_playoff_round(league_id, round_number):
                 status=WeekStatus.DECK_SELECTION.value,
                 playoff_bracket_id=bracket.id,
                 playoff_round=round_number,
+                **{
+                    field: getattr(bracket, field, None)
+                    for field in _BRACKET_CONSTRAINT_FIELDS
+                    if getattr(bracket, field, None) is not None
+                },
             )
             db.session.add(week)
             db.session.flush()
@@ -844,185 +936,6 @@ def start_playoff_round(league_id, round_number):
     tree["weeks_created"] = created_weeks
     tree["matches_created"] = created_matches
     return jsonify(tree)
-
-
-# How many decks a player submits, by format. Mirrors the same table on the
-# deck selection endpoint.
-_SLOTS_BY_FORMAT = {
-    WeekFormat.TRIAD.value: 3,
-    WeekFormat.TRIAD_SHORT.value: 3,
-    WeekFormat.MOIRAI.value: 3,
-    WeekFormat.NORDIC_HEXAD.value: 6,
-    WeekFormat.OUBLIETTE.value: 2,
-    WeekFormat.EXCHANGE.value: 2,
-}
-
-# The fields the constraints display reads, so a bracket week can be shown with
-# the same component as an ordinary one.
-_WEEK_CONSTRAINT_FIELDS = (
-    "allowed_sets",
-    "max_sas",
-    "sas_floor",
-    "combined_max_sas",
-    "set_diversity",
-    "house_diversity",
-    "no_keycheat",
-    "team_max_raw_amber",
-    "team_min_raw_amber",
-    "sas_ladder_maxes",
-    "sas_ladder_feature_rung",
-)
-
-
-def _week_for_display(week):
-    data = {
-        "id": week.id,
-        "name": week.name,
-        "status": week.status,
-        "format_type": week.format_type,
-        "best_of_n": week.best_of_n,
-        "required_card_names": (
-            json.loads(week.required_card_names) if week.required_card_names else None
-        ),
-        "required_card_categories": (
-            json.loads(week.required_card_categories)
-            if week.required_card_categories
-            else None
-        ),
-        "deck_submission_deadline": (
-            week.deck_submission_deadline.isoformat() + "Z"
-            if week.deck_submission_deadline
-            else None
-        ),
-        "match_completion_deadline": (
-            week.match_completion_deadline.isoformat() + "Z"
-            if week.match_completion_deadline
-            else None
-        ),
-        "feature_match_applies": False,
-    }
-    for field in _WEEK_CONSTRAINT_FIELDS:
-        value = getattr(week, field, None)
-        if field in ("allowed_sets", "sas_ladder_maxes") and value:
-            try:
-                value = json.loads(value)
-            except (json.JSONDecodeError, TypeError):
-                value = None
-        data[field] = value
-    return data
-
-
-@blueprint.route(
-    "/<int:league_id>/playoffs/rounds/<int:round_number>/decks", methods=["GET"]
-)
-def get_round_decks(league_id, round_number):
-    """One team's decks for a playoff round, every bracket in one place.
-
-    A round is a week per bracket underneath, but a team should see a single
-    list: each of their players, the format they are in, what it requires, and
-    the deck they have entered. Submitting still goes to that bracket's week,
-    through the ordinary deck selection endpoint.
-    """
-    league, err = _get_league_or_404(league_id)
-    if err:
-        return err
-    viewer = get_effective_user()
-    if getattr(viewer, "id", None) is None:
-        viewer = None
-
-    team_id = request.args.get("team_id", type=int)
-    my_team_id = None
-    if viewer is not None:
-        member = (
-            TeamMember.query.join(Team)
-            .filter(Team.league_id == league.id, TeamMember.user_id == viewer.id)
-            .first()
-        )
-        my_team_id = member.team_id if member else None
-    team_id = team_id or my_team_id
-    if team_id is None:
-        return jsonify({"error": "No team to show"}), 400
-    if team_id != my_team_id and not (viewer and _is_league_admin(league, viewer)):
-        return jsonify({"error": "That is not your team"}), 403
-
-    weeks = {
-        w.playoff_bracket_id: w
-        for w in league.weeks
-        if w.playoff_round == round_number and w.playoff_bracket_id
-    }
-    brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
-    team = db.session.get(Team, team_id)
-
-    rows = []
-    for bracket in brackets:
-        week = weeks.get(bracket.id)
-        if week is None:
-            continue
-        assignment = next(
-            (a for a in bracket.assignments if a.team_id == team_id), None
-        )
-        if assignment is None:
-            continue
-        match = next(
-            (
-                m
-                for m in bracket.matches
-                if m.round_number == round_number
-                and team_id in (m.team1_id, m.team2_id)
-            ),
-            None,
-        )
-        opponent = None
-        if match is not None:
-            other_id = match.team2_id if match.team1_id == team_id else match.team1_id
-            if other_id:
-                other_team = db.session.get(Team, other_id)
-                other_player_id = _player_for(bracket, other_id)
-                other_player = db.session.get(User, other_player_id) if other_player_id else None
-                opponent = {
-                    "team_id": other_id,
-                    "team_name": other_team.name if other_team else None,
-                    "player": (
-                        {"id": other_player.id, "name": other_player.name}
-                        if other_player
-                        else None
-                    ),
-                }
-        selections = (
-            PlayerDeckSelection.query.filter_by(
-                week_id=week.id, user_id=assignment.user_id
-            )
-            .order_by(PlayerDeckSelection.slot_number)
-            .all()
-        )
-        player = db.session.get(User, assignment.user_id)
-        rows.append(
-            {
-                "bracket": {
-                    "id": bracket.id,
-                    "bracket_number": bracket.bracket_number,
-                    "name": bracket.name,
-                    "format_type": bracket.format_type,
-                    "best_of_n": bracket.best_of_n,
-                },
-                "week": _week_for_display(week),
-                "player": {"id": player.id, "name": player.name} if player else None,
-                "opponent": opponent,
-                "selections": [serialize_deck_selection(sel) for sel in selections],
-                "max_slots": _SLOTS_BY_FORMAT.get(bracket.format_type, 1),
-                "player_matchup_id": match.player_matchup_id if match else None,
-                "is_bye": bool(match.is_bye) if match else False,
-            }
-        )
-
-    return jsonify(
-        {
-            "round": round_number,
-            "team_id": team_id,
-            "team_name": team.name if team else None,
-            "rows": rows,
-        }
-    )
 
 
 def _points_for_round(points, round_number):

@@ -71,11 +71,13 @@ import TeamAmberBudgetPanel from '../components/TeamAmberBudgetPanel';
 import SpecialsPanel from '../components/SpecialsPanel';
 import OutstandingMatchesTab from '../components/OutstandingMatchesTab';
 import { currentWeekOf } from './MyLeagueInfoPage';
+import { getPlayoffSetup, setPlayoffAssignments } from '../api/playoffs';
+import type { PlayoffSetup } from '../api/playoffs';
 import { getWeekDescription } from '../utils/formatDescriptions';
 import AlliancePodBuilder, { type PodEntry } from '../components/AlliancePodBuilder';
 import { useAuth } from '../contexts/AuthContext';
 import { WEEK_FORMAT_LABELS as FORMAT_LABELS } from '../utils/formatLabels';
-import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, DeckSelectionInfo, DeckEntryLogEntry } from '../types';
+import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail, DeckSelectionInfo, DeckEntryLogEntry } from '../types';
 import type { SealedPoolEntry, TeamSealedPoolEntry } from '../api/leagues';
 import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
@@ -112,11 +114,27 @@ export function sortWeeksForTabs(weeks: LeagueWeek[]): LeagueWeek[] {
   });
 }
 
+/** The rounds this team has playoff weeks for, in order. */
+function playoffRoundNumbers(weeks: LeagueWeek[]): number[] {
+  const rounds = new Set<number>();
+  for (const week of weeks) {
+    if (week.playoff_round != null) rounds.add(week.playoff_round);
+  }
+  return [...rounds].sort((a, b) => a - b);
+}
+
 /** Tab slugs, in render order, so ?tab= can name a tab instead of counting them. */
-function myTeamTabKeys(league: LeagueDetail): string[] {
+function myTeamTabKeys(league: LeagueDetail, playoffsTab: boolean): string[] {
+  const weeks = league.weeks || [];
   return [
     'membership',
-    ...sortWeeksForTabs(league.weeks || []).map((w) => `week-${w.week_number}`),
+    ...sortWeeksForTabs(weeks.filter((w) => w.playoff_round == null)).map(
+      (w) => `week-${w.week_number}`,
+    ),
+    ...(playoffsTab ? ['playoffs'] : []),
+    // A round is one week per bracket, so it gets a tab holding all of them
+    // rather than a tab each.
+    ...playoffRoundNumbers(weeks).map((n) => `playoff-round-${n}`),
     'log',
     ...(league.is_captain ? ['outstanding'] : []),
   ];
@@ -138,6 +156,11 @@ export default function MyTeamPage() {
 
   // Available sets for constraint display
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
+
+  // The playoff setup, for the bracket assignment tab. Checked before the
+  // starting tab is resolved, since it decides whether that tab is there.
+  const [playoffSetup, setPlayoffSetup] = useState<PlayoffSetup | null>(null);
+  const [playoffsChecked, setPlayoffsChecked] = useState(false);
 
   // Captain override confirmation for PAIRING status or SAS restriction violations
   type PendingDeckAction =
@@ -197,7 +220,10 @@ export default function MyTeamPage() {
     setTeamSealedPools({});
     getLeague(leagueId)
       .then((l) => {
-        setLeague(l);
+        // Playoff weeks ride along in their own field so they do not each claim
+        // a week tab. Merging them into weeks here keeps every week handler on
+        // this page working on them unchanged; the tab list filters them out.
+        setLeague({ ...l, weeks: [...(l.weeks || []), ...(l.playoff_weeks || [])] });
         const myTeam = l.teams.find((t) => t.id === l.my_team_id);
         if (myTeam) setEditName(myTeam.name);
       })
@@ -207,12 +233,22 @@ export default function MyTeamPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  const refreshPlayoffs = useCallback(() => {
+    getPlayoffSetup(leagueId)
+      .then(setPlayoffSetup)
+      .catch(() => setPlayoffSetup(null))
+      .finally(() => setPlayoffsChecked(true));
+  }, [leagueId]);
+
+  useEffect(() => { refreshPlayoffs(); }, [refreshPlayoffs]);
+
   // Resolve the starting tab once the league is known: an explicit ?tab= wins,
   // otherwise open on the week actually being played. Runs once so a later
   // refresh cannot yank the user off the tab they clicked.
   useEffect(() => {
-    if (!league || initialTabApplied.current) return;
-    const keys = myTeamTabKeys(league);
+    if (!league || !playoffsChecked || initialTabApplied.current) return;
+    const playoffsTab = Boolean(playoffSetup?.config.published_at && league.my_team_id);
+    const keys = myTeamTabKeys(league, playoffsTab);
     const raw = searchParams.get('tab');
     let idx: number | null = null;
     if (raw) {
@@ -227,11 +263,17 @@ export default function MyTeamPage() {
     }
     if (idx === null) {
       const current = currentWeekOf(league);
-      if (current) idx = keys.indexOf(`week-${current.week_number}`);
+      if (current) {
+        idx = keys.indexOf(
+          current.playoff_round != null
+            ? `playoff-round-${current.playoff_round}`
+            : `week-${current.week_number}`,
+        );
+      }
     }
     setWeekTab(idx != null && idx >= 0 ? idx : 0);
     initialTabApplied.current = true;
-  }, [league, searchParams]);
+  }, [league, playoffSetup, playoffsChecked, searchParams]);
 
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
@@ -304,8 +346,13 @@ export default function MyTeamPage() {
 
   const isCaptain = league.is_captain;
   const weeks = league.weeks || [];
-  const logTabIdx = weeks.length + 1;
-  const outstandingTabIdx = weeks.length + 2;
+  const regularWeeks = sortWeeksForTabs(weeks.filter((w) => w.playoff_round == null));
+  const playoffRounds = playoffRoundNumbers(weeks);
+  const playoffsTabShown = Boolean(playoffSetup?.config.published_at && league.my_team_id);
+  const playoffsTabIdx = playoffsTabShown ? regularWeeks.length + 1 : -1;
+  const firstPlayoffRoundIdx = regularWeeks.length + 1 + (playoffsTabShown ? 1 : 0);
+  const logTabIdx = firstPlayoffRoundIdx + playoffRounds.length;
+  const outstandingTabIdx = logTabIdx + 1;
 
   const handleOpenLogTab = () => {
     if (deckEntryLog === null && !deckEntryLogLoading) {
@@ -2314,8 +2361,6 @@ export default function MyTeamPage() {
     );
   };
 
-  const sortedWeeks = sortWeeksForTabs(weeks);
-
   return (
     <Container maxWidth="md" sx={{ mt: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -2331,13 +2376,13 @@ export default function MyTeamPage() {
 
       <Tabs
         value={weekTab}
-        onChange={(_, v) => { setWeekTab(v); const key = myTeamTabKeys(league)[v] ?? String(v); setSearchParams((prev) => { prev.set('tab', key); return prev; }, { replace: true }); if (v === logTabIdx) handleOpenLogTab(); }}
+        onChange={(_, v) => { setWeekTab(v); const key = myTeamTabKeys(league, playoffsTabShown)[v] ?? String(v); setSearchParams((prev) => { prev.set('tab', key); return prev; }, { replace: true }); if (v === logTabIdx) handleOpenLogTab(); }}
         sx={{ mb: 2 }}
         variant="scrollable"
         scrollButtons="auto"
       >
         <Tab label="Membership" />
-        {sortedWeeks.map((w, i) => (
+        {regularWeeks.map((w, i) => (
           <Tab
             key={w.id}
             value={i + 1}
@@ -2350,6 +2395,10 @@ export default function MyTeamPage() {
               ) : `Week ${w.week_number}`
             }
           />
+        ))}
+        {playoffsTabShown && <Tab value={playoffsTabIdx} label="Playoffs" />}
+        {playoffRounds.map((n, i) => (
+          <Tab key={`playoff-round-${n}`} value={firstPlayoffRoundIdx + i} label={`Playoff round ${n}`} />
         ))}
         <Tab value={logTabIdx} label="Log" />
         {isCaptain && <Tab value={outstandingTabIdx} label="Outstanding Matches" />}
@@ -2456,7 +2505,28 @@ export default function MyTeamPage() {
         </>
       )}
 
-      {weekTab > 0 && weekTab !== logTabIdx && weekTab !== outstandingTabIdx && sortedWeeks[weekTab - 1] && renderWeekContent(sortedWeeks[weekTab - 1])}
+      {weekTab > 0 && weekTab <= regularWeeks.length && regularWeeks[weekTab - 1]
+        && renderWeekContent(regularWeeks[weekTab - 1])}
+
+      {playoffsTabShown && weekTab === playoffsTabIdx && playoffSetup && (
+        <PlayoffAssignmentsTab
+          leagueId={leagueId}
+          setup={playoffSetup}
+          team={myTeam}
+          isCaptain={isCaptain}
+          onSaved={() => { refreshPlayoffs(); setSuccess('Assignments saved.'); }}
+          setError={setError}
+        />
+      )}
+
+      {weekTab >= firstPlayoffRoundIdx && weekTab < logTabIdx && (
+        <>
+          {weeks
+            .filter((w) => w.playoff_round === playoffRounds[weekTab - firstPlayoffRoundIdx])
+            .sort((a, b) => (a.playoff_bracket_number || 0) - (b.playoff_bracket_number || 0))
+            .map((w) => <Box key={w.id}>{renderWeekContent(w)}</Box>)}
+        </>
+      )}
 
       {weekTab === outstandingTabIdx && isCaptain && (
         <OutstandingMatchesTab
@@ -2533,5 +2603,133 @@ export default function MyTeamPage() {
         </DialogActions>
       </Dialog>
     </Container>
+  );
+}
+
+
+/**
+ * Who this team puts in each playoff bracket.
+ *
+ * A bracket runs for the whole playoffs, so this is chosen once, before the
+ * draw, and a player plays every round of the bracket they are put in.
+ */
+function PlayoffAssignmentsTab({
+  leagueId,
+  setup,
+  team,
+  isCaptain,
+  onSaved,
+  setError,
+}: {
+  leagueId: number;
+  setup: PlayoffSetup;
+  team: TeamDetail;
+  isCaptain: boolean;
+  onSaved: () => void;
+  setError: (message: string) => void;
+}) {
+  const drawn = Boolean(setup.config.drawn_at);
+  const [choices, setChoices] = useState<Record<number, number>>(() => {
+    const mine: Record<number, number> = {};
+    for (const bracket of setup.brackets) {
+      const assignment = bracket.assignments.find((a) => a.team_id === team.id);
+      if (assignment) mine[bracket.id] = assignment.user_id;
+    }
+    return mine;
+  });
+  const [saving, setSaving] = useState(false);
+
+  const chosen = Object.values(choices);
+  const doubledUp = chosen.filter((id, i) => chosen.indexOf(id) !== i);
+  const unfilled = setup.brackets.filter((b) => !choices[b.id]).length;
+
+  const save = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      await setPlayoffAssignments(
+        leagueId,
+        team.id,
+        Object.entries(choices).map(([bracketId, userId]) => ({
+          bracket_id: Number(bracketId),
+          user_id: Number(userId),
+        })),
+      );
+      onSaved();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" gutterBottom>Playoff brackets</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          One bracket per player, each in its own format. Whoever you put in a bracket
+          plays every round of it.
+        </Typography>
+
+        {drawn && <Alert severity="info" sx={{ mb: 2 }}>The draw is made, so this is fixed.</Alert>}
+        {!drawn && !isCaptain && (
+          <Alert severity="info" sx={{ mb: 2 }}>Only a captain can change these.</Alert>
+        )}
+        {doubledUp.length > 0 && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            A player can only be in one bracket, and one is picked twice here.
+          </Alert>
+        )}
+        {!drawn && unfilled > 0 && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {unfilled} bracket{unfilled === 1 ? ' has' : 's have'} nobody in {unfilled === 1 ? 'it' : 'them'} yet.
+          </Alert>
+        )}
+
+        {setup.brackets.length === 0 && (
+          <Typography color="text.secondary">No brackets defined yet.</Typography>
+        )}
+
+        {setup.brackets.map((bracket) => (
+          <Box key={bracket.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+            <Typography variant="body2" sx={{ minWidth: 190 }}>
+              {bracket.name || `Bracket ${bracket.bracket_number}`}
+            </Typography>
+            <Chip size="small" variant="outlined"
+              label={FORMAT_LABELS[bracket.format_type] || bracket.format_type} />
+            <Chip size="small" variant="outlined" label={`Bo${bracket.best_of_n}`} />
+            {bracket.max_sas != null && (
+              <Chip size="small" variant="outlined" label={`Max SAS ${bracket.max_sas}`} />
+            )}
+            <FormControl size="small" sx={{ minWidth: 200 }} disabled={drawn || !isCaptain}>
+              <InputLabel>Player</InputLabel>
+              <Select
+                label="Player"
+                value={choices[bracket.id] || ''}
+                onChange={(e) =>
+                  setChoices((prev) => ({ ...prev, [bracket.id]: Number(e.target.value) }))
+                }
+              >
+                {team.members.map((m) => (
+                  <MenuItem key={m.user.id} value={m.user.id}>{m.user.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        ))}
+
+        {setup.brackets.length > 0 && (
+          <Button
+            variant="contained"
+            sx={{ mt: 1 }}
+            disabled={drawn || !isCaptain || saving || doubledUp.length > 0}
+            onClick={save}
+          >
+            {saving ? 'Saving...' : 'Save assignments'}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }

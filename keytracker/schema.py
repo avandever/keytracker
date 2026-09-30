@@ -1749,6 +1749,9 @@ class PlayoffConfig(db.Model):
     bye_policy = db.Column(
         db.String(20), nullable=False, default=PlayoffByePolicy.RANDOM_EVEN.value
     )
+    # Set when the admin publishes the setup, which is what lets captains see
+    # the brackets and put their players in them.
+    published_at = db.Column(db.DateTime, nullable=True)
     # Set once the draw has been made, after which brackets and assignments
     # are fixed.
     drawn_at = db.Column(db.DateTime, nullable=True)
@@ -1797,6 +1800,30 @@ class PlayoffBracket(db.Model):
     name = db.Column(db.String(100), nullable=True)
     format_type = db.Column(db.String(30), nullable=False)
     best_of_n = db.Column(db.Integer, nullable=False, default=1)
+    # The constraints this bracket is played under, in the same shape a week
+    # holds them. Starting a round copies them onto the week it makes, so a
+    # bracket is tuned once rather than once per round.
+    allowed_sets = db.Column(db.Text, nullable=True)
+    max_sas = db.Column(db.Integer, nullable=True)
+    sas_floor = db.Column(db.Integer, nullable=True)
+    combined_max_sas = db.Column(db.Integer, nullable=True)
+    set_diversity = db.Column(db.Boolean, nullable=True)
+    house_diversity = db.Column(db.Boolean, nullable=True)
+    decks_per_player = db.Column(db.Integer, nullable=True)
+    no_keycheat = db.Column(db.Boolean, nullable=True)
+    alliance_restricted_list_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey("alliance_restricted_list_version.id"),
+        nullable=True,
+    )
+    sas_ladder_maxes = db.Column(db.Text, nullable=True)
+    sas_ladder_feature_rung = db.Column(db.Integer, nullable=True)
+    team_max_raw_amber = db.Column(db.Integer, nullable=True)
+    team_min_raw_amber = db.Column(db.Integer, nullable=True)
+    required_card_names = db.Column(db.Text, nullable=True)
+    required_card_categories = db.Column(db.Text, nullable=True)
+    custom_description = db.Column(db.Text, nullable=True)
+    hide_standard_description = db.Column(db.Boolean, nullable=True)
 
     league = db.relationship("League", backref="playoff_brackets")
 

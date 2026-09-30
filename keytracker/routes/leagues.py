@@ -273,7 +273,45 @@ def get_league(league_id):
     data["is_signed_up"] = is_signed_up
     data["my_team_id"] = my_team_id
     data["is_captain"] = is_captain
+    data["playoff_weeks"] = _playoff_weeks_for_team(league, viewer, my_team_id)
     return etag_response(data)
+
+
+def _playoff_weeks_for_team(league, viewer, my_team_id):
+    """A team's playoff weeks, scoped the way My Info scopes an ordinary one.
+
+    A round is one week per bracket, so a team has as many of these per round
+    as it has players. They stay out of the ordinary week list -- nobody wants
+    eleven more week tabs -- and My Team groups them into a tab per round.
+    """
+    if my_team_id is None:
+        return []
+    playoff_weeks = [
+        w for w in league.weeks if getattr(w, "playoff_bracket_id", None) is not None
+    ]
+    if not playoff_weeks:
+        return []
+    my_user_ids = {
+        m.user_id for m in TeamMember.query.filter_by(team_id=my_team_id).all()
+    }
+    brackets = {b.id: b for b in league.playoff_brackets}
+    scoped = []
+    for week in sorted(
+        playoff_weeks, key=lambda w: (w.playoff_round or 0, w.week_number)
+    ):
+        week_data = serialize_league_week(week, viewer=viewer)
+        week_data = _scope_week_to_viewer(week_data, my_team_id, my_user_ids)
+        bracket = brackets.get(week.playoff_bracket_id)
+        week_data["playoff_round"] = week.playoff_round
+        week_data["playoff_bracket_id"] = week.playoff_bracket_id
+        week_data["playoff_bracket_number"] = (
+            bracket.bracket_number if bracket else None
+        )
+        week_data["playoff_bracket_name"] = (
+            (bracket.name or f"Bracket {bracket.bracket_number}") if bracket else None
+        )
+        scoped.append(week_data)
+    return scoped
 
 
 def _scope_week_to_viewer(week_data: dict, my_team_id, my_user_ids: set) -> dict:

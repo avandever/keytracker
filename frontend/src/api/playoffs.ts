@@ -1,8 +1,31 @@
 import apiClient from './client';
-import type { UserBrief } from '../types';
+
+/**
+ * The constraints a bracket is played under, in the same shape a week holds
+ * them. Starting a round copies these onto the week it makes.
+ */
+export interface PlayoffBracketConstraints {
+  allowed_sets?: number[] | null;
+  max_sas?: number | null;
+  sas_floor?: number | null;
+  combined_max_sas?: number | null;
+  set_diversity?: boolean | null;
+  house_diversity?: boolean | null;
+  decks_per_player?: number | null;
+  no_keycheat?: boolean | null;
+  alliance_restricted_list_version_id?: number | null;
+  sas_ladder_maxes?: number[] | null;
+  sas_ladder_feature_rung?: number | null;
+  team_max_raw_amber?: number | null;
+  team_min_raw_amber?: number | null;
+  required_card_names?: string[] | null;
+  required_card_categories?: unknown[] | null;
+  custom_description?: string | null;
+  hide_standard_description?: boolean | null;
+}
 
 /** One bracket: a format, and which player each team puts in it. */
-export interface PlayoffBracketInfo {
+export interface PlayoffBracketInfo extends PlayoffBracketConstraints {
   id: number;
   bracket_number: number;
   name: string | null;
@@ -30,6 +53,9 @@ export interface PlayoffConfigInfo {
   consolation_enabled: boolean;
   consolation_points: number;
   bye_policy: 'random_even' | 'team_record' | 'admin' | 'player_record';
+  /** Set when the admin shows the setup to the teams, which is what lets
+   *  captains fill their brackets on My Team. */
+  published_at: string | null;
   drawn_at: string | null;
   /** One bracket per player on a team. */
   expected_brackets: number;
@@ -53,31 +79,6 @@ export interface PlayoffTree {
   started_round?: number;
 }
 
-/** A team's decks for one round, every bracket in one list. */
-export interface PlayoffRoundRow {
-  bracket: {
-    id: number;
-    bracket_number: number;
-    name: string | null;
-    format_type: string;
-    best_of_n: number;
-  };
-  week: any;
-  player: UserBrief | null;
-  opponent: { team_id: number; team_name: string | null; player: UserBrief | null } | null;
-  selections: any[];
-  max_slots: number;
-  player_matchup_id: number | null;
-  is_bye: boolean;
-}
-
-export interface PlayoffRoundDecks {
-  round: number;
-  team_id: number;
-  team_name: string | null;
-  rows: PlayoffRoundRow[];
-}
-
 export async function getPlayoffSetup(leagueId: number): Promise<PlayoffSetup> {
   const { data } = await apiClient.get(`/leagues/${leagueId}/playoffs`);
   return data;
@@ -91,9 +92,23 @@ export async function updatePlayoffConfig(
   return data;
 }
 
+export async function publishPlayoffs(
+  leagueId: number,
+  published = true,
+): Promise<PlayoffConfigInfo> {
+  const { data } = await apiClient.post(`/leagues/${leagueId}/playoffs/publish`, {
+    published,
+  });
+  return data;
+}
+
 export async function setPlayoffBrackets(
   leagueId: number,
-  brackets: { name?: string | null; format_type: string; best_of_n?: number }[],
+  brackets: (PlayoffBracketConstraints & {
+    name?: string | null;
+    format_type: string;
+    best_of_n?: number;
+  })[],
 ): Promise<{ brackets: PlayoffBracketInfo[] }> {
   const { data } = await apiClient.put(`/leagues/${leagueId}/playoffs/brackets`, { brackets });
   return data;
@@ -139,17 +154,6 @@ export async function startPlayoffRound(
     `/leagues/${leagueId}/playoffs/rounds/${round}/start`,
     {},
   );
-  return data;
-}
-
-export async function getPlayoffRoundDecks(
-  leagueId: number,
-  round: number,
-  teamId?: number,
-): Promise<PlayoffRoundDecks> {
-  const { data } = await apiClient.get(`/leagues/${leagueId}/playoffs/rounds/${round}/decks`, {
-    params: teamId ? { team_id: teamId } : undefined,
-  });
   return data;
 }
 

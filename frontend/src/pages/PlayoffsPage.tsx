@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -23,30 +26,22 @@ import {
   alpha,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
-import { useAuth } from '../contexts/AuthContext';
-import { getLeague, submitDeckSelection, getSets } from '../api/leagues';
+import { getLeague, getSets } from '../api/leagues';
 import {
   drawPlayoffs,
-  getPlayoffRoundDecks,
   getPlayoffSetup,
   getPlayoffStandings,
   getPlayoffTree,
-  setPlayoffAssignments,
+  publishPlayoffs,
   setPlayoffBrackets,
   setPlayoffQualifiers,
   startPlayoffRound,
   updatePlayoffConfig,
 } from '../api/playoffs';
-import type {
-  PlayoffRoundDecks,
-  PlayoffSetup,
-  PlayoffStandings,
-  PlayoffTree,
-} from '../api/playoffs';
+import type { PlayoffSetup, PlayoffStandings, PlayoffTree } from '../api/playoffs';
 import type { KeyforgeSetInfo, LeagueDetail } from '../types';
-import WeekConstraints from '../components/WeekConstraints';
-import HouseIcons from '../components/HouseIcons';
 import { WEEK_FORMAT_LABELS } from '../utils/formatLabels';
 
 /**
@@ -55,22 +50,17 @@ import { WEEK_FORMAT_LABELS } from '../utils/formatLabels';
  */
 export default function PlayoffsPage() {
   const leagueId = useLeagueNumericId();
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
 
   const [league, setLeague] = useState<LeagueDetail | null>(null);
   const [setup, setSetup] = useState<PlayoffSetup | null>(null);
   const [tree, setTree] = useState<PlayoffTree | null>(null);
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
-  const [decks, setDecks] = useState<PlayoffRoundDecks | null>(null);
   const [standings, setStandings] = useState<PlayoffStandings | null>(null);
-  const [round, setRound] = useState(1);
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [deckUrls, setDeckUrls] = useState<Record<string, string>>({});
 
   const refresh = useCallback(() => {
     Promise.all([
@@ -91,20 +81,6 @@ export default function PlayoffsPage() {
 
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
-
-  useEffect(() => {
-    const raw = searchParams.get('round');
-    if (raw && !isNaN(parseInt(raw, 10))) setRound(parseInt(raw, 10));
-  }, [searchParams]);
-
-  const loadDecks = useCallback(() => {
-    if (!setup?.my_team_id && !setup?.is_admin) return;
-    getPlayoffRoundDecks(leagueId, round)
-      .then(setDecks)
-      .catch(() => setDecks(null));
-  }, [leagueId, round, setup]);
-
-  useEffect(() => { loadDecks(); }, [loadDecks]);
 
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
   if (!league || !setup) {
@@ -134,7 +110,6 @@ export default function PlayoffsPage() {
       await what();
       setSuccess(done);
       refresh();
-      loadDecks();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
     }
@@ -165,7 +140,6 @@ export default function PlayoffsPage() {
       <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable" scrollButtons="auto">
         <Tab label="Brackets" />
         <Tab label="Standings" />
-        {(setup.my_team_id || setup.is_admin) && <Tab label="My Team" />}
         {(setup.is_admin || setup.is_captain) && <Tab label="Setup" />}
       </Tabs>
 
@@ -268,117 +242,14 @@ export default function PlayoffsPage() {
         </Card>
       )}
 
-      {tab === 2 && (setup.my_team_id || setup.is_admin) && (
-        <Box>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
-            <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel>Round</InputLabel>
-              <Select
-                label="Round"
-                value={round}
-                onChange={(e) => {
-                  const next = Number(e.target.value);
-                  setRound(next);
-                  setSearchParams((prev) => { prev.set('round', String(next)); return prev; }, { replace: true });
-                }}
-              >
-                {Array.from({ length: Math.max(rounds, 1) }, (_, i) => i + 1).map((n) => (
-                  <MenuItem key={n} value={n}>{roundLabel(n)}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {decks?.team_name && <Typography variant="body2" color="text.secondary">{decks.team_name}</Typography>}
-          </Box>
-
-          {(!decks || decks.rows.length === 0) && (
-            <Typography color="text.secondary">
-              This round has not been opened yet.
-            </Typography>
-          )}
-
-          {(decks?.rows || []).map((row) => {
-            const key = `${row.bracket.id}`;
-            const canSubmit = row.week.status === 'deck_selection'
-              || row.week.status === 'team_paired'
-              || row.week.status === 'pairing';
-            return (
-              <Card key={row.bracket.id} sx={{ mb: 2 }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
-                    <Typography variant="subtitle1">
-                      {row.bracket.name || `Bracket ${row.bracket.bracket_number}`}
-                    </Typography>
-                    <Chip size="small" variant="outlined"
-                      label={WEEK_FORMAT_LABELS[row.bracket.format_type] || row.bracket.format_type} />
-                    <Chip size="small" variant="outlined" label={`Bo${row.bracket.best_of_n}`} />
-                    <Typography variant="body2" sx={{ ml: 1 }}>
-                      {row.player?.name}
-                      {row.opponent?.player ? ` vs ${row.opponent.player.name}` : ''}
-                      {row.opponent?.team_name ? ` (${row.opponent.team_name})` : ''}
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 1 }}>
-                    <WeekConstraints week={row.week} sets={sets} />
-                  </Box>
-
-                  {row.selections.length > 0 ? (
-                    row.selections.map((sel: any) => (
-                      <Box key={sel.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
-                        {row.max_slots > 1 && <Chip size="small" variant="outlined" label={`Slot ${sel.slot_number}`} />}
-                        {sel.deck?.houses && <HouseIcons houses={sel.deck.houses} />}
-                        <Typography variant="body2">{sel.deck?.name || 'Unknown deck'}</Typography>
-                        {sel.deck?.sas_rating != null && (
-                          <Chip size="small" variant="outlined" label={`SAS ${sel.deck.sas_rating}`} />
-                        )}
-                      </Box>
-                    ))
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">No deck entered yet.</Typography>
-                  )}
-
-                  {canSubmit && row.selections.length < row.max_slots && row.player && (
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
-                      <TextField
-                        size="small"
-                        sx={{ minWidth: 320, flexGrow: 1 }}
-                        label={`Deck URL for ${row.player.name}`}
-                        placeholder="https://decksofkeyforge.com/decks/..."
-                        value={deckUrls[key] || ''}
-                        onChange={(e) => setDeckUrls((prev) => ({ ...prev, [key]: e.target.value }))}
-                      />
-                      <Button
-                        variant="outlined"
-                        disabled={!deckUrls[key]?.trim()}
-                        onClick={() =>
-                          act(
-                            () => submitDeckSelection(leagueId, row.week.id, {
-                              deck_url: (deckUrls[key] || '').trim(),
-                              slot_number: row.selections.length + 1,
-                              user_id: row.player!.id === user?.id ? undefined : row.player!.id,
-                            }).then(() => setDeckUrls((prev) => ({ ...prev, [key]: '' }))),
-                            'Deck entered.',
-                          )
-                        }
-                      >
-                        Submit
-                      </Button>
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </Box>
-      )}
-
-      {tab === 3 && (setup.is_admin || setup.is_captain) && (
+      {tab === 2 && (setup.is_admin || setup.is_captain) && (
         <PlayoffSetupPanel
           league={league}
           setup={setup}
           rounds={rounds}
           onAct={act}
           leagueId={leagueId}
+          sets={sets}
         />
       )}
     </Container>
@@ -391,31 +262,23 @@ function PlayoffSetupPanel({
   rounds,
   onAct,
   leagueId,
+  sets,
 }: {
   league: LeagueDetail;
   setup: PlayoffSetup;
   rounds: number;
   onAct: (what: () => Promise<unknown>, done: string) => Promise<void>;
   leagueId: number;
+  sets: KeyforgeSetInfo[];
 }) {
   const drawn = Boolean(setup.config.drawn_at);
+  const published = Boolean(setup.config.published_at);
   const [advancing, setAdvancing] = useState(setup.config.teams_advancing);
   const [points, setPoints] = useState(setup.config.points_per_round.join(', '));
   const [consolation, setConsolation] = useState(setup.config.consolation_enabled);
   const [consolationPoints, setConsolationPoints] = useState(setup.config.consolation_points);
   const [byePolicy, setByePolicy] = useState(setup.config.bye_policy);
   const [qualifiers, setQualifiers] = useState<number[]>(setup.qualifiers.map((q) => q.team_id));
-  const [assignments, setAssignments] = useState<Record<number, number>>(() => {
-    const mine: Record<number, number> = {};
-    for (const b of setup.brackets) {
-      const a = b.assignments.find((x) => x.team_id === setup.my_team_id);
-      if (a) mine[b.id] = a.user_id;
-    }
-    return mine;
-  });
-
-  const myTeam = league.teams.find((t) => t.id === setup.my_team_id);
-
   return (
     <Box>
       {setup.is_admin && (
@@ -519,68 +382,8 @@ function PlayoffSetupPanel({
           drawn={drawn}
           leagueId={leagueId}
           onAct={onAct}
+          sets={sets}
         />
-      )}
-
-      {setup.my_team_id && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              {myTeam?.name}: who plays in each bracket
-            </Typography>
-            {drawn && <Alert severity="info" sx={{ mb: 1 }}>Fixed now that the draw is made.</Alert>}
-            {setup.brackets.length === 0 && (
-              <Typography color="text.secondary">No brackets defined yet.</Typography>
-            )}
-            {setup.brackets.map((bracket) => (
-              <Box key={bracket.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
-                <Typography variant="body2" sx={{ minWidth: 200 }}>
-                  {bracket.name || `Bracket ${bracket.bracket_number}`}
-                  {' — '}
-                  {WEEK_FORMAT_LABELS[bracket.format_type] || bracket.format_type}
-                </Typography>
-                <FormControl size="small" sx={{ minWidth: 200 }} disabled={drawn}>
-                  <InputLabel>Player</InputLabel>
-                  <Select
-                    label="Player"
-                    value={assignments[bracket.id] || ''}
-                    onChange={(e) =>
-                      setAssignments((prev) => ({ ...prev, [bracket.id]: Number(e.target.value) }))
-                    }
-                  >
-                    {(myTeam?.members || []).map((m) => (
-                      <MenuItem key={m.user.id} value={m.user.id}>{m.user.name}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            ))}
-            <Button
-              variant="contained"
-              disabled={drawn || !setup.is_captain}
-              onClick={() =>
-                onAct(
-                  () => setPlayoffAssignments(
-                    leagueId,
-                    setup.my_team_id!,
-                    Object.entries(assignments).map(([bracketId, userId]) => ({
-                      bracket_id: Number(bracketId),
-                      user_id: Number(userId),
-                    })),
-                  ),
-                  'Assignments saved.',
-                )
-              }
-            >
-              Save assignments
-            </Button>
-            {!setup.is_captain && (
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                Only a captain can change these.
-              </Typography>
-            )}
-          </CardContent>
-        </Card>
       )}
 
       {setup.is_admin && (
@@ -588,6 +391,18 @@ function PlayoffSetupPanel({
           <CardContent>
             <Typography variant="h6" gutterBottom>Running the playoffs</Typography>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                variant={published ? 'outlined' : 'contained'}
+                disabled={setup.brackets.length === 0 || (published && drawn)}
+                onClick={() =>
+                  onAct(
+                    () => publishPlayoffs(leagueId, !published),
+                    published ? 'Setup hidden again.' : 'Setup published to the teams.',
+                  )
+                }
+              >
+                {published ? 'Unpublish' : 'Publish to the teams'}
+              </Button>
               <Button
                 variant="contained" disabled={drawn}
                 onClick={() => onAct(() => drawPlayoffs(leagueId), 'Brackets drawn.')}
@@ -604,6 +419,8 @@ function PlayoffSetupPanel({
               ))}
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+              Publishing shows the brackets to the teams and opens the Playoffs tab on My
+              Team, where captains put a player in each bracket.
               Opening a round creates a week per bracket and its matches. A later round will not
               open until every result before it is reported and verified.
             </Typography>
@@ -614,23 +431,89 @@ function PlayoffSetupPanel({
   );
 }
 
+interface BracketRow {
+  name: string;
+  format_type: string;
+  best_of_n: number;
+  max_sas: number | null;
+  sas_floor: number | null;
+  combined_max_sas: number | null;
+  set_diversity: boolean;
+  house_diversity: boolean;
+  decks_per_player: number | null;
+  no_keycheat: boolean;
+  team_max_raw_amber: number | null;
+  team_min_raw_amber: number | null;
+  allowed_sets: number[];
+  custom_description: string;
+  hide_standard_description: boolean;
+}
+
+const EMPTY_BRACKET: BracketRow = {
+  name: '',
+  format_type: 'archon_standard',
+  best_of_n: 1,
+  max_sas: null,
+  sas_floor: null,
+  combined_max_sas: null,
+  set_diversity: false,
+  house_diversity: false,
+  decks_per_player: null,
+  no_keycheat: false,
+  team_max_raw_amber: null,
+  team_min_raw_amber: null,
+  allowed_sets: [],
+  custom_description: '',
+  hide_standard_description: false,
+};
+
+/** A number field that means "unset" when it is empty, not zero. */
+function numberOrNull(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const value = parseInt(trimmed, 10);
+  return isNaN(value) ? null : value;
+}
+
 function BracketEditor({
   setup,
   drawn,
   leagueId,
   onAct,
+  sets,
 }: {
   setup: PlayoffSetup;
   drawn: boolean;
   leagueId: number;
   onAct: (what: () => Promise<unknown>, done: string) => Promise<void>;
+  sets: KeyforgeSetInfo[];
 }) {
   const expected = setup.config.expected_brackets;
-  const [rows, setRows] = useState(() =>
+  const [rows, setRows] = useState<BracketRow[]>(() =>
     setup.brackets.length > 0
-      ? setup.brackets.map((b) => ({ name: b.name || '', format_type: b.format_type, best_of_n: b.best_of_n }))
-      : Array.from({ length: expected }, () => ({ name: '', format_type: 'archon_standard', best_of_n: 1 })),
+      ? setup.brackets.map((b) => ({
+          ...EMPTY_BRACKET,
+          name: b.name || '',
+          format_type: b.format_type,
+          best_of_n: b.best_of_n,
+          max_sas: b.max_sas ?? null,
+          sas_floor: b.sas_floor ?? null,
+          combined_max_sas: b.combined_max_sas ?? null,
+          set_diversity: Boolean(b.set_diversity),
+          house_diversity: Boolean(b.house_diversity),
+          decks_per_player: b.decks_per_player ?? null,
+          no_keycheat: Boolean(b.no_keycheat),
+          team_max_raw_amber: b.team_max_raw_amber ?? null,
+          team_min_raw_amber: b.team_min_raw_amber ?? null,
+          allowed_sets: b.allowed_sets || [],
+          custom_description: b.custom_description || '',
+          hide_standard_description: Boolean(b.hide_standard_description),
+        }))
+      : Array.from({ length: expected }, () => ({ ...EMPTY_BRACKET })),
   );
+
+  const edit = (index: number, patch: Partial<BracketRow>) =>
+    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
 
   return (
     <Card sx={{ mb: 2 }}>
@@ -639,40 +522,143 @@ function BracketEditor({
           Brackets ({rows.length} of {expected})
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          One per player on a team, each in its own format.
+          One per player on a team, each in its own format. A bracket&apos;s settings are
+          copied onto the week it plays each round, so they are set once here rather than
+          every round.
         </Typography>
         {rows.map((row, index) => (
-          <Box key={index} sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-            <Typography variant="body2" sx={{ width: 24 }}>{index + 1}</Typography>
-            <TextField
-              size="small" label="Name" sx={{ width: 180 }} disabled={drawn}
-              value={row.name}
-              onChange={(e) => setRows((prev) => prev.map((r, i) => i === index ? { ...r, name: e.target.value } : r))}
-            />
-            <FormControl size="small" sx={{ minWidth: 220 }} disabled={drawn}>
-              <InputLabel>Format</InputLabel>
-              <Select
-                label="Format" value={row.format_type}
-                onChange={(e) => setRows((prev) => prev.map((r, i) => i === index ? { ...r, format_type: String(e.target.value) } : r))}
-              >
-                {Object.entries(WEEK_FORMAT_LABELS).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>{label}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              size="small" type="number" label="Best of" sx={{ width: 100 }} disabled={drawn}
-              value={row.best_of_n}
-              onChange={(e) => setRows((prev) => prev.map((r, i) => i === index ? { ...r, best_of_n: parseInt(e.target.value, 10) || 1 } : r))}
-            />
-          </Box>
+          <Accordion key={index} disableGutters sx={{ mb: 0.5 }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography variant="body2" sx={{ width: 24 }}>{index + 1}</Typography>
+                <Typography variant="body2" sx={{ minWidth: 140 }}>
+                  {row.name || `Bracket ${index + 1}`}
+                </Typography>
+                <Chip size="small" variant="outlined"
+                  label={WEEK_FORMAT_LABELS[row.format_type] || row.format_type} />
+                <Chip size="small" variant="outlined" label={`Bo${row.best_of_n}`} />
+                {row.max_sas != null && <Chip size="small" variant="outlined" label={`Max SAS ${row.max_sas}`} />}
+                {row.allowed_sets.length > 0 && (
+                  <Chip size="small" variant="outlined" label={`${row.allowed_sets.length} set(s)`} />
+                )}
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                <TextField
+                  size="small" label="Name" sx={{ width: 180 }} disabled={drawn}
+                  value={row.name}
+                  onChange={(e) => edit(index, { name: e.target.value })}
+                />
+                <FormControl size="small" sx={{ minWidth: 220 }} disabled={drawn}>
+                  <InputLabel>Format</InputLabel>
+                  <Select
+                    label="Format" value={row.format_type}
+                    onChange={(e) => edit(index, { format_type: String(e.target.value) })}
+                  >
+                    {Object.entries(WEEK_FORMAT_LABELS).map(([value, label]) => (
+                      <MenuItem key={value} value={value}>{label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  size="small" type="number" label="Best of" sx={{ width: 100 }} disabled={drawn}
+                  value={row.best_of_n}
+                  onChange={(e) => edit(index, { best_of_n: parseInt(e.target.value, 10) || 1 })}
+                />
+                <TextField
+                  size="small" type="number" label="Decks per player" sx={{ width: 150 }} disabled={drawn}
+                  value={row.decks_per_player ?? ''}
+                  onChange={(e) => edit(index, { decks_per_player: numberOrNull(e.target.value) })}
+                />
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                <TextField
+                  size="small" type="number" label="Max SAS" sx={{ width: 120 }} disabled={drawn}
+                  value={row.max_sas ?? ''}
+                  onChange={(e) => edit(index, { max_sas: numberOrNull(e.target.value) })}
+                />
+                <TextField
+                  size="small" type="number" label="SAS floor" sx={{ width: 120 }} disabled={drawn}
+                  value={row.sas_floor ?? ''}
+                  onChange={(e) => edit(index, { sas_floor: numberOrNull(e.target.value) })}
+                />
+                <TextField
+                  size="small" type="number" label="Combined max SAS" sx={{ width: 170 }} disabled={drawn}
+                  value={row.combined_max_sas ?? ''}
+                  onChange={(e) => edit(index, { combined_max_sas: numberOrNull(e.target.value) })}
+                />
+                <TextField
+                  size="small" type="number" label="Team max raw æmber" sx={{ width: 180 }} disabled={drawn}
+                  value={row.team_max_raw_amber ?? ''}
+                  onChange={(e) => edit(index, { team_max_raw_amber: numberOrNull(e.target.value) })}
+                />
+                <TextField
+                  size="small" type="number" label="Team min raw æmber" sx={{ width: 180 }} disabled={drawn}
+                  value={row.team_min_raw_amber ?? ''}
+                  onChange={(e) => edit(index, { team_min_raw_amber: numberOrNull(e.target.value) })}
+                />
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                <FormControl size="small" sx={{ minWidth: 260 }} disabled={drawn}>
+                  <InputLabel>Allowed sets</InputLabel>
+                  <Select
+                    multiple label="Allowed sets" value={row.allowed_sets}
+                    onChange={(e) => edit(index, { allowed_sets: e.target.value as number[] })}
+                    renderValue={(selected) => (
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {(selected as number[]).map((v) => (
+                          <Chip key={v} size="small"
+                            label={sets.find((x) => x.number === v)?.shortname || v} />
+                        ))}
+                      </Box>
+                    )}
+                  >
+                    {sets.map((set) => (
+                      <MenuItem key={set.number} value={set.number}>
+                        {set.name} ({set.shortname})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControlLabel
+                  control={<Switch checked={row.set_diversity} disabled={drawn}
+                    onChange={(e) => edit(index, { set_diversity: e.target.checked })} />}
+                  label="Set diversity"
+                />
+                <FormControlLabel
+                  control={<Switch checked={row.house_diversity} disabled={drawn}
+                    onChange={(e) => edit(index, { house_diversity: e.target.checked })} />}
+                  label="House diversity"
+                />
+                <FormControlLabel
+                  control={<Switch checked={row.no_keycheat} disabled={drawn}
+                    onChange={(e) => edit(index, { no_keycheat: e.target.checked })} />}
+                  label="No keycheat"
+                />
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                <TextField
+                  size="small" label="Custom description" sx={{ minWidth: 320, flexGrow: 1 }}
+                  multiline maxRows={4} disabled={drawn}
+                  value={row.custom_description}
+                  onChange={(e) => edit(index, { custom_description: e.target.value })}
+                />
+                <FormControlLabel
+                  control={<Switch checked={row.hide_standard_description} disabled={drawn}
+                    onChange={(e) => edit(index, { hide_standard_description: e.target.checked })} />}
+                  label="Hide standard description"
+                />
+              </Box>
+            </AccordionDetails>
+          </Accordion>
         ))}
         <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
           <Button variant="contained" disabled={drawn}
             onClick={() => onAct(() => setPlayoffBrackets(leagueId, rows), 'Brackets saved.')}>
             Save brackets
           </Button>
-          <Button disabled={drawn} onClick={() => setRows((prev) => [...prev, { name: '', format_type: 'archon_standard', best_of_n: 1 }])}>
+          <Button disabled={drawn} onClick={() => setRows((prev) => [...prev, { ...EMPTY_BRACKET }])}>
             Add one
           </Button>
         </Box>
