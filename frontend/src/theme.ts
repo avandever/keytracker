@@ -33,12 +33,16 @@ export function buildTheme(mode: PaletteMode): Theme {
         paper: light ? '#FFFFFF' : '#1F1B16',
       },
       divider: light ? 'rgba(0, 0, 0, 0.12)' : 'rgba(255, 255, 255, 0.14)',
-      text: light
-        ? undefined
+      // Spelling out `text` in light mode would replace MUI's defaults rather
+      // than merge with them, so only dark mode names its own.
+      ...(light
+        ? {}
         : {
-            primary: '#F2EDE6',
-            secondary: 'rgba(242, 237, 230, 0.68)',
-          },
+            text: {
+              primary: '#F2EDE6',
+              secondary: 'rgba(242, 237, 230, 0.68)',
+            },
+          }),
     },
     typography: {
       fontFamily: 'Roboto, Arial, sans-serif',
