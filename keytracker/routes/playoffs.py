@@ -51,6 +51,11 @@ blueprint = Blueprint("playoffs", __name__, url_prefix="/api/v2/leagues")
 
 DEFAULT_POINTS_PER_ROUND = [1]
 
+# Formats a bracket cannot be run in. The SAS ladder spreads a whole team over
+# rungs, where a bracket is one player from each team playing one opponent, so
+# there is nothing for it to ladder.
+NON_BRACKET_FORMATS = (WeekFormat.SAS_LADDER.value,)
+
 
 # The constraints a bracket carries, which its weeks are made with. Text
 # fields hold JSON, the same as on a week.
@@ -313,10 +318,22 @@ def set_playoff_brackets(league_id):
     wanted = data.get("brackets")
     if not isinstance(wanted, list):
         return jsonify({"error": "brackets must be a list"}), 400
-    valid_formats = {f.value for f in WeekFormat}
+    valid_formats = {f.value for f in WeekFormat} - set(NON_BRACKET_FORMATS)
     for entry in wanted:
         if not isinstance(entry, dict):
             return jsonify({"error": "each bracket must be an object"}), 400
+        if entry.get("format_type") in NON_BRACKET_FORMATS:
+            return (
+                jsonify(
+                    {
+                        "error": (
+                            f"{entry['format_type']} cannot be played as a playoff "
+                            "bracket"
+                        )
+                    }
+                ),
+                400,
+            )
         if entry.get("format_type") not in valid_formats:
             return (
                 jsonify({"error": f"Unknown format: {entry.get('format_type')!r}"}),

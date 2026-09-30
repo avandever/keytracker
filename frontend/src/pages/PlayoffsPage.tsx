@@ -565,6 +565,12 @@ const EMPTY_BRACKET: BracketRow = {
   hide_standard_description: false,
 };
 
+/**
+ * Formats a bracket cannot be run in. The SAS ladder spreads a whole team over
+ * rungs, where a bracket is one player from each team playing one opponent.
+ */
+const NON_BRACKET_FORMATS = ['sas_ladder'];
+
 /** Formats played with alliance decks, which a restricted list applies to. */
 function isAllianceFormat(formatType: string): boolean {
   return formatType.includes('alliance');
@@ -670,9 +676,11 @@ function BracketEditor({
                     label="Format" value={row.format_type}
                     onChange={(e) => edit(index, { format_type: String(e.target.value) })}
                   >
-                    {Object.entries(WEEK_FORMAT_LABELS).map(([value, label]) => (
-                      <MenuItem key={value} value={value}>{label}</MenuItem>
-                    ))}
+                    {Object.entries(WEEK_FORMAT_LABELS)
+                      .filter(([value]) => !NON_BRACKET_FORMATS.includes(value))
+                      .map(([value, label]) => (
+                        <MenuItem key={value} value={value}>{label}</MenuItem>
+                      ))}
                   </Select>
                 </FormControl>
                 <TextField
