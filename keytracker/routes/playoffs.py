@@ -22,9 +22,11 @@ from keytracker.playoff_draw import (
 )
 
 from keytracker.routes.leagues import (
+    _clean_card_categories,
     _get_league_or_404,
     _is_league_admin,
     _log_admin_action,
+    _parse_deadline,
     get_effective_user,
 )
 from keytracker.schema import (
@@ -334,6 +336,13 @@ def set_playoff_brackets(league_id):
         bracket.name = (entry.get("name") or "").strip() or None
         bracket.format_type = entry["format_type"]
         bracket.best_of_n = entry.get("best_of_n", 1)
+        if "required_card_categories" in entry:
+            cleaned, category_err = _clean_card_categories(
+                entry["required_card_categories"]
+            )
+            if category_err:
+                return jsonify({"error": category_err}), 400
+            entry = {**entry, "required_card_categories": cleaned}
         for field in _BRACKET_CONSTRAINT_FIELDS:
             if field not in entry:
                 continue
@@ -828,6 +837,18 @@ def start_playoff_round(league_id, round_number):
     if not _locked(config):
         return jsonify({"error": "Draw the brackets first"}), 400
 
+    # The round's deadlines, which every bracket in it shares. Sending them
+    # again for a round already open just moves the dates.
+    data = request.get_json(silent=True) or {}
+    deadlines = {}
+    for field in ("deck_submission_deadline", "match_completion_deadline"):
+        if field not in data:
+            continue
+        parsed, deadline_err = _parse_deadline(data[field])
+        if deadline_err:
+            return jsonify({"error": f"{field}: {deadline_err}"}), 400
+        deadlines[field] = parsed
+
     qualifiers = sorted(league.playoff_qualifiers, key=lambda q: q.position)
     total_rounds = rounds_needed(len(qualifiers))
     if round_number < 1 or round_number > total_rounds:
@@ -897,6 +918,8 @@ def start_playoff_round(league_id, round_number):
             db.session.flush()
             next_number += 1
             created_weeks += 1
+        for field, value in deadlines.items():
+            setattr(week, field, value)
 
         matches = [
             m

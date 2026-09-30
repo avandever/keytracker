@@ -5,6 +5,7 @@ import {
   AccordionDetails,
   AccordionSummary,
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -12,6 +13,10 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   FormControlLabel,
   IconButton,
@@ -28,7 +33,13 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
-import { getLeague, getSets } from '../api/leagues';
+import {
+  getCardCategoryOptions,
+  getLeague,
+  getRestrictedListVersions,
+  getSets,
+  searchCards,
+} from '../api/leagues';
 import {
   drawPlayoffs,
   getPlayoffSetup,
@@ -41,7 +52,13 @@ import {
   updatePlayoffConfig,
 } from '../api/playoffs';
 import type { PlayoffSetup, PlayoffStandings, PlayoffTree } from '../api/playoffs';
-import type { KeyforgeSetInfo, LeagueDetail } from '../types';
+import type {
+  CardCategoryPreset,
+  KeyforgeSetInfo,
+  LeagueDetail,
+  RequiredCardCategory,
+} from '../types';
+import { localInputToIso } from '../utils/deadlines';
 import { WEEK_FORMAT_LABELS } from '../utils/formatLabels';
 
 /**
@@ -56,6 +73,10 @@ export default function PlayoffsPage() {
   const [setup, setSetup] = useState<PlayoffSetup | null>(null);
   const [tree, setTree] = useState<PlayoffTree | null>(null);
   const [sets, setSets] = useState<KeyforgeSetInfo[]>([]);
+  const [rlVersions, setRlVersions] = useState<{ id: number; version: number }[]>([]);
+  const [cardCategoryOptions, setCardCategoryOptions] = useState<{ presets: CardCategoryPreset[] }>(
+    { presets: [] },
+  );
   const [standings, setStandings] = useState<PlayoffStandings | null>(null);
   const [tab, setTab] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -80,7 +101,11 @@ export default function PlayoffsPage() {
   }, [leagueId]);
 
   useEffect(() => { refresh(); }, [refresh]);
-  useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
+  useEffect(() => {
+    getSets().then(setSets).catch(() => {});
+    getRestrictedListVersions().then(setRlVersions).catch(() => {});
+    getCardCategoryOptions().then(setCardCategoryOptions).catch(() => {});
+  }, []);
 
   if (loading) return <Container sx={{ mt: 3 }}><CircularProgress /></Container>;
   if (!league || !setup) {
@@ -250,6 +275,9 @@ export default function PlayoffsPage() {
           onAct={act}
           leagueId={leagueId}
           sets={sets}
+          rlVersions={rlVersions}
+          cardPresets={cardCategoryOptions.presets}
+          roundLabel={roundLabel}
         />
       )}
     </Container>
@@ -263,6 +291,9 @@ function PlayoffSetupPanel({
   onAct,
   leagueId,
   sets,
+  rlVersions,
+  cardPresets,
+  roundLabel,
 }: {
   league: LeagueDetail;
   setup: PlayoffSetup;
@@ -270,9 +301,16 @@ function PlayoffSetupPanel({
   onAct: (what: () => Promise<unknown>, done: string) => Promise<void>;
   leagueId: number;
   sets: KeyforgeSetInfo[];
+  rlVersions: { id: number; version: number }[];
+  cardPresets: CardCategoryPreset[];
+  roundLabel: (n: number) => string;
 }) {
   const drawn = Boolean(setup.config.drawn_at);
   const published = Boolean(setup.config.published_at);
+  // Which round the deadline dialog is for, if it is open.
+  const [openingRound, setOpeningRound] = useState<number | null>(null);
+  const [deckDeadline, setDeckDeadline] = useState('');
+  const [matchDeadline, setMatchDeadline] = useState('');
   const [advancing, setAdvancing] = useState(setup.config.teams_advancing);
   const [points, setPoints] = useState(setup.config.points_per_round.join(', '));
   const [consolation, setConsolation] = useState(setup.config.consolation_enabled);
@@ -383,6 +421,8 @@ function PlayoffSetupPanel({
           leagueId={leagueId}
           onAct={onAct}
           sets={sets}
+          rlVersions={rlVersions}
+          cardPresets={cardPresets}
         />
       )}
 
@@ -412,7 +452,11 @@ function PlayoffSetupPanel({
               {Array.from({ length: rounds }, (_, i) => i + 1).map((n) => (
                 <Button
                   key={n} variant="outlined" disabled={!drawn}
-                  onClick={() => onAct(() => startPlayoffRound(leagueId, n), `Round ${n} opened.`)}
+                  onClick={() => {
+                    setDeckDeadline('');
+                    setMatchDeadline('');
+                    setOpeningRound(n);
+                  }}
                 >
                   Open round {n}
                 </Button>
@@ -427,6 +471,54 @@ function PlayoffSetupPanel({
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={openingRound !== null} onClose={() => setOpeningRound(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          Open {openingRound ? roundLabel(openingRound).toLowerCase() : 'round'}
+        </DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            A bracket runs for the whole playoffs, so its deadlines belong to the round
+            rather than to it. These apply to every bracket in this round, and can be
+            moved by opening the round again. Leave them blank for none.
+          </Typography>
+          <TextField
+            label="Deck submission deadline"
+            type="datetime-local"
+            size="small"
+            InputLabelProps={{ shrink: true }}
+            value={deckDeadline}
+            onChange={(e) => setDeckDeadline(e.target.value)}
+          />
+          <TextField
+            label="Match completion deadline"
+            type="datetime-local"
+            size="small"
+            InputLabelProps={{ shrink: true }}
+            value={matchDeadline}
+            onChange={(e) => setMatchDeadline(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpeningRound(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              const n = openingRound!;
+              setOpeningRound(null);
+              onAct(
+                () => startPlayoffRound(leagueId, n, {
+                  deck_submission_deadline: localInputToIso(deckDeadline),
+                  match_completion_deadline: localInputToIso(matchDeadline),
+                }),
+                `Round ${n} opened.`,
+              );
+            }}
+          >
+            Open
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -445,6 +537,9 @@ interface BracketRow {
   team_max_raw_amber: number | null;
   team_min_raw_amber: number | null;
   allowed_sets: number[];
+  required_card_names: string[];
+  required_card_categories: RequiredCardCategory[];
+  alliance_restricted_list_version_id: number | '';
   custom_description: string;
   hide_standard_description: boolean;
 }
@@ -463,9 +558,17 @@ const EMPTY_BRACKET: BracketRow = {
   team_max_raw_amber: null,
   team_min_raw_amber: null,
   allowed_sets: [],
+  required_card_names: [],
+  required_card_categories: [],
+  alliance_restricted_list_version_id: '',
   custom_description: '',
   hide_standard_description: false,
 };
+
+/** Formats played with alliance decks, which a restricted list applies to. */
+function isAllianceFormat(formatType: string): boolean {
+  return formatType.includes('alliance');
+}
 
 /** A number field that means "unset" when it is empty, not zero. */
 function numberOrNull(raw: string): number | null {
@@ -481,12 +584,16 @@ function BracketEditor({
   leagueId,
   onAct,
   sets,
+  rlVersions,
+  cardPresets,
 }: {
   setup: PlayoffSetup;
   drawn: boolean;
   leagueId: number;
   onAct: (what: () => Promise<unknown>, done: string) => Promise<void>;
   sets: KeyforgeSetInfo[];
+  rlVersions: { id: number; version: number }[];
+  cardPresets: CardCategoryPreset[];
 }) {
   const expected = setup.config.expected_brackets;
   const [rows, setRows] = useState<BracketRow[]>(() =>
@@ -506,6 +613,9 @@ function BracketEditor({
           team_max_raw_amber: b.team_max_raw_amber ?? null,
           team_min_raw_amber: b.team_min_raw_amber ?? null,
           allowed_sets: b.allowed_sets || [],
+          required_card_names: b.required_card_names || [],
+          required_card_categories: b.required_card_categories || [],
+          alliance_restricted_list_version_id: b.alliance_restricted_list_version_id ?? '',
           custom_description: b.custom_description || '',
           hide_standard_description: Boolean(b.hide_standard_description),
         }))
@@ -540,6 +650,10 @@ function BracketEditor({
                 {row.max_sas != null && <Chip size="small" variant="outlined" label={`Max SAS ${row.max_sas}`} />}
                 {row.allowed_sets.length > 0 && (
                   <Chip size="small" variant="outlined" label={`${row.allowed_sets.length} set(s)`} />
+                )}
+                {(row.required_card_names.length + row.required_card_categories.length) > 0 && (
+                  <Chip size="small" variant="outlined" color="info"
+                    label={`${row.required_card_names.length + row.required_card_categories.length} required`} />
                 )}
               </Box>
             </AccordionSummary>
@@ -637,6 +751,36 @@ function BracketEditor({
                   label="No keycheat"
                 />
               </Box>
+              <RequiredCardsField
+                disabled={drawn}
+                presets={cardPresets}
+                cards={row.required_card_names}
+                categories={row.required_card_categories}
+                onChange={(cards, categories) =>
+                  edit(index, { required_card_names: cards, required_card_categories: categories })
+                }
+              />
+
+              {isAllianceFormat(row.format_type) && rlVersions.length > 0 && (
+                <FormControl size="small" sx={{ minWidth: 260, mb: 1 }} disabled={drawn}>
+                  <InputLabel>Alliance restricted list</InputLabel>
+                  <Select
+                    label="Alliance restricted list"
+                    value={row.alliance_restricted_list_version_id}
+                    onChange={(e) =>
+                      edit(index, {
+                        alliance_restricted_list_version_id: e.target.value as number | '',
+                      })
+                    }
+                  >
+                    <MenuItem value=""><em>Latest version</em></MenuItem>
+                    {rlVersions.map((v) => (
+                      <MenuItem key={v.id} value={v.id}>v{v.version}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                 <TextField
                   size="small" label="Custom description" sx={{ minWidth: 320, flexGrow: 1 }}
@@ -655,7 +799,21 @@ function BracketEditor({
         ))}
         <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
           <Button variant="contained" disabled={drawn}
-            onClick={() => onAct(() => setPlayoffBrackets(leagueId, rows), 'Brackets saved.')}>
+            onClick={() =>
+              onAct(
+                () => setPlayoffBrackets(
+                  leagueId,
+                  rows.map((row) => ({
+                    ...row,
+                    alliance_restricted_list_version_id:
+                      row.alliance_restricted_list_version_id === ''
+                        ? null
+                        : row.alliance_restricted_list_version_id,
+                  })),
+                ),
+                'Brackets saved.',
+              )
+            }>
             Save brackets
           </Button>
           <Button disabled={drawn} onClick={() => setRows((prev) => [...prev, { ...EMPTY_BRACKET }])}>
@@ -664,5 +822,122 @@ function BracketEditor({
         </Box>
       </CardContent>
     </Card>
+  );
+}
+
+
+/**
+ * Cards a deck in this bracket must contain, individually or by group.
+ *
+ * The same control as the week editor's: a group like a Skybeast is a
+ * requirement in the same sense a named card is, so both are searched for in
+ * one box rather than two.
+ */
+function RequiredCardsField({
+  disabled,
+  presets,
+  cards,
+  categories,
+  onChange,
+}: {
+  disabled: boolean;
+  presets: CardCategoryPreset[];
+  cards: string[];
+  categories: RequiredCardCategory[];
+  onChange: (cards: string[], categories: RequiredCardCategory[]) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  return (
+    <Box sx={{ mb: 1 }}>
+      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+        Required cards {cards.length + categories.length > 0 ? `(${cards.length + categories.length})` : ''}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+        Each deck must contain at least one card from this list. Within a team, each card
+        can only appear in one player&apos;s deck.
+      </Typography>
+      <Autocomplete
+        freeSolo
+        disabled={disabled}
+        options={[
+          ...presets
+            .filter(
+              (p) =>
+                query.length >= 2 &&
+                p.name.toLowerCase().includes(query.toLowerCase()) &&
+                !categories.some((c) => c.preset === p.key),
+            )
+            .map((p) => `group:${p.key}`),
+          ...results,
+        ]}
+        getOptionLabel={(option) => {
+          if (typeof option !== 'string') return '';
+          if (!option.startsWith('group:')) return option;
+          const preset = presets.find((p) => p.key === option.slice('group:'.length));
+          const size = preset?.category.card_titles?.length;
+          return preset ? `${preset.name}${size ? ` (${size} cards)` : ''}` : option;
+        }}
+        inputValue={query}
+        onInputChange={(_e, value) => {
+          setQuery(value);
+          if (value.length >= 2) {
+            setLoading(true);
+            searchCards(value).then(setResults).finally(() => setLoading(false));
+          } else {
+            setResults([]);
+          }
+        }}
+        onChange={(_e, value) => {
+          if (value && typeof value === 'string') {
+            if (value.startsWith('group:')) {
+              const preset = presets.find((p) => p.key === value.slice('group:'.length));
+              if (preset) onChange(cards, [...categories, { ...preset.category }]);
+            } else if (!cards.includes(value)) {
+              onChange([...cards, value], categories);
+            }
+          }
+          setQuery('');
+          setResults([]);
+        }}
+        loading={loading}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Search cards or groups to add"
+            size="small"
+            helperText="Individual cards, or a known group like a Skybeast or an X-Y Mutant"
+          />
+        )}
+        size="small"
+      />
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+        {categories.map((cat, idx) => (
+          <Chip
+            key={`cat-${idx}`}
+            color="info"
+            size="small"
+            label={(cat.label || 'card group') + (cat.card_titles ? ` · ${cat.card_titles.length} cards` : '')}
+            onDelete={disabled ? undefined : () => onChange(cards, categories.filter((_c, i) => i !== idx))}
+          />
+        ))}
+        {cards.map((card) => (
+          <Chip
+            key={card}
+            size="small"
+            label={card}
+            onDelete={disabled ? undefined : () => onChange(cards.filter((c) => c !== card), categories)}
+          />
+        ))}
+      </Box>
+      {categories.length > 0 && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          A group counts once per team: if one player brings a card from it, nobody else on
+          that team can.
+        </Typography>
+      )}
+    </Box>
   );
 }

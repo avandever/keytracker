@@ -1,4 +1,5 @@
 import apiClient from './client';
+import type { RequiredCardCategory } from '../types';
 
 /**
  * The constraints a bracket is played under, in the same shape a week holds
@@ -19,7 +20,7 @@ export interface PlayoffBracketConstraints {
   team_max_raw_amber?: number | null;
   team_min_raw_amber?: number | null;
   required_card_names?: string[] | null;
-  required_card_categories?: unknown[] | null;
+  required_card_categories?: RequiredCardCategory[] | null;
   custom_description?: string | null;
   hide_standard_description?: boolean | null;
 }
@@ -146,13 +147,25 @@ export async function getPlayoffTree(leagueId: number): Promise<PlayoffTree> {
   return data;
 }
 
+/**
+ * Open a round: a week per bracket, and its matches.
+ *
+ * The deadlines belong to the round rather than the bracket -- a bracket runs
+ * for the whole playoffs, a date does not -- so they are given here and apply
+ * to every bracket in the round. Sending them for a round already open moves
+ * the dates.
+ */
 export async function startPlayoffRound(
   leagueId: number,
   round: number,
+  deadlines?: {
+    deck_submission_deadline?: string | null;
+    match_completion_deadline?: string | null;
+  },
 ): Promise<PlayoffTree> {
   const { data } = await apiClient.post(
     `/leagues/${leagueId}/playoffs/rounds/${round}/start`,
-    {},
+    deadlines || {},
   );
   return data;
 }
