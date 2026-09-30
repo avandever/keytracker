@@ -1,4 +1,5 @@
-import { Typography, Tooltip, Box } from '@mui/material';
+import { Typography, Tooltip, Box, useTheme } from '@mui/material';
+import type { PaletteMode } from '@mui/material';
 
 const SYSTEM_PATTERNS = [
   /^.* brings .* to The Crucible/,
@@ -39,23 +40,69 @@ interface CategoryStyle {
   bg: string;
 }
 
-const CATEGORIES: { patterns: RegExp[]; style: CategoryStyle }[] = [
-  { patterns: SYSTEM_PATTERNS, style: { color: '#999', bg: 'transparent' } },
-  { patterns: TURN_START_PATTERNS, style: { color: '#000', bg: '#e3f2fd' } },
-  { patterns: CARD_PLAY_PATTERNS, style: { color: '#1b5e20', bg: '#e8f5e9' } },
-  { patterns: UPKEEP_PATTERNS, style: { color: '#795548', bg: '#fff8e1' } },
-  { patterns: FORGED_KEY_PATTERNS, style: { color: '#e65100', bg: '#fff3e0' } },
+/**
+ * Each log category gets a tint, in light and dark flavours.
+ *
+ * The light tints are the MUI 50-level pastels they always were; the dark ones
+ * are the same hues at low lightness, with text light enough to read on them.
+ */
+interface CategoryColors {
+  light: CategoryStyle;
+  dark: CategoryStyle;
+}
+
+const CATEGORIES: { patterns: RegExp[]; colors: CategoryColors }[] = [
+  {
+    patterns: SYSTEM_PATTERNS,
+    colors: {
+      light: { color: '#999', bg: 'transparent' },
+      dark: { color: '#8f8a83', bg: 'transparent' },
+    },
+  },
+  {
+    patterns: TURN_START_PATTERNS,
+    colors: {
+      light: { color: '#000', bg: '#e3f2fd' },
+      dark: { color: '#cfe4f7', bg: '#17293a' },
+    },
+  },
+  {
+    patterns: CARD_PLAY_PATTERNS,
+    colors: {
+      light: { color: '#1b5e20', bg: '#e8f5e9' },
+      dark: { color: '#b3e0b8', bg: '#16301a' },
+    },
+  },
+  {
+    patterns: UPKEEP_PATTERNS,
+    colors: {
+      light: { color: '#795548', bg: '#fff8e1' },
+      dark: { color: '#dcc3ae', bg: '#2c2318' },
+    },
+  },
+  {
+    patterns: FORGED_KEY_PATTERNS,
+    colors: {
+      light: { color: '#e65100', bg: '#fff3e0' },
+      dark: { color: '#f5b276', bg: '#35220f' },
+    },
+  },
 ];
 
-function categorize(message: string): CategoryStyle {
-  for (const { patterns, style } of CATEGORIES) {
+const DEFAULT_COLORS: CategoryColors = {
+  light: { color: '#333', bg: 'transparent' },
+  dark: { color: '#ded7ce', bg: 'transparent' },
+};
+
+function categorize(message: string, mode: PaletteMode): CategoryStyle {
+  for (const { patterns, colors } of CATEGORIES) {
     for (const pattern of patterns) {
       if (pattern.test(message)) {
-        return style;
+        return colors[mode];
       }
     }
   }
-  return { color: '#333', bg: 'transparent' };
+  return DEFAULT_COLORS[mode];
 }
 
 // Split a message into alternating plain-text / card-name segments.
@@ -91,7 +138,8 @@ interface Props {
 }
 
 export default function GameLogEntry({ message, cardImages, sortedCardNames }: Props) {
-  const style = categorize(message);
+  const theme = useTheme();
+  const style = categorize(message, theme.palette.mode);
   const parts =
     cardImages && sortedCardNames && sortedCardNames.length > 0
       ? splitByCardNames(message, sortedCardNames, cardImages)

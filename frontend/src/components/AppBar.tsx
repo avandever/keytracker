@@ -20,6 +20,7 @@ import {
 import MenuIcon from '@mui/icons-material/Menu';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import ColorModeToggle from './ColorModeToggle';
 
 const NAV_LINKS = [
   { label: 'Games', to: '/games' },
@@ -78,6 +79,8 @@ export default function AppBar() {
 
         {/* Spacer on mobile so user controls stay right */}
         <Box sx={{ flexGrow: 1, display: { xs: 'flex', md: 'none' } }} />
+
+        <ColorModeToggle />
 
         {!loading && (
           user ? (

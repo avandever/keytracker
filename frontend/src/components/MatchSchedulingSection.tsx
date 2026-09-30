@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ChangeEvent } from 'react';
 import {
   Box,
   Typography,
@@ -137,11 +138,21 @@ export default function MatchSchedulingSection({ leagueId, pm, myUserId, onUpdat
 
       {/* Add times */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, flexWrap: 'wrap' }}>
-        <input
+        <Box
+          component="input"
           type="datetime-local"
           value={pickerValue}
-          onChange={(e) => setPickerValue(e.target.value)}
-          style={{ padding: '4px 8px', borderRadius: 4, border: '1px solid #ccc' }}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setPickerValue(e.target.value)}
+          sx={{
+            px: 1,
+            py: 0.5,
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'divider',
+            bgcolor: 'background.paper',
+            color: 'text.primary',
+            font: 'inherit',
+          }}
         />
         <Button size="small" variant="outlined" onClick={addTime} disabled={!pickerValue || busy}>
           Add

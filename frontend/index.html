@@ -8,6 +8,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
     <title>Bear Tracks</title>
+    <!-- Painted before React mounts, so dark mode does not flash white. -->
+    <style>
+      html { color-scheme: light dark; }
+      body { margin: 0; background: #FAFAF5; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #16130F; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
