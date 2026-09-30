@@ -70,11 +70,27 @@ docker run -d --name keytracker-webhook --restart always \
   -v /home/andrew/.ssh:/root/.ssh:ro \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -p 9867:9867 \
-  keytracker-webhook
+  keytracker-webhook \
+  sh -c 'while [ ! -f /tracker/deploy/webhook.py ]; do echo "[entrypoint] waiting for the repo mount"; sleep 10; done; exec python3 /tracker/deploy/webhook.py'
 ```
 
 The SSH mount is what lets `git pull` reach the remote; the docker socket is
 what lets `deploy.sh` rebuild and restart the app container.
+
+**The wait loop is not decoration.** When Docker Desktop restarts, the
+`/home/andrew/tracker` bind mount can come back empty for a while. The image's
+own command is `python3 deploy/webhook.py`, which exits 127 on a missing file,
+and the container has twice been found dead hours later with pushes silently
+not deploying. Waiting rather than exiting lets it pick up by itself.
+
+If a push did not deploy, check `docker ps -a --filter name=keytracker-webhook`
+first. Run the missed deploy through the container rather than as your own
+user -- `deploy/deploy.log` is owned by root, so `bash deploy/deploy.sh` fails
+on it:
+
+```bash
+docker exec keytracker-webhook sh -c 'cd /tracker && bash deploy/deploy.sh'
+```
 
 `docker logs keytracker-webhook` says whether each deploy succeeded or failed,
 and `deploy/deploy.log` has the detail.
