@@ -645,6 +645,49 @@ def _allowed_houses_for_week(week: LeagueWeek, allowed_sets) -> list:
     return [n for (n,) in all_houses if n and n not in NON_PLAYABLE_HOUSES]
 
 
+def _reveal_opponent_decks(
+    week, viewer, redacted_opponent_ids, is_revealed, hide_until_revealed=False
+):
+    """Un-redact the decks a viewer is entitled to see in their own matches.
+
+    `is_revealed(pm)` says whether that match has reached the point where the
+    two players have to see each other's decks. The viewer is entitled when
+    they are in the match -- standing in for someone counts -- or captain a
+    team in it. With `hide_until_revealed`, a match that has not reached that
+    point has its opponent decks hidden even where the blanket rule would not,
+    which is what keeps a completed-but-unplayed match covered.
+    """
+    # Standing in for someone means seeing what they would see.
+    viewer_acts_as = {viewer.id} | {
+        sub.out_user_id
+        for sub in (week.substitutions or [])
+        if sub.in_user_id == viewer.id
+    }
+    captain_team_ids = {
+        team.id
+        for team in week.league.teams
+        if any(m.user_id == viewer.id and m.is_captain for m in team.members)
+    }
+    for wm in week.matchups:
+        captains_here = bool(captain_team_ids & {wm.team1_id, wm.team2_id})
+        for pm in wm.player_matchups:
+            in_match = bool(viewer_acts_as & {pm.player1_id, pm.player2_id})
+            if not in_match and not captains_here:
+                continue
+            if in_match:
+                others = {pm.player1_id, pm.player2_id} - viewer_acts_as
+            else:
+                # Captaining one side: the teammate is visible anyway, so this
+                # is really about the player on the other team.
+                others = {pm.player1_id, pm.player2_id} - {viewer.id}
+            revealed = is_revealed(pm)
+            for other_id in others:
+                if revealed:
+                    redacted_opponent_ids.discard(other_id)
+                elif hide_until_revealed and in_match:
+                    redacted_opponent_ids.add(other_id)
+
+
 def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
     allowed_sets = None
     if week.allowed_sets:
@@ -709,50 +752,47 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         for ds in week.deck_selections:
             if ds.user_id != viewer.id and ds.user_id not in viewer_team_member_ids:
                 redacted_opponent_ids.add(ds.user_id)
-    # Tertiate hides an opponent's deck until both players have started, and
-    # reveals it from that point on -- each player picks a house to purge from
-    # the other's deck before every game, so they have to be able to see it.
-    # That reveal has to override the blanket rule above, which would otherwise
-    # keep the deck hidden until the week completed and leave both players
-    # unable to purge, and so unable to report the match at all.
+    # Two formats need a player to see the opponent's decks mid-week, each at
+    # its own moment, so the blanket rule above has to give way for them.
     #
-    # A captain of either team in the match sees the same thing once both have
-    # started. By then the two players have already shown each other their
-    # decks, so there is nothing left to keep from the captain -- and a captain
-    # entering the purges for a match played off-site has to name a house from
-    # each deck.
-    if viewer and not viewer_is_admin and week.format_type == "tertiate":
-        # Standing in for someone means seeing what they would see.
-        viewer_acts_as = {viewer.id} | {
-            sub.out_user_id
-            for sub in (week.substitutions or [])
-            if sub.in_user_id == viewer.id
-        }
-        captain_team_ids = {
-            team.id
-            for team in week.league.teams
-            if any(m.user_id == viewer.id and m.is_captain for m in team.members)
-        }
-        for wm in week.matchups:
-            captains_here = bool(
-                captain_team_ids & {wm.team1_id, wm.team2_id}
+    # Tertiate hides an opponent's deck until both players have started and
+    # reveals it from then on -- each player picks a house to purge from the
+    # other's deck before every game, so they have to be able to see it.
+    # Without the reveal the deck stays hidden until the week completes, both
+    # players are unable to purge, and the match cannot be reported at all.
+    #
+    # Oubliette waits instead for both banned houses. A ban eliminates every
+    # deck containing that house, so a player has to see which of the
+    # opponent's decks survived -- but only afterwards. Revealing the decks
+    # while a ban could still be made would hand the banner the one thing the
+    # format keeps from them: which house takes out the most of the other
+    # side's decks.
+    #
+    # A captain of either team in the match sees the same thing at the same
+    # time. By then the two players have shown each other their decks, so there
+    # is nothing left to keep from the captain -- and a captain entering the
+    # purges for a match played off-site has to name a house from each deck.
+    if viewer and not viewer_is_admin:
+        if week.format_type == "tertiate":
+            _reveal_opponent_decks(
+                week,
+                viewer,
+                redacted_opponent_ids,
+                lambda pm: bool(pm.player1_started and pm.player2_started),
+                # A Tertiate deck goes back out of sight if the week completes
+                # with the match never started, which is how it behaved before
+                # the reveal existed.
+                hide_until_revealed=True,
             )
-            for pm in wm.player_matchups:
-                in_match = bool(viewer_acts_as & {pm.player1_id, pm.player2_id})
-                if not in_match and not captains_here:
-                    continue
-                both_started = pm.player1_started and pm.player2_started
-                if in_match:
-                    others = {pm.player1_id, pm.player2_id} - viewer_acts_as
-                else:
-                    # Captaining one side: the teammate is visible anyway, so
-                    # this is really about the player on the other team.
-                    others = {pm.player1_id, pm.player2_id} - {viewer.id}
-                for other_id in others:
-                    if both_started:
-                        redacted_opponent_ids.discard(other_id)
-                    elif in_match:
-                        redacted_opponent_ids.add(other_id)
+        elif week.format_type == "oubliette":
+            _reveal_opponent_decks(
+                week,
+                viewer,
+                redacted_opponent_ids,
+                lambda pm: bool(
+                    pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house
+                ),
+            )
 
     data = {
         "id": week.id,

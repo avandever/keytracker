@@ -1540,24 +1540,31 @@ export default function MyLeagueInfoPage() {
             sels: DeckSelectionInfo[],
             eligibleIds: number[] | null | undefined,
           ) => sels.map((s) => {
-            const eligible = eligibleIds?.includes(s.deck?.db_id ?? -1);
+            // A deck we were not given cannot be judged: saying "eliminated"
+            // because its id is missing reports a result that never happened.
+            const known = s.deck?.db_id != null;
+            const eligible = known && eligibleIds?.includes(s.deck!.db_id!);
             return (
               <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
                 {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
                 <Typography
                   variant="body2"
                   sx={{
-                    textDecoration: eligible ? 'none' : 'line-through',
-                    color: eligible ? 'inherit' : 'text.disabled',
+                    textDecoration: known && !eligible ? 'line-through' : 'none',
+                    color: known && !eligible ? 'text.disabled' : 'inherit',
                   }}
                 >
-                  {s.deck?.name || 'Unknown deck'}
+                  {s.deck?.name || 'Deck not shown'}
                 </Typography>
-                <Chip
-                  label={eligible ? 'Eligible' : 'Eliminated'}
-                  size="small"
-                  color={eligible ? 'success' : 'error'}
-                />
+                {known ? (
+                  <Chip
+                    label={eligible ? 'Eligible' : 'Eliminated'}
+                    size="small"
+                    color={eligible ? 'success' : 'error'}
+                  />
+                ) : (
+                  <Chip label="Not shown" size="small" variant="outlined" />
+                )}
               </Box>
             );
           });

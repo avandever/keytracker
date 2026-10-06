@@ -1215,13 +1215,18 @@ export default function StandaloneMatchPage() {
                         <Box>
                           <Typography variant="subtitle2">Your eligible decks</Typography>
                           {mySelections.map((s) => {
-                            const eligible = myEligible?.includes(s.deck?.db_id ?? -1);
+                            const known = s.deck?.db_id != null;
+                            const eligible = known && myEligible?.includes(s.deck!.db_id!);
                             return (
                               <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
-                                <Typography variant="body2" sx={{ textDecoration: eligible ? 'none' : 'line-through', color: eligible ? 'inherit' : 'text.disabled' }}>
-                                  {s.deck?.name}
+                                <Typography variant="body2" sx={{ textDecoration: known && !eligible ? 'line-through' : 'none', color: known && !eligible ? 'text.disabled' : 'inherit' }}>
+                                  {s.deck?.name || 'Deck not shown'}
                                 </Typography>
-                                <Chip label={eligible ? 'Eligible' : 'Eliminated'} size="small" color={eligible ? 'success' : 'error'} />
+                                {known ? (
+                                  <Chip label={eligible ? 'Eligible' : 'Eliminated'} size="small" color={eligible ? 'success' : 'error'} />
+                                ) : (
+                                  <Chip label="Not shown" size="small" variant="outlined" />
+                                )}
                               </Box>
                             );
                           })}
@@ -1230,13 +1235,18 @@ export default function StandaloneMatchPage() {
                         <Box>
                           <Typography variant="subtitle2">Opponent&apos;s eligible decks</Typography>
                           {oppSelections.map((s) => {
-                            const eligible = oppEligible?.includes(s.deck?.db_id ?? -1);
+                            const known = s.deck?.db_id != null;
+                            const eligible = known && oppEligible?.includes(s.deck!.db_id!);
                             return (
                               <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
-                                <Typography variant="body2" sx={{ textDecoration: eligible ? 'none' : 'line-through', color: eligible ? 'inherit' : 'text.disabled' }}>
-                                  {s.deck?.name}
+                                <Typography variant="body2" sx={{ textDecoration: known && !eligible ? 'line-through' : 'none', color: known && !eligible ? 'text.disabled' : 'inherit' }}>
+                                  {s.deck?.name || 'Deck not shown'}
                                 </Typography>
-                                <Chip label={eligible ? 'Eligible' : 'Eliminated'} size="small" color={eligible ? 'success' : 'error'} />
+                                {known ? (
+                                  <Chip label={eligible ? 'Eligible' : 'Eliminated'} size="small" color={eligible ? 'success' : 'error'} />
+                                ) : (
+                                  <Chip label="Not shown" size="small" variant="outlined" />
+                                )}
                               </Box>
                             );
                           })}
