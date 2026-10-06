@@ -346,11 +346,17 @@ export interface LeagueSummary {
   status: string;
   signups_open: boolean;
   week_bonus_points: number;
+  /** When Oubliette bans become visible to opponents. Mirrors
+   *  OublietteBanReveal in schema.py. */
+  oubliette_ban_reveal?: OublietteBanReveal;
   is_test: boolean;
   created_by: UserBrief;
   signup_count: number;
   created_at: string | null;
 }
+
+/** When Oubliette bans stop being secret. Mirrors schema.py. */
+export type OublietteBanReveal = 'both_banned' | 'published';
 
 export interface LeagueDetail extends LeagueSummary {
   /** Present when the payload is trimmed to one player (the My Info endpoint). */

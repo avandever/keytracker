@@ -38,6 +38,7 @@ from keytracker.schema import (
     MatchScheduleProposal,
     MatchScheduleConfirmation,
     OublietteBan,
+    OublietteBanReveal,
     SasLadderAssignment,
     WeekSubstitution,
     TeamDeckEntryLog,
@@ -496,6 +497,18 @@ def update_league(league_id):
             and data["week_bonus_points"] >= 0
         ):
             league.week_bonus_points = data["week_bonus_points"]
+    # So can the Oubliette reveal rule: it only governs what is shown, so
+    # changing it mid-league cannot invalidate a ban already made.
+    if "oubliette_ban_reveal" in data:
+        valid = {r.value for r in OublietteBanReveal}
+        if data["oubliette_ban_reveal"] not in valid:
+            return (
+                jsonify(
+                    {"error": f"oubliette_ban_reveal must be one of {sorted(valid)}"}
+                ),
+                400,
+            )
+        league.oubliette_ban_reveal = data["oubliette_ban_reveal"]
     if "url_name" in data:
         raw = (data["url_name"] or "").strip() or None
         if raw is not None:

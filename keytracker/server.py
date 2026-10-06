@@ -331,6 +331,17 @@ with app.app_context():
                             "ADD COLUMN playoff_round INTEGER NULL"
                         )
                     )
+        if inspector.has_table("tracker_league"):
+            columns = {c["name"] for c in inspector.get_columns("tracker_league")}
+            with db.engine.begin() as conn:
+                if "oubliette_ban_reveal" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league ADD COLUMN "
+                            "oubliette_ban_reveal VARCHAR(20) NOT NULL "
+                            "DEFAULT 'both_banned'"
+                        )
+                    )
         if inspector.has_table("tracker_playoff_bracket"):
             columns = {
                 c["name"] for c in inspector.get_columns("tracker_playoff_bracket")

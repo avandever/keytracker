@@ -19,6 +19,7 @@ import {
   Select,
   MenuItem,
   FormControl,
+  FormHelperText,
   InputLabel,
   Autocomplete,
   IconButton,
@@ -89,7 +90,7 @@ import {
 } from '../api/leagues';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
-import type { LeagueDetail, KeyforgeSetInfo, LeagueWeek } from '../types';
+import type { LeagueDetail, KeyforgeSetInfo, LeagueWeek, OublietteBanReveal } from '../types';
 import { alpha } from '@mui/material/styles';
 
 const getChipSx = (color: string) => (theme: any) => {
@@ -174,6 +175,7 @@ export default function LeagueAdminPage() {
   // Alliance-specific
   const [weekAllianceRlVersionId, setWeekAllianceRlVersionId] = useState<number | ''>('');
   const [availableRlVersions, setAvailableRlVersions] = useState<{ id: number; version: number }[]>([]);
+  const [editBanReveal, setEditBanReveal] = useState<OublietteBanReveal>('both_banned');
   // SAS Ladder-specific
   const [weekSasLadderMaxes, setWeekSasLadderMaxes] = useState('');
   const [weekSasLadderFeatureRung, setWeekSasLadderFeatureRung] = useState('');
@@ -247,6 +249,7 @@ export default function LeagueAdminPage() {
         setEditTeamSize(String(l.team_size));
         setEditNumTeams(String(l.num_teams));
         setEditBonusPoints(String(l.week_bonus_points ?? 2));
+        setEditBanReveal(l.oubliette_ban_reveal ?? 'both_banned');
       })
       .catch((e) => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
@@ -353,6 +356,7 @@ export default function LeagueAdminPage() {
     try {
       const payload: Parameters<typeof updateLeague>[1] = {
         week_bonus_points: parseInt(editBonusPoints, 10) || 0,
+        oubliette_ban_reveal: editBanReveal,
         url_name: editUrlName.trim() || null,
       };
       if (isSetup) {
@@ -1256,6 +1260,22 @@ export default function LeagueAdminPage() {
                     </>
                   )}
                   <TextField label="Bonus Points Per Week Win" value={editBonusPoints} onChange={(e) => setEditBonusPoints(e.target.value)} type="number" inputProps={{ min: '0' }} helperText="Extra points awarded to the week winner (default: 2)" />
+                  <FormControl fullWidth>
+                    <InputLabel>Oubliette: when bans are revealed</InputLabel>
+                    <Select
+                      value={editBanReveal}
+                      label="Oubliette: when bans are revealed"
+                      onChange={(e) => setEditBanReveal(e.target.value as OublietteBanReveal)}
+                    >
+                      <MenuItem value="both_banned">Once both players have banned</MenuItem>
+                      <MenuItem value="published">When the pairings are published</MenuItem>
+                    </Select>
+                    <FormHelperText>
+                      {editBanReveal === 'both_banned'
+                        ? 'Each match reveals itself: a ban stays hidden from the opponent until theirs is in.'
+                        : 'Every ban in the week goes on the table when the pairings do, including one the other player never answered.'}
+                    </FormHelperText>
+                  </FormControl>
                   <TextField label="League URL Name" value={editUrlName} onChange={(e) => setEditUrlName(e.target.value)} helperText={`Optional. Sets the URL: /league/${editUrlName || '<name>'}`} />
                   <Button variant="contained" onClick={handleSaveSettings}>Save Settings</Button>
                 </Box>

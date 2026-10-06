@@ -266,6 +266,9 @@ def serialize_league_summary(league: League) -> dict:
         "status": league.status,
         "signups_open": league.signups_open,
         "week_bonus_points": league.week_bonus_points,
+        "oubliette_ban_reveal": getattr(
+            league, "oubliette_ban_reveal", "both_banned"
+        ),
         "is_test": league.is_test,
         "url_name": league.url_name,
         "created_by": serialize_user_brief(league.created_by),
@@ -1110,7 +1113,19 @@ def serialize_player_matchup(
     # Banning is blind-simultaneous: don't reveal a player's ban to their opponent
     # until both bans have been submitted. Admins always see both.
     _both_oubliette_bans = bool(pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house)
-    if _both_oubliette_bans or viewer_is_admin:
+    # A league can choose to hold every ban until the pairings go out instead,
+    # so the week opens with all of them on the table at once rather than each
+    # match revealing itself as its second ban lands. Whatever has been banned
+    # by then is shown, including a lone ban in a match the other player never
+    # answered.
+    _pm_week = pm.week_matchup.week if pm.week_matchup else None
+    _reveal_on_publish = (
+        _pm_week is not None
+        and getattr(_pm_week.league, "oubliette_ban_reveal", "both_banned")
+        == "published"
+        and _pm_week.status == "published"
+    )
+    if _both_oubliette_bans or _reveal_on_publish or viewer_is_admin:
         data["oubliette_p1_banned_house"] = pm.oubliette_p1_banned_house
         data["oubliette_p2_banned_house"] = pm.oubliette_p2_banned_house
     else:

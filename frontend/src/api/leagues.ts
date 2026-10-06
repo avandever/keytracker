@@ -2,6 +2,7 @@ import apiClient from './client';
 import type {
   LeagueSummary,
   LeagueDetail,
+  OublietteBanReveal,
   LeagueWeek,
   TeamDetail,
   DraftState,
@@ -57,6 +58,7 @@ export async function updateLeague(
     team_size: number;
     num_teams: number;
     week_bonus_points: number;
+    oubliette_ban_reveal: OublietteBanReveal;
     url_name: string | null;
   }>,
 ): Promise<LeagueDetail> {

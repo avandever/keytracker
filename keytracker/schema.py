@@ -925,6 +925,13 @@ class League(db.Model):
     status = db.Column(db.String(20), nullable=False, default=LeagueStatus.SETUP.value)
     signups_open = db.Column(db.Boolean, nullable=False, default=True, server_default="1")
     week_bonus_points = db.Column(db.Integer, nullable=False, default=2)
+    # When Oubliette bans become visible to opponents. See OublietteBanReveal.
+    oubliette_ban_reveal = db.Column(
+        db.String(20),
+        nullable=False,
+        default="both_banned",
+        server_default="both_banned",
+    )
     is_test = db.Column(db.Boolean, default=False, nullable=False)
     url_name = db.Column(db.String(100), nullable=True, unique=True, index=True)
     dok_tag_id = db.Column(db.BigInteger, nullable=True)
@@ -2001,6 +2008,19 @@ class SasLadderAssignment(db.Model):
     week = db.relationship("LeagueWeek", backref="sas_ladder_assignments")
     user = db.relationship("User")
     team = db.relationship("Team")
+
+
+class OublietteBanReveal(PyEnum):
+    """When an Oubliette ban stops being secret, as a league decides it.
+
+    Banning is blind: a ban is worth more when the other player cannot see it
+    coming. BOTH_BANNED keeps each ban from the opponent until theirs is in,
+    match by match. PUBLISHED instead holds every ban until the pairings go
+    out, so the week opens with all of them on the table at once.
+    """
+
+    BOTH_BANNED = "both_banned"
+    PUBLISHED = "published"
 
 
 class OublietteBan(db.Model):
