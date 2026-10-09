@@ -61,7 +61,6 @@ import {
   submitTertiatePurge,
   setWeekSubstitution,
   clearWeekSubstitution,
-  confirmMatchResult,
   getTeamDeckEntryLog,
 } from '../api/leagues';
 import HouseIcons from '../components/HouseIcons';
@@ -70,6 +69,7 @@ import CaptainHud from '../components/CaptainHud';
 import TeamAmberBudgetPanel from '../components/TeamAmberBudgetPanel';
 import SpecialsPanel from '../components/SpecialsPanel';
 import OutstandingMatchesTab from '../components/OutstandingMatchesTab';
+import CaptainMatchControls from '../components/CaptainMatchControls';
 import { currentWeekOf } from './MyLeagueInfoPage';
 import { getPlayoffSetup, setPlayoffAssignments } from '../api/playoffs';
 import type { PlayoffSetup } from '../api/playoffs';
@@ -2169,36 +2169,33 @@ export default function MyTeamPage() {
                             {!pm.is_double_loss && !isComplete && (!pm.player1_started || !pm.player2_started) ? (
                               <Chip label="Not started" size="small" color="default" />
                             ) : null}
-                            {isUnverified && isCaptain && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="success"
-                                onClick={async () => {
-                                  try {
-                                    const updated = await confirmMatchResult(leagueId, pm.id);
-                                    setLeague((prev) => {
-                                      if (!prev) return prev;
-                                      return {
-                                        ...prev,
-                                        weeks: prev.weeks.map((w) => w.id === week.id ? {
-                                          ...w,
-                                          matchups: w.matchups.map((wm2) => ({
-                                            ...wm2,
-                                            player_matchups: wm2.player_matchups.map((pm2) => pm2.id === pm.id ? updated : pm2),
-                                          })),
-                                        } : w),
-                                      };
-                                    });
-                                  } catch {
-                                    setError('Failed to confirm result');
-                                  }
-                                }}
-                              >
-                                Verify
-                              </Button>
-                            )}
                           </Box>
+
+                          {/* A captain can report and verify from the week
+                              itself, not only the outstanding list. */}
+                          {isCaptain
+                            && (week.status === 'published' || week.status === 'completed')
+                            && !pm.is_double_loss
+                            && (() => {
+                              const memberIds = new Set(myTeam.members.map((m) => m.user.id));
+                              const p1IsMine = memberIds.has(pm.player1.id);
+                              if (!p1IsMine && !memberIds.has(pm.player2.id)) return null;
+                              return (
+                                <Box sx={{ ml: 2, mb: 1 }}>
+                                  <CaptainMatchControls
+                                    leagueId={leagueId}
+                                    week={week}
+                                    pm={pm}
+                                    mine={p1IsMine ? pm.player1 : pm.player2}
+                                    theirs={p1IsMine ? pm.player2 : pm.player1}
+                                    decided={isComplete}
+                                    onChanged={refresh}
+                                    setError={setError}
+                                    setSuccess={setSuccess}
+                                  />
+                                </Box>
+                              );
+                            })()}
                           {showPods && (
                             <Box sx={{ ml: 2, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                               {[pm.player1, pm.player2].map((player) => {
