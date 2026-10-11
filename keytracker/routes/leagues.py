@@ -5832,6 +5832,60 @@ def submit_triad_short_pick(league_id, matchup_id):
 
 
 @blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/bans-not-recorded", methods=["POST"]
+)
+@login_required
+def mark_oubliette_bans_not_recorded(league_id, matchup_id):
+    """Record that an Oubliette match was played without its bans entered here.
+
+    A ban can only be submitted by the player it belongs to, and only while the
+    match is live, so a player who never banned leaves the match unreportable
+    with nobody able to unblock it. A captain of either team, or an admin, can
+    say so here: the result becomes reportable and the eliminations are left
+    unknown rather than invented.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.OUBLIETTE.value:
+        return jsonify({"error": "Only for Oubliette format"}), 400
+
+    effective = get_effective_user()
+    if not _is_league_admin(league, effective):
+        captain = TeamMember.query.filter(
+            TeamMember.team_id.in_({wm.team1_id, wm.team2_id}),
+            TeamMember.user_id == effective.id,
+            TeamMember.is_captain == True,  # noqa: E712
+        ).first()
+        if not captain:
+            return (
+                jsonify({"error": "Only a team captain or admin can do this"}),
+                403,
+            )
+
+    if pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house:
+        return jsonify({"error": "Both bans are already in"}), 400
+
+    pm.oubliette_bans_not_recorded = True
+    _log_admin_action(
+        league.id,
+        week.id,
+        effective.id,
+        "oubliette_bans_not_recorded",
+        f"matchup {pm.id}: {pm.player1.name} vs {pm.player2.name}",
+    )
+    db.session.commit()
+    return jsonify(serialize_player_matchup(pm, viewer=effective))
+
+
+@blueprint.route(
     "/<int:league_id>/matches/<int:matchup_id>/banned-house", methods=["POST"]
 )
 @login_required
@@ -7080,9 +7134,12 @@ def report_game(league_id, matchup_id):
                 400,
             )
 
-    # Oubliette: both banned houses must be submitted
+    # Oubliette: both banned houses must be submitted, unless a captain or
+    # admin has recorded that the match was played without them.
     if week.format_type == WeekFormat.OUBLIETTE.value:
-        if not pm.oubliette_p1_banned_house or not pm.oubliette_p2_banned_house:
+        if not getattr(pm, "oubliette_bans_not_recorded", False) and (
+            not pm.oubliette_p1_banned_house or not pm.oubliette_p2_banned_house
+        ):
             return (
                 jsonify(
                     {

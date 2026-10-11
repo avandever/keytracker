@@ -342,6 +342,18 @@ with app.app_context():
                             "DEFAULT 'both_banned'"
                         )
                     )
+        if inspector.has_table("tracker_player_matchup"):
+            columns = {
+                c["name"] for c in inspector.get_columns("tracker_player_matchup")
+            }
+            with db.engine.begin() as conn:
+                if "oubliette_bans_not_recorded" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_player_matchup ADD COLUMN "
+                            "oubliette_bans_not_recorded BOOLEAN NULL DEFAULT FALSE"
+                        )
+                    )
         if inspector.has_table("tracker_playoff_bracket"):
             columns = {
                 c["name"] for c in inspector.get_columns("tracker_playoff_bracket")

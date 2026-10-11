@@ -19,6 +19,7 @@ import {
   reportGame,
   confirmMatchResult,
   markMatchAlreadyPlayed,
+  markOublietteBansNotRecorded,
   submitTertiatePurgeRetroactive,
 } from '../api/leagues';
 import type { LeagueWeek, PlayerMatchupInfo } from '../types';
@@ -88,6 +89,7 @@ export default function CaptainMatchControls({
   const [purgeMine, setPurgeMine] = useState('');
   const [purgeTheirs, setPurgeTheirs] = useState('');
   const [forgetting, setForgetting] = useState(false);
+  const [forgettingBans, setForgettingBans] = useState(false);
 
   const unverified = decided && !pm.result_confirmed && !pm.is_double_loss;
   // A match played off-site never got its Start presses, and without them the
@@ -100,6 +102,16 @@ export default function CaptainMatchControls({
   );
   const needsPurges =
     week.format_type === 'tertiate' && !needsStart && purgesThisGame.length < 2;
+  // A ban can only be entered by the player it belongs to, so a player who
+  // never banned leaves the match unreportable with nobody able to unblock it.
+  const needsBans =
+    week.format_type === 'oubliette' &&
+    !pm.oubliette_bans_not_recorded &&
+    !(pm.oubliette_p1_banned_house && pm.oubliette_p2_banned_house);
+  const whoHasNotBanned = [
+    pm.oubliette_p1_banned_house ? null : pm.player1.name,
+    pm.oubliette_p2_banned_house ? null : pm.player2.name,
+  ].filter(Boolean) as string[];
 
   const slotOne = (userId: number) =>
     (week.deck_selections || []).find(
@@ -144,6 +156,12 @@ export default function CaptainMatchControls({
       await submitTertiatePurgeRetroactive(leagueId, pm.id, body);
       setForgetting(false);
     }, notRecorded ? 'Purges recorded as not remembered.' : 'Purges recorded.');
+
+  const handleBansNotRecorded = () =>
+    run(async () => {
+      await markOublietteBansNotRecorded(leagueId, pm.id);
+      setForgettingBans(false);
+    }, 'Recorded as played without bans — you can enter the result now.');
 
   const handleReport = () => {
     if (!winner) return;
@@ -258,14 +276,51 @@ export default function CaptainMatchControls({
         </Box>
       )}
 
-      {!decided && !needsStart && !needsPurges && NEEDS_DECK_PER_GAME.has(week.format_type) && (
+      {!decided && !needsStart && needsBans && (
+        <Box sx={{ mt: 1, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            {whoHasNotBanned.join(' and ')} {whoHasNotBanned.length === 1 ? 'has' : 'have'} not
+            banned a house, and only {whoHasNotBanned.length === 1 ? 'they' : 'they'} can enter
+            it, so the result cannot be reported yet.
+          </Typography>
+          {forgettingBans ? (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="body2">
+                This records the match as played <strong>without its bans</strong>. Which
+                decks the bans would have eliminated is then left unknown rather than
+                guessed at, and the result can be entered.
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                <Button size="small" onClick={() => setForgettingBans(false)} disabled={busy}>
+                  Back
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="warning"
+                  disabled={busy}
+                  onClick={handleBansNotRecorded}
+                >
+                  Confirm: played without bans
+                </Button>
+              </Box>
+            </Box>
+          ) : (
+            <Button size="small" color="warning" sx={{ mt: 1 }} onClick={() => setForgettingBans(true)}>
+              They played without entering bans
+            </Button>
+          )}
+        </Box>
+      )}
+
+      {!decided && !needsStart && !needsPurges && !needsBans && NEEDS_DECK_PER_GAME.has(week.format_type) && (
         <Typography variant="body2" color="text.secondary">
           {week.format_type === 'triad' ? 'Triad' : 'This format'} records which deck each
           player used, so the game has to be reported from the player&apos;s own match page.
         </Typography>
       )}
 
-      {!decided && !needsStart && !needsPurges && !NEEDS_DECK_PER_GAME.has(week.format_type) && (
+      {!decided && !needsStart && !needsPurges && !needsBans && !NEEDS_DECK_PER_GAME.has(week.format_type) && (
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>{`Game ${nextGame} winner`}</InputLabel>

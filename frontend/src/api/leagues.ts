@@ -762,6 +762,20 @@ export async function getSignupDiscordCheck(leagueId: number): Promise<SignupDis
 }
 
 
+/**
+ * Record that an Oubliette match was played without its bans entered here, so
+ * the result can be reported. Captain or admin only.
+ */
+export async function markOublietteBansNotRecorded(
+  leagueId: number,
+  matchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/bans-not-recorded`,
+  );
+  return data;
+}
+
 export async function confirmMatchResult(
   leagueId: number,
   matchupId: number,

@@ -1212,6 +1212,10 @@ class PlayerMatchup(db.Model):
     )
     adaptive_bidding_complete = db.Column(db.Boolean, default=False, nullable=False)
 
+    # Set when a captain or admin records that the match was played without
+    # its bans being entered here. The result can then be reported, and the
+    # eliminations are simply unknown rather than guessed at.
+    oubliette_bans_not_recorded = db.Column(db.Boolean, nullable=True, default=False)
     oubliette_p1_banned_house = db.Column(db.Text, nullable=True)
     oubliette_p2_banned_house = db.Column(db.Text, nullable=True)
 

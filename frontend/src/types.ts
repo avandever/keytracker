@@ -629,6 +629,8 @@ export interface PlayerMatchupInfo {
   adaptive_winning_deck_player_id: number | null;
   triad_short_picks_count?: number;
   triad_short_picks?: TriadShortPickInfo[];
+  /** Set when a captain recorded that the match was played without its bans. */
+  oubliette_bans_not_recorded?: boolean;
   oubliette_p1_banned_house?: string | null;
   oubliette_p2_banned_house?: string | null;
   oubliette_p1_eligible_deck_ids?: number[] | null;

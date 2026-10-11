@@ -1112,6 +1112,9 @@ def serialize_player_matchup(
     # Oubliette banned houses and eligible deck IDs.
     # Banning is blind-simultaneous: don't reveal a player's ban to their opponent
     # until both bans have been submitted. Admins always see both.
+    data["oubliette_bans_not_recorded"] = bool(
+        getattr(pm, "oubliette_bans_not_recorded", False)
+    )
     _both_oubliette_bans = bool(pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house)
     # A league can choose to hold every ban until the pairings go out instead,
     # so the week opens with all of them on the table at once rather than each
