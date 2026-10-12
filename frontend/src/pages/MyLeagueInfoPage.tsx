@@ -1508,6 +1508,11 @@ export default function MyLeagueInfoPage() {
           const opponentId = iAmP1 ? pm.player2.id : pm.player1.id;
           const opponentName = iAmP1 ? pm.player2.name : pm.player1.name;
           const oppSelections = week.deck_selections.filter((ds) => ds.user_id === opponentId);
+          // The decks in this match belong to whoever is playing it. Standing
+          // in for someone means that is them, not the substitute, and the
+          // eligible list the server sends is about their decks.
+          const actingSelections = week.deck_selections.filter((ds) => ds.user_id === actingId);
+          const actingName = iAmP1 ? pm.player1.name : pm.player2.name;
 
           const renderDeckList = (
             sels: DeckSelectionInfo[],
@@ -1549,9 +1554,9 @@ export default function MyLeagueInfoPage() {
                 {!myBan && (
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
-                      Ban a house that does NOT appear in either of your own decks. Any
-                      deck — yours or {opponentName}'s — containing a banned house is
-                      eliminated.
+                      {actingId === effectiveUserId
+                        ? `Ban a house that does NOT appear in either of your own decks. Any deck — yours or ${opponentName}'s — containing a banned house is eliminated.`
+                        : `Ban a house that does NOT appear in either of ${actingName}'s decks. Any deck — theirs or ${opponentName}'s — containing a banned house is eliminated.`}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                       <TextField
@@ -1576,22 +1581,29 @@ export default function MyLeagueInfoPage() {
                 )}
                 {myBan && !bothBanned && (
                   <Alert severity="info" sx={{ mb: 1 }}>
-                    You banned <strong>{myBan}</strong>. Waiting for {opponentName} to ban.
+                    {actingId === effectiveUserId ? 'You banned' : `${actingName} banned`}{' '}
+                    <strong>{myBan}</strong>. Waiting for {opponentName} to ban.
                   </Alert>
                 )}
                 {bothBanned && (
                   <>
-                    <Typography variant="body2"><strong>Your ban:</strong> {myBan}</Typography>
+                    <Typography variant="body2"><strong>{actingId === effectiveUserId ? 'Your ban' : `${actingName}'s ban`}:</strong> {myBan}</Typography>
                     <Typography variant="body2">
                       <strong>{opponentName}'s ban:</strong> {oppBan}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 4, mt: 1, flexWrap: 'wrap' }}>
                       <Box>
-                        <Typography variant="subtitle2">Your eligible decks</Typography>
-                        {renderDeckList(mySelections, myEligible)}
+                        <Typography variant="subtitle2">
+                          {actingId === effectiveUserId
+                            ? 'Your eligible decks'
+                            : `${actingName}'s eligible decks`}
+                        </Typography>
+                        {renderDeckList(actingSelections, myEligible)}
                         {myEligible?.length === 0 && (
                           <Alert severity="error" sx={{ mt: 0.5 }}>
-                            All your decks eliminated — you forfeit.
+                            {actingId === effectiveUserId
+                              ? 'All your decks eliminated — you forfeit.'
+                              : `All of ${actingName}'s decks are eliminated — this match is forfeit.`}
                           </Alert>
                         )}
                       </Box>
