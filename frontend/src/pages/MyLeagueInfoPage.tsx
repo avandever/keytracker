@@ -126,11 +126,14 @@ export default function MyLeagueInfoPage() {
   const winnerFor = (id: number) => reportWinnerById[id] ?? '';
   const winnerKeysFor = (id: number) => reportWinnerKeysById[id] ?? '3';
   const loserKeysFor = (id: number) => reportLoserKeysById[id] ?? '0';
-  const [reportWentToTime, setReportWentToTime] = useState(false);
-  const [reportLoserConceded, setReportLoserConceded] = useState(false);
+  const [reportWentToTimeById, setReportWentToTimeById] = useState<Record<number, boolean>>({});
+  const [reportLoserConcededById, setReportLoserConcededById] = useState<Record<number, boolean>>({});
+  const wentToTimeFor = (id: number) => reportWentToTimeById[id] ?? false;
+  const loserConcededFor = (id: number) => reportLoserConcededById[id] ?? false;
   const [reportSubmitting, setReportSubmitting] = useState(false);
 
-  const [reportLog, setReportLog] = useState('');
+  const [reportLogById, setReportLogById] = useState<Record<number, string>>({});
+  const logFor = (id: number) => reportLogById[id] ?? '';
 
   // Triad: strike selection and deck pickers
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
@@ -141,11 +144,16 @@ export default function MyLeagueInfoPage() {
   const [retroOppHouse, setRetroOppHouse] = useState('');
   const [retroForgetting, setRetroForgetting] = useState(false);
   const [retroSaving, setRetroSaving] = useState(false);
-  const [alreadyPlayedOpen, setAlreadyPlayedOpen] = useState(false);
+  // Which match the already-played dialog is for. A substitute has their own
+  // match and the one they are covering on this page, and a single flag here
+  // opened the dialog on both at once.
+  const [alreadyPlayedFor, setAlreadyPlayedFor] = useState<number | null>(null);
   const purgeLabel = (house: string) =>
     house === TERTIATE_PURGE_NOT_RECORDED ? 'not recorded' : house;
-  const [reportP1DeckId, setReportP1DeckId] = useState<number | ''>('');
-  const [reportP2DeckId, setReportP2DeckId] = useState<number | ''>('');
+  const [reportP1DeckById, setReportP1DeckById] = useState<Record<number, number | ''>>({});
+  const [reportP2DeckById, setReportP2DeckById] = useState<Record<number, number | ''>>({});
+  const p1DeckFor = (id: number) => reportP1DeckById[id] ?? '';
+  const p2DeckFor = (id: number) => reportP2DeckById[id] ?? '';
 
   // Sealed: pool and selection
   const [sealedPools, setSealedPools] = useState<Record<number, SealedPoolEntry[]>>({});
@@ -457,7 +465,7 @@ export default function MyLeagueInfoPage() {
     try {
       const updated = await markMatchAlreadyPlayed(league.id, matchupId);
       setSuccess('Recorded as already played — you can enter the result now.');
-      setAlreadyPlayedOpen(false);
+      setAlreadyPlayedFor(null);
       handleMatchupUpdate(updated);
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -490,21 +498,21 @@ export default function MyLeagueInfoPage() {
         winner_id: winnerId as number,
         player1_keys: winnerId === pm.player1.id ? winnerKeys : loserKeys,
         player2_keys: winnerId === pm.player2.id ? winnerKeys : loserKeys,
-        went_to_time: reportWentToTime,
-        loser_conceded: reportLoserConceded,
-        player1_deck_id: reportP1DeckId || undefined,
-        player2_deck_id: reportP2DeckId || undefined,
-        log: reportLog.trim() || undefined,
+        went_to_time: wentToTimeFor(matchupId),
+        loser_conceded: loserConcededFor(matchupId),
+        player1_deck_id: p1DeckFor(matchupId) || undefined,
+        player2_deck_id: p2DeckFor(matchupId) || undefined,
+        log: logFor(matchupId).trim() || undefined,
       });
       setSuccess('Game reported!');
       setReportWinnerById((prev) => ({ ...prev, [matchupId]: '' }));
       setReportWinnerKeysById((prev) => ({ ...prev, [matchupId]: '3' }));
       setReportLoserKeysById((prev) => ({ ...prev, [matchupId]: '0' }));
-      setReportWentToTime(false);
-      setReportLoserConceded(false);
-      setReportP1DeckId('');
-      setReportP2DeckId('');
-      setReportLog('');
+      setReportWentToTimeById((prev) => ({ ...prev, [matchupId]: false }));
+      setReportLoserConcededById((prev) => ({ ...prev, [matchupId]: false }));
+      setReportP1DeckById((prev) => ({ ...prev, [matchupId]: '' }));
+      setReportP2DeckById((prev) => ({ ...prev, [matchupId]: '' }));
+      setReportLogById((prev) => ({ ...prev, [matchupId]: '' }));
       refresh();
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
@@ -1695,14 +1703,14 @@ export default function MyLeagueInfoPage() {
                       played away from the site, so offer a way past it. */}
                   {!(myMatchup.player1_started && myMatchup.player2_started) && (
                     <Box sx={{ mb: 2 }}>
-                      <Button size="small" onClick={() => setAlreadyPlayedOpen(true)}>
+                      <Button size="small" onClick={() => setAlreadyPlayedFor(myMatchup.id)}>
                         We already played
                       </Button>
                     </Box>
                   )}
                   <Dialog
-                    open={alreadyPlayedOpen}
-                    onClose={() => setAlreadyPlayedOpen(false)}
+                    open={alreadyPlayedFor === myMatchup.id}
+                    onClose={() => setAlreadyPlayedFor(null)}
                     maxWidth="xs"
                     fullWidth
                   >
@@ -1721,7 +1729,7 @@ export default function MyLeagueInfoPage() {
                       </Typography>
                     </DialogContent>
                     <DialogActions>
-                      <Button onClick={() => setAlreadyPlayedOpen(false)}>Cancel</Button>
+                      <Button onClick={() => setAlreadyPlayedFor(null)}>Cancel</Button>
                       <Button variant="contained" onClick={() => handleAlreadyPlayed(myMatchup.id)}>
                         Continue
                       </Button>
@@ -2092,9 +2100,11 @@ export default function MyLeagueInfoPage() {
                           <FormControl size="small" sx={{ flex: 1 }}>
                             <InputLabel>{myMatchup.player1.name}'s Deck</InputLabel>
                             <Select
-                              value={reportP1DeckId}
+                              value={p1DeckFor(myMatchup.id)}
                               label={`${myMatchup.player1.name}'s Deck`}
-                              onChange={(e) => setReportP1DeckId(e.target.value as number)}
+                              onChange={(e) =>
+                                setReportP1DeckById((prev) => ({ ...prev, [myMatchup.id]: e.target.value as number }))
+                              }
                             >
                               {p1Available.map((ds) => (
                                 <MenuItem key={ds.id} value={ds.deck!.db_id!}>
@@ -2106,9 +2116,11 @@ export default function MyLeagueInfoPage() {
                           <FormControl size="small" sx={{ flex: 1 }}>
                             <InputLabel>{myMatchup.player2.name}'s Deck</InputLabel>
                             <Select
-                              value={reportP2DeckId}
+                              value={p2DeckFor(myMatchup.id)}
                               label={`${myMatchup.player2.name}'s Deck`}
-                              onChange={(e) => setReportP2DeckId(e.target.value as number)}
+                              onChange={(e) =>
+                                setReportP2DeckById((prev) => ({ ...prev, [myMatchup.id]: e.target.value as number }))
+                              }
                             >
                               {p2Available.map((ds) => (
                                 <MenuItem key={ds.id} value={ds.deck!.db_id!}>
@@ -2148,11 +2160,11 @@ export default function MyLeagueInfoPage() {
                     </Box>
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       <FormControlLabel
-                        control={<Checkbox checked={reportWentToTime} onChange={(e) => setReportWentToTime(e.target.checked)} size="small" />}
+                        control={<Checkbox checked={wentToTimeFor(myMatchup.id)} onChange={(e) => setReportWentToTimeById((prev) => ({ ...prev, [myMatchup.id]: e.target.checked }))} size="small" />}
                         label="Went to time"
                       />
                       <FormControlLabel
-                        control={<Checkbox checked={reportLoserConceded} onChange={(e) => setReportLoserConceded(e.target.checked)} size="small" />}
+                        control={<Checkbox checked={loserConcededFor(myMatchup.id)} onChange={(e) => setReportLoserConcededById((prev) => ({ ...prev, [myMatchup.id]: e.target.checked }))} size="small" />}
                         label="Loser conceded"
                       />
                     </Box>
@@ -2164,8 +2176,10 @@ export default function MyLeagueInfoPage() {
                       maxRows={6}
                       size="small"
                       fullWidth
-                      value={reportLog}
-                      onChange={(e) => setReportLog(e.target.value)}
+                      value={logFor(myMatchup.id)}
+                      onChange={(e) =>
+                        setReportLogById((prev) => ({ ...prev, [myMatchup.id]: e.target.value }))
+                      }
                     />
                     <Button
                       variant="contained"
