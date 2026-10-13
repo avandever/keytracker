@@ -1032,6 +1032,15 @@ export default function LeagueAdminPage() {
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="outlined"
+            component={RouterLink}
+            // Relative to this page's own route, which is the league plus
+            // /admin -- the same hop the back arrow above makes.
+            to="../playoffs"
+          >
+            Playoffs
+          </Button>
+          <Button
+            variant="outlined"
             color={league.signups_open ? 'error' : 'success'}
             onClick={handleToggleSignups}
           >

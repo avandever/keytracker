@@ -151,11 +151,18 @@ export default function LeagueDetailPage() {
   }, [leagueId]);
 
   // Same again for the playoffs: the link appears once brackets exist, and a
-  // league that never sets them up simply never shows it.
+  // league that never sets them up simply never shows it. An admin or captain
+  // sees it before that, since setting the brackets up is itself on that page
+  // -- gating it on brackets existing left the one person who could create
+  // them with no way in.
   useEffect(() => {
     if (!leagueId) return;
     getPlayoffSetup(leagueId)
-      .then((setup) => setHasPlayoffs(setup.brackets.length > 0))
+      .then((setup) =>
+        setHasPlayoffs(
+          setup.brackets.length > 0 || setup.is_admin || setup.is_captain,
+        ),
+      )
       .catch(() => setHasPlayoffs(false));
   }, [leagueId]);
 
