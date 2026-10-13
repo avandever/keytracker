@@ -370,11 +370,18 @@ export async function submitWeekOublietteBan(
   leagueId: number,
   weekId: number,
   bannedHouse: string,
-  userId?: number,
-): Promise<{ user_id: number; banned_house: string }> {
+  /** A number is the player the ban is for, kept for older callers. Double
+   *  Oubliette passes the set the ban applies to as well. */
+  forWhom?: number | { expansion?: number; user_id?: number },
+): Promise<{ user_id: number; banned_house: string; expansion?: number }> {
+  const opts = typeof forWhom === 'number' ? { user_id: forWhom } : forWhom || {};
   const { data } = await apiClient.post(
     `/leagues/${leagueId}/weeks/${weekId}/oubliette-ban`,
-    { banned_house: bannedHouse, ...(userId !== undefined && { user_id: userId }) },
+    {
+      banned_house: bannedHouse,
+      ...(opts.user_id !== undefined && { user_id: opts.user_id }),
+      ...(opts.expansion !== undefined && { expansion: opts.expansion }),
+    },
   );
   return data;
 }

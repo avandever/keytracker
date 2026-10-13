@@ -176,6 +176,8 @@ export default function MyLeagueInfoPage() {
 
   // Oubliette: the house this player is banning, keyed by matchup (post-pairing)
   const [oublietteBan, setOublietteBan] = useState<Record<number, string>>({});
+  // Double Oubliette bans, keyed by `${matchupId}-${setNumber}`.
+  const [doubleBan, setDoubleBan] = useState<Record<string, string>>({});
   // ...and keyed by week, for the ban made alongside deck submission
   const [weekBanInput, setWeekBanInput] = useState<Record<number, string>>({});
 
@@ -633,6 +635,32 @@ export default function MyLeagueInfoPage() {
     try {
       await submitOublietteBannedHouse(league.id, matchupId, house);
       setOublietteBan((prev) => ({ ...prev, [matchupId]: '' }));
+      setSuccess('Banned house submitted!');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDoubleOublietteBan = async (
+    weekId: number,
+    matchupId: number,
+    expansion: number,
+    actingId: number | null,
+  ) => {
+    const house = (doubleBan[`${matchupId}-${expansion}`] || '').trim();
+    if (!house) return;
+    setError('');
+    setSuccess('');
+    setSubmitting(true);
+    try {
+      await submitWeekOublietteBan(league.id, weekId, house, {
+        expansion,
+        user_id: actingId && actingId !== effectiveUserId ? actingId : undefined,
+      });
+      setDoubleBan((prev) => ({ ...prev, [`${matchupId}-${expansion}`]: '' }));
       setSuccess('Banned house submitted!');
       refresh();
     } catch (e: any) {
@@ -1513,6 +1541,138 @@ export default function MyLeagueInfoPage() {
         })}
 
         {/* Oubliette: ban a house, then see which decks survive both bans */}
+        {week.format_type === 'double_oubliette' && week.status === 'published' && getMyMatchups(week)
+          .map(({ pm, actingId }) => {
+          const iAmP1 = pm.player1.id === actingId;
+          const myBans = (iAmP1 ? pm.double_oubliette_p1_bans : pm.double_oubliette_p2_bans) || {};
+          const oppBans = (iAmP1 ? pm.double_oubliette_p2_bans : pm.double_oubliette_p1_bans) || {};
+          const myOut = iAmP1
+            ? pm.double_oubliette_p1_eliminated_deck_ids
+            : pm.double_oubliette_p2_eliminated_deck_ids;
+          const oppOut = iAmP1
+            ? pm.double_oubliette_p2_eliminated_deck_ids
+            : pm.double_oubliette_p1_eliminated_deck_ids;
+          const opponentId = iAmP1 ? pm.player2.id : pm.player1.id;
+          const opponentName = iAmP1 ? pm.player2.name : pm.player1.name;
+          const actingName = iAmP1 ? pm.player1.name : pm.player2.name;
+          const mine = week.deck_selections.filter((ds) => ds.user_id === actingId);
+          const theirs = week.deck_selections.filter((ds) => ds.user_id === opponentId);
+          const weekSets = week.allowed_sets || [];
+          const allIn = Object.keys(myBans).length >= 2 && Object.keys(oppBans).length >= 2;
+          const setName = (n: number) =>
+            sets.find((s) => s.number === n)?.shortname || `set ${n}`;
+          const deckRows = (
+            sels: DeckSelectionInfo[],
+            out: number[] | null | undefined,
+          ) => sels.map((s) => {
+            const known = s.deck?.db_id != null;
+            const dead = known && (out || []).includes(s.deck!.db_id!);
+            return (
+              <Box key={s.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
+                {s.deck?.houses && <HouseIcons houses={s.deck.houses} />}
+                <Typography
+                  variant="body2"
+                  sx={{
+                    textDecoration: dead ? 'line-through' : 'none',
+                    color: dead ? 'text.disabled' : 'inherit',
+                  }}
+                >
+                  {s.deck?.name || 'Deck not shown'}
+                </Typography>
+                {s.deck?.expansion != null && (
+                  <Chip label={setName(s.deck.expansion)} size="small" variant="outlined" />
+                )}
+                {known && out != null && (
+                  <Chip
+                    label={dead ? 'Eliminated' : 'Alive'}
+                    size="small"
+                    color={dead ? 'error' : 'success'}
+                  />
+                )}
+              </Box>
+            );
+          });
+
+          return (
+            <Card key={pm.id} sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Double Oubliette — Banned Houses</Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  One ban per set, each applying to that set&apos;s decks only. A ban cannot
+                  be a house in {actingId === effectiveUserId ? 'your own' : `${actingName}'s`}{' '}
+                  deck from the same set. Losing a deck to a ban loses the match, since the
+                  match is won by winning a game with each deck.
+                </Typography>
+                {weekSets.map((setNumber) => (
+                  <Box key={setNumber} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+                    <Chip label={setName(setNumber)} size="small" />
+                    {myBans[setNumber] ? (
+                      <Typography variant="body2">
+                        {actingId === effectiveUserId ? 'You banned' : `${actingName} banned`}{' '}
+                        <strong>{myBans[setNumber]}</strong>
+                      </Typography>
+                    ) : (
+                      <>
+                        <TextField
+                          size="small"
+                          label={`House to ban for ${setName(setNumber)}`}
+                          value={doubleBan[`${pm.id}-${setNumber}`] || ''}
+                          onChange={(e) =>
+                            setDoubleBan((prev) => ({ ...prev, [`${pm.id}-${setNumber}`]: e.target.value }))
+                          }
+                          sx={{ minWidth: 240 }}
+                        />
+                        <Button
+                          variant="contained"
+                          color="error"
+                          disabled={submitting || !(doubleBan[`${pm.id}-${setNumber}`] || '').trim()}
+                          onClick={() => handleDoubleOublietteBan(week.id, pm.id, setNumber, actingId ?? null)}
+                        >
+                          Submit
+                        </Button>
+                      </>
+                    )}
+                    {allIn && (
+                      <Typography variant="body2" color="text.secondary">
+                        — {opponentName} banned <strong>{oppBans[setNumber]}</strong>
+                      </Typography>
+                    )}
+                  </Box>
+                ))}
+                {!allIn && (
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    Both players ban for both sets before anything is revealed.
+                  </Alert>
+                )}
+                {allIn && (
+                  <Box sx={{ display: 'flex', gap: 4, mt: 1, flexWrap: 'wrap' }}>
+                    <Box>
+                      <Typography variant="subtitle2">
+                        {actingId === effectiveUserId ? 'Your decks' : `${actingName}'s decks`}
+                      </Typography>
+                      {deckRows(mine, myOut)}
+                      {(myOut || []).length > 0 && (
+                        <Alert severity="error" sx={{ mt: 0.5 }}>
+                          A deck is out, so the match cannot be won — it is forfeit.
+                        </Alert>
+                      )}
+                    </Box>
+                    <Box>
+                      <Typography variant="subtitle2">{opponentName}&apos;s decks</Typography>
+                      {deckRows(theirs, oppOut)}
+                      {(oppOut || []).length > 0 && (
+                        <Alert severity="success" sx={{ mt: 0.5 }}>
+                          {opponentName} loses a deck, so the match is yours.
+                        </Alert>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+
         {week.format_type === 'oubliette' && week.status === 'published' && getMyMatchups(week)
           .filter(({ pm }) => pm.player1_started && pm.player2_started)
           .map(({ pm, actingId }) => {

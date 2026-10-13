@@ -35,6 +35,7 @@ const NEEDS_START = new Set([
   'adaptive',
   'adaptive_short',
   'oubliette',
+  'double_oubliette',
   'nordic_hexad',
   'exchange',
   'moirai',
@@ -51,6 +52,7 @@ const NEEDS_DECK_PER_GAME = new Set([
   'nordic_hexad',
   'moirai',
   'sealed_survival',
+  'double_oubliette',
 ]);
 
 interface Props {

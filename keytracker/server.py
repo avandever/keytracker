@@ -348,6 +348,41 @@ with app.app_context():
                             "DEFAULT 'both_banned'"
                         )
                     )
+        if inspector.has_table("tracker_oubliette_ban"):
+            columns = {
+                c["name"] for c in inspector.get_columns("tracker_oubliette_ban")
+            }
+            uniques = {
+                u["name"] for u in inspector.get_unique_constraints(
+                    "tracker_oubliette_ban"
+                )
+            }
+            with db.engine.begin() as conn:
+                if "expansion" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_oubliette_ban ADD COLUMN "
+                            "expansion INTEGER NOT NULL DEFAULT 0"
+                        )
+                    )
+                # Double Oubliette files a ban per set, so one row per player
+                # per week is no longer the rule -- it is one per player per
+                # set, with 0 standing for the whole match.
+                if "uq_oubliette_ban_week_user" in uniques:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_oubliette_ban "
+                            "DROP INDEX uq_oubliette_ban_week_user"
+                        )
+                    )
+                if "uq_oubliette_ban_week_user_set" not in uniques:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_oubliette_ban ADD UNIQUE INDEX "
+                            "uq_oubliette_ban_week_user_set "
+                            "(week_id, user_id, expansion)"
+                        )
+                    )
         if inspector.has_table("tracker_player_matchup"):
             columns = {
                 c["name"] for c in inspector.get_columns("tracker_player_matchup")

@@ -796,6 +796,18 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
                     pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house
                 ),
             )
+        elif week.format_type == "double_oubliette":
+            _by_user = {}
+            for _b in week.oubliette_bans or []:
+                if _b.expansion:
+                    _by_user.setdefault(_b.user_id, set()).add(_b.expansion)
+            _reveal_opponent_decks(
+                week,
+                viewer,
+                redacted_opponent_ids,
+                lambda pm: len(_by_user.get(pm.player1_id, ())) >= 2
+                and len(_by_user.get(pm.player2_id, ())) >= 2,
+            )
 
     data = {
         "id": week.id,
@@ -956,6 +968,35 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
             )
             if week.format_type == "oubliette"
             else None
+        ),
+        "my_double_oubliette_bans": (
+            {
+                b.expansion: b.banned_house
+                for b in (week.oubliette_bans or [])
+                if viewer and b.user_id == viewer.id and b.expansion
+            }
+            if week.format_type == "double_oubliette"
+            else {}
+        ),
+        "team_double_oubliette_bans": (
+            [
+                {
+                    "user_id": b.user_id,
+                    "expansion": b.expansion,
+                    "banned_house": b.banned_house,
+                }
+                for b in (week.oubliette_bans or [])
+                if b.expansion
+                and viewer_own_team_id is not None
+                and any(
+                    m.user_id == b.user_id
+                    for t in week.league.teams
+                    if t.id == viewer_own_team_id
+                    for m in t.members
+                )
+            ]
+            if week.format_type == "double_oubliette"
+            else []
         ),
         "team_oubliette_bans": (
             [
@@ -1143,6 +1184,46 @@ def serialize_player_matchup(
         data["oubliette_p2_banned_house"] = (
             pm.oubliette_p2_banned_house if effective_viewer_id == pm.player2_id else None
         )
+    if _pm_week is not None and _pm_week.format_type == "double_oubliette":
+        from keytracker.match_helpers import get_deck_houses
+
+        _bans = {}
+        for _b in _pm_week.oubliette_bans or []:
+            if _b.expansion:
+                _bans.setdefault(_b.user_id, {})[_b.expansion] = _b.banned_house
+        _p1_bans = _bans.get(pm.player1_id, {})
+        _p2_bans = _bans.get(pm.player2_id, {})
+        _all_in = len(_p1_bans) >= 2 and len(_p2_bans) >= 2
+        if _all_in or _reveal_on_publish or viewer_is_admin:
+            data["double_oubliette_p1_bans"] = _p1_bans
+            data["double_oubliette_p2_bans"] = _p2_bans
+        else:
+            data["double_oubliette_p1_bans"] = (
+                _p1_bans if effective_viewer_id == pm.player1_id else {}
+            )
+            data["double_oubliette_p2_bans"] = (
+                _p2_bans if effective_viewer_id == pm.player2_id else {}
+            )
+        # A deck meets only the ban aimed at its own set.
+        def _killed(owner_id, their_bans):
+            out = []
+            for sel in PlayerDeckSelection.query.filter_by(
+                week_id=_pm_week.id, user_id=owner_id
+            ).all():
+                if not sel.deck:
+                    continue
+                banned = their_bans.get(sel.deck.expansion)
+                if banned and banned in get_deck_houses(sel.deck):
+                    out.append(sel.deck_id)
+            return out
+
+        data["double_oubliette_p1_eliminated_deck_ids"] = (
+            _killed(pm.player1_id, _p2_bans) if _all_in else None
+        )
+        data["double_oubliette_p2_eliminated_deck_ids"] = (
+            _killed(pm.player2_id, _p1_bans) if _all_in else None
+        )
+
     if pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house:
         from keytracker.match_helpers import get_oubliette_eligible_deck_ids
 

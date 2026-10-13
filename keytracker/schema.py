@@ -879,6 +879,7 @@ class WeekFormat(PyEnum):
     MOIRAI = "moirai"
     TERTIATE = "tertiate"
     SEALED_SURVIVAL = "sealed_survival"
+    DOUBLE_OUBLIETTE = "double_oubliette"
 
 
 # Weeks played from a generated sealed pool. Pool decks are dealt out, not
@@ -2044,13 +2045,19 @@ class OublietteBan(db.Model):
 
     __tablename__ = "tracker_oubliette_ban"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    # Which set's decks this ban applies to. 0 is every deck in the match,
+    # which is what ordinary Oubliette means; Double Oubliette instead files
+    # one ban per set.
+    expansion = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     week_id = db.Column(
         db.Integer, db.ForeignKey("tracker_league_week.id"), nullable=False
     )
     user_id = db.Column(db.Integer, db.ForeignKey("tracker_user.id"), nullable=False)
     banned_house = db.Column(db.String(50), nullable=False)
     __table_args__ = (
-        db.UniqueConstraint("week_id", "user_id", name="uq_oubliette_ban_week_user"),
+        db.UniqueConstraint(
+            "week_id", "user_id", "expansion", name="uq_oubliette_ban_week_user_set"
+        ),
     )
     week = db.relationship("LeagueWeek", backref="oubliette_bans")
     user = db.relationship("User")

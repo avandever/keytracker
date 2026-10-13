@@ -4053,6 +4053,7 @@ def submit_deck_selection(league_id, week_id):
         WeekFormat.ADAPTIVE_SHORT.value,
         WeekFormat.EXCHANGE.value,
         WeekFormat.SEALED_SURVIVAL.value,
+        WeekFormat.DOUBLE_OUBLIETTE.value,
     )
     max_slots = (
         6
@@ -4471,6 +4472,38 @@ def submit_deck_selection(league_id, week_id):
                     400,
                 )
 
+    # Double Oubliette: one deck from each of the week's two sets, so the two
+    # bans each have something to aim at.
+    if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value:
+        sets = _double_oubliette_sets(week)
+        if len(sets) != 2:
+            return (
+                jsonify(
+                    {"error": "This week must allow exactly two sets before decks go in"}
+                ),
+                400,
+            )
+        if deck.expansion not in sets:
+            return (
+                jsonify({"error": "That deck is not from one of this week's two sets"}),
+                400,
+            )
+        for other in PlayerDeckSelection.query.filter(
+            PlayerDeckSelection.week_id == week.id,
+            PlayerDeckSelection.user_id == target_user_id,
+            PlayerDeckSelection.slot_number != slot_number,
+        ).all():
+            if other.deck and other.deck.expansion == deck.expansion:
+                return (
+                    jsonify(
+                        {
+                            "error": "Your other deck is already from that set -- bring "
+                            "one from each."
+                        }
+                    ),
+                    400,
+                )
+
     # Oubliette: a ban binds the player who made it too. The ban is checked
     # against their decks when it is set, but only against the decks submitted
     # by then -- a second deck added afterwards went unchecked, which let a
@@ -4837,6 +4870,88 @@ def remove_deck_selection(league_id, week_id, slot):
     return jsonify({"success": True})
 
 
+def _double_oubliette_sets(week):
+    """The two sets a Double Oubliette week is played across, in order."""
+    try:
+        sets = json.loads(week.allowed_sets or "[]")
+    except (json.JSONDecodeError, TypeError):
+        sets = []
+    return [int(s) for s in sets]
+
+
+def _double_oubliette_bans(week, user_id):
+    """A player's bans for the week, keyed by the set each applies to."""
+    return {
+        b.expansion: b.banned_house
+        for b in OublietteBan.query.filter_by(week_id=week.id, user_id=user_id).all()
+        if b.expansion
+    }
+
+
+def _double_oubliette_eliminated(week, player_id, opponent_id):
+    """Which of a player's decks the opponent's bans take out.
+
+    A ban applies only to the decks of its own set, so a deck is checked
+    against the one ban aimed at the set it came from.
+    """
+    from keytracker.match_helpers import get_deck_houses
+
+    bans = _double_oubliette_bans(week, opponent_id)
+    out = []
+    for sel in PlayerDeckSelection.query.filter_by(
+        week_id=week.id, user_id=player_id
+    ).all():
+        if not sel.deck:
+            continue
+        banned = bans.get(sel.deck.expansion)
+        if banned and banned in get_deck_houses(sel.deck):
+            out.append(sel.deck_id)
+    return out
+
+
+def _resolve_double_oubliette_forfeit(week, pm):
+    """Settle a Double Oubliette match that a ban has already decided.
+
+    The match is won by winning a game with each of your two decks, so losing
+    one of them to a ban makes it unwinnable: the opponent takes it without a
+    game being played. It is recorded as the wins a best-of needs, so the match
+    reads as decided rather than half-finished.
+    """
+    sets = _double_oubliette_sets(week)
+    if len(sets) != 2:
+        return
+    for player_id in (pm.player1_id, pm.player2_id):
+        if len(_double_oubliette_bans(week, player_id)) < 2:
+            return  # not everyone has banned yet
+    if pm.games:
+        return
+
+    p1_out = _double_oubliette_eliminated(week, pm.player1_id, pm.player2_id)
+    p2_out = _double_oubliette_eliminated(week, pm.player2_id, pm.player1_id)
+    if p1_out and p2_out:
+        return  # both caught; leave it for an admin to settle
+    if not p1_out and not p2_out:
+        return
+    winner_id = pm.player2_id if p1_out else pm.player1_id
+
+    wins_needed = math.ceil(week.best_of_n / 2)
+    for game_number in range(1, wins_needed + 1):
+        db.session.add(
+            MatchGame(
+                player_matchup_id=pm.id,
+                game_number=game_number,
+                winner_id=winner_id,
+                player1_keys=0,
+                player2_keys=0,
+                went_to_time=False,
+                loser_conceded=True,
+            )
+        )
+    db.session.flush()
+    db.session.expire(pm, ["games"])
+    _check_week_completion(week)
+
+
 def _resolve_oubliette_forfeit(week, pm):
     """Once both bans are in, award a forfeit if a player has no legal deck left."""
     from keytracker.match_helpers import get_oubliette_eligible_deck_ids
@@ -4887,6 +5002,14 @@ def _apply_oubliette_bans(week):
     Bans are made during deck selection, before pairings exist, so they are
     transferred here once the matchups have been generated.
     """
+    if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value:
+        # Its bans stay on the week, keyed by set, rather than being copied:
+        # there are two of them per player, where the matchup holds one.
+        for wm in week.matchups:
+            for pm in wm.player_matchups:
+                _resolve_double_oubliette_forfeit(week, pm)
+        db.session.flush()
+        return
     if week.format_type != WeekFormat.OUBLIETTE.value:
         return
     bans = {
@@ -4929,13 +5052,24 @@ def submit_week_oubliette_ban(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.format_type != WeekFormat.OUBLIETTE.value:
+    if week.format_type not in (
+        WeekFormat.OUBLIETTE.value,
+        WeekFormat.DOUBLE_OUBLIETTE.value,
+    ):
         return jsonify({"error": "Only for Oubliette format"}), 400
-    if week.status not in (
+    # Double Oubliette reveals nothing until all four bans are in, so its bans
+    # stay open while the week is published -- there is no window in which
+    # seeing one helps.
+    _ban_open = (
         WeekStatus.DECK_SELECTION.value,
         WeekStatus.TEAM_PAIRED.value,
         WeekStatus.PAIRING.value,
-    ):
+    ) + (
+        (WeekStatus.PUBLISHED.value,)
+        if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value
+        else ()
+    )
+    if week.status not in _ban_open:
         return jsonify({"error": "Deck selection is not open"}), 400
 
     effective = get_effective_user()
@@ -4973,23 +5107,57 @@ def submit_week_oubliette_ban(league_id, week_id):
     selections = PlayerDeckSelection.query.filter_by(
         week_id=week.id, user_id=target_user_id
     ).all()
+
+    # Double Oubliette bans a house per set, and the rule that you cannot ban
+    # out of your own decks applies to the deck from that set.
+    expansion = 0
+    if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value:
+        expansion = data.get("expansion")
+        if not isinstance(expansion, int) or expansion not in _double_oubliette_sets(
+            week
+        ):
+            return (
+                jsonify({"error": "expansion must be one of this week's two sets"}),
+                400,
+            )
+        selections = [
+            s for s in selections if s.deck and s.deck.expansion == expansion
+        ]
+
     error = validate_oubliette_ban_against_decks(banned_house, selections)
     if error:
         return jsonify({"error": error}), 400
 
-    ban = OublietteBan.query.filter_by(week_id=week.id, user_id=target_user_id).first()
+    ban = OublietteBan.query.filter_by(
+        week_id=week.id, user_id=target_user_id, expansion=expansion
+    ).first()
     if ban is None:
         ban = OublietteBan(
-            week_id=week.id, user_id=target_user_id, banned_house=banned_house
+            week_id=week.id,
+            user_id=target_user_id,
+            banned_house=banned_house,
+            expansion=expansion,
         )
         db.session.add(ban)
+    elif week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value:
+        return jsonify({"error": "You have already banned for that set"}), 400
     else:
         # Revisable while deck selection is open, like the decks themselves.
         ban.banned_house = banned_house
+    if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value:
+        db.session.flush()
+        for wm in week.matchups:
+            for pm in wm.player_matchups:
+                if target_user_id in (pm.player1_id, pm.player2_id):
+                    _resolve_double_oubliette_forfeit(week, pm)
     db.session.commit()
 
     return jsonify(
-        {"user_id": target_user_id, "banned_house": banned_house}
+        {
+            "user_id": target_user_id,
+            "banned_house": banned_house,
+            "expansion": expansion,
+        }
     )
 
 
@@ -7245,6 +7413,55 @@ def report_game(league_id, matchup_id):
                 ),
                 400,
             )
+
+    # Double Oubliette: every ban in, and each game names the deck played. A
+    # deck that has won is finished, which is what makes the match "win one
+    # with each" rather than "win two with the better one".
+    if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value:
+        for player_id in (pm.player1_id, pm.player2_id):
+            if len(_double_oubliette_bans(week, player_id)) < 2:
+                return (
+                    jsonify(
+                        {
+                            "error": "Both players must ban a house for each set "
+                            "before reporting games"
+                        }
+                    ),
+                    400,
+                )
+        if not p1_deck_id or not p2_deck_id:
+            return (
+                jsonify(
+                    {
+                        "error": "player1_deck_id and player2_deck_id required for "
+                        "Double Oubliette"
+                    }
+                ),
+                400,
+            )
+        for label, player_id, deck_id, won_field in (
+            ("Player 1", pm.player1_id, p1_deck_id, "player1_deck_id"),
+            ("Player 2", pm.player2_id, p2_deck_id, "player2_deck_id"),
+        ):
+            own = PlayerDeckSelection.query.filter_by(
+                week_id=week.id, user_id=player_id, deck_id=deck_id
+            ).first()
+            if not own:
+                return (
+                    jsonify({"error": f"{label}'s deck is not one of their two"}),
+                    400,
+                )
+            for g in existing_games:
+                if g.winner_id == player_id and getattr(g, won_field) == deck_id:
+                    return (
+                        jsonify(
+                            {
+                                "error": f"{label}'s deck already won a game, so the "
+                                "other one has to win the next"
+                            }
+                        ),
+                        400,
+                    )
 
     # Nordic Hexad: all 3 phases must complete; validate remaining deck pools and unique-deck rule
     if week.format_type == WeekFormat.NORDIC_HEXAD.value:
