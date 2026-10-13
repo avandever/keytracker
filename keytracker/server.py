@@ -368,19 +368,24 @@ with app.app_context():
                 # Double Oubliette files a ban per set, so one row per player
                 # per week is no longer the rule -- it is one per player per
                 # set, with 0 standing for the whole match.
-                if "uq_oubliette_ban_week_user" in uniques:
-                    conn.execute(
-                        text(
-                            "ALTER TABLE tracker_oubliette_ban "
-                            "DROP INDEX uq_oubliette_ban_week_user"
-                        )
-                    )
+                #
+                # The new index goes in before the old one comes out. MySQL
+                # refuses to drop the index a foreign key is relying on, and
+                # the old unique index is what backs week_id; the new one
+                # starts with week_id as well, so it can take that over.
                 if "uq_oubliette_ban_week_user_set" not in uniques:
                     conn.execute(
                         text(
                             "ALTER TABLE tracker_oubliette_ban ADD UNIQUE INDEX "
                             "uq_oubliette_ban_week_user_set "
                             "(week_id, user_id, expansion)"
+                        )
+                    )
+                if "uq_oubliette_ban_week_user" in uniques:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_oubliette_ban "
+                            "DROP INDEX uq_oubliette_ban_week_user"
                         )
                     )
         if inspector.has_table("tracker_player_matchup"):
@@ -482,8 +487,8 @@ with app.app_context():
                                 f"ALTER TABLE {table_name} ADD COLUMN enhanced_power {col_type}"
                             )
                         )
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001 - startup continues, but not in silence
+        app.logger.exception("Schema migration step failed")
     finally:
         if _schema_lock_held:
             try:
