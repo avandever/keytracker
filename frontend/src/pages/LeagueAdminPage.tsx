@@ -187,6 +187,10 @@ export default function LeagueAdminPage() {
   const [weekMatchDeadline, setWeekMatchDeadline] = useState('');
   // Required card list
   const [weekRequiredCards, setWeekRequiredCards] = useState<string[]>([]);
+  const [weekBannedCards, setWeekBannedCards] = useState<string[]>([]);
+  const [bannedSearchQuery, setBannedSearchQuery] = useState('');
+  const [bannedSearchResults, setBannedSearchResults] = useState<string[]>([]);
+  const [bannedSearchLoading, setBannedSearchLoading] = useState(false);
   const [weekCardCategories, setWeekCardCategories] = useState<RequiredCardCategory[]>([]);
   const [cardCategoryOptions, setCardCategoryOptions] = useState<{
     traits: string[];
@@ -518,6 +522,7 @@ export default function LeagueAdminPage() {
     setWeekDeckDeadline('');
     setWeekMatchDeadline('');
     setWeekRequiredCards([]);
+    setWeekBannedCards([]);
     setWeekCardCategories([]);
     setCardSearchQuery('');
     setCardSearchResults([]);
@@ -546,6 +551,7 @@ export default function LeagueAdminPage() {
     setWeekDeckDeadline(isoToLocalInput(week.deck_submission_deadline));
     setWeekMatchDeadline(isoToLocalInput(week.match_completion_deadline));
     setWeekRequiredCards(week.required_card_names || []);
+    setWeekBannedCards(week.banned_card_names || []);
     setWeekCardCategories(week.required_card_categories || []);
     setCardSearchQuery('');
     setCardSearchResults([]);
@@ -584,6 +590,7 @@ export default function LeagueAdminPage() {
       deck_submission_deadline: localInputToIso(weekDeckDeadline),
       match_completion_deadline: localInputToIso(weekMatchDeadline),
       required_card_names: weekRequiredCards.length > 0 ? weekRequiredCards : null,
+      banned_card_names: weekBannedCards.length > 0 ? weekBannedCards : null,
       required_card_categories: weekCardCategories.length > 0 ? weekCardCategories : null,
       custom_description: weekCustomDescription.trim() || null,
       hide_standard_description: weekHideStandardDescription,
@@ -2051,6 +2058,55 @@ export default function LeagueAdminPage() {
                   nobody else on that team can.
                 </Typography>
               )}
+            </Box>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                Banned Cards {weekBannedCards.length > 0 ? `(${weekBannedCards.length})` : ''}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                A deck containing any of these is refused. Named cards only — a group
+                would ban far more than it looks like it does.
+              </Typography>
+              <Autocomplete
+                freeSolo
+                options={bannedSearchResults}
+                inputValue={bannedSearchQuery}
+                onInputChange={(_e, value) => {
+                  setBannedSearchQuery(value);
+                  if (value.length >= 2) {
+                    setBannedSearchLoading(true);
+                    searchCards(value)
+                      .then(setBannedSearchResults)
+                      .finally(() => setBannedSearchLoading(false));
+                  } else {
+                    setBannedSearchResults([]);
+                  }
+                }}
+                onChange={(_e, value) => {
+                  if (value && typeof value === 'string' && !weekBannedCards.includes(value)) {
+                    setWeekBannedCards([...weekBannedCards, value]);
+                  }
+                  setBannedSearchQuery('');
+                  setBannedSearchResults([]);
+                }}
+                loading={bannedSearchLoading}
+                renderInput={(params) => (
+                  <TextField {...params} label="Search cards to ban" size="small" />
+                )}
+                size="small"
+              />
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+                {weekBannedCards.map((card) => (
+                  <Chip
+                    key={card}
+                    color="error"
+                    variant="outlined"
+                    label={card}
+                    size="small"
+                    onDelete={() => setWeekBannedCards(weekBannedCards.filter((c) => c !== card))}
+                  />
+                ))}
+              </Box>
             </Box>
           </Box>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>

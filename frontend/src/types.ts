@@ -550,6 +550,8 @@ export interface LeagueWeek {
   /** False on a week returned as a tab stub: its lists are empty, not known to be empty. */
   detail_loaded?: boolean;
   required_card_names: string[] | null;
+  /** Cards no deck may contain this week. The mirror of required_card_names. */
+  banned_card_names?: string[] | null;
   required_card_categories?: RequiredCardCategory[] | null;
   /** UTC ISO. Advisory deadlines set by a league admin. */
   deck_submission_deadline?: string | null;

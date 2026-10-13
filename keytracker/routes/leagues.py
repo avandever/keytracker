@@ -1874,6 +1874,12 @@ def create_week(league_id):
         else None
     )
 
+    banned_card_names_raw = data.get("banned_card_names")
+    banned_card_names_json = (
+        json.dumps(banned_card_names_raw)
+        if isinstance(banned_card_names_raw, list) and banned_card_names_raw
+        else None
+    )
     required_card_names_raw = data.get("required_card_names")
     required_card_names_json = (
         json.dumps(required_card_names_raw)
@@ -1920,6 +1926,7 @@ def create_week(league_id):
         team_max_raw_amber=data.get("team_max_raw_amber"),
         team_min_raw_amber=data.get("team_min_raw_amber"),
         required_card_names=required_card_names_json,
+        banned_card_names=banned_card_names_json,
         required_card_categories=required_card_categories_json,
         deck_submission_deadline=deck_submission_deadline,
         match_completion_deadline=match_completion_deadline,
@@ -2095,6 +2102,11 @@ def update_week(league_id, week_id):
         week.team_max_raw_amber = data["team_max_raw_amber"]
     if "team_min_raw_amber" in data:
         week.team_min_raw_amber = data["team_min_raw_amber"]
+    if "banned_card_names" in data:
+        if data["banned_card_names"] and isinstance(data["banned_card_names"], list):
+            week.banned_card_names = json.dumps(data["banned_card_names"])
+        else:
+            week.banned_card_names = None
     if "required_card_names" in data:
         if data["required_card_names"] and isinstance(data["required_card_names"], list):
             week.required_card_names = json.dumps(data["required_card_names"])
@@ -4457,6 +4469,30 @@ def submit_deck_selection(league_id, week_id):
                         {
                             "error": f"This deck contains {own_ban.banned_house}, "
                             "which you banned. Your own ban applies to you as well."
+                        }
+                    ),
+                    400,
+                )
+
+    # Banned cards: a named card the week or bracket does not allow at all.
+    # Checked before the required-card rule, so a deck that breaks both is told
+    # about the ban rather than being sent to find a card it cannot bring.
+    if getattr(week, "banned_card_names", None):
+        try:
+            banned_names = json.loads(week.banned_card_names or "[]")
+        except (json.JSONDecodeError, TypeError):
+            banned_names = []
+        if banned_names:
+            found = _qualifying_card_titles(deck, banned_names, [])
+            if found:
+                listed = ", ".join(sorted(found))
+                return (
+                    jsonify(
+                        {
+                            "error": (
+                                f"This deck contains {listed}, which cannot be played "
+                                "this week."
+                            )
                         }
                     ),
                     400,

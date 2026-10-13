@@ -254,6 +254,7 @@ export async function createWeek(
     team_max_raw_amber?: number | null;
     team_min_raw_amber?: number | null;
     required_card_names?: string[] | null;
+    banned_card_names?: string[] | null;
     required_card_categories?: RequiredCardCategory[] | null;
   },
 ): Promise<LeagueWeek> {

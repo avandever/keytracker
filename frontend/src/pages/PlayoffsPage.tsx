@@ -552,6 +552,7 @@ interface BracketRow {
   allowed_sets: number[];
   required_card_names: string[];
   required_card_categories: RequiredCardCategory[];
+  banned_card_names: string[];
   alliance_restricted_list_version_id: number | '';
   custom_description: string;
   hide_standard_description: boolean;
@@ -573,6 +574,7 @@ const EMPTY_BRACKET: BracketRow = {
   allowed_sets: [],
   required_card_names: [],
   required_card_categories: [],
+  banned_card_names: [],
   alliance_restricted_list_version_id: '',
   custom_description: '',
   hide_standard_description: false,
@@ -638,6 +640,7 @@ function BracketEditor({
           allowed_sets: b.allowed_sets || [],
           required_card_names: b.required_card_names || [],
           required_card_categories: b.required_card_categories || [],
+          banned_card_names: b.banned_card_names || [],
           alliance_restricted_list_version_id: b.alliance_restricted_list_version_id ?? '',
           custom_description: b.custom_description || '',
           hide_standard_description: Boolean(b.hide_standard_description),
@@ -677,6 +680,10 @@ function BracketEditor({
                 {(row.required_card_names.length + row.required_card_categories.length) > 0 && (
                   <Chip size="small" variant="outlined" color="info"
                     label={`${row.required_card_names.length + row.required_card_categories.length} required`} />
+                )}
+                {row.banned_card_names.length > 0 && (
+                  <Chip size="small" variant="outlined" color="error"
+                    label={`${row.banned_card_names.length} banned`} />
                 )}
               </Box>
             </AccordionSummary>
@@ -784,6 +791,12 @@ function BracketEditor({
                 onChange={(cards, categories) =>
                   edit(index, { required_card_names: cards, required_card_categories: categories })
                 }
+              />
+
+              <BannedCardsField
+                disabled={drawn}
+                cards={row.banned_card_names}
+                onChange={(cards) => edit(index, { banned_card_names: cards })}
               />
 
               {isAllianceFormat(row.format_type) && rlVersions.length > 0 && (
@@ -1038,5 +1051,76 @@ function SealedPoolsPanel({
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+
+/**
+ * Cards a deck in this bracket may not contain.
+ *
+ * Named cards only: a group would ban far more than the label suggests, and a
+ * ban is the one requirement where that is dangerous rather than convenient.
+ */
+function BannedCardsField({
+  disabled,
+  cards,
+  onChange,
+}: {
+  disabled: boolean;
+  cards: string[];
+  onChange: (cards: string[]) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  return (
+    <Box sx={{ mb: 1 }}>
+      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+        Banned cards {cards.length > 0 ? `(${cards.length})` : ''}
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+        A deck containing any of these is refused.
+      </Typography>
+      <Autocomplete
+        freeSolo
+        disabled={disabled}
+        options={results}
+        inputValue={query}
+        onInputChange={(_e, value) => {
+          setQuery(value);
+          if (value.length >= 2) {
+            setLoading(true);
+            searchCards(value).then(setResults).finally(() => setLoading(false));
+          } else {
+            setResults([]);
+          }
+        }}
+        onChange={(_e, value) => {
+          if (value && typeof value === 'string' && !cards.includes(value)) {
+            onChange([...cards, value]);
+          }
+          setQuery('');
+          setResults([]);
+        }}
+        loading={loading}
+        renderInput={(params) => (
+          <TextField {...params} label="Search cards to ban" size="small" />
+        )}
+        size="small"
+      />
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+        {cards.map((card) => (
+          <Chip
+            key={card}
+            size="small"
+            color="error"
+            variant="outlined"
+            label={card}
+            onDelete={disabled ? undefined : () => onChange(cards.filter((c) => c !== card))}
+          />
+        ))}
+      </Box>
+    </Box>
   );
 }

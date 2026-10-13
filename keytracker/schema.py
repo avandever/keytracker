@@ -1093,6 +1093,9 @@ class LeagueWeek(db.Model):
     # matches every field the category sets. Lets a week ask for "a Sin" or "a
     # gigantic creature" rather than listing every card that qualifies.
     required_card_categories = db.Column(db.Text, nullable=True)
+    # Cards no deck may contain, by name. The mirror of required_card_names:
+    # that one says a deck must bring something, this says it must not.
+    banned_card_names = db.Column(db.Text, nullable=True)
     # Deadlines, UTC. Advisory: nothing is blocked when one passes, they drive
     # the "what still needs doing" displays.
     deck_submission_deadline = db.Column(db.DateTime, nullable=True)
@@ -1833,6 +1836,7 @@ class PlayoffBracket(db.Model):
     team_min_raw_amber = db.Column(db.Integer, nullable=True)
     required_card_names = db.Column(db.Text, nullable=True)
     required_card_categories = db.Column(db.Text, nullable=True)
+    banned_card_names = db.Column(db.Text, nullable=True)
     custom_description = db.Column(db.Text, nullable=True)
     hide_standard_description = db.Column(db.Boolean, nullable=True)
 

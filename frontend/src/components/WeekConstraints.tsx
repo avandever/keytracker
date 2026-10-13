@@ -114,6 +114,32 @@ export default function WeekConstraints({ week, size = 'small', sets }: WeekCons
       />,
     );
   }
+  if (week.banned_card_names && week.banned_card_names.length > 0) {
+    // Named in full for the same reason the requirement is: a player has to
+    // know exactly which cards would be refused.
+    chips.push(
+      <Chip
+        key="banned-cards"
+        label={`Banned: ${week.banned_card_names.join(' / ')}`}
+        size={size}
+        variant="outlined"
+        color="error"
+        sx={{
+          height: 'auto',
+          maxWidth: '100%',
+          minWidth: 0,
+          '& .MuiChip-label': {
+            display: 'block',
+            whiteSpace: 'normal',
+            overflow: 'visible',
+            textOverflow: 'clip',
+            overflowWrap: 'anywhere',
+            py: 0.5,
+          },
+        }}
+      />,
+    );
+  }
   if (week.format_type === 'sas_ladder' && week.sas_ladder_maxes && week.sas_ladder_maxes.length > 0) {
     const numRungs = week.sas_ladder_maxes.length + 1;
     chips.push(<Chip key="sas-ladder" label={`SAS Ladder: ${numRungs} rungs`} size={size} variant="outlined" color="secondary" />);

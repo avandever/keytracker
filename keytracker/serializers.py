@@ -816,6 +816,11 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "no_keycheat": week.no_keycheat,
         "team_max_raw_amber": week.team_max_raw_amber,
         "team_min_raw_amber": week.team_min_raw_amber,
+        "banned_card_names": (
+            json.loads(week.banned_card_names)
+            if getattr(week, "banned_card_names", None)
+            else None
+        ),
         "required_card_names": (
             json.loads(week.required_card_names)
             if week.required_card_names

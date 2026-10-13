@@ -21,6 +21,7 @@ export interface PlayoffBracketConstraints {
   team_min_raw_amber?: number | null;
   required_card_names?: string[] | null;
   required_card_categories?: RequiredCardCategory[] | null;
+  banned_card_names?: string[] | null;
   custom_description?: string | null;
   hide_standard_description?: boolean | null;
 }

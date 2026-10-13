@@ -81,6 +81,7 @@ _BRACKET_CONSTRAINT_FIELDS = (
     "team_min_raw_amber",
     "required_card_names",
     "required_card_categories",
+    "banned_card_names",
     "custom_description",
     "hide_standard_description",
 )
@@ -91,6 +92,7 @@ _BRACKET_JSON_FIELDS = (
     "sas_ladder_maxes",
     "required_card_names",
     "required_card_categories",
+    "banned_card_names",
 )
 
 

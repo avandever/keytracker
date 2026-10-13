@@ -277,6 +277,12 @@ with app.app_context():
                             "ALTER TABLE tracker_league_week ADD COLUMN team_min_raw_amber INTEGER"
                         )
                     )
+                if "banned_card_names" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_league_week ADD COLUMN banned_card_names TEXT"
+                        )
+                    )
                 if "required_card_names" not in columns:
                     conn.execute(
                         text(
@@ -374,6 +380,7 @@ with app.app_context():
                 ("team_max_raw_amber", "INTEGER NULL"),
                 ("team_min_raw_amber", "INTEGER NULL"),
                 ("required_card_names", "TEXT NULL"),
+                ("banned_card_names", "TEXT NULL"),
                 ("required_card_categories", "TEXT NULL"),
                 ("custom_description", "TEXT NULL"),
                 ("hide_standard_description", "BOOLEAN NULL"),
