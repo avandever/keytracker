@@ -68,8 +68,14 @@ def main():
     try:
         # Import models via raw SQL to avoid Flask app context dependency
         # Find or create the version
+        # version is a FLOAT column, so an exact match misses: 2.7 does not
+        # survive the round trip bit for bit, and the lookup then falls through
+        # to an insert that trips the unique constraint.
         row = session.execute(
-            text("SELECT id FROM alliance_restricted_list_version WHERE version = :v"),
+            text(
+                "SELECT id FROM alliance_restricted_list_version "
+                "WHERE ABS(version - :v) < 0.0001"
+            ),
             {"v": args.version},
         ).fetchone()
         if row:
