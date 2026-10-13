@@ -620,6 +620,14 @@ const NON_BRACKET_FORMATS = ['sas_ladder', 'team_sealed', 'team_sealed_alliance'
 /** Bracket formats whose decks are dealt from a pool rather than brought. */
 const SEALED_FORMATS = ['sealed_archon', 'sealed_alliance'];
 
+/** Formats dealt a pool, where decks per player sizes the pool rather than
+ *  the hand: how many each player then keeps is fixed by the format. */
+const POOL_FORMATS: Record<string, number> = {
+  sealed_archon: 1,
+  sealed_alliance: 3,
+  sealed_survival: 2,
+};
+
 /** Formats played with alliance decks, which a restricted list applies to. */
 function isAllianceFormat(formatType: string): boolean {
   return formatType.includes('alliance');
@@ -680,6 +688,25 @@ function BracketEditor({
 
   const edit = (index: number, patch: Partial<BracketRow>) =>
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+
+  // The endpoint replaces the whole list, so saving one bracket saves them all.
+  // Having the button to hand on each one still beats scrolling to the bottom
+  // of eleven.
+  const save = () =>
+    onAct(
+      () =>
+        setPlayoffBrackets(
+          leagueId,
+          rows.map((row) => ({
+            ...row,
+            alliance_restricted_list_version_id:
+              row.alliance_restricted_list_version_id === ''
+                ? null
+                : row.alliance_restricted_list_version_id,
+          })),
+        ),
+      'Brackets saved.',
+    );
 
   return (
     <Card sx={{ mb: 2 }}>
@@ -742,11 +769,15 @@ function BracketEditor({
                   value={row.best_of_n}
                   onChange={(e) => edit(index, { best_of_n: parseInt(e.target.value, 10) || 1 })}
                 />
-                <TextField
-                  size="small" type="number" label="Decks per player" sx={{ width: 150 }} disabled={drawn}
-                  value={row.decks_per_player ?? ''}
-                  onChange={(e) => edit(index, { decks_per_player: numberOrNull(e.target.value) })}
-                />
+                {POOL_FORMATS[row.format_type] !== undefined && (
+                  <TextField
+                    size="small" type="number" label="Decks dealt to each player"
+                    sx={{ width: 230 }} disabled={drawn}
+                    value={row.decks_per_player ?? ''}
+                    onChange={(e) => edit(index, { decks_per_player: numberOrNull(e.target.value) })}
+                    helperText={`Pool size. Each player keeps ${POOL_FORMATS[row.format_type]}.`}
+                  />
+                )}
               </Box>
               <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                 <TextField
@@ -776,27 +807,55 @@ function BracketEditor({
                 />
               </Box>
               <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap', alignItems: 'center' }}>
-                <FormControl size="small" sx={{ minWidth: 260 }} disabled={drawn}>
-                  <InputLabel>Allowed sets</InputLabel>
-                  <Select
-                    multiple label="Allowed sets" value={row.allowed_sets}
-                    onChange={(e) => edit(index, { allowed_sets: e.target.value as number[] })}
-                    renderValue={(selected) => (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {(selected as number[]).map((v) => (
-                          <Chip key={v} size="small"
-                            label={sets.find((x) => x.number === v)?.shortname || v} />
-                        ))}
-                      </Box>
-                    )}
-                  >
-                    {sets.map((set) => (
-                      <MenuItem key={set.number} value={set.number}>
-                        {set.name} ({set.shortname})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                {sets.length > 0 && (
+                  <Box sx={{ width: '100%' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                      <Typography variant="subtitle2">
+                        Allowed sets{' '}
+                        {row.allowed_sets.length > 0 ? `(${row.allowed_sets.length} selected)` : '(all)'}
+                      </Typography>
+                      <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5, py: 0 }}
+                        disabled={drawn}
+                        onClick={() =>
+                          edit(index, { allowed_sets: sets.filter((x) => x.is_legal).map((x) => x.number) })
+                        }>
+                        All
+                      </Button>
+                      <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5, py: 0 }}
+                        disabled={drawn}
+                        onClick={() => edit(index, { allowed_sets: sets.map((x) => x.number) })}>
+                        All (even non-legal)
+                      </Button>
+                      <Button size="small" variant="text" sx={{ minWidth: 0, px: 0.5, py: 0 }}
+                        disabled={drawn}
+                        onClick={() => edit(index, { allowed_sets: [] })}>
+                        None
+                      </Button>
+                    </Box>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {sets.map((set) => (
+                        <Chip
+                          key={set.number}
+                          label={set.is_legal ? set.shortname : `${set.shortname} *`}
+                          size="small"
+                          variant={row.allowed_sets.includes(set.number) ? 'filled' : 'outlined'}
+                          color={row.allowed_sets.includes(set.number) ? 'primary' : 'default'}
+                          sx={set.is_legal ? undefined : { fontStyle: 'italic' }}
+                          onClick={
+                            drawn
+                              ? undefined
+                              : () =>
+                                  edit(index, {
+                                    allowed_sets: row.allowed_sets.includes(set.number)
+                                      ? row.allowed_sets.filter((n) => n !== set.number)
+                                      : [...row.allowed_sets, set.number],
+                                  })
+                          }
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
                 <FormControlLabel
                   control={<Switch checked={row.set_diversity} disabled={drawn}
                     onChange={(e) => edit(index, { set_diversity: e.target.checked })} />}
@@ -862,26 +921,19 @@ function BracketEditor({
                   label="Hide standard description"
                 />
               </Box>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1 }}>
+                <Button variant="contained" size="small" disabled={drawn} onClick={save}>
+                  Save brackets
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  Saves every bracket, not only this one — the list goes up as a whole.
+                </Typography>
+              </Box>
             </AccordionDetails>
           </Accordion>
         ))}
         <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-          <Button variant="contained" disabled={drawn}
-            onClick={() =>
-              onAct(
-                () => setPlayoffBrackets(
-                  leagueId,
-                  rows.map((row) => ({
-                    ...row,
-                    alliance_restricted_list_version_id:
-                      row.alliance_restricted_list_version_id === ''
-                        ? null
-                        : row.alliance_restricted_list_version_id,
-                  })),
-                ),
-                'Brackets saved.',
-              )
-            }>
+          <Button variant="contained" disabled={drawn} onClick={save}>
             Save brackets
           </Button>
           <Button disabled={drawn} onClick={() => setRows((prev) => [...prev, { ...EMPTY_BRACKET }])}>
