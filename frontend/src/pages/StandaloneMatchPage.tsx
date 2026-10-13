@@ -64,6 +64,8 @@ const FORMAT_LABELS: Record<string, string> = {
   archon_standard: 'Archon',
   triad: 'Triad',
   sealed_archon: 'Sealed Archon',
+  sealed_survival: 'Sealed Survival',
+  double_oubliette: 'Double Oubliette',
   sealed_alliance: 'Sealed Alliance',
   adaptive: 'Adaptive',
   alliance: 'Alliance',
@@ -274,7 +276,12 @@ export default function StandaloneMatchPage() {
     sas_floor: match.sas_floor,
   };
 
-  const isSealed = match.format_type === 'sealed_archon' || match.format_type === 'sealed_alliance';
+  const isSealed =
+    match.format_type === 'sealed_archon' ||
+    match.format_type === 'sealed_alliance' ||
+    match.format_type === 'sealed_survival';
+  const isSealedSurvival = match.format_type === 'sealed_survival';
+  const isDoubleOubliette = match.format_type === 'double_oubliette';
   const isTriad = match.format_type === 'triad';
   const isSealedAlliance = match.format_type === 'sealed_alliance';
   const isOpenAlliance = match.format_type === 'alliance';
@@ -296,7 +303,7 @@ export default function StandaloneMatchPage() {
     setSubmitting(true);
     setError('');
     try {
-      if (match.format_type === 'sealed_archon') {
+      if (match.format_type === 'sealed_archon' || match.format_type === 'sealed_survival') {
         if (!sealedDeckId) return;
         await submitStandaloneDeckSelection(id, { deck_id: sealedDeckId as number, slot_number: slot });
       } else {
@@ -847,7 +854,7 @@ export default function StandaloneMatchPage() {
             )}
 
             {/* Sealed Archon: pick from pool */}
-            {match.format_type === 'sealed_archon' && (
+            {(match.format_type === 'sealed_archon' || match.format_type === 'sealed_survival') && (
               <Box>
                 <Typography variant="subtitle2" gutterBottom>Your Sealed Pool</Typography>
                 {sealedPool.map((entry) => (
@@ -857,33 +864,55 @@ export default function StandaloneMatchPage() {
                   </Box>
                 ))}
                 <Divider sx={{ my: 2 }} />
-                <Typography variant="subtitle2" gutterBottom>Select Your Deck</Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel>Select Deck</InputLabel>
-                    <Select
-                      value={sealedDeckId}
-                      label="Select Deck"
-                      onChange={(e) => setSealedDeckId(e.target.value as number)}
+                <Typography variant="subtitle2" gutterBottom>
+                  {isSealedSurvival
+                    ? `Keep Two Decks (${mySelections.length} of 2)`
+                    : 'Select Your Deck'}
+                </Typography>
+                {mySelections.length > 0 && (
+                  <Box sx={{ mb: 1 }}>
+                    {mySelections.map((sel) => (
+                      <Typography key={sel.id} variant="body2">
+                        Kept: {sel.deck?.name}
+                      </Typography>
+                    ))}
+                  </Box>
+                )}
+                {mySelections.length < (isSealedSurvival ? 2 : 1) && (
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <FormControl size="small" sx={{ minWidth: 200 }}>
+                      <InputLabel>Select Deck</InputLabel>
+                      <Select
+                        value={sealedDeckId}
+                        label="Select Deck"
+                        onChange={(e) => setSealedDeckId(e.target.value as number)}
+                      >
+                        {sealedPool
+                          .filter((entry) =>
+                            !mySelections.some((s) => s.deck?.db_id === entry.deck?.db_id))
+                          .map((entry) => entry.deck && (
+                            <MenuItem key={entry.deck.db_id} value={entry.deck.db_id}>
+                              {entry.deck.name}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                    <Button
+                      variant="contained"
+                      onClick={() => handleDeckSubmit(mySelections.length + 1)}
+                      disabled={submitting || !sealedDeckId}
                     >
-                      {sealedPool.map((entry) => entry.deck && (
-                        <MenuItem key={entry.deck.db_id} value={entry.deck.db_id}>
-                          {entry.deck.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <Button variant="contained" onClick={() => handleDeckSubmit(1)} disabled={submitting || !sealedDeckId}>
-                    Submit
-                  </Button>
-                </Box>
+                      Submit
+                    </Button>
+                  </Box>
+                )}
               </Box>
             )}
 
             {/* Archon / Triad: submit by URL */}
             {!isSealed && !isOpenAlliance && (
               <Box>
-                {Array.from({ length: isNordicHexad ? 6 : isTriad || isTriadShort || isMoirai ? 3 : isOubliette || isAdaptiveShort || isExchange ? 2 : 1 }, (_, i) => i + 1).map((slot) => {
+                {Array.from({ length: isNordicHexad ? 6 : isTriad || isTriadShort || isMoirai ? 3 : isOubliette || isAdaptiveShort || isExchange || isDoubleOubliette ? 2 : 1 }, (_, i) => i + 1).map((slot) => {
                   const sel = mySelections.find((s) => s.slot_number === slot);
                   return (
                     <Box key={slot} sx={{ mb: 2 }}>

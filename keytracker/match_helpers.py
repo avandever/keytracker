@@ -1233,6 +1233,93 @@ def validate_adaptive_bid(pm, requesting_user_id, chains=None, concede=False):
     return True, None
 
 
+def standalone_double_oubliette_bans(matchup):
+    """The per-set bans on a standalone matchup, as {player_id: {set: house}}."""
+    import json as _json
+
+    try:
+        raw = _json.loads(matchup.double_oubliette_bans or "{}")
+    except (ValueError, TypeError):
+        raw = {}
+    return {
+        matchup.player1_id: {int(k): v for k, v in (raw.get("p1") or {}).items()},
+        matchup.player2_id: {int(k): v for k, v in (raw.get("p2") or {}).items()},
+    }
+
+
+def set_standalone_double_oubliette_ban(matchup, user_id, expansion, house):
+    """Record one per-set ban on a standalone matchup."""
+    import json as _json
+
+    try:
+        raw = _json.loads(matchup.double_oubliette_bans or "{}")
+    except (ValueError, TypeError):
+        raw = {}
+    side = "p1" if user_id == matchup.player1_id else "p2"
+    raw.setdefault(side, {})[str(expansion)] = house
+    matchup.double_oubliette_bans = _json.dumps(raw)
+
+
+def survival_deck_error(matchup, selections_by_user, existing_games, p1_deck_id, p2_deck_id):
+    """Why this pair of decks cannot play the next Sealed Survival game.
+
+    A deck has to be one the player kept, and a deck that has lost is out of
+    the match. Shared so a league week and a standalone match cannot drift.
+    """
+    if not p1_deck_id or not p2_deck_id:
+        return "player1_deck_id and player2_deck_id required for Sealed Survival"
+    for label, player_id, deck_id, is_p1 in (
+        ("Player 1", matchup.player1_id, p1_deck_id, True),
+        ("Player 2", matchup.player2_id, p2_deck_id, False),
+    ):
+        if deck_id not in selections_by_user.get(player_id, set()):
+            return f"{label}'s deck is not one of their two"
+        for g in existing_games:
+            lost_with = g.player1_deck_id if is_p1 else g.player2_deck_id
+            if g.winner_id != player_id and lost_with == deck_id:
+                return f"{label}'s deck lost a game and is out of the match"
+    return None
+
+
+def double_oubliette_deck_error(matchup, selections_by_user, existing_games, p1_deck_id, p2_deck_id):
+    """Why this pair of decks cannot play the next Double Oubliette game.
+
+    The match is won by winning with each deck, so a deck that has won is
+    finished.
+    """
+    if not p1_deck_id or not p2_deck_id:
+        return "player1_deck_id and player2_deck_id required for Double Oubliette"
+    for label, player_id, deck_id, is_p1 in (
+        ("Player 1", matchup.player1_id, p1_deck_id, True),
+        ("Player 2", matchup.player2_id, p2_deck_id, False),
+    ):
+        if deck_id not in selections_by_user.get(player_id, set()):
+            return f"{label}'s deck is not one of their two"
+        for g in existing_games:
+            won_with = g.player1_deck_id if is_p1 else g.player2_deck_id
+            if g.winner_id == player_id and won_with == deck_id:
+                return (
+                    f"{label}'s deck already won a game, so the other one has to "
+                    "win the next"
+                )
+    return None
+
+
+def _selections_by_user(matchup):
+    """Each player's chosen deck ids for this matchup's match or week."""
+    week_id = matchup.week_matchup.week_id if matchup.week_matchup else None
+    query = PlayerDeckSelection.query
+    if week_id:
+        query = query.filter_by(week_id=week_id)
+    else:
+        query = query.filter_by(standalone_match_id=matchup.standalone_match_id)
+    out = {matchup.player1_id: set(), matchup.player2_id: set()}
+    for sel in query.all():
+        if sel.user_id in out:
+            out[sel.user_id].add(sel.deck_id)
+    return out
+
+
 def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_type):
     """
     Validate and record a game result for a PlayerMatchup.
@@ -1304,6 +1391,34 @@ def validate_and_record_game(matchup, reporter_id, game_data, best_of_n, format_
                 return None, "Player 1's deck already won a game and cannot be reused"
             if g.winner_id == matchup.player2_id and g.player2_deck_id == p2_deck_id:
                 return None, "Player 2's deck already won a game and cannot be reused"
+
+    if format_type == WeekFormat.SEALED_SURVIVAL:
+        error = survival_deck_error(
+            matchup,
+            _selections_by_user(matchup),
+            existing_games,
+            p1_deck_id,
+            p2_deck_id,
+        )
+        if error:
+            return None, error
+
+    if format_type == WeekFormat.DOUBLE_OUBLIETTE:
+        bans = standalone_double_oubliette_bans(matchup)
+        for player_id in (matchup.player1_id, matchup.player2_id):
+            if len(bans.get(player_id, {})) < 2:
+                return None, (
+                    "Both players must ban a house for each set before reporting games"
+                )
+        error = double_oubliette_deck_error(
+            matchup,
+            _selections_by_user(matchup),
+            existing_games,
+            p1_deck_id,
+            p2_deck_id,
+        )
+        if error:
+            return None, error
 
     if format_type == WeekFormat.EXCHANGE:
         borrows = getattr(matchup, "exchange_borrows", [])

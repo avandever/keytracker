@@ -33,6 +33,7 @@ from keytracker.schema import (
     ExchangeBorrow,
     NordicHexadAction,
     MoiraiAssignment,
+    MatchGame,
     StandaloneMatch,
     StandaloneMatchStatus,
     WeekFormat,
@@ -77,7 +78,11 @@ standalone_bp = Blueprint(
     "standalone", __name__, url_prefix="/api/v2/standalone-matches"
 )
 
-SEALED_FORMATS = (WeekFormat.SEALED_ARCHON, WeekFormat.SEALED_ALLIANCE)
+SEALED_FORMATS = (
+    WeekFormat.SEALED_ARCHON,
+    WeekFormat.SEALED_ALLIANCE,
+    WeekFormat.SEALED_SURVIVAL,
+)
 ALLIANCE_FORMATS = (WeekFormat.SEALED_ALLIANCE, WeekFormat.ALLIANCE)
 
 
@@ -153,6 +158,8 @@ def create_match():
         WeekFormat.EXCHANGE,
         WeekFormat.NORDIC_HEXAD,
         WeekFormat.MOIRAI,
+        WeekFormat.SEALED_SURVIVAL,
+        WeekFormat.DOUBLE_OUBLIETTE,
     ):
         best_of_n = 3  # These formats are always best of 3
     if format_type in (
@@ -169,7 +176,7 @@ def create_match():
     set_diversity = bool(data.get("set_diversity", False))
     house_diversity = bool(data.get("house_diversity", False))
     allowed_sets = data.get("allowed_sets")
-    is_sealed = format_type in (WeekFormat.SEALED_ARCHON, WeekFormat.SEALED_ALLIANCE)
+    is_sealed = format_type in SEALED_FORMATS
     decks_per_player = data.get("decks_per_player", 3 if is_sealed else 1)
 
     if allowed_sets is not None and not isinstance(allowed_sets, list):
@@ -366,7 +373,13 @@ def submit_deck_selection(match_id):
     data = request.get_json(silent=True) or {}
     slot_number = data.get("slot_number", 1)
     _three_slot = (WeekFormat.TRIAD, WeekFormat.TRIAD_SHORT, WeekFormat.MOIRAI)
-    _two_slot = (WeekFormat.OUBLIETTE, WeekFormat.ADAPTIVE_SHORT, WeekFormat.EXCHANGE)
+    _two_slot = (
+        WeekFormat.OUBLIETTE,
+        WeekFormat.ADAPTIVE_SHORT,
+        WeekFormat.EXCHANGE,
+        WeekFormat.SEALED_SURVIVAL,
+        WeekFormat.DOUBLE_OUBLIETTE,
+    )
     _six_slot = (WeekFormat.NORDIC_HEXAD,)
     max_slots = (
         6
@@ -381,15 +394,32 @@ def submit_deck_selection(match_id):
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
 
     # Resolve deck
-    if match.format_type == WeekFormat.SEALED_ARCHON:
+    if match.format_type in (WeekFormat.SEALED_ARCHON, WeekFormat.SEALED_SURVIVAL):
+        label = (
+            "Sealed Archon"
+            if match.format_type == WeekFormat.SEALED_ARCHON
+            else "Sealed Survival"
+        )
         deck_db_id = data.get("deck_id")
         if not deck_db_id:
-            return jsonify({"error": "deck_id is required for Sealed Archon"}), 400
+            return jsonify({"error": f"deck_id is required for {label}"}), 400
         pool_entry = SealedPoolDeck.query.filter_by(
             standalone_match_id=match.id, user_id=user.id, deck_id=deck_db_id
         ).first()
         if not pool_entry:
             return jsonify({"error": "Deck is not in your sealed pool"}), 400
+        if match.format_type == WeekFormat.SEALED_SURVIVAL:
+            clash = PlayerDeckSelection.query.filter(
+                PlayerDeckSelection.standalone_match_id == match.id,
+                PlayerDeckSelection.user_id == user.id,
+                PlayerDeckSelection.deck_id == deck_db_id,
+                PlayerDeckSelection.slot_number != slot_number,
+            ).first()
+            if clash:
+                return (
+                    jsonify({"error": "That deck is already your other choice"}),
+                    400,
+                )
         deck = db.session.get(Deck, deck_db_id)
         if not deck:
             return jsonify({"error": "Deck not found"}), 400
@@ -722,6 +752,59 @@ def submit_triad_short_pick(match_id):
     return jsonify(serialize_standalone_match(match, viewer_id))
 
 
+def _resolve_standalone_double_oubliette(match, pm):
+    """Settle a standalone Double Oubliette that the bans have already decided.
+
+    Mirrors the league rule: a deck taken out by a ban makes the match
+    unwinnable, since it is won by winning a game with each deck.
+    """
+    from keytracker.match_helpers import (
+        get_deck_houses,
+        standalone_double_oubliette_bans,
+    )
+
+    bans = standalone_double_oubliette_bans(pm)
+    if any(len(bans.get(p, {})) < 2 for p in (pm.player1_id, pm.player2_id)):
+        return
+    if pm.games:
+        return
+
+    def eliminated(owner_id, their_bans):
+        out = []
+        for sel in PlayerDeckSelection.query.filter_by(
+            standalone_match_id=match.id, user_id=owner_id
+        ).all():
+            if not sel.deck:
+                continue
+            banned = their_bans.get(sel.deck.expansion)
+            if banned and banned in get_deck_houses(sel.deck):
+                out.append(sel.deck_id)
+        return out
+
+    p1_out = eliminated(pm.player1_id, bans.get(pm.player2_id, {}))
+    p2_out = eliminated(pm.player2_id, bans.get(pm.player1_id, {}))
+    if (p1_out and p2_out) or (not p1_out and not p2_out):
+        return
+    winner_id = pm.player2_id if p1_out else pm.player1_id
+
+    wins_needed = math.ceil(match.best_of_n / 2)
+    for game_number in range(1, wins_needed + 1):
+        db.session.add(
+            MatchGame(
+                player_matchup_id=pm.id,
+                game_number=game_number,
+                winner_id=winner_id,
+                player1_keys=0,
+                player2_keys=0,
+                went_to_time=False,
+                loser_conceded=True,
+            )
+        )
+    db.session.flush()
+    db.session.expire(pm, ["games"])
+    match.status = StandaloneMatchStatus.COMPLETED
+
+
 @standalone_bp.route("/<int:match_id>/banned-house", methods=["POST"])
 def submit_banned_house(match_id):
     """Submit an Oubliette banned house. Valid after both players have submitted decks."""
@@ -729,7 +812,7 @@ def submit_banned_house(match_id):
     if err:
         return err
 
-    if match.format_type != WeekFormat.OUBLIETTE:
+    if match.format_type not in (WeekFormat.OUBLIETTE, WeekFormat.DOUBLE_OUBLIETTE):
         return jsonify({"error": "Only for Oubliette format"}), 400
     if match.status != StandaloneMatchStatus.PUBLISHED:
         return jsonify({"error": "Match is not published"}), 400
@@ -750,6 +833,36 @@ def submit_banned_house(match_id):
     user_sels = PlayerDeckSelection.query.filter_by(
         standalone_match_id=match.id, user_id=user.id
     ).all()
+
+    # Double Oubliette bans a house per set, against that set's decks only.
+    if match.format_type == WeekFormat.DOUBLE_OUBLIETTE:
+        from keytracker.match_helpers import (
+            set_standalone_double_oubliette_ban,
+            standalone_double_oubliette_bans,
+            validate_oubliette_ban_against_decks,
+        )
+
+        sets = list(match.allowed_sets or [])
+        expansion = data.get("expansion")
+        if not isinstance(expansion, int) or expansion not in sets:
+            return (
+                jsonify({"error": "expansion must be one of this match's two sets"}),
+                400,
+            )
+        already = standalone_double_oubliette_bans(pm).get(user.id, {})
+        if expansion in already:
+            return jsonify({"error": "You have already banned for that set"}), 400
+        same_set = [s for s in user_sels if s.deck and s.deck.expansion == expansion]
+        error = validate_oubliette_ban_against_decks(banned_house, same_set)
+        if error:
+            return jsonify({"error": error}), 400
+
+        set_standalone_double_oubliette_ban(pm, user.id, expansion, banned_house)
+        db.session.flush()
+        _resolve_standalone_double_oubliette(match, pm)
+        db.session.commit()
+        viewer_id = user.id if current_user.is_authenticated else None
+        return jsonify(serialize_standalone_match(match, viewer_id))
 
     error = validate_oubliette_ban(pm, user.id, banned_house, user_sels)
     if error:

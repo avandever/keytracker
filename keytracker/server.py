@@ -400,6 +400,13 @@ with app.app_context():
                             "oubliette_bans_not_recorded BOOLEAN NULL DEFAULT FALSE"
                         )
                     )
+                if "double_oubliette_bans" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_player_matchup ADD COLUMN "
+                            "double_oubliette_bans TEXT NULL"
+                        )
+                    )
         if inspector.has_table("tracker_playoff_bracket"):
             columns = {
                 c["name"] for c in inspector.get_columns("tracker_playoff_bracket")

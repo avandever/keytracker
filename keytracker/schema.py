@@ -1222,6 +1222,10 @@ class PlayerMatchup(db.Model):
     # its bans being entered here. The result can then be reported, and the
     # eliminations are simply unknown rather than guessed at.
     oubliette_bans_not_recorded = db.Column(db.Boolean, nullable=True, default=False)
+    # Double Oubliette in a standalone match: {"p1": {"<set>": house}, "p2": ...}.
+    # A league files these against the week instead, since its bans are made
+    # before the matchup exists.
+    double_oubliette_bans = db.Column(db.Text, nullable=True)
     oubliette_p1_banned_house = db.Column(db.Text, nullable=True)
     oubliette_p2_banned_house = db.Column(db.Text, nullable=True)
 

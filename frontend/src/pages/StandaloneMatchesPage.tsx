@@ -38,6 +38,8 @@ const FORMAT_LABELS: Record<string, string> = {
   sealed_alliance: 'Sealed Alliance',
   adaptive: 'Adaptive',
   alliance: 'Alliance',
+  sealed_survival: 'Sealed Survival',
+  double_oubliette: 'Double Oubliette',
 };
 
 export default function StandaloneMatchesPage() {
@@ -61,7 +63,10 @@ export default function StandaloneMatchesPage() {
   const [allowedSets, setAllowedSets] = useState<number[]>([]);
   const [decksPerPlayer, setDecksPerPlayer] = useState(3);
 
-  const isSealed = formatType === 'sealed_archon' || formatType === 'sealed_alliance';
+  const isSealed =
+    formatType === 'sealed_archon' ||
+    formatType === 'sealed_alliance' ||
+    formatType === 'sealed_survival';
   const isSealedAlliance = formatType === 'sealed_alliance';
   const isTriad = formatType === 'triad';
   const isAdaptive = formatType === 'adaptive';
@@ -177,6 +182,8 @@ export default function StandaloneMatchesPage() {
               <MenuItem value="sealed_alliance">Sealed Alliance</MenuItem>
               <MenuItem value="adaptive">Adaptive</MenuItem>
               <MenuItem value="alliance">Alliance</MenuItem>
+              <MenuItem value="sealed_survival">Sealed Survival</MenuItem>
+              <MenuItem value="double_oubliette">Double Oubliette</MenuItem>
             </Select>
           </FormControl>
 
