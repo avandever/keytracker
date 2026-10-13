@@ -22,6 +22,7 @@ export const WEEK_FORMAT_LABELS: Record<string, string> = {
   exchange: 'Exchange',
   nordic_hexad: 'Nordic Hexad',
   moirai: 'Moirai',
+  sealed_survival: 'Sealed Survival',
   tertiate: 'Tertiate',
 };
 

@@ -878,6 +878,7 @@ class WeekFormat(PyEnum):
     NORDIC_HEXAD = "nordic_hexad"
     MOIRAI = "moirai"
     TERTIATE = "tertiate"
+    SEALED_SURVIVAL = "sealed_survival"
 
 
 # Weeks played from a generated sealed pool. Pool decks are dealt out, not
@@ -888,6 +889,7 @@ SEALED_WEEK_FORMATS = (
     WeekFormat.SEALED_ALLIANCE.value,
     WeekFormat.TEAM_SEALED.value,
     WeekFormat.TEAM_SEALED_ALLIANCE.value,
+    WeekFormat.SEALED_SURVIVAL.value,
 )
 
 

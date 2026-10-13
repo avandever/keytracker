@@ -2870,16 +2870,12 @@ def generate_sealed_pools(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.format_type not in (
-        WeekFormat.SEALED_ARCHON.value,
-        WeekFormat.SEALED_ALLIANCE.value,
-        WeekFormat.TEAM_SEALED.value,
-        WeekFormat.TEAM_SEALED_ALLIANCE.value,
-    ):
+    if week.format_type not in SEALED_WEEK_FORMATS:
         return (
             jsonify(
                 {
-                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, Team Sealed, or Team Sealed Alliance format"
+                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, "
+                    "Sealed Survival, Team Sealed, or Team Sealed Alliance format"
                 }
             ),
             400,
@@ -4056,6 +4052,7 @@ def submit_deck_selection(league_id, week_id):
         WeekFormat.OUBLIETTE.value,
         WeekFormat.ADAPTIVE_SHORT.value,
         WeekFormat.EXCHANGE.value,
+        WeekFormat.SEALED_SURVIVAL.value,
     )
     max_slots = (
         6
@@ -4069,17 +4066,39 @@ def submit_deck_selection(league_id, week_id):
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
 
-    # Sealed Archon: select from pool by deck_id
-    if week.format_type == WeekFormat.SEALED_ARCHON.value:
+    # Sealed Archon and Sealed Survival: select from the pool by deck_id. They
+    # differ only in how many of the pool's decks are carried into the match.
+    if week.format_type in (
+        WeekFormat.SEALED_ARCHON.value,
+        WeekFormat.SEALED_SURVIVAL.value,
+    ):
+        label = (
+            "Sealed Archon"
+            if week.format_type == WeekFormat.SEALED_ARCHON.value
+            else "Sealed Survival"
+        )
         deck_db_id = data.get("deck_id")
         if not deck_db_id:
-            return jsonify({"error": "deck_id is required for Sealed Archon"}), 400
+            return jsonify({"error": f"deck_id is required for {label}"}), 400
         # Verify deck is in player's sealed pool
         pool_entry = SealedPoolDeck.query.filter_by(
             week_id=week.id, user_id=target_user_id, deck_id=deck_db_id
         ).first()
         if not pool_entry:
             return jsonify({"error": "Deck is not in your sealed pool"}), 400
+        # The two decks carried in have to be different ones.
+        if week.format_type == WeekFormat.SEALED_SURVIVAL.value:
+            clash = PlayerDeckSelection.query.filter(
+                PlayerDeckSelection.week_id == week.id,
+                PlayerDeckSelection.user_id == target_user_id,
+                PlayerDeckSelection.deck_id == deck_db_id,
+                PlayerDeckSelection.slot_number != slot_number,
+            ).first()
+            if clash:
+                return (
+                    jsonify({"error": "That deck is already your other choice"}),
+                    400,
+                )
         deck = db.session.get(Deck, deck_db_id)
         if not deck:
             return jsonify({"error": "Deck not found"}), 400
@@ -7085,6 +7104,48 @@ def report_game(league_id, matchup_id):
                     400,
                 )
 
+    # Sealed Survival: each game is played with a deck that has not yet lost.
+    # A loss knocks that deck out, so losing both ends the match -- which is
+    # the same thing as the opponent reaching the wins the best-of already
+    # needs, and is why no separate win condition is needed here.
+    if week.format_type == WeekFormat.SEALED_SURVIVAL.value:
+        if not p1_deck_id or not p2_deck_id:
+            return (
+                jsonify(
+                    {
+                        "error": "player1_deck_id and player2_deck_id required for "
+                        "Sealed Survival"
+                    }
+                ),
+                400,
+            )
+        for label, player_id, deck_id in (
+            ("Player 1", pm.player1_id, p1_deck_id),
+            ("Player 2", pm.player2_id, p2_deck_id),
+        ):
+            own = PlayerDeckSelection.query.filter_by(
+                week_id=week.id, user_id=player_id, deck_id=deck_id
+            ).first()
+            if not own:
+                return (
+                    jsonify({"error": f"{label}'s deck is not one of their two"}),
+                    400,
+                )
+            for g in existing_games:
+                lost_with = (
+                    g.player1_deck_id if player_id == pm.player1_id else g.player2_deck_id
+                )
+                if g.winner_id != player_id and lost_with == deck_id:
+                    return (
+                        jsonify(
+                            {
+                                "error": f"{label}'s deck lost a game and is out of "
+                                "the match"
+                            }
+                        ),
+                        400,
+                    )
+
     # Exchange: both borrows must be submitted; validate deck pools
     if week.format_type == WeekFormat.EXCHANGE.value:
         from keytracker.match_helpers import (
@@ -7681,16 +7742,12 @@ def regenerate_sealed_pools(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.format_type not in (
-        WeekFormat.SEALED_ARCHON.value,
-        WeekFormat.SEALED_ALLIANCE.value,
-        WeekFormat.TEAM_SEALED.value,
-        WeekFormat.TEAM_SEALED_ALLIANCE.value,
-    ):
+    if week.format_type not in SEALED_WEEK_FORMATS:
         return (
             jsonify(
                 {
-                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, Team Sealed, or Team Sealed Alliance format"
+                    "error": "Sealed pools only for Sealed Archon, Sealed Alliance, "
+                    "Sealed Survival, Team Sealed, or Team Sealed Alliance format"
                 }
             ),
             400,

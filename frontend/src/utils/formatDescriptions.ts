@@ -7,6 +7,8 @@ export const FORMAT_DESCRIPTIONS: Record<string, string> = {
     "Submit two decks. Your opponent chooses one for you to play in game 1, then you freely choose for game 2.",
   sealed_archon:
     "A sealed pool of decks will be generated for you. Pick your best one and take it to battle.",
+  sealed_survival:
+    'A sealed pool is generated for you. Keep two decks from it. Each game you play a deck that has not yet lost — a deck that loses is out of the match, and you are out when both of yours have gone.',
   sealed_alliance:
     "A sealed pool of decks will be generated for you. Build an alliance deck from the available houses.",
   team_sealed:

@@ -329,7 +329,7 @@ export default function MyLeagueInfoPage() {
   const myMember = myTeam.members.find((m) => m.user.id === effectiveUserId);
   const weeks = league.weeks || [];
 
-  const handleSubmitSealedDeck = async (weekId: number) => {
+  const handleSubmitSealedDeck = async (weekId: number, slotNumber = 1) => {
     if (!sealedDeckId) return;
     setError('');
     setSuccess('');
@@ -338,7 +338,7 @@ export default function MyLeagueInfoPage() {
       await submitDeckSelection(league.id, weekId, {
         deck_url: '', // not used for sealed
         deck_id: sealedDeckId as number,
-        slot_number: 1,
+        slot_number: slotNumber,
       } as any);
       setSealedDeckId('');
       setSuccess('Deck selected!');
@@ -891,6 +891,7 @@ export default function MyLeagueInfoPage() {
             {/* Submit new deck */}
             {canSelectDeck && mySelections.length < maxSlots &&
               week.format_type !== 'sealed_archon' &&
+              week.format_type !== 'sealed_survival' &&
               week.format_type !== 'sealed_alliance' &&
               week.format_type !== 'thief' && (() => {
               const filteredCollection = filterCollectionForConstraints(collectionDecks, {
@@ -1004,7 +1005,7 @@ export default function MyLeagueInfoPage() {
             )}
 
             {/* Sealed Archon: always show pool, show dropdown only when selecting */}
-            {week.format_type === 'sealed_archon' && (() => {
+            {(week.format_type === 'sealed_archon' || week.format_type === 'sealed_survival') && (() => {
               if (!sealedPools[week.id]) {
                 loadSealedPool(week.id);
               }
@@ -1034,13 +1035,21 @@ export default function MyLeagueInfoPage() {
                           </Box>
                         ))}
                       </Box>
-                      {canSelectDeck && mySelections.length < 1 && (
+                      {canSelectDeck && mySelections.length < maxSlots && (
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                           <FormControl size="small" sx={{ minWidth: 300 }}>
-                            <InputLabel>Select deck from pool</InputLabel>
+                            <InputLabel>
+                              {maxSlots > 1
+                                ? `Deck ${mySelections.length + 1} of ${maxSlots} from pool`
+                                : 'Select deck from pool'}
+                            </InputLabel>
                             <Select
                               value={sealedDeckId}
-                              label="Select deck from pool"
+                              label={
+                                maxSlots > 1
+                                  ? `Deck ${mySelections.length + 1} of ${maxSlots} from pool`
+                                  : 'Select deck from pool'
+                              }
                               onChange={(e) => setSealedDeckId(e.target.value as number)}
                             >
                               {pool.map((entry) => (
@@ -1053,7 +1062,7 @@ export default function MyLeagueInfoPage() {
                           </FormControl>
                           <Button
                             variant="contained"
-                            onClick={() => handleSubmitSealedDeck(week.id)}
+                            onClick={() => handleSubmitSealedDeck(week.id, mySelections.length + 1)}
                             disabled={submitting || !sealedDeckId}
                           >
                             Select
@@ -2077,6 +2086,63 @@ export default function MyLeagueInfoPage() {
                         <MenuItem value={myMatchup.player2.id}>{myMatchup.player2.name}</MenuItem>
                       </Select>
                     </FormControl>
+                    {week.format_type === 'sealed_survival' && (() => {
+                      // A deck that lost is out, so it is not offered again.
+                      const lost = (playerId: number, isP1: boolean) =>
+                        new Set(
+                          myMatchup.games
+                            .filter((g) => g.winner_id !== playerId)
+                            .map((g) => (isP1 ? g.player1_deck_id : g.player2_deck_id))
+                            .filter((d): d is number => d != null),
+                        );
+                      const p1Out = lost(myMatchup.player1.id, true);
+                      const p2Out = lost(myMatchup.player2.id, false);
+                      const alive = (userId: number, out: Set<number>) =>
+                        week.deck_selections.filter(
+                          (ds) =>
+                            ds.user_id === userId &&
+                            ds.deck?.db_id != null &&
+                            !out.has(ds.deck.db_id),
+                        );
+                      const p1Alive = alive(myMatchup.player1.id, p1Out);
+                      const p2Alive = alive(myMatchup.player2.id, p2Out);
+                      return (
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                          <FormControl size="small" sx={{ flex: 1 }}>
+                            <InputLabel>{myMatchup.player1.name}&apos;s Deck</InputLabel>
+                            <Select
+                              value={p1DeckFor(myMatchup.id)}
+                              label={`${myMatchup.player1.name}'s Deck`}
+                              onChange={(e) =>
+                                setReportP1DeckById((prev) => ({ ...prev, [myMatchup.id]: e.target.value as number }))
+                              }
+                            >
+                              {p1Alive.map((ds) => (
+                                <MenuItem key={ds.id} value={ds.deck!.db_id!}>
+                                  {ds.deck?.name || 'Unknown'}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <FormControl size="small" sx={{ flex: 1 }}>
+                            <InputLabel>{myMatchup.player2.name}&apos;s Deck</InputLabel>
+                            <Select
+                              value={p2DeckFor(myMatchup.id)}
+                              label={`${myMatchup.player2.name}'s Deck`}
+                              onChange={(e) =>
+                                setReportP2DeckById((prev) => ({ ...prev, [myMatchup.id]: e.target.value as number }))
+                              }
+                            >
+                              {p2Alive.map((ds) => (
+                                <MenuItem key={ds.id} value={ds.deck!.db_id!}>
+                                  {ds.deck?.name || 'Unknown'}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Box>
+                      );
+                    })()}
                     {week.format_type === 'triad' && (() => {
                       const strickenSelIds = new Set(myMatchup.strikes.map((s) => s.struck_deck_selection_id));
                       const p1Sels = week.deck_selections.filter(

@@ -13,6 +13,7 @@ export const DECK_SLOTS_BY_FORMAT: Record<string, number> = {
   adaptive_short: 2,
   exchange: 2,
   nordic_hexad: 6,
+  sealed_survival: 2,
 };
 
 export function deckSlotsForFormat(formatType: string): number {

@@ -45,7 +45,13 @@ const NEEDS_START = new Set([
  * the endpoint requires and these controls do not collect. Mirrors the
  * per-format checks in the reporting endpoint.
  */
-const NEEDS_DECK_PER_GAME = new Set(['triad', 'exchange', 'nordic_hexad', 'moirai']);
+const NEEDS_DECK_PER_GAME = new Set([
+  'triad',
+  'exchange',
+  'nordic_hexad',
+  'moirai',
+  'sealed_survival',
+]);
 
 interface Props {
   leagueId: number;
