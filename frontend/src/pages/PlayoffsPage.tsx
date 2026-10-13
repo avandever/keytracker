@@ -19,6 +19,7 @@ import {
   DialogTitle,
   FormControl,
   FormControlLabel,
+  FormHelperText,
   IconButton,
   InputLabel,
   MenuItem,
@@ -315,6 +316,8 @@ function PlayoffSetupPanel({
   const [openingRound, setOpeningRound] = useState<number | null>(null);
   const [deckDeadline, setDeckDeadline] = useState('');
   const [matchDeadline, setMatchDeadline] = useState('');
+  // '' opens every bracket; a bracket id opens that one alone.
+  const [openingBracket, setOpeningBracket] = useState<number | ''>('');
   const [advancing, setAdvancing] = useState(setup.config.teams_advancing);
   const [points, setPoints] = useState(setup.config.points_per_round.join(', '));
   const [consolation, setConsolation] = useState(setup.config.consolation_enabled);
@@ -459,6 +462,7 @@ function PlayoffSetupPanel({
                   onClick={() => {
                     setDeckDeadline('');
                     setMatchDeadline('');
+                    setOpeningBracket('');
                     setOpeningRound(n);
                   }}
                 >
@@ -492,9 +496,32 @@ function PlayoffSetupPanel({
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
           <Typography variant="body2" color="text.secondary">
             A bracket runs for the whole playoffs, so its deadlines belong to the round
-            rather than to it. These apply to every bracket in this round, and can be
-            moved by opening the round again. Leave them blank for none.
+            rather than to it. They can be moved by opening the round again. Leave them
+            blank for none.
           </Typography>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Brackets</InputLabel>
+            <Select
+              label="Brackets"
+              value={openingBracket}
+              onChange={(e) => setOpeningBracket(e.target.value as number | '')}
+            >
+              <MenuItem value="">Every bracket</MenuItem>
+              {(tree?.brackets || []).map((b) => {
+                const at = Math.max(0, ...(b.weeks || []).map((w) => w.round_number || 0));
+                return (
+                  <MenuItem key={b.id} value={b.id}>
+                    {b.name || `Bracket ${b.bracket_number}`}
+                    {at ? ` — on round ${at}` : ' — not started'}
+                  </MenuItem>
+                );
+              })}
+            </Select>
+            <FormHelperText>
+              One bracket at a time when it is ready ahead of the others; a bracket that
+              is behind is left alone rather than blocking the rest.
+            </FormHelperText>
+          </FormControl>
           <TextField
             label="Deck submission deadline"
             type="datetime-local"
@@ -523,8 +550,11 @@ function PlayoffSetupPanel({
                 () => startPlayoffRound(leagueId, n, {
                   deck_submission_deadline: localInputToIso(deckDeadline),
                   match_completion_deadline: localInputToIso(matchDeadline),
+                  ...(openingBracket === '' ? {} : { bracket_id: openingBracket }),
                 }),
-                `Round ${n} opened.`,
+                openingBracket === ''
+                  ? `Round ${n} opened.`
+                  : `Round ${n} opened for that bracket.`,
               );
             }}
           >

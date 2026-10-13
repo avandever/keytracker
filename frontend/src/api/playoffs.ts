@@ -174,6 +174,8 @@ export async function startPlayoffRound(
   deadlines?: {
     deck_submission_deadline?: string | null;
     match_completion_deadline?: string | null;
+    /** Open this bracket alone, rather than every bracket in the round. */
+    bracket_id?: number;
   },
 ): Promise<PlayoffTree> {
   const { data } = await apiClient.post(

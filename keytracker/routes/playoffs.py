@@ -873,6 +873,12 @@ def start_playoff_round(league_id, round_number):
     Each bracket is its own format with its own constraints, which is what a
     week already is, so a round is one week per bracket. They are kept out of
     the ordinary week list and shown as brackets instead.
+
+    With `bracket_id`, only that bracket opens. Brackets already advance on
+    their own -- a match is decided when its own games are -- and some take
+    longer to play than others, so one that is ready should not have to wait
+    on the slowest. Without it, every bracket opens together, which is the
+    normal case.
     """
     league, err = _get_league_or_404(league_id)
     if err:
@@ -905,6 +911,11 @@ def start_playoff_round(league_id, round_number):
         )
 
     brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
+    only_bracket_id = data.get("bracket_id")
+    if only_bracket_id is not None:
+        brackets = [b for b in brackets if b.id == only_bracket_id]
+        if not brackets:
+            return jsonify({"error": "Bracket not found in this league"}), 404
 
     if round_number > 1:
         waiting = []
@@ -995,9 +1006,15 @@ def start_playoff_round(league_id, round_number):
             match.player_matchup_id = pm.id
             created_matches += 1
 
+    scope = (
+        f" for {brackets[0].name or f'bracket {brackets[0].bracket_number}'}"
+        if only_bracket_id is not None
+        else ""
+    )
     _log_admin_action(
         league.id, None, effective.id, "playoff_round_started",
-        f"round {round_number}: {created_weeks} week(s), {created_matches} match(es)",
+        f"round {round_number}{scope}: {created_weeks} week(s), "
+        f"{created_matches} match(es)",
     )
     db.session.commit()
     db.session.refresh(league)
