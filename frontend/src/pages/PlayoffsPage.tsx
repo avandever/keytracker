@@ -688,8 +688,6 @@ const EMPTY_BRACKET: BracketRow = {
 const NON_BRACKET_FORMATS = ['sas_ladder', 'team_sealed', 'team_sealed_alliance', 'thief'];
 
 /** Bracket formats whose decks are dealt from a pool rather than brought. */
-const SEALED_FORMATS = ['sealed_archon', 'sealed_alliance'];
-
 /** Formats dealt a pool, where decks per player sizes the pool rather than
  *  the hand: how many each player then keeps is fixed by the format. */
 const POOL_FORMATS: Record<string, number> = {
@@ -697,6 +695,12 @@ const POOL_FORMATS: Record<string, number> = {
   sealed_alliance: 3,
   sealed_survival: 2,
 };
+
+/** The same formats, as the sealed pool panel needs them: a bracket week in
+ *  any of these has a pool to deal. Read off POOL_FORMATS rather than listed
+ *  again -- the two had already drifted, and a sealed format missing here is
+ *  invisible, since the panel just does not offer the week a button. */
+const SEALED_FORMATS = Object.keys(POOL_FORMATS);
 
 /** Formats played with alliance decks, which a restricted list applies to. */
 function isAllianceFormat(formatType: string): boolean {
