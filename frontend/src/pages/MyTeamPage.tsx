@@ -1144,9 +1144,13 @@ export default function MyTeamPage() {
             <Chip label={week.status.replace('_', ' ')} size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
             <WeekConstraints week={week} sets={sets} />
 
-            {/* What the captain still has to chase, gathered in one place. */}
-            {(isCaptain || league.is_admin) && week.detail_loaded !== false && (
-              <CaptainHud week={week} myTeam={myTeam} members={membersForWeek(week)} />
+            {/* What the captain still has to chase, gathered in one place.
+                A bracket week is left out: its round shows one summary for
+                every bracket in it rather than the same card eleven times. */}
+            {(isCaptain || league.is_admin)
+              && week.detail_loaded !== false
+              && week.playoff_bracket_id == null && (
+              <CaptainHud weeks={[week]} myTeam={myTeam} membersFor={membersForWeek} />
             )}
           </Box>
           {(() => {
@@ -2574,14 +2578,23 @@ export default function MyTeamPage() {
         />
       )}
 
-      {weekTab >= firstPlayoffRoundIdx && weekTab < lastPlayoffRoundIdx && (
-        <>
-          {weeks
-            .filter((w) => w.playoff_round === playoffRounds[weekTab - firstPlayoffRoundIdx])
-            .sort((a, b) => (a.playoff_bracket_number || 0) - (b.playoff_bracket_number || 0))
-            .map((w) => <Box key={w.id}>{renderWeekContent(w)}</Box>)}
-        </>
-      )}
+      {weekTab >= firstPlayoffRoundIdx && weekTab < lastPlayoffRoundIdx && (() => {
+        const roundWeeks = weeks
+          .filter((w) => w.playoff_round === playoffRounds[weekTab - firstPlayoffRoundIdx])
+          .sort((a, b) => (a.playoff_bracket_number || 0) - (b.playoff_bracket_number || 0));
+        return (
+          <>
+            {(isCaptain || league.is_admin) && roundWeeks.length > 0 && (
+              <CaptainHud
+                weeks={roundWeeks.filter((w) => w.detail_loaded !== false)}
+                myTeam={myTeam}
+                membersFor={membersForWeek}
+              />
+            )}
+            {roundWeeks.map((w) => <Box key={w.id}>{renderWeekContent(w)}</Box>)}
+          </>
+        );
+      })()}
 
       {weekTab === outstandingTabIdx && isCaptain && (
         <OutstandingMatchesTab
