@@ -127,15 +127,26 @@ function playoffRoundNumbers(weeks: LeagueWeek[]): number[] {
 /** Tab slugs, in render order, so ?tab= can name a tab instead of counting them. */
 function myTeamTabKeys(league: LeagueDetail, playoffsTab: boolean): string[] {
   const weeks = league.weeks || [];
+  const regular = sortWeeksForTabs(weeks.filter((w) => w.playoff_round == null)).map(
+    (w) => `week-${w.week_number}`,
+  );
+  // A round is one week per bracket, so it gets a tab holding all of them
+  // rather than a tab each.
+  const playoff = [
+    ...(playoffsTab ? ['playoffs'] : []),
+    ...playoffRoundNumbers(weeks).map((n) => `playoff-round-${n}`),
+  ];
+  // Once a round is open, the playoffs are what the team is actually playing
+  // and the season behind them is finished. Thirteen week tabs is already
+  // more than fits, so leaving the live round off the end of a scroll is no
+  // good. Before a round opens they stay on the right, where a bracket that
+  // has only been published belongs.
+  const playoffsLead = playoffRoundNumbers(weeks).length > 0;
   return [
     'membership',
-    ...sortWeeksForTabs(weeks.filter((w) => w.playoff_round == null)).map(
-      (w) => `week-${w.week_number}`,
-    ),
-    ...(playoffsTab ? ['playoffs'] : []),
-    // A round is one week per bracket, so it gets a tab holding all of them
-    // rather than a tab each.
-    ...playoffRoundNumbers(weeks).map((n) => `playoff-round-${n}`),
+    ...(playoffsLead ? playoff : []),
+    ...regular,
+    ...(playoffsLead ? [] : playoff),
     'log',
     ...(league.is_captain ? ['outstanding'] : []),
   ];
@@ -354,10 +365,30 @@ export default function MyTeamPage() {
   const regularWeeks = sortWeeksForTabs(weeks.filter((w) => w.playoff_round == null));
   const playoffRounds = playoffRoundNumbers(weeks);
   const playoffsTabShown = Boolean(playoffSetup?.config.published_at && league.my_team_id);
-  const playoffsTabIdx = playoffsTabShown ? regularWeeks.length + 1 : -1;
-  const firstPlayoffRoundIdx = regularWeeks.length + 1 + (playoffsTabShown ? 1 : 0);
-  const logTabIdx = firstPlayoffRoundIdx + playoffRounds.length;
+  // Membership is always 0. After it come the playoffs or the season,
+  // depending on whether a round is open; see myTeamTabKeys.
+  const playoffsLead = playoffRounds.length > 0;
+  const playoffBlock = (playoffsTabShown ? 1 : 0) + playoffRounds.length;
+  const playoffStart = playoffsLead ? 1 : regularWeeks.length + 1;
+  const regularStart = playoffsLead ? 1 + playoffBlock : 1;
+  const playoffsTabIdx = playoffsTabShown ? playoffStart : -1;
+  const firstPlayoffRoundIdx = playoffStart + (playoffsTabShown ? 1 : 0);
+  const lastPlayoffRoundIdx = firstPlayoffRoundIdx + playoffRounds.length;
+  const logTabIdx = 1 + regularWeeks.length + playoffBlock;
   const outstandingTabIdx = logTabIdx + 1;
+
+  const playoffTabs = [
+    ...(playoffsTabShown
+      ? [<Tab key="playoffs" value={playoffsTabIdx} label="Playoffs" />]
+      : []),
+    ...playoffRounds.map((n, i) => (
+      <Tab
+        key={`playoff-round-${n}`}
+        value={firstPlayoffRoundIdx + i}
+        label={`Playoff round ${n}`}
+      />
+    )),
+  ];
 
   const handleOpenLogTab = () => {
     if (deckEntryLog === null && !deckEntryLogLoading) {
@@ -2406,10 +2437,11 @@ export default function MyTeamPage() {
         scrollButtons="auto"
       >
         <Tab label="Membership" />
+        {playoffsLead && playoffTabs}
         {regularWeeks.map((w, i) => (
           <Tab
             key={w.id}
-            value={i + 1}
+            value={regularStart + i}
             label={
               w.name ? (
                 <Box sx={{ textAlign: 'center', lineHeight: 1.2 }}>
@@ -2420,10 +2452,7 @@ export default function MyTeamPage() {
             }
           />
         ))}
-        {playoffsTabShown && <Tab value={playoffsTabIdx} label="Playoffs" />}
-        {playoffRounds.map((n, i) => (
-          <Tab key={`playoff-round-${n}`} value={firstPlayoffRoundIdx + i} label={`Playoff round ${n}`} />
-        ))}
+        {!playoffsLead && playoffTabs}
         <Tab value={logTabIdx} label="Log" />
         {isCaptain && <Tab value={outstandingTabIdx} label="Outstanding Matches" />}
       </Tabs>
@@ -2529,8 +2558,10 @@ export default function MyTeamPage() {
         </>
       )}
 
-      {weekTab > 0 && weekTab <= regularWeeks.length && regularWeeks[weekTab - 1]
-        && renderWeekContent(regularWeeks[weekTab - 1])}
+      {weekTab >= regularStart
+        && weekTab < regularStart + regularWeeks.length
+        && regularWeeks[weekTab - regularStart]
+        && renderWeekContent(regularWeeks[weekTab - regularStart])}
 
       {playoffsTabShown && weekTab === playoffsTabIdx && playoffSetup && (
         <PlayoffAssignmentsTab
@@ -2543,7 +2574,7 @@ export default function MyTeamPage() {
         />
       )}
 
-      {weekTab >= firstPlayoffRoundIdx && weekTab < logTabIdx && (
+      {weekTab >= firstPlayoffRoundIdx && weekTab < lastPlayoffRoundIdx && (
         <>
           {weeks
             .filter((w) => w.playoff_round === playoffRounds[weekTab - firstPlayoffRoundIdx])
