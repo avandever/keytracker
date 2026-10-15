@@ -445,14 +445,19 @@ with app.app_context():
             columns = {
                 c["name"] for c in inspector.get_columns("tracker_playoff_config")
             }
+            config_columns = [
+                ("published_at", "DATETIME NULL"),
+                ("assignments_published_at", "DATETIME NULL"),
+            ]
             with db.engine.begin() as conn:
-                if "published_at" not in columns:
-                    conn.execute(
-                        text(
-                            "ALTER TABLE tracker_playoff_config "
-                            "ADD COLUMN published_at DATETIME NULL"
+                for name, ddl in config_columns:
+                    if name not in columns:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE tracker_playoff_config "
+                                f"ADD COLUMN {name} {ddl}"
+                            )
                         )
-                    )
         if inspector.has_table("tertiate_house_purge"):
             columns = {
                 c["name"] for c in inspector.get_columns("tertiate_house_purge")

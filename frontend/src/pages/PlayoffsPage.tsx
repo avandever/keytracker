@@ -47,6 +47,7 @@ import {
   getPlayoffSetup,
   getPlayoffStandings,
   getPlayoffTree,
+  publishPlayoffAssignments,
   publishPlayoffs,
   setPlayoffBrackets,
   setPlayoffQualifiers,
@@ -312,6 +313,10 @@ function PlayoffSetupPanel({
 }) {
   const drawn = Boolean(setup.config.drawn_at);
   const published = Boolean(setup.config.published_at);
+  const assignmentsPublished = Boolean(setup.config.assignments_published_at);
+  const progress = setup.assignment_progress || [];
+  const allAssigned =
+    progress.length > 0 && progress.every((row) => row.total > 0 && row.assigned >= row.total);
   // Which round the deadline dialog is for, if it is open.
   const [openingRound, setOpeningRound] = useState<number | null>(null);
   const [deckDeadline, setDeckDeadline] = useState('');
@@ -434,6 +439,60 @@ function PlayoffSetupPanel({
       )}
 
       {setup.is_admin && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Bracket assignments</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              How far each team has got. Who they picked stays private — from you as well,
+              since an admin is usually a captain too — until you publish it here, so that
+              nobody is choosing against an opponent they can already see.
+            </Typography>
+            {progress.length === 0 ? (
+              <Typography color="text.secondary">
+                Nothing to show until the qualifying teams are saved.
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+                {progress.map((row) => (
+                  <Chip
+                    key={row.team_id}
+                    label={`${row.team_name || row.team_id} ${row.assigned}/${row.total}`}
+                    color={row.total > 0 && row.assigned >= row.total ? 'success' : 'default'}
+                    variant={row.assigned > 0 ? 'filled' : 'outlined'}
+                  />
+                ))}
+              </Box>
+            )}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Button
+                variant={assignmentsPublished ? 'outlined' : 'contained'}
+                disabled={!published || (!assignmentsPublished && !allAssigned)}
+                onClick={() =>
+                  onAct(
+                    () => publishPlayoffAssignments(leagueId, !assignmentsPublished),
+                    assignmentsPublished
+                      ? 'Assignments hidden again.'
+                      : 'Assignments shown to every team.',
+                  )
+                }
+              >
+                {assignmentsPublished
+                  ? 'Hide the assignments again'
+                  : 'Publish bracket assignments'}
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                {assignmentsPublished
+                  ? 'Every team can see who is in every bracket.'
+                  : allAssigned
+                    ? 'Every bracket is filled, so this is ready.'
+                    : 'Available once every team has filled every bracket.'}
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {setup.is_admin && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Running the playoffs</Typography>
@@ -473,8 +532,11 @@ function PlayoffSetupPanel({
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
               Publishing shows the brackets to the teams and opens the Playoffs tab on My
               Team, where captains put a player in each bracket.
-              Opening a round creates a week per bracket and its matches. A later round will not
-              open until every result before it is reported and verified.
+              Opening a round creates a week per bracket and its matches. A match names its
+              two players, so until the assignments are published the weeks open without
+              their matches — enough for a sealed pool to be dealt — and opening the round
+              again once the assignments are out fills the matches in. A later round will
+              not open until every result before it is reported and verified.
             </Typography>
           </CardContent>
         </Card>

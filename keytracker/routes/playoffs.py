@@ -129,12 +129,26 @@ def _serialize_config(league, config):
         "drawn_at": (
             config.drawn_at.isoformat() + "Z" if config and config.drawn_at else None
         ),
+        "assignments_published_at": (
+            config.assignments_published_at.isoformat() + "Z"
+            if config and config.assignments_published_at
+            else None
+        ),
         # One bracket per player on a team, so this is how many there should be.
         "expected_brackets": league.team_size,
     }
 
 
-def _serialize_bracket(bracket):
+def _serialize_bracket(bracket, my_team_id=None, reveal=False):
+    """One bracket, carrying only the assignments this viewer may see.
+
+    Who a team puts in a bracket is that team's own business until an admin
+    publishes the assignments. A captain able to read the other teams would be
+    choosing against a known opponent rather than blind, which is most of the
+    point of choosing at all. Admins are no exception -- an admin here is
+    usually also a captain, and the per-team counts are enough to chase
+    whoever has not finished.
+    """
     constraints = {}
     for field in _BRACKET_CONSTRAINT_FIELDS:
         value = getattr(bracket, field, None)
@@ -151,6 +165,7 @@ def _serialize_bracket(bracket):
         "format_type": bracket.format_type,
         "best_of_n": bracket.best_of_n,
         **constraints,
+        "assignments_revealed": bool(reveal),
         "assignments": [
             {
                 "id": a.id,
@@ -159,12 +174,66 @@ def _serialize_bracket(bracket):
                 "user_name": a.user.name if a.user else None,
             }
             for a in sorted(bracket.assignments, key=lambda a: a.team_id)
+            if reveal or a.team_id == my_team_id
         ],
     }
 
 
 def _is_captain_of(team, user_id):
     return any(m.user_id == user_id and m.is_captain for m in team.members)
+
+
+def _viewer_membership(league, viewer):
+    """The viewer's team in this league, and whether they captain it."""
+    if viewer is None or getattr(viewer, "id", None) is None:
+        return None, False
+    member = (
+        TeamMember.query.join(Team)
+        .filter(Team.league_id == league.id, TeamMember.user_id == viewer.id)
+        .first()
+    )
+    if member is None:
+        return None, False
+    return member.team_id, bool(member.is_captain)
+
+
+def _assignments_revealed(config):
+    return config is not None and config.assignments_published_at is not None
+
+
+def _missing_assignments(league, brackets, qualifier_ids):
+    """Which team is still missing from which bracket."""
+    missing = []
+    for bracket in brackets:
+        assigned = {a.team_id for a in bracket.assignments}
+        label = bracket.name or f"bracket {bracket.bracket_number}"
+        for team_id in qualifier_ids:
+            if team_id not in assigned:
+                team = db.session.get(Team, team_id)
+                missing.append(f"{team.name if team else team_id} in {label}")
+    return missing
+
+
+def _assignment_progress(league, brackets):
+    """How far each qualifying team has got, without saying who they picked.
+
+    This is what an admin chases the stragglers with, so it stays readable
+    while the assignments themselves are still private.
+    """
+    names = {t.id: t.name for t in league.teams}
+    counts = {}
+    for bracket in brackets:
+        for assignment in bracket.assignments:
+            counts[assignment.team_id] = counts.get(assignment.team_id, 0) + 1
+    return [
+        {
+            "team_id": q.team_id,
+            "team_name": names.get(q.team_id),
+            "assigned": counts.get(q.team_id, 0),
+            "total": len(brackets),
+        }
+        for q in sorted(league.playoff_qualifiers, key=lambda q: q.position)
+    ]
 
 
 @blueprint.route("/<int:league_id>/playoffs", methods=["GET"])
@@ -183,23 +252,17 @@ def get_playoffs(league_id):
     viewer = get_effective_user()
     if getattr(viewer, "id", None) is None:
         viewer = None
-    my_team_id = None
-    is_captain = False
-    if viewer is not None:
-        member = (
-            TeamMember.query.join(Team)
-            .filter(Team.league_id == league.id, TeamMember.user_id == viewer.id)
-            .first()
-        )
-        if member:
-            my_team_id = member.team_id
-            is_captain = bool(member.is_captain)
+    my_team_id, is_captain = _viewer_membership(league, viewer)
+    reveal = _assignments_revealed(config)
 
     return jsonify(
         {
             "league_id": league.id,
             "config": _serialize_config(league, config),
-            "brackets": [_serialize_bracket(b) for b in brackets],
+            "brackets": [
+                _serialize_bracket(b, my_team_id, reveal) for b in brackets
+            ],
+            "assignment_progress": _assignment_progress(league, brackets),
             "qualifiers": [
                 {
                     "team_id": q.team_id,
@@ -521,7 +584,63 @@ def set_playoff_assignments(league_id):
     db.session.commit()
     db.session.refresh(league)
     ordered = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
-    return jsonify({"brackets": [_serialize_bracket(b) for b in ordered]})
+    reveal = _assignments_revealed(config)
+    return jsonify(
+        {"brackets": [_serialize_bracket(b, team.id, reveal) for b in ordered]}
+    )
+
+
+@blueprint.route("/<int:league_id>/playoffs/assignments/publish", methods=["POST"])
+@login_required
+def publish_playoff_assignments(league_id):
+    """Reveal who every team put in every bracket, or take that back.
+
+    Nothing is revealed until an admin says so, and not until every bracket is
+    filled: publishing half of it would hand whoever is left a free look at
+    the opposition they are still choosing against.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if not _is_league_admin(league, effective):
+        return jsonify({"error": "Admin access required"}), 403
+    config = _config_for(league, create=True)
+
+    data = request.get_json(silent=True) or {}
+    publish = data.get("published", True)
+    if publish:
+        brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
+        qualifier_ids = [q.team_id for q in league.playoff_qualifiers]
+        if not brackets or not qualifier_ids:
+            return jsonify({"error": "Set the brackets and the qualifiers first"}), 400
+        missing = _missing_assignments(league, brackets, qualifier_ids)
+        if missing:
+            return (
+                jsonify(
+                    {
+                        "error": "Every team needs a player in every bracket before "
+                        "the assignments can be shown. Missing: "
+                        + ", ".join(missing[:8])
+                        + ("..." if len(missing) > 8 else ""),
+                        "missing_count": len(missing),
+                    }
+                ),
+                400,
+            )
+        config.assignments_published_at = datetime.datetime.utcnow()
+    else:
+        config.assignments_published_at = None
+    _log_admin_action(
+        league.id,
+        None,
+        effective.id,
+        "playoff_assignments_published" if publish else "playoff_assignments_hidden",
+        "shown to every team" if publish else "hidden again",
+    )
+    db.session.commit()
+    db.session.refresh(league)
+    return jsonify(_serialize_config(league, config))
 
 
 def _serialize_match(match):
@@ -722,11 +841,12 @@ def draw_playoffs(league_id):
     )
     db.session.commit()
     db.session.refresh(league)
-    return jsonify(_bracket_tree(league))
+    my_team_id, _ = _viewer_membership(league, effective)
+    return jsonify(_bracket_tree(league, my_team_id, _assignments_revealed(config)))
 
 
-def _bracket_tree(league):
-    """The drawn brackets, round by round."""
+def _bracket_tree(league, my_team_id=None, reveal=False):
+    """The drawn brackets, round by round, as this viewer may see them."""
     brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
     # The week each bracket plays in each round. The admin week list leaves
     # playoff weeks out, so anything an admin does to one -- generating a
@@ -747,7 +867,7 @@ def _bracket_tree(league):
         ),
         "brackets": [
             {
-                **_serialize_bracket(bracket),
+                **_serialize_bracket(bracket, my_team_id, reveal),
                 "weeks": [
                     {
                         "id": week.id,
@@ -781,7 +901,13 @@ def get_bracket_tree(league_id):
     league, err = _get_league_or_404(league_id)
     if err:
         return err
-    return jsonify(_bracket_tree(league))
+    viewer = get_effective_user()
+    if getattr(viewer, "id", None) is None:
+        viewer = None
+    my_team_id, _ = _viewer_membership(league, viewer)
+    return jsonify(
+        _bracket_tree(league, my_team_id, _assignments_revealed(_config_for(league)))
+    )
 
 
 def _match_winner_team_id(match):
@@ -944,7 +1070,8 @@ def start_playoff_round(league_id, round_number):
     # week_number is unique per league, so each bracket-week takes the next
     # one rather than sharing a number with the rest of its round.
     next_number = max([w.week_number for w in league.weeks] or [0]) + 1
-    created_weeks, created_matches = 0, 0
+    created_weeks, created_matches, deferred_matches = 0, 0, 0
+    reveal_assignments = _assignments_revealed(config)
     for bracket in brackets:
         week = next(
             (
@@ -993,6 +1120,12 @@ def start_playoff_round(league_id, round_number):
             player2 = _player_for(bracket, match.team2_id)
             if not player1 or not player2:
                 continue
+            # A matchup names its two players, so creating one would give the
+            # assignments away. Until they are published the week opens without
+            # its matches, which is enough for a pool to be dealt and studied.
+            if not reveal_assignments:
+                deferred_matches += 1
+                continue
             wm = WeekMatchup(
                 week_id=week.id, team1_id=match.team1_id, team2_id=match.team2_id
             )
@@ -1018,10 +1151,12 @@ def start_playoff_round(league_id, round_number):
     )
     db.session.commit()
     db.session.refresh(league)
-    tree = _bracket_tree(league)
+    my_team_id, _ = _viewer_membership(league, effective)
+    tree = _bracket_tree(league, my_team_id, reveal_assignments)
     tree["started_round"] = round_number
     tree["weeks_created"] = created_weeks
     tree["matches_created"] = created_matches
+    tree["matches_deferred"] = deferred_matches
     return jsonify(tree)
 
 

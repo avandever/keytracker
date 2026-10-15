@@ -33,7 +33,10 @@ export interface PlayoffBracketInfo extends PlayoffBracketConstraints {
   name: string | null;
   format_type: string;
   best_of_n: number;
+  /** Only the viewer's own team until an admin publishes the assignments. */
   assignments: { id: number; team_id: number; user_id: number; user_name: string | null }[];
+  /** False while the list above is scoped to the viewer's own team. */
+  assignments_revealed?: boolean;
   matches?: PlayoffMatchInfo[];
   /** The week this bracket plays in each round, once the round is open. */
   weeks?: PlayoffBracketWeek[];
@@ -71,6 +74,8 @@ export interface PlayoffConfigInfo {
    *  captains fill their brackets on My Team. */
   published_at: string | null;
   drawn_at: string | null;
+  /** Set when the admin reveals who each team put in each bracket. */
+  assignments_published_at: string | null;
   /** One bracket per player on a team. */
   expected_brackets: number;
 }
@@ -83,6 +88,16 @@ export interface PlayoffSetup {
   is_admin: boolean;
   my_team_id: number | null;
   is_captain: boolean;
+  /** How far each qualifying team has got, saying nothing about who. */
+  assignment_progress: PlayoffAssignmentProgress[];
+}
+
+/** One team's progress through the brackets, with no names in it. */
+export interface PlayoffAssignmentProgress {
+  team_id: number;
+  team_name: string | null;
+  assigned: number;
+  total: number;
 }
 
 export interface PlayoffTree {
@@ -91,6 +106,8 @@ export interface PlayoffTree {
   drawn_at: string | null;
   brackets: PlayoffBracketInfo[];
   started_round?: number;
+  /** Matches left unmade because the assignments are not published yet. */
+  matches_deferred?: number;
 }
 
 export async function getPlayoffSetup(leagueId: number): Promise<PlayoffSetup> {
@@ -113,6 +130,24 @@ export async function publishPlayoffs(
   const { data } = await apiClient.post(`/leagues/${leagueId}/playoffs/publish`, {
     published,
   });
+  return data;
+}
+
+/**
+ * Reveal who each team put in each bracket, or take the reveal back.
+ *
+ * Separate from publishing the setup: that one lets captains assign, this one
+ * shows everybody what they assigned, and it is refused until every bracket is
+ * filled so that nobody picks against an opponent they can already see.
+ */
+export async function publishPlayoffAssignments(
+  leagueId: number,
+  published = true,
+): Promise<PlayoffConfigInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/playoffs/assignments/publish`,
+    { published },
+  );
   return data;
 }
 

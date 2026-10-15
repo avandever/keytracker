@@ -1776,6 +1776,9 @@ class PlayoffConfig(db.Model):
     # Set once the draw has been made, after which brackets and assignments
     # are fixed.
     drawn_at = db.Column(db.DateTime, nullable=True)
+    # Set when the admin reveals who each team put in each bracket. Until then
+    # a team sees its own assignments and nobody else's.
+    assignments_published_at = db.Column(db.DateTime, nullable=True)
 
     league = db.relationship("League", backref=db.backref("playoff_config", uselist=False))
 
