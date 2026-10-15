@@ -30,6 +30,8 @@ from keytracker.routes.leagues import (
     get_effective_user,
 )
 from keytracker.schema import (
+    SEALED_WEEK_FORMATS,
+    DeckSuggestion,
     LeagueWeek,
     PlayerMatchup,
     PlayoffAssignment,
@@ -1029,6 +1031,56 @@ def _resolve_round(bracket, round_number, total_rounds, consolation_enabled):
     return pending
 
 
+def _carry_suggestions_forward(league, bracket, week, round_number):
+    """Copy a bracket's deck suggestions from the round before into this one.
+
+    A bracket runs for the whole playoffs: the same team, the same format, the
+    same player, and the same decks to choose between. A team that shortlisted
+    decks for round one is still talking about that shortlist in round two and
+    should not have to type it in again.
+
+    They are copied rather than read through, so round two's list is its own:
+    a team can drop what it has already used without reaching back into a
+    finished round. Whoever suggested a deck stays credited with it, and a
+    deck actually played in round one still shows as spent, since conflicts
+    are worked out per week when the week is read.
+
+    Sealed brackets are left out. Their pool is dealt fresh each round, so
+    last round's decks are not among the ones that can be picked.
+    """
+    if week.format_type in SEALED_WEEK_FORMATS:
+        return 0
+    previous = LeagueWeek.query.filter_by(
+        league_id=league.id,
+        playoff_bracket_id=bracket.id,
+        playoff_round=round_number - 1,
+    ).first()
+    if previous is None:
+        return 0
+
+    # Unique on (week, team, deck), so anything already here is left alone.
+    seen = {
+        (s.team_id, s.deck_id)
+        for s in DeckSuggestion.query.filter_by(week_id=week.id).all()
+    }
+    carried = 0
+    for suggestion in DeckSuggestion.query.filter_by(week_id=previous.id).all():
+        key = (suggestion.team_id, suggestion.deck_id)
+        if key in seen:
+            continue
+        db.session.add(
+            DeckSuggestion(
+                week_id=week.id,
+                team_id=suggestion.team_id,
+                suggesting_user_id=suggestion.suggesting_user_id,
+                deck_id=suggestion.deck_id,
+            )
+        )
+        seen.add(key)
+        carried += 1
+    return carried
+
+
 def _player_for(bracket, team_id):
     assignment = next(
         (a for a in bracket.assignments if a.team_id == team_id), None
@@ -1116,6 +1168,7 @@ def start_playoff_round(league_id, round_number):
     # one rather than sharing a number with the rest of its round.
     next_number = max([w.week_number for w in league.weeks] or [0]) + 1
     created_weeks, created_matches, deferred_matches = 0, 0, 0
+    carried_suggestions = 0
     reveal_assignments = _assignments_revealed(config)
     for bracket in brackets:
         week = next(
@@ -1148,6 +1201,11 @@ def start_playoff_round(league_id, round_number):
             db.session.flush()
             next_number += 1
             created_weeks += 1
+            # Only on the round the week is made for. Opening a round again
+            # must not undo a team deliberately dropping a suggestion.
+            carried_suggestions += _carry_suggestions_forward(
+                league, bracket, week, round_number
+            )
         for field, value in deadlines.items():
             setattr(week, field, value)
 
@@ -1202,6 +1260,7 @@ def start_playoff_round(league_id, round_number):
     tree["weeks_created"] = created_weeks
     tree["matches_created"] = created_matches
     tree["matches_deferred"] = deferred_matches
+    tree["suggestions_carried"] = carried_suggestions
     return jsonify(tree)
 
 
