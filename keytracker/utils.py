@@ -1890,17 +1890,28 @@ def dump_page_json_to_file(
         params["ordering"] = "date"
     else:
         params["ordering"] = "-date"
-    response = mv_api.callMVSync(
-        MV_API_BASE,
-        params=params,
-    )
     finished = False
     while tries and not finished:
         tries -= 1
+        # Fetched inside the loop. Retrying response.json() on a response we
+        # already hold just re-reads the same bytes, so neither a bad body nor
+        # a throttling reply could ever come good however long we waited.
+        response = mv_api.callMVSync(
+            MV_API_BASE,
+            params=params,
+        )
         try:
             data = response.json()
-        except (json.decoder.JSONDecodeError, ContentTypeError):
-            current_app.logger.error(f"raw response: {response}")
+        except json.decoder.JSONDecodeError:
+            # requests raises its own JSONDecodeError, which subclasses this
+            # one. An aiohttp ContentTypeError was caught here as well until
+            # the async client went away and took the import with it, leaving
+            # this clause to raise NameError while handling the very error it
+            # exists to absorb -- so a stretch of HTML from MV became a crash.
+            current_app.logger.error(
+                f"MV gave {response.status_code} and not json: "
+                f"{response.text[:500]!r}"
+            )
             if tries:
                 time.sleep(random.choice(range(20, 40)))
                 continue
@@ -1956,17 +1967,28 @@ def get_decks_from_page_v2(
         params["ordering"] = "date"
     else:
         params["ordering"] = "-date"
-    response = mv_api.callMVSync(
-        MV_API_BASE,
-        params=params,
-    )
     finished = False
     while tries and not finished:
         tries -= 1
+        # Fetched inside the loop. Retrying response.json() on a response we
+        # already hold just re-reads the same bytes, so neither a bad body nor
+        # a throttling reply could ever come good however long we waited.
+        response = mv_api.callMVSync(
+            MV_API_BASE,
+            params=params,
+        )
         try:
             data = response.json()
-        except (json.decoder.JSONDecodeError, ContentTypeError):
-            current_app.logger.error(f"raw response: {response}")
+        except json.decoder.JSONDecodeError:
+            # requests raises its own JSONDecodeError, which subclasses this
+            # one. An aiohttp ContentTypeError was caught here as well until
+            # the async client went away and took the import with it, leaving
+            # this clause to raise NameError while handling the very error it
+            # exists to absorb -- so a stretch of HTML from MV became a crash.
+            current_app.logger.error(
+                f"MV gave {response.status_code} and not json: "
+                f"{response.text[:500]!r}"
+            )
             if tries:
                 time.sleep(random.choice(range(20, 40)))
                 continue
