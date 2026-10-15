@@ -66,6 +66,7 @@ import {
 import HouseIcons from '../components/HouseIcons';
 import WeekConstraints, { CombinedSas } from '../components/WeekConstraints';
 import CaptainHud from '../components/CaptainHud';
+import { POOL_FORMAT_TYPES } from '../utils/poolFormats';
 import TeamAmberBudgetPanel from '../components/TeamAmberBudgetPanel';
 import SpecialsPanel from '../components/SpecialsPanel';
 import OutstandingMatchesTab from '../components/OutstandingMatchesTab';
@@ -277,7 +278,7 @@ export default function MyTeamPage() {
 
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
 
-  // Fetch sealed pools for sealed_archon and sealed_alliance weeks
+  // Fetch the sealed pool for every week played out of one
   useEffect(() => {
     if (!league || !user) return;
     const myTeam = league.teams.find((t) => t.id === league.my_team_id);
@@ -285,7 +286,7 @@ export default function MyTeamPage() {
     const isCaptain = league.is_captain;
 
     const sealedWeeks = (league.weeks || []).filter(
-      (w) => ['sealed_archon', 'sealed_alliance'].includes(w.format_type) && w.sealed_pools_generated,
+      (w) => POOL_FORMAT_TYPES.includes(w.format_type) && w.sealed_pools_generated,
     );
     sealedWeeks.forEach((week) => {
       const members = isCaptain
@@ -594,7 +595,7 @@ export default function MyTeamPage() {
       );
     }
 
-    if (week.format_type === 'sealed_archon' || week.format_type === 'sealed_alliance') {
+    if (POOL_FORMAT_TYPES.includes(week.format_type)) {
       const poolKey = `${week.id}-${userId}`;
       const pool = sealedPools[poolKey];
       if (!pool) {
@@ -1497,8 +1498,8 @@ export default function MyTeamPage() {
                   );
                 })()}
 
-                {/* Sealed pool display (sealed_archon and sealed_alliance) */}
-                {(week.format_type === 'sealed_archon' || week.format_type === 'sealed_alliance') && (() => {
+                {/* The pool a player picks from, on any week dealt one */}
+                {POOL_FORMAT_TYPES.includes(week.format_type) && (() => {
                   const poolKey = `${week.id}-${m.user.id}`;
                   const pool = sealedPools[poolKey];
                   if (!pool || pool.length === 0) return null;
