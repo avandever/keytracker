@@ -57,6 +57,7 @@ from keytracker.schema import (
 )
 from keytracker.serializers import (
     _preload_league_graph,
+    bracket_player_id,
     serialize_league_summary,
     serialize_league_detail,
     serialize_league_week,
@@ -316,14 +317,7 @@ def _playoff_weeks_for_team(league, viewer, my_team_id):
         # asks eleven people for a deck in a match only one of them plays.
         # None while this team has not put anybody in the bracket yet; a team
         # only ever learns its own, which is all this needs.
-        week_data["playoff_team_user_id"] = (
-            next(
-                (a.user_id for a in bracket.assignments if a.team_id == my_team_id),
-                None,
-            )
-            if bracket
-            else None
-        )
+        week_data["playoff_team_user_id"] = bracket_player_id(week, my_team_id)
         scoped.append(week_data)
     return scoped
 

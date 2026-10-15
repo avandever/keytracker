@@ -564,6 +564,29 @@ def _required_card_usage(week: LeagueWeek, team_id) -> dict:
     return usage
 
 
+def bracket_player_id(week: LeagueWeek, team_id):
+    """The one player a team has in this week's bracket, if it is a bracket.
+
+    A playoff bracket is one player from each team, so everything a week
+    reports about "the team" is really about that player. None for an ordinary
+    week, and for a bracket this team has not filled yet.
+
+    Scoped to the team asked about, which is always the viewer's own, so this
+    gives nothing away about who a rival put in the bracket.
+    """
+    bracket_id = getattr(week, "playoff_bracket_id", None)
+    if bracket_id is None or not team_id:
+        return None
+    bracket = next(
+        (b for b in week.league.playoff_brackets if b.id == bracket_id), None
+    )
+    if bracket is None:
+        return None
+    return next(
+        (a.user_id for a in bracket.assignments if a.team_id == team_id), None
+    )
+
+
 def _team_amber_budget(week: LeagueWeek, team_id) -> dict:
     """Running total of a team's raw aember for a week that caps or floors it.
 
@@ -581,6 +604,13 @@ def _team_amber_budget(week: LeagueWeek, team_id) -> dict:
     if not team:
         return None
 
+    # On a bracket the cap belongs to the one player in it, not to eleven
+    # people who are not playing this match.
+    roster = team.members
+    if getattr(week, "playoff_bracket_id", None) is not None:
+        playing = bracket_player_id(week, team_id)
+        roster = [m for m in roster if m.user_id == playing]
+
     members = {
         m.user_id: {
             "user_id": m.user_id,
@@ -588,7 +618,7 @@ def _team_amber_budget(week: LeagueWeek, team_id) -> dict:
             "decks": [],
             "subtotal": 0,
         }
-        for m in team.members
+        for m in roster
     }
     claimed = 0
     unknown_decks = 0
