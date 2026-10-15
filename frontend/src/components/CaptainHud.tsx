@@ -6,6 +6,9 @@ import { formatDeadline, isPast } from '../utils/deadlines';
 interface Props {
   week: LeagueWeek;
   myTeam: TeamDetail;
+  /** Who from the team plays this week. Defaults to the whole roster, which
+   *  is every week except a playoff bracket, where one player plays. */
+  members?: TeamDetail['members'];
 }
 
 /** Formats where both players press Start before anything else can happen. */
@@ -28,17 +31,18 @@ const NEEDS_START = new Set([
  * rows, the matchup list and the Outstanding tab. A captain checking whether
  * their team is ready should not have to assemble it themselves.
  */
-export default function CaptainHud({ week, myTeam }: Props) {
+export default function CaptainHud({ week, myTeam, members }: Props) {
+  const playing = members ?? myTeam.members;
   const memberIds = new Set(myTeam.members.map((m) => m.user.id));
   const slots = deckSlotsForFormat(week.format_type);
 
   const selectionsFor = (userId: number) =>
     (week.deck_selections || []).filter((ds) => ds.user_id === userId).length;
-  const missingDecks = myTeam.members.filter((m) => selectionsFor(m.user.id) < slots);
+  const missingDecks = playing.filter((m) => selectionsFor(m.user.id) < slots);
   // Counted per slot, not per player: in a two-deck format someone who has
   // entered one of their two is half done, not nothing.
-  const decksExpected = myTeam.members.length * slots;
-  const decksIn = myTeam.members.reduce(
+  const decksExpected = playing.length * slots;
+  const decksIn = playing.reduce(
     (total, m) => total + Math.min(selectionsFor(m.user.id), slots),
     0,
   );

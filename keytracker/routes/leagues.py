@@ -311,6 +311,19 @@ def _playoff_weeks_for_team(league, viewer, my_team_id):
         week_data["playoff_bracket_name"] = (
             (bracket.name or f"Bracket {bracket.bracket_number}") if bracket else None
         )
+        # A bracket is one player from each team, so this week is that player's
+        # alone. Without it every screen falls back to the whole roster and
+        # asks eleven people for a deck in a match only one of them plays.
+        # None while this team has not put anybody in the bracket yet; a team
+        # only ever learns its own, which is all this needs.
+        week_data["playoff_team_user_id"] = (
+            next(
+                (a.user_id for a in bracket.assignments if a.team_id == my_team_id),
+                None,
+            )
+            if bracket
+            else None
+        )
         scoped.append(week_data)
     return scoped
 

@@ -592,6 +592,9 @@ export interface LeagueWeek {
   playoff_bracket_id?: number | null;
   playoff_bracket_number?: number | null;
   playoff_bracket_name?: string | null;
+  /** On a playoff bracket week, the one player from the viewer's own team who
+   *  plays it; null while that team has assigned nobody to the bracket. */
+  playoff_team_user_id?: number | null;
   feature_volunteers?: { team_id: number; user_id: number }[];
   deck_suggestions?: {
     id: number;

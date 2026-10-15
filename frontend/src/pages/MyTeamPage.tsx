@@ -289,9 +289,13 @@ export default function MyTeamPage() {
       (w) => POOL_FORMAT_TYPES.includes(w.format_type) && w.sealed_pools_generated,
     );
     sealedWeeks.forEach((week) => {
+      const roster =
+        week.playoff_bracket_id != null
+          ? myTeam.members.filter((m) => m.user.id === week.playoff_team_user_id)
+          : myTeam.members;
       const members = isCaptain
-        ? myTeam.members
-        : myTeam.members.filter((m) => m.user.id === user.id);
+        ? roster
+        : roster.filter((m) => m.user.id === user.id);
 
       members.forEach((m) => {
         const key = `${week.id}-${m.user.id}`;
@@ -518,6 +522,21 @@ export default function MyTeamPage() {
 
   const getMemberSelections = (week: LeagueWeek, userId: number): DeckSelectionInfo[] => {
     return week.deck_selections.filter((ds) => ds.user_id === userId);
+  };
+
+  /**
+   * Who from my team plays this week.
+   *
+   * An ordinary week is the whole roster. A playoff bracket is one player
+   * from each team, so a bracket week asks that player for a deck and nobody
+   * else -- eleven brackets times eleven players would otherwise be 121 deck
+   * slots for 11 matches.
+   */
+  const membersForWeek = (week: LeagueWeek) => {
+    if (week.playoff_bracket_id == null) return myTeam.members;
+    const playerId = week.playoff_team_user_id;
+    if (playerId == null) return [];
+    return myTeam.members.filter((m) => m.user.id === playerId);
   };
 
   const renderDeckInput = (week: LeagueWeek, userId: number, slotNumber: number) => {
@@ -1096,7 +1115,7 @@ export default function MyTeamPage() {
 
             {/* What the captain still has to chase, gathered in one place. */}
             {(isCaptain || league.is_admin) && week.detail_loaded !== false && (
-              <CaptainHud week={week} myTeam={myTeam} />
+              <CaptainHud week={week} myTeam={myTeam} members={membersForWeek(week)} />
             )}
           </Box>
           {(() => {
@@ -1424,7 +1443,14 @@ export default function MyTeamPage() {
             </Alert>
           )}
 
-          {myTeam.members.map((m) => {
+          {week.playoff_bracket_id != null && week.playoff_team_user_id == null && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Nobody from this team is in this bracket yet. A captain puts one player in
+              each on the Playoffs tab, and only that player submits a deck here.
+            </Alert>
+          )}
+
+          {membersForWeek(week).map((m) => {
             const isMe = m.user.id === user.id;
             // Late entry is for captains and admins only: peer entry and
             // entering your own deck both stop when pairings publish.
