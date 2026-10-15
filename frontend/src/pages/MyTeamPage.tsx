@@ -82,7 +82,7 @@ import type { KeyforgeSetInfo, LeagueDetail, LeagueWeek, TeamDetail, DeckSelecti
 import type { SealedPoolEntry, TeamSealedPoolEntry } from '../api/leagues';
 import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
-import { filterCollectionForConstraints } from '../utils/collectionFilter';
+import { filterCollectionForConstraints, pipSuffix } from '../utils/collectionFilter';
 import { deckSlotsForFormat } from '../utils/deckSlots';
 import { banOptions } from '../utils/houses';
 
@@ -790,10 +790,18 @@ export default function MyTeamPage() {
     // Normal URL input for non-sealed formats
     const urlKey = `${week.id}-${userId}-${slotNumber}`;
     const isReversal = week.format_type === 'reversal';
+    // A cap narrows what can still be picked; a floor on its own does not, so
+    // only a cap filters. The picker is shown for an empty slot alone, so what
+    // the team has already spent is exactly what should be counted against.
+    const budget = week.team_amber_budget;
+    const pipsLeft =
+      budget && budget.max_raw_amber != null ? Math.max(0, budget.remaining ?? 0) : null;
+    const capped = pipsLeft != null;
     const filteredCollection = filterCollectionForConstraints(collectionDecks, {
       allowed_sets: week.allowed_sets,
       max_sas: week.max_sas,
       sas_floor: week.sas_floor,
+      max_raw_amber: pipsLeft,
     });
     // Deck suggestions for the current user's team this week
     const myTeamForDeckInput = league.teams.find((t) => t.id === league.my_team_id);
@@ -835,13 +843,14 @@ export default function MyTeamPage() {
         {filteredCollection.length > 0 && (
           <Autocomplete
             options={filteredCollection}
-            getOptionLabel={(d) => `${d.name}${d.sas_rating != null ? ` (SAS ${d.sas_rating})` : ''}`}
+            getOptionLabel={(d) => `${d.name}${d.sas_rating != null ? ` (SAS ${d.sas_rating})` : ''}${pipSuffix(d, capped)}`}
             renderOption={(props, d) => (
               <li {...props} key={d.kf_id}>
                 <Box>
                   <Typography variant="body2">{d.name}</Typography>
                   <Typography variant="caption" color="text.secondary">
                     {d.expansion_name}{d.sas_rating != null ? ` · SAS ${d.sas_rating}` : ''}
+                    {pipSuffix(d, capped)}
                   </Typography>
                 </Box>
               </li>
@@ -852,7 +861,16 @@ export default function MyTeamPage() {
             size="small"
             sx={{ mb: 0.5 }}
             renderInput={(params) => (
-              <TextField {...params} label="Pick from your collection" size="small" />
+              <TextField
+                {...params}
+                label="Pick from your collection"
+                size="small"
+                helperText={
+                  capped
+                    ? `${pipsLeft} of ${budget!.max_raw_amber} pips left — only decks that fit are listed`
+                    : undefined
+                }
+              />
             )}
           />
         )}

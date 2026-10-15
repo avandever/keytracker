@@ -75,7 +75,7 @@ import type {
 import { TERTIATE_PURGE_NOT_RECORDED } from '../types';
 import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
-import { filterCollectionForConstraints } from '../utils/collectionFilter';
+import { filterCollectionForConstraints, pipSuffix } from '../utils/collectionFilter';
 import { deckSlotsForFormat } from '../utils/deckSlots';
 
 const TOKEN_SETS = new Set([855, 600]);
@@ -922,23 +922,33 @@ export default function MyLeagueInfoPage() {
               week.format_type !== 'sealed_survival' &&
               week.format_type !== 'sealed_alliance' &&
               week.format_type !== 'thief' && (() => {
+              // See My Team: only a cap narrows the list, and the picker is
+              // shown for an empty slot alone.
+              const budget = week.team_amber_budget;
+              const pipsLeft =
+                budget && budget.max_raw_amber != null
+                  ? Math.max(0, budget.remaining ?? 0)
+                  : null;
+              const capped = pipsLeft != null;
               const filteredCollection = filterCollectionForConstraints(collectionDecks, {
                 allowed_sets: week.allowed_sets,
                 max_sas: week.max_sas,
                 sas_floor: week.sas_floor,
+                max_raw_amber: pipsLeft,
               });
               return (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                   {filteredCollection.length > 0 && (
                     <Autocomplete
                       options={filteredCollection}
-                      getOptionLabel={(d) => `${d.name}${d.sas_rating != null ? ` (SAS ${d.sas_rating})` : ''}`}
+                      getOptionLabel={(d) => `${d.name}${d.sas_rating != null ? ` (SAS ${d.sas_rating})` : ''}${pipSuffix(d, capped)}`}
                       renderOption={(props, d) => (
                         <li {...props} key={d.kf_id}>
                           <Box>
                             <Typography variant="body2">{d.name}</Typography>
                             <Typography variant="caption" color="text.secondary">
                               {d.expansion_name}{d.sas_rating != null ? ` · SAS ${d.sas_rating}` : ''}
+                              {pipSuffix(d, capped)}
                             </Typography>
                           </Box>
                         </li>
@@ -946,7 +956,16 @@ export default function MyLeagueInfoPage() {
                       onChange={(_, d) => { if (d) setDeckUrl(d.mv_url); }}
                       size="small"
                       renderInput={(params) => (
-                        <TextField {...params} label="Pick from your collection" size="small" />
+                        <TextField
+                          {...params}
+                          label="Pick from your collection"
+                          size="small"
+                          helperText={
+                            capped
+                              ? `${pipsLeft} of ${budget!.max_raw_amber} pips left — only decks that fit are listed`
+                              : undefined
+                          }
+                        />
                       )}
                     />
                   )}
