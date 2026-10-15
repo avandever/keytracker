@@ -71,17 +71,34 @@ docker run -d --name keytracker-webhook --restart always \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -p 9867:9867 \
   keytracker-webhook \
-  sh -c 'while [ ! -f /tracker/deploy/webhook.py ]; do echo "[entrypoint] waiting for the repo mount"; sleep 10; done; exec python3 /tracker/deploy/webhook.py'
+  sh -c 'while true; do
+            if [ ! -f /tracker/deploy/webhook.py ]; then
+              echo "[entrypoint] waiting for the repo mount"
+            elif ! command -v python3 >/dev/null 2>&1; then
+              echo "[entrypoint] waiting for python3"
+            else
+              python3 /tracker/deploy/webhook.py
+              echo "[entrypoint] listener exited $?, starting it again"
+            fi
+            sleep 10
+          done'
 ```
 
 The SSH mount is what lets `git pull` reach the remote; the docker socket is
 what lets `deploy.sh` rebuild and restart the app container.
 
-**The wait loop is not decoration.** When Docker Desktop restarts, the
+**The supervising loop is not decoration.** When Docker Desktop restarts, the
 `/home/andrew/tracker` bind mount can come back empty for a while. The image's
 own command is `python3 deploy/webhook.py`, which exits 127 on a missing file,
-and the container has twice been found dead hours later with pushes silently
-not deploying. Waiting rather than exiting lets it pick up by itself.
+and the container has three times been found dead hours later with pushes
+silently not deploying.
+
+An earlier version of this command waited for the mount and then `exec`'d the
+listener. That was not enough: on 2026-10-14 it died with 127 anyway -- the
+exec itself failed, not the file check -- and `--restart always` did not bring
+it back, so three days of pushes sat undeployed. The shell now stays as PID 1
+and retries whatever goes wrong, so there is no single failure that ends it.
+Do not reintroduce the `exec`.
 
 If a push did not deploy, check `docker ps -a --filter name=keytracker-webhook`
 first. Run the missed deploy through the container rather than as your own
