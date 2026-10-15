@@ -1773,8 +1773,9 @@ class PlayoffConfig(db.Model):
     # Set when the admin publishes the setup, which is what lets captains see
     # the brackets and put their players in them.
     published_at = db.Column(db.DateTime, nullable=True)
-    # Set once the draw has been made, after which brackets and assignments
-    # are fixed.
+    # Set once the draw has been made, after which the brackets themselves are
+    # fixed. The assignments are not: a draw places teams, and a bracket's
+    # players are fixed only when its first round opens.
     drawn_at = db.Column(db.DateTime, nullable=True)
     # Set when the admin reveals who each team put in each bracket. Until then
     # a team sees its own assignments and nobody else's.

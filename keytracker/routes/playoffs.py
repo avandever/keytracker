@@ -166,6 +166,8 @@ def _serialize_bracket(bracket, my_team_id=None, reveal=False):
         "best_of_n": bracket.best_of_n,
         **constraints,
         "assignments_revealed": bool(reveal),
+        # Fixed once the bracket has matchups, which name the two players.
+        "assignments_locked": any(m.player_matchup_id for m in bracket.matches),
         "assignments": [
             {
                 "id": a.id,
@@ -531,8 +533,6 @@ def set_playoff_assignments(league_id):
         return err
     effective = get_effective_user()
     config = _config_for(league)
-    if _locked(config):
-        return jsonify({"error": "The brackets are drawn; assignments are fixed"}), 400
 
     data = request.get_json(silent=True) or {}
     team_id = data.get("team_id")
@@ -549,13 +549,44 @@ def set_playoff_assignments(league_id):
 
     brackets = {b.id: b for b in league.playoff_brackets}
     member_ids = {m.user_id for m in team.members}
-    seen_brackets, seen_users = set(), set()
+    # A bracket is fixed once it has matchups, which name the two players: a
+    # match that exists cannot change who is playing it. The draw fixes
+    # nothing by itself, so every bracket that has not started stays editable
+    # and a team can keep filling the rest.
+    locked_ids = {
+        b.id
+        for b in league.playoff_brackets
+        if any(m.player_matchup_id for m in b.matches)
+    }
+    editable_ids = [bid for bid in brackets if bid not in locked_ids]
+    kept = {
+        a.bracket_id: a
+        for a in PlayoffAssignment.query.filter(
+            PlayoffAssignment.team_id == team.id,
+            PlayoffAssignment.bracket_id.in_(list(locked_ids) or [0]),
+        ).all()
+    }
+    seen_brackets = set(kept)
+    seen_users = {a.user_id for a in kept.values()}
+    fresh = []
     for entry in entries:
         if not isinstance(entry, dict):
             return jsonify({"error": "each assignment must be an object"}), 400
         bracket_id, user_id = entry.get("bracket_id"), entry.get("user_id")
         if bracket_id not in brackets:
             return jsonify({"error": f"Unknown bracket {bracket_id}"}), 400
+        if bracket_id in locked_ids:
+            # Sending a started bracket back unchanged is how a captain saves
+            # the others, so only an actual change is an error.
+            existing = kept.get(bracket_id)
+            if existing is not None and existing.user_id == user_id:
+                continue
+            bracket = brackets[bracket_id]
+            label = bracket.name or f"Bracket {bracket.bracket_number}"
+            return (
+                jsonify({"error": f"{label} has started; its players are fixed"}),
+                400,
+            )
         if user_id not in member_ids:
             user = db.session.get(User, user_id)
             name = user.name if user else user_id
@@ -566,18 +597,20 @@ def set_playoff_assignments(league_id):
             return jsonify({"error": "A player can only be in one bracket"}), 400
         seen_brackets.add(bracket_id)
         seen_users.add(user_id)
+        fresh.append((bracket_id, user_id))
 
-    PlayoffAssignment.query.filter(
-        PlayoffAssignment.team_id == team.id,
-        PlayoffAssignment.bracket_id.in_(list(brackets)),
-    ).delete(synchronize_session=False)
+    if editable_ids:
+        PlayoffAssignment.query.filter(
+            PlayoffAssignment.team_id == team.id,
+            PlayoffAssignment.bracket_id.in_(editable_ids),
+        ).delete(synchronize_session=False)
     db.session.flush()
-    for entry in entries:
+    for bracket_id, user_id in fresh:
         db.session.add(
             PlayoffAssignment(
-                bracket_id=entry["bracket_id"],
+                bracket_id=bracket_id,
                 team_id=team.id,
-                user_id=entry["user_id"],
+                user_id=user_id,
                 assigned_by_id=effective.id,
             )
         )
@@ -643,14 +676,22 @@ def publish_playoff_assignments(league_id):
     return jsonify(_serialize_config(league, config))
 
 
-def _serialize_match(match):
+def _serialize_match(match, hide_teams=False):
+    """One match, with the teams in it hidden while its bracket fills up.
+
+    Drawing before the captains have finished means the round-one pairings
+    exist before the choosing does. A captain who could read them would be
+    picking a player against a known opponent, so a bracket keeps its pairings
+    to itself -- from every team, and from the admin -- until every qualifying
+    team has put somebody in it.
+    """
     return {
         "id": match.id,
         "round_number": match.round_number,
         "slot_index": match.slot_index,
-        "team1_id": match.team1_id,
-        "team2_id": match.team2_id,
-        "winner_team_id": match.winner_team_id,
+        "team1_id": None if hide_teams else match.team1_id,
+        "team2_id": None if hide_teams else match.team2_id,
+        "winner_team_id": None if hide_teams else match.winner_team_id,
         "is_bye": bool(match.is_bye),
         "is_consolation": bool(match.is_consolation),
         "player_matchup_id": match.player_matchup_id,
@@ -702,7 +743,10 @@ def _bye_teams_by_policy(league, config, brackets, qualifier_ids, rng):
 @blueprint.route("/<int:league_id>/playoffs/draw", methods=["POST"])
 @login_required
 def draw_playoffs(league_id):
-    """Draw every bracket at once, fixing the whole tree.
+    """Draw every bracket at once, fixing which team meets which.
+
+    Only the teams are placed. A bracket's players are bound when its first
+    round opens, so this can be done before the captains have assigned anyone.
 
     Placement is drawn rather than seeded, and balanced so that across the
     brackets no pair of teams meets in round one much more often than any
@@ -738,21 +782,12 @@ def draw_playoffs(league_id):
             jsonify({"error": f"{config.teams_advancing} teams must be confirmed"}),
             400,
         )
-    missing = []
-    for bracket in brackets:
-        assigned = {a.team_id for a in bracket.assignments}
-        for team_id in qualifier_ids:
-            if team_id not in assigned:
-                team = db.session.get(Team, team_id)
-                missing.append(f"{team.name if team else team_id} in bracket {bracket.bracket_number}")
-    if missing:
-        return (
-            jsonify({"error": "Every team needs a player in every bracket. Missing: "
-                              + ", ".join(missing[:8])
-                              + ("..." if len(missing) > 8 else "")}),
-            400,
-        )
-
+    # Nothing here needs the captains to have finished. A match holds two
+    # teams, and the players are bound when a round opens, so the draw can be
+    # made while the brackets are still being filled -- which is what lets a
+    # sealed bracket deal its pools early. The full house is required instead
+    # when the assignments are published, and a bracket hides its pairings
+    # until it has one.
     data = request.get_json(silent=True) or {}
     rng = random.Random(data.get("seed"))
     byes_for = _bye_teams_by_policy(league, config, brackets, qualifier_ids, rng)
@@ -859,6 +894,15 @@ def _bracket_tree(league, my_team_id=None, reveal=False):
     teams = {t.id: t.name for t in league.teams}
     config = _config_for(league)
     qualifiers = sorted(league.playoff_qualifiers, key=lambda q: q.position)
+    qualifier_ids = [q.team_id for q in qualifiers]
+    hidden_pairings = {
+        bracket.id: bool(qualifier_ids)
+        and any(
+            team_id not in {a.team_id for a in bracket.assignments}
+            for team_id in qualifier_ids
+        )
+        for bracket in brackets
+    }
     return {
         "rounds": rounds_needed(len(qualifiers)) if qualifiers else 0,
         "teams": teams,
@@ -882,8 +926,9 @@ def _bracket_tree(league, my_team_id=None, reveal=False):
                         key=lambda w: (w.playoff_round or 0),
                     )
                 ],
+                "pairings_hidden": hidden_pairings.get(bracket.id, False),
                 "matches": [
-                    _serialize_match(m)
+                    _serialize_match(m, hidden_pairings.get(bracket.id, False))
                     for m in sorted(
                         bracket.matches,
                         key=lambda m: (m.round_number, m.is_consolation, m.slot_index),

@@ -191,6 +191,10 @@ export default function PlayoffsPage() {
                     <Chip size="small" variant="outlined"
                       label={WEEK_FORMAT_LABELS[bracket.format_type] || bracket.format_type} />
                     <Chip size="small" variant="outlined" label={`Bo${bracket.best_of_n}`} />
+                    {bracket.pairings_hidden && (
+                      <Chip size="small" color="warning" variant="outlined"
+                        label="Pairings hidden until every team has filled this bracket" />
+                    )}
                   </Box>
                   <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
                     {ordered.map(([key, matches]) => (
@@ -531,7 +535,11 @@ function PlayoffSetupPanel({
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
               Publishing shows the brackets to the teams and opens the Playoffs tab on My
-              Team, where captains put a player in each bracket.
+              Team, where captains put a player in each bracket. Drawing places the teams
+              and does not wait on the captains — a bracket's players are bound when its
+              round opens, not by the draw — but a bracket keeps its pairings hidden until
+              every team has filled it, so that nobody picks against an opponent they can
+              already see.
               Opening a round creates a week per bracket and its matches. A match names its
               two players, so until the assignments are published the weeks open without
               their matches — enough for a sealed pool to be dealt — and opening the round

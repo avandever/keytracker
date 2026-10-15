@@ -2625,7 +2625,12 @@ function PlayoffAssignmentsTab({
   onSaved: () => void;
   setError: (message: string) => void;
 }) {
-  const drawn = Boolean(setup.config.drawn_at);
+  // The draw does not fix anything here: it places teams, and a bracket's
+  // players are fixed when that bracket's first round opens. So each one
+  // locks on its own, and the rest stay editable.
+  const anyLocked = setup.brackets.some((b) => b.assignments_locked);
+  const allLocked =
+    setup.brackets.length > 0 && setup.brackets.every((b) => b.assignments_locked);
   const [choices, setChoices] = useState<Record<number, number>>(() => {
     const mine: Record<number, number> = {};
     for (const bracket of setup.brackets) {
@@ -2669,8 +2674,17 @@ function PlayoffAssignmentsTab({
           plays every round of it.
         </Typography>
 
-        {drawn && <Alert severity="info" sx={{ mb: 2 }}>The draw is made, so this is fixed.</Alert>}
-        {!drawn && !isCaptain && (
+        {allLocked && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Every bracket has started, so this is fixed.
+          </Alert>
+        )}
+        {anyLocked && !allLocked && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            A bracket that has started is fixed. The rest can still be changed.
+          </Alert>
+        )}
+        {!allLocked && !isCaptain && (
           <Alert severity="info" sx={{ mb: 2 }}>Only a captain can change these.</Alert>
         )}
         {doubledUp.length > 0 && (
@@ -2678,7 +2692,7 @@ function PlayoffAssignmentsTab({
             A player can only be in one bracket, and one is picked twice here.
           </Alert>
         )}
-        {!drawn && unfilled > 0 && (
+        {!allLocked && unfilled > 0 && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             {unfilled} bracket{unfilled === 1 ? ' has' : 's have'} nobody in {unfilled === 1 ? 'it' : 'them'} yet.
           </Alert>
@@ -2699,7 +2713,14 @@ function PlayoffAssignmentsTab({
             {bracket.max_sas != null && (
               <Chip size="small" variant="outlined" label={`Max SAS ${bracket.max_sas}`} />
             )}
-            <FormControl size="small" sx={{ minWidth: 200 }} disabled={drawn || !isCaptain}>
+            {bracket.assignments_locked && (
+              <Chip size="small" color="info" variant="outlined" label="Started" />
+            )}
+            <FormControl
+              size="small"
+              sx={{ minWidth: 200 }}
+              disabled={Boolean(bracket.assignments_locked) || !isCaptain}
+            >
               <InputLabel>Player</InputLabel>
               <Select
                 label="Player"
@@ -2720,7 +2741,7 @@ function PlayoffAssignmentsTab({
           <Button
             variant="contained"
             sx={{ mt: 1 }}
-            disabled={drawn || !isCaptain || saving || doubledUp.length > 0}
+            disabled={allLocked || !isCaptain || saving || doubledUp.length > 0}
             onClick={save}
           >
             {saving ? 'Saving...' : 'Save assignments'}

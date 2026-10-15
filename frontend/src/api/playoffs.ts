@@ -37,6 +37,10 @@ export interface PlayoffBracketInfo extends PlayoffBracketConstraints {
   assignments: { id: number; team_id: number; user_id: number; user_name: string | null }[];
   /** False while the list above is scoped to the viewer's own team. */
   assignments_revealed?: boolean;
+  /** True once the bracket has matchups, after which its players are fixed. */
+  assignments_locked?: boolean;
+  /** True while the bracket is still being filled, so its teams read null. */
+  pairings_hidden?: boolean;
   matches?: PlayoffMatchInfo[];
   /** The week this bracket plays in each round, once the round is open. */
   weeks?: PlayoffBracketWeek[];
