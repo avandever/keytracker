@@ -264,6 +264,21 @@ def get_deck_platonic_card_ids(deck) -> list:
     ]
 
 
+def get_pod_platonic_card_ids(deck, house) -> list:
+    """The platonic card ids of one pod: a deck's cards of a single house.
+
+    An alliance takes one house from a deck and leaves the other two behind,
+    so a pod -- not the deck it came from -- is what the alliance contains.
+    """
+    return [
+        cid.platonic_card_id
+        for cid in deck.cards_from_assoc
+        if cid.platonic_card_id
+        and cid.card_in_set is not None
+        and cid.card_in_set.house == house
+    ]
+
+
 def validate_alliance_open(
     match_or_week, user_id, pods, token_deck_id, prophecy_deck_id
 ):
@@ -362,12 +377,18 @@ def validate_alliance_open(
             ).first()
 
         if rl_version and rl_version.entries:
-            # Collect all platonic card ids from all pod decks (with duplicates)
+            # Only the pods taken are in the alliance. The other two houses
+            # of each deck stay behind, so a restricted card sitting in one of
+            # them is not in play and must not count against the alliance.
+            # Counting whole decks meant weighing about a hundred cards where
+            # the alliance holds a third of that, and with eleven commonly
+            # played cards on the 2.7 list, turning up two of them was close
+            # to routine -- which is what was refusing legal alliances.
             all_card_ids = []
-            for deck_id in pod_deck_ids:
+            for deck_id, house in zip(pod_deck_ids, houses):
                 deck = db.session.get(Deck, deck_id)
                 if deck:
-                    all_card_ids.extend(get_deck_platonic_card_ids(deck))
+                    all_card_ids.extend(get_pod_platonic_card_ids(deck, house))
 
             # Count restricted entries present
             restricted_entries_found = 0
