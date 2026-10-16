@@ -1124,6 +1124,26 @@ class LeagueWeek(db.Model):
     )
 
 
+def deck_reuse_scope(week):
+    """The weeks a deck's reuse is judged against, as a filter on LeagueWeek.
+
+    A deck is spent once it has been played. But the playoffs are a separate
+    competition from the season that qualified for them -- the points start
+    from zero, and so does this -- so a team is not asked to field decks it
+    has kept in reserve for eleven weeks, nor punished for having played its
+    best ones to get there.
+
+    A season week is therefore judged against season weeks, a playoff week
+    against playoff weeks, and never across the two. Three places ask this
+    question -- submitting a deck, publishing the pairings, and marking up a
+    suggestion -- and they have to agree, or a deck is accepted in one place
+    and refused in another.
+    """
+    if getattr(week, "playoff_bracket_id", None) is not None:
+        return LeagueWeek.playoff_bracket_id.isnot(None)
+    return LeagueWeek.playoff_bracket_id.is_(None)
+
+
 class WeekMatchup(db.Model):
     __tablename__ = "tracker_week_matchup"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)

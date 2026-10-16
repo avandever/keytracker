@@ -21,6 +21,7 @@ from keytracker.schema import (
     LeagueAdminLog,
     EXPANSION_ID_TO_ABBR,
     SEALED_WEEK_FORMATS,
+    deck_reuse_scope,
 )
 from keytracker.schema import (
     StandaloneMatch,
@@ -408,6 +409,7 @@ def _suggestion_conflicts(week: LeagueWeek) -> dict:
                 LeagueWeek.league_id == week.league_id,
                 LeagueWeek.id != week.id,
                 ~LeagueWeek.format_type.in_(_SEALED_FORMATS),
+                deck_reuse_scope(week),
             )
             .all()
         )

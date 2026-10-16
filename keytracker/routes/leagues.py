@@ -54,6 +54,7 @@ from keytracker.schema import (
     TOKEN_EXPANSION_IDS,
     PROPHECY_EXPANSION_ID,
     SEALED_WEEK_FORMATS,
+    deck_reuse_scope,
 )
 from keytracker.serializers import (
     _preload_league_graph,
@@ -2621,6 +2622,7 @@ def generate_player_matchups(league_id, week_id):
                     LeagueWeek.id != week.id,
                     LeagueWeek.week_number < week.week_number,
                     ~LeagueWeek.format_type.in_(SEALED_FORMATS),
+                    deck_reuse_scope(week),
                 )
                 .first()
             )
@@ -3981,6 +3983,7 @@ def _check_deck_cross_week_conflicts(league, week, deck, target_team):
             LeagueWeek.id != week.id,
             LeagueWeek.week_number < week.week_number,
             ~LeagueWeek.format_type.in_(SEALED_FORMATS),
+            deck_reuse_scope(week),
         )
         .all()
     )
@@ -4003,6 +4006,7 @@ def _check_deck_cross_week_conflicts(league, week, deck, target_team):
                 LeagueWeek.id != week.id,
                 PlayerDeckSelection.user_id.in_(team_member_ids),
                 ~LeagueWeek.format_type.in_(SEALED_FORMATS),
+                deck_reuse_scope(week),
             )
             .all()
         )
