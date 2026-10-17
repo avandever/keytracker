@@ -5252,11 +5252,18 @@ def clear_week_oubliette_ban(league_id, week_id):
     week = db.session.get(LeagueWeek, week_id)
     if not week or week.league_id != league.id:
         return jsonify({"error": "Week not found"}), 404
-    if week.status not in (
+    # The same window the ban was set in: Double Oubliette reveals nothing
+    # until all four are in, so its bans stay changeable while published.
+    _clear_open = (
         WeekStatus.DECK_SELECTION.value,
         WeekStatus.TEAM_PAIRED.value,
         WeekStatus.PAIRING.value,
-    ):
+    ) + (
+        (WeekStatus.PUBLISHED.value,)
+        if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value
+        else ()
+    )
+    if week.status not in _clear_open:
         return jsonify({"error": "Deck selection is not open"}), 400
 
     effective = get_effective_user()
@@ -5277,7 +5284,20 @@ def clear_week_oubliette_ban(league_id, week_id):
         if not allowed:
             return jsonify({"error": "Cannot clear a ban for this user"}), 403
 
-    OublietteBan.query.filter_by(week_id=week.id, user_id=target_user_id).delete()
+    cleared = OublietteBan.query.filter_by(
+        week_id=week.id, user_id=target_user_id
+    )
+    if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value:
+        # One ban per set, so clearing has to name the set. Without this,
+        # changing the ban for one set would take the other one with it.
+        expansion = request.args.get("expansion", type=int)
+        if expansion is None:
+            return (
+                jsonify({"error": "expansion is required for Double Oubliette"}),
+                400,
+            )
+        cleared = cleared.filter_by(expansion=expansion)
+    cleared.delete()
     db.session.commit()
     return jsonify({"success": True})
 

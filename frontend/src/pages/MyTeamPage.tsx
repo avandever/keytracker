@@ -979,6 +979,43 @@ export default function MyTeamPage() {
     }
   };
 
+  const handleSetDoubleOublietteBan = async (
+    weekId: number,
+    userId: number,
+    expansion: number,
+    house: string,
+  ) => {
+    setError('');
+    try {
+      await submitWeekOublietteBan(league.id, weekId, house, {
+        expansion,
+        ...(userId !== user!.id ? { user_id: userId } : {}),
+      });
+      setSuccess('Banned house saved!');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
+  const handleClearDoubleOublietteBan = async (
+    weekId: number,
+    userId: number,
+    expansion: number,
+  ) => {
+    setError('');
+    try {
+      await clearWeekOublietteBan(league.id, weekId, {
+        expansion,
+        ...(userId !== user!.id ? { user_id: userId } : {}),
+      });
+      setSuccess('Banned house cleared.');
+      refresh();
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message);
+    }
+  };
+
   const handleClearOublietteBan = async (weekId: number, userId: number) => {
     setError('');
     try {
@@ -2098,6 +2135,105 @@ export default function MyTeamPage() {
                       >
                         Save Ban
                       </Button>
+                    </Box>
+                  );
+                })()}
+
+                {/* Double Oubliette: a ban per set, next to the decks they
+                    apply to. The single-set version above is the same idea;
+                    this one just asks twice and keeps each set apart. */}
+                {week.format_type === 'double_oubliette' && (() => {
+                  const weekSets = week.allowed_sets || [];
+                  if (weekSets.length === 0) return null;
+                  // Nothing is revealed until all four bans are in, so unlike
+                  // the single version this window stays open once pairings
+                  // publish -- which is what the server already allows.
+                  const canEdit =
+                    (isWeekEditable || week.status === 'published')
+                    && (isMe || isCaptain || myTeam.allow_peer_deck_entry);
+                  const setLabel = (n: number) =>
+                    sets.find((s) => s.number === n)?.shortname || `Set ${n}`;
+                  return (
+                    <Box sx={{ ml: 4, mt: 0.5 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                        One ban per set, applying to that set&apos;s decks only — never a
+                        house in {isMe ? 'your' : `${m.user.name}'s`} own deck from that set.
+                        Nothing is shown to anyone until all four bans are in.
+                      </Typography>
+                      {weekSets.map((setNumber) => {
+                        const existing = (week.team_double_oubliette_bans || []).find(
+                          (b) => b.user_id === m.user.id && b.expansion === setNumber,
+                        );
+                        const banKey = `${week.id}-${m.user.id}-${setNumber}`;
+                        const fromSet = selections.filter(
+                          (s) => s.deck?.expansion === setNumber,
+                        );
+                        return (
+                          <Box key={setNumber} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 0.5, flexWrap: 'wrap' }}>
+                            <Chip label={setLabel(setNumber)} size="small" variant="outlined" />
+                            {existing ? (
+                              <>
+                                <Chip label={`Banned: ${existing.banned_house}`} size="small" color="error" />
+                                {canEdit && (
+                                  <Button
+                                    size="small"
+                                    onClick={() =>
+                                      handleClearDoubleOublietteBan(week.id, m.user.id, setNumber)
+                                    }
+                                  >
+                                    Change
+                                  </Button>
+                                )}
+                              </>
+                            ) : !canEdit ? (
+                              <Typography variant="body2" color="text.secondary">
+                                No house banned
+                              </Typography>
+                            ) : (
+                              <>
+                                <FormControl size="small" sx={{ minWidth: 200 }}>
+                                  <InputLabel>House to ban</InputLabel>
+                                  <Select
+                                    label="House to ban"
+                                    value={oublietteBanSelections[banKey] ?? ''}
+                                    onChange={(e) =>
+                                      setOublietteBanSelections((prev) => ({
+                                        ...prev,
+                                        [banKey]: e.target.value,
+                                      }))
+                                    }
+                                  >
+                                    {banOptions(
+                                      week.allowed_houses,
+                                      fromSet.map((s) => s.deck?.houses),
+                                    ).map((o) => (
+                                      <MenuItem key={o.house} value={o.house} disabled={o.disabled}>
+                                        {o.house}{o.reason ? ` — ${o.reason}` : ''}
+                                      </MenuItem>
+                                    ))}
+                                  </Select>
+                                </FormControl>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="error"
+                                  disabled={!oublietteBanSelections[banKey]}
+                                  onClick={() =>
+                                    handleSetDoubleOublietteBan(
+                                      week.id,
+                                      m.user.id,
+                                      setNumber,
+                                      oublietteBanSelections[banKey],
+                                    )
+                                  }
+                                >
+                                  Save Ban
+                                </Button>
+                              </>
+                            )}
+                          </Box>
+                        );
+                      })}
                     </Box>
                   );
                 })()}

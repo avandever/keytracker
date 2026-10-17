@@ -389,10 +389,17 @@ export async function submitWeekOublietteBan(
 export async function clearWeekOublietteBan(
   leagueId: number,
   weekId: number,
-  userId?: number,
+  /** A number is the player the ban belongs to, kept for older callers.
+   *  Double Oubliette must also name the set, since it has a ban per set. */
+  forWhom?: number | { expansion?: number; user_id?: number },
 ): Promise<void> {
+  const opts = typeof forWhom === 'number' ? { user_id: forWhom } : forWhom || {};
+  const params = {
+    ...(opts.user_id !== undefined && { user_id: opts.user_id }),
+    ...(opts.expansion !== undefined && { expansion: opts.expansion }),
+  };
   await apiClient.delete(`/leagues/${leagueId}/weeks/${weekId}/oubliette-ban`, {
-    ...(userId !== undefined && { params: { user_id: userId } }),
+    ...(Object.keys(params).length > 0 && { params }),
   });
 }
 
