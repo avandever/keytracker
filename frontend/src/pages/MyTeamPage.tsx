@@ -83,7 +83,7 @@ import type { SealedPoolEntry, TeamSealedPoolEntry } from '../api/leagues';
 import { alpha } from '@mui/material/styles';
 import useMyCollection from '../hooks/useMyCollection';
 import { filterCollectionForConstraints, pipSuffix } from '../utils/collectionFilter';
-import { deckSlotsForFormat } from '../utils/deckSlots';
+import { deckSlotsForFormat, slotSetNumber } from '../utils/deckSlots';
 import { banOptions } from '../utils/houses';
 
 function getSasLadderRanges(maxes: number[]): [number, number | null][] {
@@ -568,6 +568,19 @@ export default function MyTeamPage() {
     const playerId = week.playoff_team_user_id;
     if (playerId == null) return [];
     return myTeam.members.filter((m) => m.user.id === playerId);
+  };
+
+  /**
+   * What to call a deck slot.
+   *
+   * Double Oubliette splits its four slots between the week's two sets, so a
+   * bare "Slot 3" would not say what it wants.
+   */
+  const slotLabel = (week: LeagueWeek, slotNumber: number) => {
+    const setNumber = slotSetNumber(week.format_type, slotNumber, week.allowed_sets);
+    if (setNumber == null) return `Slot ${slotNumber}`;
+    const name = sets.find((s) => s.number === setNumber)?.shortname || `Set ${setNumber}`;
+    return `${name} deck ${slotNumber <= 2 ? slotNumber : slotNumber - 2}`;
   };
 
   const renderDeckInput = (week: LeagueWeek, userId: number, slotNumber: number) => {
@@ -2001,7 +2014,7 @@ export default function MyTeamPage() {
                   if (sel) {
                     return (
                       <Box key={slotNum} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, ml: 4, flexWrap: 'wrap' }}>
-                        {maxSlots > 1 && <Chip label={`Slot ${slotNum}`} size="small" variant="outlined" />}
+                        {maxSlots > 1 && <Chip label={slotLabel(week, slotNum)} size="small" variant="outlined" />}
                         {sel.deck?.houses && <HouseIcons houses={sel.deck.houses} />}
                         <Typography variant="body2">{sel.deck?.name || 'Unknown'}</Typography>
                         {sel.deck?.sas_rating != null && (
@@ -2030,7 +2043,7 @@ export default function MyTeamPage() {
                       <Box key={slotNum}>
                         {maxSlots > 1 && (
                           <Typography variant="body2" color="text.secondary" sx={{ ml: 4, mt: 0.5 }}>
-                            Slot {slotNum}:
+                            {slotLabel(week, slotNum)}:
                           </Typography>
                         )}
                         {renderDeckInput(week, m.user.id, slotNum)}
@@ -2039,7 +2052,7 @@ export default function MyTeamPage() {
                   }
                   return (
                     <Box key={slotNum} sx={{ ml: 4, mb: 0.5 }}>
-                      {maxSlots > 1 && <Chip label={`Slot ${slotNum}`} size="small" variant="outlined" sx={{ mr: 1 }} />}
+                      {maxSlots > 1 && <Chip label={slotLabel(week, slotNum)} size="small" variant="outlined" sx={{ mr: 1 }} />}
                       <Typography variant="body2" color="text.secondary" component="span">
                         No deck selected
                       </Typography>

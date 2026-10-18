@@ -4133,15 +4133,20 @@ def submit_deck_selection(league_id, week_id):
         WeekFormat.ADAPTIVE_SHORT.value,
         WeekFormat.EXCHANGE.value,
         WeekFormat.SEALED_SURVIVAL.value,
-        WeekFormat.DOUBLE_OUBLIETTE.value,
     )
     max_slots = (
         6
         if week.format_type == WeekFormat.NORDIC_HEXAD.value
+        # Double Oubliette is two sets played side by side, each with the two
+        # decks and one ban an Oubliette has.
         else (
-            3
-            if week.format_type in _three_slot
-            else (2 if week.format_type in _two_slot else 1)
+            4
+            if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value
+            else (
+                3
+                if week.format_type in _three_slot
+                else (2 if week.format_type in _two_slot else 1)
+            )
         )
     )
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
@@ -4551,8 +4556,8 @@ def submit_deck_selection(league_id, week_id):
                     400,
                 )
 
-    # Double Oubliette: one deck from each of the week's two sets, so the two
-    # bans each have something to aim at.
+    # Double Oubliette: two decks from each of the week's two sets, so each set
+    # is its own pair for the ban aimed at it to work on.
     if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value:
         sets = _double_oubliette_sets(week)
         if len(sets) != 2:
@@ -4562,26 +4567,20 @@ def submit_deck_selection(league_id, week_id):
                 ),
                 400,
             )
-        if deck.expansion not in sets:
+        # The slot says which set it takes: slots 1 and 2 the first, 3 and 4
+        # the second. Tying the set to the slot keeps "two from each" true one
+        # deck at a time, and lets the screen say what a slot wants rather than
+        # waiting to refuse what is put in it.
+        wanted = sets[0] if slot_number <= 2 else sets[1]
+        if deck.expansion != wanted:
+            from keytracker.schema import KeyforgeSet
+
+            kf_set = db.session.get(KeyforgeSet, wanted)
+            label = (kf_set.shortname or kf_set.name) if kf_set else str(wanted)
             return (
-                jsonify({"error": "That deck is not from one of this week's two sets"}),
+                jsonify({"error": f"Slot {slot_number} takes a {label} deck"}),
                 400,
             )
-        for other in PlayerDeckSelection.query.filter(
-            PlayerDeckSelection.week_id == week.id,
-            PlayerDeckSelection.user_id == target_user_id,
-            PlayerDeckSelection.slot_number != slot_number,
-        ).all():
-            if other.deck and other.deck.expansion == deck.expansion:
-                return (
-                    jsonify(
-                        {
-                            "error": "Your other deck is already from that set -- bring "
-                            "one from each."
-                        }
-                    ),
-                    400,
-                )
 
     # Oubliette: a ban binds the player who made it too. The ban is checked
     # against their decks when it is set, but only against the decks submitted
@@ -4988,13 +4987,32 @@ def _double_oubliette_eliminated(week, player_id, opponent_id):
     return out
 
 
+def _double_oubliette_wiped_sets(week, player_id, opponent_id):
+    """Sets where the opponent's ban has taken every deck the player brought.
+
+    With two decks from each set, one of them being banned out still leaves
+    something to play. It is a set with nothing left that decides the match,
+    the same way Oubliette forfeits only when every deck is gone.
+    """
+    out = set(_double_oubliette_eliminated(week, player_id, opponent_id))
+    selections = PlayerDeckSelection.query.filter_by(
+        week_id=week.id, user_id=player_id
+    ).all()
+    wiped = []
+    for expansion in _double_oubliette_sets(week):
+        from_set = [s for s in selections if s.deck and s.deck.expansion == expansion]
+        if from_set and all(s.deck_id in out for s in from_set):
+            wiped.append(expansion)
+    return wiped
+
+
 def _resolve_double_oubliette_forfeit(week, pm):
     """Settle a Double Oubliette match that a ban has already decided.
 
-    The match is won by winning a game with each of your two decks, so losing
-    one of them to a ban makes it unwinnable: the opponent takes it without a
-    game being played. It is recorded as the wins a best-of needs, so the match
-    reads as decided rather than half-finished.
+    A set the bans have emptied leaves nothing to play for that set, which
+    loses the match: the opponent takes it without a game being played. It is
+    recorded as the wins a best-of needs, so the match reads as decided rather
+    than half-finished.
     """
     sets = _double_oubliette_sets(week)
     if len(sets) != 2:
@@ -5005,8 +5023,8 @@ def _resolve_double_oubliette_forfeit(week, pm):
     if pm.games:
         return
 
-    p1_out = _double_oubliette_eliminated(week, pm.player1_id, pm.player2_id)
-    p2_out = _double_oubliette_eliminated(week, pm.player2_id, pm.player1_id)
+    p1_out = _double_oubliette_wiped_sets(week, pm.player1_id, pm.player2_id)
+    p2_out = _double_oubliette_wiped_sets(week, pm.player2_id, pm.player1_id)
     if p1_out and p2_out:
         return  # both caught; leave it for an admin to settle
     if not p1_out and not p2_out:

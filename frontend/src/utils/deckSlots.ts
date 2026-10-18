@@ -14,8 +14,26 @@ export const DECK_SLOTS_BY_FORMAT: Record<string, number> = {
   exchange: 2,
   nordic_hexad: 6,
   sealed_survival: 2,
-  double_oubliette: 2,
+  double_oubliette: 4,
 };
+
+/**
+ * Which set a slot takes, for a format that splits its slots between sets.
+ *
+ * Double Oubliette plays two sets side by side: slots 1 and 2 are the first
+ * set, 3 and 4 the second. Null for every other format, which does not care
+ * which set a slot holds.
+ */
+export function slotSetNumber(
+  formatType: string,
+  slotNumber: number,
+  allowedSets: number[] | null | undefined,
+): number | null {
+  if (formatType !== 'double_oubliette') return null;
+  const sets = allowedSets || [];
+  if (sets.length !== 2) return null;
+  return slotNumber <= 2 ? sets[0] : sets[1];
+}
 
 export function deckSlotsForFormat(formatType: string): number {
   return DECK_SLOTS_BY_FORMAT[formatType] ?? 1;

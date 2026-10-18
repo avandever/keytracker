@@ -8,7 +8,7 @@ export const FORMAT_DESCRIPTIONS: Record<string, string> = {
   sealed_archon:
     "A sealed pool of decks will be generated for you. Pick your best one and take it to battle.",
   double_oubliette:
-    'Bring two decks, one from each of the week’s two sets. Ban a house for each set — not one of your own from that set — and your opponent does the same. A deck containing the ban aimed at its set is eliminated, and losing a deck loses the match: you win by winning a game with each of your two decks.',
+    'Bring four decks: two from each of the week’s two sets. Ban one house per set — not one in your own decks from that set — and your opponent does the same. Their ban takes out any of your decks from that set that contains it, and a set it empties leaves you nothing to play, which loses the match.',
   sealed_survival:
     'A sealed pool is generated for you. Keep two decks from it. Each game you play a deck that has not yet lost — a deck that loses is out of the match, and you are out when both of yours have gone.',
   sealed_alliance:
