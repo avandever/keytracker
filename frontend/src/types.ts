@@ -581,6 +581,9 @@ export interface LeagueWeek {
   /** Double Oubliette: the viewer's own bans, keyed by the set each applies to. */
   my_double_oubliette_bans?: Record<number, string>;
   team_double_oubliette_bans?: { user_id: number; expansion: number; banned_house: string }[];
+  /** Houses each allowed set holds, for a format that bans one per set.
+   *  Absent for formats that ban across the week. */
+  houses_by_set?: Record<number, string[]>;
   /** Oubliette: bans for the viewer's own team, so captains can enter them. */
   team_oubliette_bans?: { user_id: number; banned_house: string }[];
   sas_ladder_assignments?: { id: number; user_id: number; team_id: number; rung_number: number }[];

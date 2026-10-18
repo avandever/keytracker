@@ -5220,6 +5220,22 @@ def submit_week_oubliette_ban(league_id, week_id):
         selections = [
             s for s in selections if s.deck and s.deck.expansion == expansion
         ]
+        # A house the set does not hold cannot turn up in a deck from it, so
+        # banning one spends the ban on nothing. No card data for the set
+        # means no opinion, rather than refusing everything.
+        from keytracker.utils import houses_for_expansions
+
+        set_houses = houses_for_expansions([expansion])
+        if set_houses and banned_house not in set_houses:
+            return (
+                jsonify(
+                    {
+                        "error": f"{banned_house} is not a house in that set, so the "
+                        "ban would do nothing"
+                    }
+                ),
+                400,
+            )
 
     error = validate_oubliette_ban_against_decks(banned_house, selections)
     if error:

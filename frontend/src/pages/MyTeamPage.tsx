@@ -583,6 +583,31 @@ export default function MyTeamPage() {
     return `${name} deck ${slotNumber <= 2 ? slotNumber : slotNumber - 2}`;
   };
 
+  /**
+   * The slot list, with a heading before each set's pair.
+   *
+   * Double Oubliette splits its four slots between two sets, and two decks
+   * and a ban per set only reads as such if the screen says where one set
+   * ends and the next begins.
+   */
+  const slotItems = (week: LeagueWeek, maxSlots: number) => {
+    const items: { slot?: number; heading?: string; key: string }[] = [];
+    for (let slotNum = 1; slotNum <= maxSlots; slotNum += 1) {
+      const setNumber = slotSetNumber(week.format_type, slotNum, week.allowed_sets);
+      const previous =
+        slotNum > 1
+          ? slotSetNumber(week.format_type, slotNum - 1, week.allowed_sets)
+          : null;
+      if (setNumber != null && setNumber !== previous) {
+        const name =
+          sets.find((s) => s.number === setNumber)?.shortname || `Set ${setNumber}`;
+        items.push({ heading: name, key: `head-${setNumber}` });
+      }
+      items.push({ slot: slotNum, key: `slot-${slotNum}` });
+    }
+    return items;
+  };
+
   const renderDeckInput = (week: LeagueWeek, userId: number, slotNumber: number) => {
     if (week.format_type === 'thief' && week.status === 'deck_selection') {
       // Build thief pool for this team
@@ -2009,7 +2034,19 @@ export default function MyTeamPage() {
                 {/* Render all slots (not for sealed_alliance/alliance/team_sealed_alliance or thief curation/steal phases) */}
                 {week.format_type !== 'sealed_alliance' && week.format_type !== 'alliance' && week.format_type !== 'team_sealed_alliance' &&
                   !(week.format_type === 'thief' && (week.status === 'curation' || week.status === 'team_paired' || week.status === 'thief')) &&
-                  Array.from({ length: maxSlots }, (_, i) => i + 1).map((slotNum) => {
+                  slotItems(week, maxSlots).map((item) => {
+                  if (item.heading) {
+                    return (
+                      <Typography
+                        key={item.key}
+                        variant="subtitle2"
+                        sx={{ ml: 4, mt: 1, color: 'text.secondary' }}
+                      >
+                        {item.heading} — two decks and one ban
+                      </Typography>
+                    );
+                  }
+                  const slotNum = item.slot as number;
                   const sel = selections.find((s) => s.slot_number === slotNum);
                   if (sel) {
                     return (
@@ -2217,7 +2254,9 @@ export default function MyTeamPage() {
                                     }
                                   >
                                     {banOptions(
-                                      week.allowed_houses,
+                                      week.houses_by_set?.[setNumber]?.length
+                                        ? week.houses_by_set[setNumber]
+                                        : week.allowed_houses,
                                       fromSet.map((s) => s.deck?.houses),
                                     ).map((o) => (
                                       <MenuItem key={o.house} value={o.house} disabled={o.disabled}>

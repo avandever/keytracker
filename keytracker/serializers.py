@@ -680,6 +680,30 @@ def _allowed_houses_for_week(week: LeagueWeek, allowed_sets) -> list:
     return [n for (n,) in all_houses if n and n not in NON_PLAYABLE_HOUSES]
 
 
+def _houses_by_set(week: LeagueWeek, allowed_sets) -> dict:
+    """The houses each allowed set holds, for a format that bans per set.
+
+    Double Oubliette aims one ban at each set, so the union of both sets is
+    the wrong list to choose from: on a Winds of Exchange / Tokens of Change
+    week it offers fourteen houses where Tokens of Change holds seven, and a
+    ban on one of the other seven is spent on nothing.
+
+    Empty for every other format, which bans across the week rather than
+    within a set, and for a set we hold no card data for -- callers fall back
+    to allowed_houses rather than show an empty list.
+    """
+    if week.format_type != "double_oubliette":
+        return {}
+    from keytracker.utils import houses_for_expansions
+
+    out = {}
+    for expansion in allowed_sets or []:
+        houses = houses_for_expansions([expansion])
+        if houses:
+            out[expansion] = houses
+    return out
+
+
 def _reveal_opponent_decks(
     week, viewer, redacted_opponent_ids, is_revealed, hide_until_revealed=False
 ):
@@ -982,6 +1006,7 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         # Houses a deck this week could actually contain, so pickers offer the
         # sets in play rather than every house that has ever existed.
         "allowed_houses": _allowed_houses_for_week(week, allowed_sets),
+        "houses_by_set": _houses_by_set(week, allowed_sets),
         # Own team only -- this exposes teammates' deck aember, which is exactly
         # the data the opponent redaction above is protecting.
         "team_amber_budget": _team_amber_budget(week, viewer_own_team_id),
