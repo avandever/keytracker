@@ -317,11 +317,13 @@ def get_league(league_id):
     data["is_signed_up"] = is_signed_up
     data["my_team_id"] = my_team_id
     data["is_captain"] = is_captain
-    data["playoff_weeks"] = _playoff_weeks_for_team(league, viewer, my_team_id)
+    data["playoff_weeks"] = _playoff_weeks_for_team(
+        league, viewer, my_team_id, stub=only_week is not None
+    )
     return etag_response(data)
 
 
-def _playoff_weeks_for_team(league, viewer, my_team_id):
+def _playoff_weeks_for_team(league, viewer, my_team_id, stub=False):
     """A team's playoff weeks, scoped the way My Info scopes an ordinary one.
 
     A round is one week per bracket, so a team has as many of these per round
@@ -343,8 +345,14 @@ def _playoff_weeks_for_team(league, viewer, my_team_id):
     for week in sorted(
         playoff_weeks, key=lambda w: (w.playoff_round or 0, w.week_number)
     ):
-        week_data = serialize_league_week(week, viewer=viewer)
-        week_data = _scope_week_to_viewer(week_data, my_team_id, my_user_ids)
+        if stub:
+            # The league page only asks whether this player is in a bracket,
+            # and eleven bracket weeks in full is 137KB to answer it. My Team,
+            # which actually draws them, asks without this.
+            week_data = _week_stub(week)
+        else:
+            week_data = serialize_league_week(week, viewer=viewer)
+            week_data = _scope_week_to_viewer(week_data, my_team_id, my_user_ids)
         bracket = brackets.get(week.playoff_bracket_id)
         week_data["playoff_round"] = week.playoff_round
         week_data["playoff_bracket_id"] = week.playoff_bracket_id
