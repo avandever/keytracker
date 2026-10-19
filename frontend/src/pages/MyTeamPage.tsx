@@ -221,6 +221,23 @@ export default function MyTeamPage() {
   const [sasRungSelections, setSasRungSelections] = useState<Record<string, number | ''>>({});
   // Oubliette: pending banned-house picks, keyed by `${weekId}-${userId}`
   const [oublietteBanSelections, setOublietteBanSelections] = useState<Record<string, string>>({});
+  // A week's own failures, shown in that week rather than at the top of the
+  // page: with eleven brackets stacked up, an error about the one halfway
+  // down was landing a screen and a half above the form that caused it.
+  const [weekErrors, setWeekErrors] = useState<Record<number, string>>({});
+
+  const showWeekError = (weekId: number, e: any) => {
+    const message = e?.response?.data?.error || e?.message || String(e);
+    setWeekErrors((prev) => ({ ...prev, [weekId]: message }));
+    return message;
+  };
+
+  const clearWeekError = (weekId: number) =>
+    setWeekErrors((prev) => {
+      const next = { ...prev };
+      delete next[weekId];
+      return next;
+    });
 
   // Tertiate: house purge selections keyed by matchup id
   const [tertiateHouseSelections, setTertiateHouseSelections] = useState<Record<number, string>>({});
@@ -1134,7 +1151,7 @@ export default function MyTeamPage() {
     const key = `${weekId}-${userId}`;
     const pods = openAlliancePods[key] || [];
     if (pods.length < 3) {
-      setError('All 3 pods must be filled before submitting');
+      showWeekError(weekId, { message: 'All 3 pods must be filled before submitting' });
       return;
     }
     setError('');
@@ -1148,10 +1165,11 @@ export default function MyTeamPage() {
       if (userId !== user!.id) payload.user_id = userId;
       await submitAllianceSelection(league.id, weekId, payload);
       setOpenAlliancePods((prev) => ({ ...prev, [key]: [] }));
+      clearWeekError(weekId);
       setSuccess('Alliance selection submitted!');
       refresh();
     } catch (e: any) {
-      setError(e.response?.data?.error || e.message);
+      showWeekError(weekId, e);
     }
   };
 
@@ -1159,10 +1177,11 @@ export default function MyTeamPage() {
     setError('');
     try {
       await clearAllianceSelection(league.id, weekId, userId !== user!.id ? userId : undefined);
+      clearWeekError(weekId);
       setSuccess('Alliance selection cleared');
       refresh();
     } catch (e: any) {
-      setError(e.response?.data?.error || e.message);
+      showWeekError(weekId, e);
     }
   };
 
@@ -1236,6 +1255,16 @@ export default function MyTeamPage() {
             <Chip label={`Bo${week.best_of_n}`} size="small" variant="outlined" />
             <Chip label={week.status.replace('_', ' ')} size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
             <WeekConstraints week={week} sets={sets} />
+
+            {weekErrors[week.id] && (
+              <Alert
+                severity="error"
+                sx={{ width: '100%', mt: 1 }}
+                onClose={() => clearWeekError(week.id)}
+              >
+                {weekErrors[week.id]}
+              </Alert>
+            )}
 
             {/* What the captain still has to chase, gathered in one place.
                 A bracket week is left out: its round shows one summary for

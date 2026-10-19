@@ -3219,10 +3219,18 @@ def submit_alliance_selection(league_id, week_id):
     )
     if week.format_type not in alliance_formats:
         return jsonify({"error": "Only for Alliance formats"}), 400
-    if week.status not in (
+    # The same window a deck gets. An alliance closed at team_paired, so a
+    # captain who had not forged one by the time pairings went out could not
+    # enter it at all and the match was dead on arrival -- while the player
+    # beside them in a non-alliance bracket could still be entered late. Every
+    # late entry is logged, the way a late deck is.
+    _open_statuses = (
         WeekStatus.DECK_SELECTION.value,
         WeekStatus.TEAM_PAIRED.value,
-    ):
+        WeekStatus.PAIRING.value,
+    )
+    is_after_pairing = week.status == WeekStatus.PUBLISHED.value
+    if week.status not in _open_statuses and not is_after_pairing:
         return jsonify({"error": "Alliance selection is not open"}), 400
 
     effective = get_effective_user()
@@ -3454,6 +3462,36 @@ def submit_alliance_selection(league_id, week_id):
                     ),
                     400,
                 )
+
+    if is_after_pairing:
+        target_team = None
+        for team in league.teams:
+            if any(m.user_id == target_user_id for m in team.members):
+                target_team = team
+                break
+        captains_target_team = target_team is not None and any(
+            m.user_id == effective.id and m.is_captain for m in target_team.members
+        )
+        if not _is_league_admin(league, effective) and not captains_target_team:
+            return (
+                jsonify(
+                    {
+                        "error": "Alliance selection has closed for this week. "
+                        "Ask your captain to enter it for you."
+                    }
+                ),
+                403,
+            )
+        if target_team is not None:
+            _log_deck_entry_change(
+                target_team.id,
+                week.id,
+                target_user_id,
+                effective.id,
+                "added",
+                deck_name=f"Alliance ({len(pods)} pods)",
+                slot_number=None,
+            )
 
     # Replace existing alliance selections
     AlliancePodSelection.query.filter_by(
