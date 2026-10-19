@@ -146,6 +146,19 @@ export default function LeagueDetailPage() {
   }, [leagueId]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // The playoff tabs fetch when they are the tab being shown -- including on
+  // first paint, since Playoff Standings is tab zero once the brackets are
+  // drawn and nothing would otherwise ask for it.
+  useEffect(() => {
+    if (!league || !playoffSetup?.config.drawn_at) return;
+    if (activeTab === 0 && playoffTree === null) {
+      getPlayoffTree(league.id).then(setPlayoffTree).catch(() => {});
+    }
+    if (activeTab === 1 && playoffDecks === null) {
+      getPlayoffDecks(league.id).then(setPlayoffDecks).catch(() => {});
+    }
+  }, [activeTab, league, playoffSetup, playoffTree, playoffDecks]);
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
   // Only offer the fantasy link when this league actually has one. Failing
   // quietly is right: a missing fantasy competition is not an error here.
