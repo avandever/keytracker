@@ -218,7 +218,8 @@ DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 PROD_DOK_BASE = "https://decksofkeyforge.com"
 _DOK_BASE = os.environ.get("DOK_BASE_URL", PROD_DOK_BASE)
 DOK_DECK_BASE = f"{_DOK_BASE}/public-api/v3/decks"
-DOK_ALLIANCE_BASE = f"{_DOK_BASE}/api/alliance-decks/with-synergies"
+_DOK_ALLIANCE_PATH = "/api/alliance-decks/with-synergies"
+DOK_ALLIANCE_BASE = f"{_DOK_BASE}{_DOK_ALLIANCE_PATH}"
 TRY_LOCAL_DOK_FOR_DECK_BASE_DATA = os.environ.get(
     "TRY_LOCAL_DOK_FOR_DECK_BASE_DATA", ""
 ).lower() in ("1", "true", "yes")
@@ -1003,6 +1004,48 @@ def parse_deck_url(url: str):
     return None
 
 
+def _get_dok_alliance_json(uuid: str) -> dict:
+    """The alliance as DoK describes it, from the mirror or from production.
+
+    DOK_BASE_URL may point at a local mirror, which can simply not hold an
+    alliance somebody built on the public site. It says so with an empty 200
+    rather than a 404, so the miss surfaces as a JSON decode error much
+    further along -- which is what left a captain unable to enter a perfectly
+    good alliance.
+
+    Production is asked whenever the mirror has nothing usable to say, the
+    same escape update_dok_deck already takes for a deck. When the mirror is
+    production there is only ever one request.
+    """
+    bases = [_DOK_BASE]
+    if _DOK_BASE != PROD_DOK_BASE:
+        bases.append(PROD_DOK_BASE)
+
+    trouble = "gave no answer"
+    for base in bases:
+        url = f"{base}{_DOK_ALLIANCE_PATH}/{uuid}"
+        try:
+            response = requests.get(url, headers=DOK_HEADERS, timeout=30)
+            response.raise_for_status()
+            if not response.text.strip():
+                trouble = "answered with an empty body"
+                continue
+            data = response.json()
+        except (requests.RequestException, json.JSONDecodeError) as exc:
+            trouble = f"{type(exc).__name__}: {exc}"
+            continue
+        if not data.get("deck"):
+            trouble = "answered without an alliance in it"
+            continue
+        if base != _DOK_BASE:
+            current_app.logger.info(
+                "Alliance %s came from production DoK: the mirror %s", uuid, trouble
+            )
+        return data
+
+    raise ValueError(f"No DoK could describe alliance {uuid}; the last one {trouble}")
+
+
 def fetch_dok_alliance(uuid: str) -> dict:
     """
     Fetch a DoK alliance deck by UUID.  Returns structured pod data.
@@ -1015,10 +1058,7 @@ def fetch_dok_alliance(uuid: str) -> dict:
         "valid_alliance": bool,
       }
     """
-    url = f"{DOK_ALLIANCE_BASE}/{uuid}"
-    response = requests.get(url, headers=DOK_HEADERS)
-    response.raise_for_status()
-    data = response.json()
+    data = _get_dok_alliance_json(uuid)
     deck_data = data.get("deck", {})
     alliance_houses = deck_data.get("allianceHouses", [])
     token_info = deck_data.get("tokenInfo") or {}
@@ -1032,6 +1072,13 @@ def fetch_dok_alliance(uuid: str) -> dict:
         if not kf_id or not house_name:
             continue
         deck = get_deck_by_id_with_zeal(kf_id)
+        if deck is None or deck.id is None:
+            # Master Vault being unreachable lands here; say which deck rather
+            # than failing on an attribute of nothing.
+            raise ValueError(
+                f"Alliance {uuid} is built from deck {kf_id}, which could not be "
+                "fetched"
+            )
         deck_houses = [ps.house for ps in deck.pod_stats if ps.house != "Archon Power"]
         pods.append(
             {
