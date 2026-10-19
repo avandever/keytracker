@@ -291,6 +291,20 @@ export default function MyTeamPage() {
       }
     }
     if (idx === null) {
+      // An open playoff round wins over the season. A last week often sits at
+      // published for days waiting on one result, and landing there while the
+      // playoffs are being played is landing on the wrong thing.
+      const openRounds = playoffRoundNumbers(
+        (league.weeks || []).filter(
+          (w) => w.status !== 'completed' && w.status !== 'setup',
+        ),
+      );
+      if (openRounds.length > 0) {
+        const at = keys.indexOf(`playoff-round-${openRounds[0]}`);
+        if (at >= 0) idx = at;
+      }
+    }
+    if (idx === null) {
       const current = currentWeekOf(league);
       if (current) {
         idx = keys.indexOf(
@@ -1255,6 +1269,33 @@ export default function MyTeamPage() {
             <Chip label={`Bo${week.best_of_n}`} size="small" variant="outlined" />
             <Chip label={week.status.replace('_', ' ')} size="small" sx={(theme) => ({ bgcolor: alpha(theme.palette.info.main, 0.12), color: theme.palette.info.dark })} />
             <WeekConstraints week={week} sets={sets} />
+
+            {/* Who this bracket's player is actually up against. It is in the
+                match list further down too, but that is below every deck
+                slot, and the first thing wanted here is the opponent. */}
+            {week.playoff_bracket_id != null && (() => {
+              const mine = week.playoff_team_user_id;
+              if (!mine) return null;
+              for (const wm of week.matchups || []) {
+                for (const pm of wm.player_matchups) {
+                  const iAmP1 = pm.player1.id === mine;
+                  if (!iAmP1 && pm.player2.id !== mine) continue;
+                  const opponent = iAmP1 ? pm.player2 : pm.player1;
+                  const theirTeam = wm.team1.id === myTeam.id ? wm.team2 : wm.team1;
+                  return (
+                    <Chip
+                      key={pm.id}
+                      size="small"
+                      color="primary"
+                      label={`vs ${opponent.name}${theirTeam ? ` (${theirTeam.name})` : ''}`}
+                    />
+                  );
+                }
+              }
+              return (
+                <Chip size="small" variant="outlined" label="Opponent not drawn yet" />
+              );
+            })()}
 
             {weekErrors[week.id] && (
               <Alert

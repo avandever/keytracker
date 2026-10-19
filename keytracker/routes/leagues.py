@@ -504,6 +504,18 @@ def get_my_league_info(league_id):
     )
     data["my_team_id"] = my_team.id if my_team else None
     data["is_captain"] = bool(member.is_captain) if member else False
+    # The player's own playoff match, if they are in one. Scoped to the
+    # bracket they were put in rather than every bracket their team plays:
+    # this page is one player's view of one match, and the rest is My Team's
+    # business. A player in no bracket gets an empty list and no tab.
+    playoff_weeks = _playoff_weeks_for_team(
+        league, effective, my_team.id if my_team else None
+    )
+    data["playoff_weeks"] = [
+        w
+        for w in playoff_weeks
+        if w.get("playoff_team_user_id") == effective.id
+    ]
     return etag_response(data)
 
 

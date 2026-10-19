@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
+import { WEEK_FORMAT_LABELS as FORMAT_LABELS } from '../utils/formatLabels';
 import {
   Container,
   Typography,
@@ -88,9 +89,19 @@ export function currentWeekOf(league: LeagueDetail) {
   );
 }
 
+/** The player's own playoff weeks, the round being played first. */
+export function playoffWeeksOf(league: LeagueDetail) {
+  return [...(league.playoff_weeks || [])].sort(
+    (a, b) => (b.playoff_round || 0) - (a.playoff_round || 0),
+  );
+}
+
 /** Tab slugs, in render order, so ?tab= can name a tab instead of counting them. */
 function tabKeysFor(league: LeagueDetail): string[] {
   return [
+    // A player in a bracket lands here: it is the match they are playing, and
+    // the season behind it is finished or nearly so.
+    ...(playoffWeeksOf(league).length > 0 ? ['playoffs'] : []),
     'team',
     ...(league.fee_amount != null ? ['fee'] : []),
     ...(league.weeks || []).map((w) => `week-${w.week_number}`),
@@ -235,6 +246,9 @@ export default function MyLeagueInfoPage() {
         if (!isNaN(n) && n >= 0 && n < keys.length) idx = n;
       }
     }
+    if (idx === null && playoffWeeksOf(league).length > 0) {
+      idx = keys.indexOf('playoffs');
+    }
     if (idx === null) {
       const current = currentWeekOf(league);
       if (current) idx = keys.indexOf(`week-${current.week_number}`);
@@ -246,7 +260,10 @@ export default function MyLeagueInfoPage() {
   // Weeks arrive as tab stubs; the one being looked at is fetched on demand.
   useEffect(() => {
     if (!league) return;
-    const weekStart = 1 + (league.fee_amount != null ? 1 : 0);
+    const weekStart =
+      (playoffWeeksOf(league).length > 0 ? 1 : 0)
+      + 1
+      + (league.fee_amount != null ? 1 : 0);
     const week = (league.weeks || [])[activeTab - weekStart];
     if (!week || week.detail_loaded) return;
     refresh(week.id);
@@ -2616,7 +2633,11 @@ export default function MyLeagueInfoPage() {
   };
 
   const feeOffset = league.fee_amount != null ? 1 : 0;
-  const weekStartIdx = 1 + feeOffset;
+  const myPlayoffWeeks = playoffWeeksOf(league);
+  const playoffOffset = myPlayoffWeeks.length > 0 ? 1 : 0;
+  const playoffsIdx = playoffOffset > 0 ? 0 : null;
+  const teamIdx = playoffOffset;
+  const weekStartIdx = playoffOffset + 1 + feeOffset;
 
   return (
     <Container maxWidth="sm" sx={{ mt: 3 }}>
@@ -2642,6 +2663,7 @@ export default function MyLeagueInfoPage() {
         variant="scrollable"
         scrollButtons="auto"
       >
+        {playoffWeeksOf(league).length > 0 && <Tab label="Playoffs" />}
         <Tab label="Team" />
         {league.fee_amount != null && <Tab label="Fee Status" />}
         {weeks.map((w) => {
@@ -2667,7 +2689,66 @@ export default function MyLeagueInfoPage() {
         })}
       </Tabs>
 
-      {activeTab === 0 && (
+      {activeTab === playoffsIdx && (
+        <Box>
+          {myPlayoffWeeks.map((week, i) => {
+            const mine = week.playoff_team_user_id;
+            const pm = (week.matchups || [])
+              .flatMap((wm) => wm.player_matchups.map((p) => ({ wm, p })))
+              .find(({ p }) => p.player1.id === mine || p.player2.id === mine);
+            const iAmP1 = pm ? pm.p.player1.id === mine : false;
+            const opponent = pm ? (iAmP1 ? pm.p.player2 : pm.p.player1) : null;
+            const theirTeam = pm
+              ? (pm.wm.team1.id === myTeam.id ? pm.wm.team2 : pm.wm.team1)
+              : null;
+            const myWins = pm
+              ? pm.p.games.filter((g) => g.winner_id === (iAmP1 ? pm.p.player1.id : pm.p.player2.id)).length
+              : 0;
+            const theirWins = pm
+              ? pm.p.games.filter((g) => g.winner_id === (iAmP1 ? pm.p.player2.id : pm.p.player1.id)).length
+              : 0;
+            // The round being played leads; anything older is history and is
+            // drawn quieter, below it.
+            const isCurrent = i === 0;
+            return (
+              <Card key={week.id} sx={{ mb: 2, opacity: isCurrent ? 1 : 0.75 }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+                    <Typography variant={isCurrent ? 'h6' : 'subtitle1'}>
+                      {week.playoff_bracket_name || week.name}
+                    </Typography>
+                    <Chip size="small" variant="outlined"
+                      label={FORMAT_LABELS[week.format_type] || week.format_type} />
+                    <Chip size="small" variant="outlined" label={`Bo${week.best_of_n}`} />
+                    <Chip size="small" variant="outlined"
+                      label={`Round ${week.playoff_round}`} />
+                    {!isCurrent && <Chip size="small" label="Earlier round" />}
+                  </Box>
+                  {opponent ? (
+                    <Typography variant="body1" sx={{ mb: 1 }}>
+                      <strong>vs {opponent.name}</strong>
+                      {theirTeam ? ` (${theirTeam.name})` : ''}
+                      {pm && pm.p.games.length > 0 ? ` — ${myWins}–${theirWins}` : ''}
+                      {pm && pm.p.result_confirmed ? ' · verified' : ''}
+                    </Typography>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      No opponent yet — the pairings for this round are not out.
+                    </Typography>
+                  )}
+                  <WeekConstraints week={week} sets={sets} />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                    Decks, bans and reporting for this match are on My Team, under{' '}
+                    {week.playoff_round ? `Playoff round ${week.playoff_round}` : 'the round tab'}.
+                  </Typography>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Box>
+      )}
+
+      {activeTab === teamIdx && (
         <Card>
           <CardContent>
             <Typography variant="h6">{myTeam.name}</Typography>
