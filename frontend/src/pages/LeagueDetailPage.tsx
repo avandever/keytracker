@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link as RouterLink, useSearchParams, useNavigate } from 'react-router-dom';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
 import {
@@ -152,13 +152,53 @@ export default function LeagueDetailPage() {
   const [playoffDecks, setPlayoffDecks] = useState<PlayoffDecks | null>(null);
 
   const refresh = useCallback(() => {
-    getLeague(leagueId)
+    getLeague(leagueId, { focus: true })
       .then(setLeague)
       .catch((e) => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
   }, [leagueId]);
 
+  /**
+   * Fetch one week's detail and keep it.
+   *
+   * The rest of the league arrives as stubs, so a week has to be asked for
+   * before it can be drawn. What has already been fetched is kept: flipping
+   * between two week tabs should not refetch either.
+   */
+  const loadWeek = useCallback(
+    (weekId: number) => {
+      getLeague(leagueId, { weekId })
+        .then((fresh) => {
+          const loaded = (fresh.weeks || []).find((w) => w.id === weekId);
+          if (!loaded) return;
+          setLeague((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  weeks: (prev.weeks || []).map((w) =>
+                    w.id === weekId ? loaded : w,
+                  ),
+                }
+              : fresh,
+          );
+        })
+        .catch(() => {});
+    },
+    [leagueId],
+  );
+
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Where the week tabs begin, written down by the render that works it out.
+  const weekStartRef = useRef(0);
+
+  // The tab the page opens on needs its week too: no change event fires for
+  // the tab you land on, and ?tab= can name one.
+  useEffect(() => {
+    if (!league) return;
+    const week = (league.weeks || [])[activeTab - weekStartRef.current];
+    if (week && week.detail_loaded === false) loadWeek(week.id);
+  }, [activeTab, league, loadWeek]);
 
   // The playoff tabs fetch when they are the tab being shown -- including on
   // first paint, since Playoff Standings is tab zero once the brackets are
@@ -271,6 +311,7 @@ export default function LeagueDetailPage() {
   const weekStartIdx =
     playoffTabCount + 1 + (showTeamLists ? 2 : 0) + (showSignups ? 1 : 0);
   const adminLogIdx = tabs.length - 1;
+  weekStartRef.current = weekStartIdx;
 
   /** A match as the bracket reads it: who is playing, and for whom. */
   const playoffSide = (
@@ -1488,6 +1529,7 @@ export default function LeagueDetailPage() {
               // Lazy-load completed match decks for published/completed weeks
               if (v >= weekStartIdx) {
                 const week = weeks[v - weekStartIdx];
+                if (week && week.detail_loaded === false) loadWeek(week.id);
                 if (week && (week.status === 'published' || week.status === 'completed') && !completedDecks[week.id]) {
                   getCompletedMatchDecks(league.id, week.id).then((data) => {
                     setCompletedDecks((prev) => ({ ...prev, [week.id]: data }));

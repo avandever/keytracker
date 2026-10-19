@@ -346,12 +346,48 @@ def _preload_league_graph(league: League, weeks=None) -> list:
     return keep_alive
 
 
+def _week_stub(week) -> dict:
+    """Enough of a week to label its tab, without loading the week."""
+    return {
+        "id": week.id,
+        "league_id": week.league_id,
+        "week_number": week.week_number,
+        "name": week.name,
+        "format_type": week.format_type,
+        "status": week.status,
+        "best_of_n": week.best_of_n,
+        "matchups": [],
+        "deck_selections": [],
+        "deck_suggestions": [],
+        "feature_designations": [
+            {
+                "team_id": fd.team_id,
+                "user_id": fd.user_id,
+            }
+            for fd in (week.feature_designations or [])
+        ],
+        "detail_loaded": False,
+    }
+
+
 def serialize_league_detail(
-    league: League, viewer=None, hide_team_members: bool = False
+    league: League,
+    viewer=None,
+    hide_team_members: bool = False,
+    only_week=None,
 ) -> dict:
+    """The league, with every week in full unless one is singled out.
+
+    With `only_week`, that week is serialised and the rest come back as the
+    stubs My Info already uses -- enough to label a tab, nothing more. The
+    league page shows one week at a time, and carrying all of them cost about
+    2.2MB on ABR 15, 96% of it weeks nobody was looking at.
+    """
     # Bound to a local on purpose: dropping it would let the preloaded rows be
     # collected before they are read.
-    _preloaded = _preload_league_graph(league)  # noqa: F841
+    _preloaded = _preload_league_graph(  # noqa: F841
+        league, weeks=[only_week] if only_week is not None else None
+    )
     data = serialize_league_summary(league)
     data["teams"] = [
         serialize_team_detail(t, hide_members=hide_team_members)
@@ -366,7 +402,11 @@ def serialize_league_detail(
     # brackets on their own page, so they stay out of the week list rather than
     # adding a tab per bracket per round.
     data["weeks"] = [
-        serialize_league_week(w, viewer=viewer)
+        (
+            serialize_league_week(w, viewer=viewer)
+            if only_week is None or w.id == only_week.id
+            else _week_stub(w)
+        )
         for w in sorted(league.weeks, key=lambda w: w.week_number)
         if getattr(w, "playoff_bracket_id", None) is None
     ]

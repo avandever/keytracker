@@ -39,8 +39,24 @@ export async function createLeague(payload: {
   return data;
 }
 
-export async function getLeague(leagueId: number): Promise<LeagueDetail> {
-  const { data } = await apiClient.get(`/leagues/${leagueId}`);
+/**
+ * A league, with every week in full unless one is singled out.
+ *
+ * `focus` asks the server to pick the week this player's attention belongs
+ * on; `weekId` names one. Either way the rest come back as stubs carrying
+ * `detail_loaded: false` -- enough to label a tab. Called with neither, every
+ * week comes in full, which is what My Team needs.
+ */
+export async function getLeague(
+  leagueId: number,
+  opts?: { weekId?: number | null; focus?: boolean },
+): Promise<LeagueDetail> {
+  const params: Record<string, string | number> = {};
+  if (opts?.weekId != null) params.week_id = opts.weekId;
+  else if (opts?.focus) params.weeks = 'focus';
+  const { data } = await apiClient.get(`/leagues/${leagueId}`, {
+    params: Object.keys(params).length ? params : undefined,
+  });
   return data;
 }
 

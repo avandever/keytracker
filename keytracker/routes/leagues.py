@@ -59,6 +59,7 @@ from keytracker.schema import (
 )
 from keytracker.serializers import (
     _preload_league_graph,
+    _week_stub,
     bracket_player_id,
     serialize_league_summary,
     serialize_league_detail,
@@ -287,9 +288,31 @@ def get_league(league_id):
     hide_team_members = (
         league.status == LeagueStatus.DRAFTING.value and not (is_admin or is_captain)
     )
+
+    # One week in full and the rest as tab stubs, when the caller asks. Left
+    # alone without the parameter: My Team reads every bracket week of a round
+    # at once and would see stubs as empty weeks.
+    season_weeks = [
+        w
+        for w in sorted(league.weeks, key=lambda w: w.week_number)
+        if getattr(w, "playoff_bracket_id", None) is None
+    ]
+    requested_id = request.args.get("week_id", type=int)
+    only_week = None
+    if requested_id is not None:
+        only_week = next((w for w in season_weeks if w.id == requested_id), None)
+        if only_week is None:
+            return jsonify({"error": "Week not found"}), 404
+    elif request.args.get("weeks") == "focus":
+        only_week = _focus_week_for_viewer(league, viewer, season_weeks)
+
     data = serialize_league_detail(
-        league, viewer=viewer, hide_team_members=hide_team_members
+        league,
+        viewer=viewer,
+        hide_team_members=hide_team_members,
+        only_week=only_week,
     )
+    data["loaded_week_id"] = only_week.id if only_week else None
     data["is_admin"] = is_admin
     data["is_signed_up"] = is_signed_up
     data["my_team_id"] = my_team_id
@@ -396,28 +419,61 @@ def _scope_week_to_viewer(week_data: dict, my_team_id, my_user_ids: set) -> dict
     return scoped
 
 
-def _week_stub(week) -> dict:
-    """Enough of a week to label its tab, without loading the week."""
-    return {
-        "id": week.id,
-        "league_id": week.league_id,
-        "week_number": week.week_number,
-        "name": week.name,
-        "format_type": week.format_type,
-        "status": week.status,
-        "best_of_n": week.best_of_n,
-        "matchups": [],
-        "deck_selections": [],
-        "deck_suggestions": [],
-        "feature_designations": [
-            {
-                "team_id": fd.team_id,
-                "user_id": fd.user_id,
-            }
-            for fd in (week.feature_designations or [])
-        ],
-        "detail_loaded": False,
-    }
+def _player_owes_decks(week, user_id):
+    """Whether this player still has decks to enter for a week."""
+    if week.format_type in ALLIANCE_WEEK_FORMATS:
+        pods = AlliancePodSelection.query.filter_by(
+            week_id=week.id, user_id=user_id, slot_type="pod"
+        ).count()
+        return pods < 3
+    have = PlayerDeckSelection.query.filter_by(
+        week_id=week.id, user_id=user_id
+    ).count()
+    return have < deck_slots_for_format(week.format_type)
+
+
+def _focus_week_for_viewer(league, viewer, weeks):
+    """The week this player's attention belongs on.
+
+    What the league page used to work out for itself by reading every week: a
+    published week holding a match of theirs that is still undecided, else the
+    first where they still owe a deck, else the first still in play, else the
+    last. Worked out here so the page can be sent one week instead of all of
+    them and still open on the right one.
+    """
+    if not weeks:
+        return None
+    if viewer is not None:
+        for week in weeks:
+            if week.status != WeekStatus.PUBLISHED.value:
+                continue
+            wins_needed = math.ceil((week.best_of_n or 1) / 2)
+            for wm in week.matchups:
+                for pm in wm.player_matchups:
+                    if viewer.id not in (pm.player1_id, pm.player2_id):
+                        continue
+                    if pm.is_double_loss:
+                        continue
+                    p1 = sum(1 for g in pm.games if g.winner_id == pm.player1_id)
+                    p2 = sum(1 for g in pm.games if g.winner_id == pm.player2_id)
+                    if p1 < wins_needed and p2 < wins_needed:
+                        return week
+        _open = (
+            WeekStatus.DECK_SELECTION.value,
+            WeekStatus.TEAM_PAIRED.value,
+            WeekStatus.PAIRING.value,
+            WeekStatus.THIEF_STEP.value,
+        )
+        for week in weeks:
+            if week.status in _open and _player_owes_decks(week, viewer.id):
+                return week
+    for week in weeks:
+        if week.status not in (
+            WeekStatus.COMPLETED.value,
+            WeekStatus.SETUP.value,
+        ):
+            return week
+    return weeks[-1]
 
 
 @blueprint.route("/<int:league_id>/my-info", methods=["GET"])
