@@ -218,8 +218,10 @@ DOK_HEADERS = {"Api-Key": os.environ.get("DOK_API_KEY")}
 PROD_DOK_BASE = "https://decksofkeyforge.com"
 _DOK_BASE = os.environ.get("DOK_BASE_URL", PROD_DOK_BASE)
 DOK_DECK_BASE = f"{_DOK_BASE}/public-api/v3/decks"
-_DOK_ALLIANCE_PATH = "/api/alliance-decks/with-synergies"
-DOK_ALLIANCE_BASE = f"{_DOK_BASE}{_DOK_ALLIANCE_PATH}"
+# Always production: an alliance is built by a person on the public site, so
+# a deck mirror does not hold one and never will. DOK_MY_ALLIANCES_URL below
+# goes straight there for the same reason.
+DOK_ALLIANCE_BASE = f"{PROD_DOK_BASE}/api/alliance-decks/with-synergies"
 TRY_LOCAL_DOK_FOR_DECK_BASE_DATA = os.environ.get(
     "TRY_LOCAL_DOK_FOR_DECK_BASE_DATA", ""
 ).lower() in ("1", "true", "yes")
@@ -1005,45 +1007,29 @@ def parse_deck_url(url: str):
 
 
 def _get_dok_alliance_json(uuid: str) -> dict:
-    """The alliance as DoK describes it, from the mirror or from production.
+    """The alliance as DoK describes it, always from production.
 
-    DOK_BASE_URL may point at a local mirror, which can simply not hold an
-    alliance somebody built on the public site. It says so with an empty 200
-    rather than a 404, so the miss surfaces as a JSON decode error much
-    further along -- which is what left a captain unable to enter a perfectly
-    good alliance.
+    Asking the mirror DOK_BASE_URL points at was the whole bug: it does not
+    hold alliances, and says so with an empty 200 rather than a 404, so
+    "never here" arrived as a JSON decode error and a captain could not enter
+    a perfectly good alliance.
 
-    Production is asked whenever the mirror has nothing usable to say, the
-    same escape update_dok_deck already takes for a deck. When the mirror is
-    production there is only ever one request.
+    The failures below stay spelled out because production can still be
+    unreachable or not know the uuid, and either should read as itself rather
+    than as a decode error.
     """
-    bases = [_DOK_BASE]
-    if _DOK_BASE != PROD_DOK_BASE:
-        bases.append(PROD_DOK_BASE)
-
-    trouble = "gave no answer"
-    for base in bases:
-        url = f"{base}{_DOK_ALLIANCE_PATH}/{uuid}"
-        try:
-            response = requests.get(url, headers=DOK_HEADERS, timeout=30)
-            response.raise_for_status()
-            if not response.text.strip():
-                trouble = "answered with an empty body"
-                continue
-            data = response.json()
-        except (requests.RequestException, json.JSONDecodeError) as exc:
-            trouble = f"{type(exc).__name__}: {exc}"
-            continue
-        if not data.get("deck"):
-            trouble = "answered without an alliance in it"
-            continue
-        if base != _DOK_BASE:
-            current_app.logger.info(
-                "Alliance %s came from production DoK: the mirror %s", uuid, trouble
-            )
-        return data
-
-    raise ValueError(f"No DoK could describe alliance {uuid}; the last one {trouble}")
+    url = f"{DOK_ALLIANCE_BASE}/{uuid}"
+    response = requests.get(url, headers=DOK_HEADERS, timeout=30)
+    response.raise_for_status()
+    if not response.text.strip():
+        raise ValueError(f"DoK answered with an empty body for alliance {uuid}")
+    try:
+        data = response.json()
+    except (requests.RequestException, json.JSONDecodeError) as exc:
+        raise ValueError(f"DoK gave no usable answer for alliance {uuid}: {exc}")
+    if not data.get("deck"):
+        raise ValueError(f"DoK knows no alliance {uuid}")
+    return data
 
 
 def fetch_dok_alliance(uuid: str) -> dict:
