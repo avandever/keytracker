@@ -48,6 +48,7 @@ import {
   getPlayoffStandings,
   getPlayoffTree,
   publishPlayoffAssignments,
+  publishPlayoffRound,
   publishPlayoffs,
   setPlayoffBrackets,
   setPlayoffQualifiers,
@@ -567,6 +568,19 @@ function PlayoffSetupPanel({
                   Open round {n}
                 </Button>
               ))}
+              {Array.from({ length: rounds }, (_, i) => i + 1).map((n) => (
+                <Button
+                  key={`publish-${n}`} variant="outlined" color="secondary" disabled={!drawn}
+                  onClick={() =>
+                    onAct(
+                      () => publishPlayoffRound(leagueId, n),
+                      `Round ${n} pairings published.`,
+                    )
+                  }
+                >
+                  Publish round {n} pairings
+                </Button>
+              ))}
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
               Publishing shows the brackets to the teams and opens the Playoffs tab on My
@@ -580,6 +594,10 @@ function PlayoffSetupPanel({
               their matches — enough for a sealed pool to be dealt — and opening the round
               again once the assignments are out fills the matches in. A later round will
               not open until every result before it is reported and verified.
+              Publishing a round&apos;s pairings is the separate step that starts it: no
+              result can be reported until it is done, and it is what shows the two
+              players each other&apos;s decks. It waits for everyone&apos;s decks unless
+              you confirm going ahead without them.
             </Typography>
           </CardContent>
         </Card>

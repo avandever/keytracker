@@ -1142,6 +1142,173 @@ def _carry_suggestions_forward(league, bracket, week, round_number):
     return carried
 
 
+def _missing_decks_for_week(week, bracket):
+    """Players in this bracket week who have not finished submitting.
+
+    An alliance is counted by its pods, which is what it files instead of
+    deck selections.
+    """
+    missing = []
+    slots = deck_slots_for_format(week.format_type)
+    for assignment in bracket.assignments:
+        if week.format_type in ALLIANCE_WEEK_FORMATS:
+            have = AlliancePodSelection.query.filter_by(
+                week_id=week.id, user_id=assignment.user_id, slot_type="pod"
+            ).count()
+            done = have >= 3
+        else:
+            have = PlayerDeckSelection.query.filter_by(
+                week_id=week.id, user_id=assignment.user_id
+            ).count()
+            done = have >= slots
+        if not done:
+            user = db.session.get(User, assignment.user_id)
+            missing.append(user.name if user else str(assignment.user_id))
+    return missing
+
+
+@blueprint.route(
+    "/<int:league_id>/playoffs/rounds/<int:round_number>/publish", methods=["POST"]
+)
+@login_required
+def publish_playoff_round(league_id, round_number):
+    """Publish a round's pairings, which is what lets results be reported.
+
+    Opening a round and publishing it are deliberately separate. Opening makes
+    the weeks and their matchups, so pools can be dealt and decks entered;
+    publishing says the matches are live, and a game cannot be reported until
+    it is. Keeping them apart leaves an admin holding the moment the two
+    players see each other's decks, rather than having it fall out of whenever
+    the round happened to open.
+
+    With `bracket_id`, only that bracket publishes. Sending `published: false`
+    puts a round back, which is refused once anything has been played.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    effective = get_effective_user()
+    if not _is_league_admin(league, effective):
+        return jsonify({"error": "Admin access required"}), 403
+    config = _config_for(league)
+    if not _locked(config):
+        return jsonify({"error": "Draw the brackets first"}), 400
+
+    data = request.get_json(silent=True) or {}
+    publish = data.get("published", True)
+    force = bool(data.get("force", False))
+    only_bracket_id = data.get("bracket_id")
+
+    brackets = {b.id: b for b in league.playoff_brackets}
+    weeks = [
+        w
+        for w in league.weeks
+        if getattr(w, "playoff_round", None) == round_number
+        and (only_bracket_id is None or w.playoff_bracket_id == only_bracket_id)
+    ]
+    if not weeks:
+        return jsonify({"error": f"Round {round_number} is not open yet"}), 400
+
+    if not publish:
+        played = [
+            w
+            for w in weeks
+            if any(
+                pm.games
+                for wm in w.matchups
+                for pm in wm.player_matchups
+            )
+        ]
+        if played:
+            return (
+                jsonify(
+                    {
+                        "error": "A game has already been reported in this round, so "
+                        "the pairings cannot be put back"
+                    }
+                ),
+                400,
+            )
+        changed = 0
+        for week in weeks:
+            if week.status == WeekStatus.PUBLISHED.value:
+                week.status = WeekStatus.DECK_SELECTION.value
+                changed += 1
+        _log_admin_action(
+            league.id, None, effective.id, "playoff_round_unpublished",
+            f"round {round_number}: {changed} week(s)",
+        )
+        db.session.commit()
+        db.session.refresh(league)
+        my_team_id, _ = _viewer_membership(league, effective)
+        tree = _bracket_tree(league, my_team_id, _assignments_revealed(config))
+        tree["weeks_unpublished"] = changed
+        return jsonify(tree)
+
+    # A week with no matchups has no pairings to publish; that is the sign the
+    # round was opened before the assignments were, and wants opening again.
+    unmade = [
+        w
+        for w in weeks
+        if not any(wm.player_matchups for wm in w.matchups)
+    ]
+    if unmade:
+        labels = sorted(
+            (brackets[w.playoff_bracket_id].name if w.playoff_bracket_id in brackets
+             else w.name) or w.name
+            for w in unmade
+        )
+        return (
+            jsonify(
+                {
+                    "error": "These have no matches yet -- open the round again now "
+                    "that the assignments are published: " + ", ".join(labels[:6])
+                    + ("..." if len(labels) > 6 else "")
+                }
+            ),
+            400,
+        )
+
+    missing = []
+    for week in weeks:
+        bracket = brackets.get(week.playoff_bracket_id)
+        if bracket is None:
+            continue
+        for name in _missing_decks_for_week(week, bracket):
+            label = bracket.name or f"bracket {bracket.bracket_number}"
+            missing.append(f"{name} ({label})")
+    if missing and not force:
+        return (
+            jsonify(
+                {
+                    "error": "Still waiting on decks: "
+                    + ", ".join(sorted(missing)[:8])
+                    + ("..." if len(missing) > 8 else "")
+                    + ". Publish anyway to go ahead without them.",
+                    "missing_players": sorted(missing),
+                }
+            ),
+            400,
+        )
+
+    published = 0
+    for week in weeks:
+        if week.status != WeekStatus.PUBLISHED.value:
+            week.status = WeekStatus.PUBLISHED.value
+            published += 1
+    _log_admin_action(
+        league.id, None, effective.id, "playoff_round_published",
+        f"round {round_number}: {published} week(s)"
+        + (f", {len(missing)} player(s) short" if missing else ""),
+    )
+    db.session.commit()
+    db.session.refresh(league)
+    my_team_id, _ = _viewer_membership(league, effective)
+    tree = _bracket_tree(league, my_team_id, _assignments_revealed(config))
+    tree["weeks_published"] = published
+    return jsonify(tree)
+
+
 def _player_for(bracket, team_id):
     assignment = next(
         (a for a in bracket.assignments if a.team_id == team_id), None

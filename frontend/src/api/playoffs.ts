@@ -237,6 +237,26 @@ export async function startPlayoffRound(
   return data;
 }
 
+/**
+ * Publish a round's pairings, which is what lets results be reported.
+ *
+ * Separate from opening the round: opening makes the weeks and their
+ * matchups so decks can go in, this says the matches are live. Refused while
+ * anyone still owes a deck unless `force` is set, and `published: false` puts
+ * a round back as long as nothing has been played.
+ */
+export async function publishPlayoffRound(
+  leagueId: number,
+  round: number,
+  opts?: { bracket_id?: number; force?: boolean; published?: boolean },
+): Promise<PlayoffTree> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/playoffs/rounds/${round}/publish`,
+    opts || {},
+  );
+  return data;
+}
+
 export interface PlayoffStandingRow {
   team_id: number;
   team_name: string | null;
