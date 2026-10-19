@@ -30,9 +30,12 @@ from keytracker.routes.leagues import (
     get_effective_user,
 )
 from keytracker.schema import (
+    ALLIANCE_WEEK_FORMATS,
     SEALED_WEEK_FORMATS,
+    AlliancePodSelection,
     DeckSuggestion,
     LeagueWeek,
+    PlayerDeckSelection,
     PlayerMatchup,
     PlayoffAssignment,
     PlayoffBracket,
@@ -47,6 +50,7 @@ from keytracker.schema import (
     WeekMatchup,
     WeekStatus,
     db,
+    deck_slots_for_format,
 )
 
 blueprint = Blueprint("playoffs", __name__, url_prefix="/api/v2/leagues")
@@ -218,6 +222,62 @@ def _missing_assignments(league, brackets, qualifier_ids):
     return missing
 
 
+def _deck_progress(league, brackets):
+    """How many decks each qualifying team has in, round by round.
+
+    What an admin wants before opening a round or publishing the assignments:
+    whether the teams are actually ready. It counts and nothing more -- no
+    deck is named and nobody is said to be holding one up, which keeps it
+    sayable out loud while the assignments themselves are still private.
+
+    An alliance is counted by its pods, since it files no deck selections at
+    all -- which is what made two filled brackets read as empty.
+    """
+    qualifiers = sorted(league.playoff_qualifiers, key=lambda q: q.position)
+    names = {t.id: t.name for t in league.teams}
+    assigned = {
+        (b.id, a.team_id): a.user_id for b in brackets for a in b.assignments
+    }
+    rounds = {}
+    for week in league.weeks:
+        if getattr(week, "playoff_round", None) is None:
+            continue
+        rounds.setdefault(week.playoff_round, []).append(week)
+
+    out = []
+    for round_number in sorted(rounds):
+        weeks = rounds[round_number]
+        teams = []
+        for qualifier in qualifiers:
+            submitted = expected = 0
+            for week in weeks:
+                user_id = assigned.get((week.playoff_bracket_id, qualifier.team_id))
+                if user_id is None:
+                    continue
+                slots = deck_slots_for_format(week.format_type)
+                expected += slots
+                if week.format_type in ALLIANCE_WEEK_FORMATS:
+                    pods = AlliancePodSelection.query.filter_by(
+                        week_id=week.id, user_id=user_id, slot_type="pod"
+                    ).count()
+                    submitted += slots if pods >= 3 else 0
+                else:
+                    have = PlayerDeckSelection.query.filter_by(
+                        week_id=week.id, user_id=user_id
+                    ).count()
+                    submitted += min(have, slots)
+            teams.append(
+                {
+                    "team_id": qualifier.team_id,
+                    "team_name": names.get(qualifier.team_id),
+                    "submitted": submitted,
+                    "expected": expected,
+                }
+            )
+        out.append({"round_number": round_number, "teams": teams})
+    return out
+
+
 def _assignment_progress(league, brackets):
     """How far each qualifying team has got, without saying who they picked.
 
@@ -267,6 +327,7 @@ def get_playoffs(league_id):
                 _serialize_bracket(b, my_team_id, reveal) for b in brackets
             ],
             "assignment_progress": _assignment_progress(league, brackets),
+            "deck_progress": _deck_progress(league, brackets),
             "qualifiers": [
                 {
                     "team_id": q.team_id,

@@ -35,6 +35,14 @@ export function slotSetNumber(
   return slotNumber <= 2 ? sets[0] : sets[1];
 }
 
+/**
+ * Formats whose deck is an alliance: three pods from three decks.
+ *
+ * They file no deck selections at all, so anything counting those alone reads
+ * a finished alliance as nothing submitted.
+ */
+export const ALLIANCE_FORMATS = ['alliance', 'sealed_alliance', 'team_sealed_alliance'];
+
 export function deckSlotsForFormat(formatType: string): number {
   return DECK_SLOTS_BY_FORMAT[formatType] ?? 1;
 }

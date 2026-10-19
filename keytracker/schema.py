@@ -885,6 +885,34 @@ class WeekFormat(PyEnum):
 # Weeks played from a generated sealed pool. Pool decks are dealt out, not
 # chosen, so the rule barring a deck from being played in more than one week
 # does not apply to them -- in either direction.
+# How many decks a format asks each player for. Mirrored by
+# frontend/src/utils/deckSlots.ts; keep the two in step.
+DECK_SLOTS_BY_FORMAT = {
+    "triad": 3,
+    "triad_short": 3,
+    "moirai": 3,
+    "oubliette": 2,
+    "adaptive_short": 2,
+    "exchange": 2,
+    "nordic_hexad": 6,
+    "sealed_survival": 2,
+    "double_oubliette": 4,
+}
+
+# An alliance is one deck built from three pods, so it is counted by its pods
+# rather than by deck selections, which it does not use at all.
+ALLIANCE_WEEK_FORMATS = (
+    "alliance",
+    "sealed_alliance",
+    "team_sealed_alliance",
+)
+
+
+def deck_slots_for_format(format_type):
+    """How many decks a format asks each player for."""
+    return DECK_SLOTS_BY_FORMAT.get(format_type, 1)
+
+
 SEALED_WEEK_FORMATS = (
     WeekFormat.SEALED_ARCHON.value,
     WeekFormat.SEALED_ALLIANCE.value,

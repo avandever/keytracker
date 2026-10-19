@@ -1,6 +1,6 @@
 import { Alert, Box, Chip, Paper, Typography, alpha } from '@mui/material';
 import type { LeagueWeek, TeamDetail } from '../types';
-import { deckSlotsForFormat } from '../utils/deckSlots';
+import { ALLIANCE_FORMATS, deckSlotsForFormat } from '../utils/deckSlots';
 import { formatDeadline, isPast } from '../utils/deadlines';
 
 type Members = TeamDetail['members'];
@@ -51,8 +51,17 @@ export default function CaptainHud({ weeks, myTeam, membersFor }: Props) {
   const many = weeks.length > 1;
   const playing = (week: LeagueWeek): Members => membersFor?.(week) ?? myTeam.members;
 
-  const selectionsFor = (week: LeagueWeek, userId: number) =>
-    (week.deck_selections || []).filter((ds) => ds.user_id === userId).length;
+  // An alliance is one deck built from three pods and files no deck
+  // selection, so counting those alone read a finished alliance as nothing.
+  const selectionsFor = (week: LeagueWeek, userId: number) => {
+    if (ALLIANCE_FORMATS.includes(week.format_type)) {
+      const pods = (week.alliance_selections || []).filter(
+        (s) => s.user_id === userId && s.slot_type === 'pod',
+      ).length;
+      return pods >= 3 ? deckSlotsForFormat(week.format_type) : 0;
+    }
+    return (week.deck_selections || []).filter((ds) => ds.user_id === userId).length;
+  };
 
   // Counted per slot, not per player: in a two-deck format someone who has
   // entered one of their two is half done, not nothing.

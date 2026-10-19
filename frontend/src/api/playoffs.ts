@@ -94,6 +94,19 @@ export interface PlayoffSetup {
   is_captain: boolean;
   /** How far each qualifying team has got, saying nothing about who. */
   assignment_progress: PlayoffAssignmentProgress[];
+  /** Decks in per team, per open round. Empty until a round opens. */
+  deck_progress: PlayoffDeckProgress[];
+}
+
+/** One round's deck submissions, by team, with no deck named. */
+export interface PlayoffDeckProgress {
+  round_number: number;
+  teams: {
+    team_id: number;
+    team_name: string | null;
+    submitted: number;
+    expected: number;
+  }[];
 }
 
 /** One team's progress through the brackets, with no names in it. */

@@ -497,6 +497,40 @@ function PlayoffSetupPanel({
         </Card>
       )}
 
+      {setup.is_admin && (setup.deck_progress || []).length > 0 && (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Deck selection</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Decks in per team for each open round, counting every bracket that team
+              has a player in. Counts only — no deck is named, and nobody is said to be
+              holding anything up.
+            </Typography>
+            {(setup.deck_progress || []).map((round) => (
+              <Box key={round.round_number} sx={{ mb: 1.5 }}>
+                <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                  {roundLabel(round.round_number)}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {round.teams.map((team) => (
+                    <Chip
+                      key={team.team_id}
+                      label={`${team.team_name || team.team_id} ${team.submitted}/${team.expected}`}
+                      color={
+                        team.expected > 0 && team.submitted >= team.expected
+                          ? 'success'
+                          : 'default'
+                      }
+                      variant={team.submitted > 0 ? 'filled' : 'outlined'}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {setup.is_admin && (
         <Card>
           <CardContent>

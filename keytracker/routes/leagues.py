@@ -55,6 +55,7 @@ from keytracker.schema import (
     PROPHECY_EXPANSION_ID,
     SEALED_WEEK_FORMATS,
     deck_reuse_scope,
+    deck_slots_for_format,
 )
 from keytracker.serializers import (
     _preload_league_graph,
@@ -4123,32 +4124,7 @@ def submit_deck_selection(league_id, week_id):
             )
 
     slot_number = data.get("slot_number", 1)
-    _three_slot = (
-        WeekFormat.TRIAD.value,
-        WeekFormat.TRIAD_SHORT.value,
-        WeekFormat.MOIRAI.value,
-    )
-    _two_slot = (
-        WeekFormat.OUBLIETTE.value,
-        WeekFormat.ADAPTIVE_SHORT.value,
-        WeekFormat.EXCHANGE.value,
-        WeekFormat.SEALED_SURVIVAL.value,
-    )
-    max_slots = (
-        6
-        if week.format_type == WeekFormat.NORDIC_HEXAD.value
-        # Double Oubliette is two sets played side by side, each with the two
-        # decks and one ban an Oubliette has.
-        else (
-            4
-            if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value
-            else (
-                3
-                if week.format_type in _three_slot
-                else (2 if week.format_type in _two_slot else 1)
-            )
-        )
-    )
+    max_slots = deck_slots_for_format(week.format_type)
     if not isinstance(slot_number, int) or slot_number < 1 or slot_number > max_slots:
         return jsonify({"error": f"slot_number must be between 1 and {max_slots}"}), 400
 
