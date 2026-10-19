@@ -539,7 +539,15 @@ def prevent_caching_for_user_responses(response):
         or request.path.startswith("/auth/")
         or "Set-Cookie" in response.headers
     ):
-        response.headers["Cache-Control"] = "no-store, private"
+        # A view that has already decided about caching keeps what it chose.
+        # etag_response sets "private, no-cache" precisely so its ETag can be
+        # used -- store it, but revalidate before every reuse -- and this hook
+        # was overwriting that with no-store, which tells the browser not to
+        # keep the response at all. The ETag was then dead weight: the browser
+        # had nothing to send If-None-Match about, so every visit refetched
+        # the league in full. "private" still keeps it out of shared caches,
+        # and Vary: Cookie still keeps one user's payload off another.
+        response.headers.setdefault("Cache-Control", "no-store, private")
         response.headers["Vary"] = "Cookie"
     return response
 
