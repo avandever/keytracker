@@ -1026,6 +1026,140 @@ def _bracket_tree(league, my_team_id=None, reveal=False):
     }
 
 
+def _match_is_finished(match):
+    """Whether a bracket match has a result everyone has agreed on.
+
+    A deck stays hidden until the match it was taken to is over, so this is
+    what decides. A bye is finished the moment it exists; anything else wants
+    a verified result, the same bar advancing uses.
+    """
+    if match.is_bye:
+        return True
+    pm = match.player_matchup
+    if pm is None:
+        return False
+    return pm.result_confirmed_at is not None
+
+
+@blueprint.route("/<int:league_id>/playoffs/decks", methods=["GET"])
+def get_playoff_decks(league_id):
+    """What was played in the playoffs, by bracket, round and player.
+
+    Decks are held back until the match they were in is finished and verified
+    -- an unplayed match would otherwise show both sides what they are about
+    to face. A bracket whose matches are all still to come comes back with
+    its players listed and no decks, rather than not at all, so the page can
+    say "not yet" rather than look empty.
+
+    Alliances are listed by their pods, which is what an alliance is.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    config = _config_for(league)
+    revealed = _assignments_revealed(config)
+    teams = {t.id: t.name for t in league.teams}
+    brackets = sorted(league.playoff_brackets, key=lambda b: b.bracket_number)
+
+    weeks_by_bracket = {}
+    for week in league.weeks:
+        if getattr(week, "playoff_round", None) is None:
+            continue
+        weeks_by_bracket.setdefault(week.playoff_bracket_id, []).append(week)
+
+    out = []
+    for bracket in brackets:
+        assignments = {a.team_id: a for a in bracket.assignments}
+        rounds = []
+        for week in sorted(
+            weeks_by_bracket.get(bracket.id, []), key=lambda w: w.playoff_round or 0
+        ):
+            # Which of this bracket's matches each team is in this round, so a
+            # player's decks can be held or shown with their own match.
+            finished_team_ids = set()
+            for match in bracket.matches:
+                if match.round_number != week.playoff_round:
+                    continue
+                if _match_is_finished(match):
+                    finished_team_ids.update(
+                        t for t in (match.team1_id, match.team2_id) if t
+                    )
+            players = []
+            for team_id, assignment in sorted(
+                assignments.items(), key=lambda kv: teams.get(kv[0]) or ""
+            ):
+                user = assignment.user
+                done = team_id in finished_team_ids
+                decks = []
+                if done:
+                    if week.format_type in ALLIANCE_WEEK_FORMATS:
+                        pods = AlliancePodSelection.query.filter_by(
+                            week_id=week.id, user_id=assignment.user_id
+                        ).all()
+                        decks = [
+                            {
+                                "slot": f"{p.slot_type} {p.slot_number}",
+                                "house": p.house_name,
+                                "name": p.deck.name if p.deck else None,
+                                "mv_url": p.deck.mv_url if p.deck else None,
+                                "dok_url": p.deck.dok_url if p.deck else None,
+                                "sas_rating": p.deck.sas_rating if p.deck else None,
+                            }
+                            for p in sorted(
+                                pods, key=lambda p: (p.slot_type, p.slot_number)
+                            )
+                        ]
+                    else:
+                        sels = PlayerDeckSelection.query.filter_by(
+                            week_id=week.id, user_id=assignment.user_id
+                        ).all()
+                        decks = [
+                            {
+                                "slot": f"Slot {sel.slot_number}",
+                                "house": None,
+                                "name": sel.deck.name if sel.deck else None,
+                                "mv_url": sel.deck.mv_url if sel.deck else None,
+                                "dok_url": sel.deck.dok_url if sel.deck else None,
+                                "sas_rating": (
+                                    sel.deck.sas_rating if sel.deck else None
+                                ),
+                            }
+                            for sel in sorted(sels, key=lambda s: s.slot_number)
+                        ]
+                players.append(
+                    {
+                        "team_id": team_id,
+                        "team_name": teams.get(team_id),
+                        # The same rule the brackets follow: no name until the
+                        # assignments are out.
+                        "player_name": (user.name if (user and revealed) else None),
+                        "match_finished": done,
+                        "decks": decks,
+                    }
+                )
+            rounds.append(
+                {
+                    "round_number": week.playoff_round,
+                    "week_id": week.id,
+                    "status": week.status,
+                    "players": sorted(
+                        players, key=lambda p: (p["player_name"] or p["team_name"] or "")
+                    ),
+                }
+            )
+        out.append(
+            {
+                "bracket_id": bracket.id,
+                "bracket_number": bracket.bracket_number,
+                "name": bracket.name,
+                "format_type": bracket.format_type,
+                "rounds": rounds,
+            }
+        )
+
+    return jsonify({"assignments_revealed": revealed, "brackets": out})
+
+
 @blueprint.route("/<int:league_id>/playoffs/brackets/tree", methods=["GET"])
 def get_bracket_tree(league_id):
     """The drawn brackets, for display."""

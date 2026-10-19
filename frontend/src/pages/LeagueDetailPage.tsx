@@ -29,7 +29,8 @@ import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDec
 import { WEEK_FORMAT_LABELS as FORMAT_LABELS } from '../utils/formatLabels';
 import type { SignupDiscordStatus } from '../api/leagues';
 import { listFantasyLeagues } from '../api/fantasy';
-import { getPlayoffSetup } from '../api/playoffs';
+import { getPlayoffDecks, getPlayoffSetup, getPlayoffTree } from '../api/playoffs';
+import type { PlayoffDecks, PlayoffSetup, PlayoffTree } from '../api/playoffs';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
 import { getWeekDescription } from '../utils/formatDescriptions';
@@ -131,6 +132,11 @@ export default function LeagueDetailPage() {
   const [completedDecks, setCompletedDecks] = useState<Record<number, CompletedMatchDecks>>({});
   const [discordStatus, setDiscordStatus] = useState<Record<number, SignupDiscordStatus> | null>(null);
   const [discordStatusLoading, setDiscordStatusLoading] = useState(false);
+  // The playoffs, for the two tabs that lead the list once they are drawn.
+  // Both are fetched when their tab is first opened rather than on load.
+  const [playoffSetup, setPlayoffSetup] = useState<PlayoffSetup | null>(null);
+  const [playoffTree, setPlayoffTree] = useState<PlayoffTree | null>(null);
+  const [playoffDecks, setPlayoffDecks] = useState<PlayoffDecks | null>(null);
 
   const refresh = useCallback(() => {
     getLeague(leagueId)
@@ -158,11 +164,12 @@ export default function LeagueDetailPage() {
   useEffect(() => {
     if (!leagueId) return;
     getPlayoffSetup(leagueId)
-      .then((setup) =>
+      .then((setup) => {
+        setPlayoffSetup(setup);
         setHasPlayoffs(
           setup.brackets.length > 0 || setup.is_admin || setup.is_captain,
-        ),
-      )
+        );
+      })
       .catch(() => setHasPlayoffs(false));
   }, [leagueId]);
 
@@ -214,7 +221,12 @@ export default function LeagueDetailPage() {
   const showSignups = league.is_admin || userIsCaptain;
   // Team rosters are hidden from non-admins/non-captains while the draft is in progress
   const showTeamLists = league.is_admin || league.is_captain || league.status !== 'drafting';
+  // Once the brackets are drawn the playoffs are what the league is doing,
+  // so they lead. Before that there is nothing to show and the tabs stay off.
+  const showPlayoffTabs = Boolean(playoffSetup?.config.drawn_at);
+  const playoffTabCount = showPlayoffTabs ? 2 : 0;
   const tabs = [
+    ...(showPlayoffTabs ? ['Playoff Standings', 'Playoff Decks'] : []),
     'Standings',
     ...(showTeamLists ? ['Player Standings', 'Teams'] : []),
     ...(showSignups ? [`Signups (${league.signups.length})`] : []),
@@ -222,11 +234,170 @@ export default function LeagueDetailPage() {
     'Admin Log',
   ];
   // tab index offsets
-  const playerStandingsIdx = showTeamLists ? 1 : null;
-  const teamsIdx = showTeamLists ? 2 : null;
-  const signupsIdx = showSignups ? 1 + (showTeamLists ? 2 : 0) : null;
-  const weekStartIdx = 1 + (showTeamLists ? 2 : 0) + (showSignups ? 1 : 0);
+  const playoffStandingsIdx = showPlayoffTabs ? 0 : null;
+  const playoffDecksIdx = showPlayoffTabs ? 1 : null;
+  const standingsIdx = playoffTabCount;
+  const playerStandingsIdx = showTeamLists ? playoffTabCount + 1 : null;
+  const teamsIdx = showTeamLists ? playoffTabCount + 2 : null;
+  const signupsIdx = showSignups
+    ? playoffTabCount + 1 + (showTeamLists ? 2 : 0)
+    : null;
+  const weekStartIdx =
+    playoffTabCount + 1 + (showTeamLists ? 2 : 0) + (showSignups ? 1 : 0);
   const adminLogIdx = tabs.length - 1;
+
+  /** A match as the bracket reads it: who is playing, and for whom. */
+  const playoffSide = (
+    teamId: number | null,
+    player: string | null | undefined,
+    teamNames: Record<string, string>,
+  ) => {
+    if (!teamId) return 'to be decided';
+    const team = teamNames[String(teamId)] || `Team ${teamId}`;
+    return player ? `${player} (${team})` : team;
+  };
+
+  const renderPlayoffStandingsTab = () => {
+    if (!playoffTree) {
+      return <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}><CircularProgress /></Box>;
+    }
+    const teamNames = playoffTree.teams || {};
+    return (
+      <Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Every bracket, round by round. A bracket keeps its pairings to itself until
+          each team has put somebody in it.
+        </Typography>
+        {(playoffTree.brackets || []).map((bracket) => {
+          const byRound = new Map<number, typeof bracket.matches>();
+          for (const m of bracket.matches || []) {
+            const key = m.is_consolation ? -1 : m.round_number;
+            byRound.set(key, [...(byRound.get(key) || []), m]);
+          }
+          const ordered = [...byRound.entries()].sort((a, b) => a[0] - b[0]);
+          return (
+            <Card key={bracket.id} sx={{ mb: 2 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+                  <Typography variant="h6">
+                    {bracket.name || `Bracket ${bracket.bracket_number}`}
+                  </Typography>
+                  <Chip size="small" variant="outlined"
+                    label={FORMAT_LABELS[bracket.format_type] || bracket.format_type} />
+                  <Chip size="small" variant="outlined" label={`Bo${bracket.best_of_n}`} />
+                  {bracket.pairings_hidden && (
+                    <Chip size="small" color="warning" variant="outlined"
+                      label="Pairings hidden until every team has filled this bracket" />
+                  )}
+                </Box>
+                <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                  {ordered.map(([key, matches]) => (
+                    <Box key={key} sx={{ minWidth: 240 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {key === -1 ? 'Third place' : `Round ${key}`}
+                      </Typography>
+                      {(matches || []).map((m) => (
+                        <Box key={m.id} sx={{ mt: 0.5, p: 1, borderRadius: 1, border: 1, borderColor: 'divider' }}>
+                          {[
+                            [m.team1_id, m.team1_player] as const,
+                            [m.team2_id, m.team2_player] as const,
+                          ].map(([side, player], i) => (
+                            <Typography key={i} variant="body2"
+                              sx={{
+                                fontWeight: side && side === m.winner_team_id ? 700 : 400,
+                                color: side ? 'text.primary' : 'text.disabled',
+                              }}>
+                              {playoffSide(side, player, teamNames)}
+                            </Typography>
+                          ))}
+                          {m.is_bye && <Chip size="small" label="Bye" sx={{ mt: 0.5 }} />}
+                        </Box>
+                      ))}
+                    </Box>
+                  ))}
+                </Box>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </Box>
+    );
+  };
+
+  const renderPlayoffDecksTab = () => {
+    if (!playoffDecks) {
+      return <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}><CircularProgress /></Box>;
+    }
+    return (
+      <Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          What was played, by bracket and round. A player&apos;s decks stay hidden until
+          their match is finished and the result verified — otherwise this page would
+          show both sides what they are about to face.
+        </Typography>
+        {(playoffDecks.brackets || []).map((bracket) => (
+          <Card key={bracket.bracket_id} sx={{ mb: 2 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+                <Typography variant="h6">
+                  {bracket.name || `Bracket ${bracket.bracket_number}`}
+                </Typography>
+                <Chip size="small" variant="outlined"
+                  label={FORMAT_LABELS[bracket.format_type] || bracket.format_type} />
+              </Box>
+              {bracket.rounds.length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  This bracket has not opened a round yet.
+                </Typography>
+              )}
+              {bracket.rounds.map((round) => (
+                <Box key={round.week_id} sx={{ mb: 1.5 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                    Round {round.round_number}
+                  </Typography>
+                  {round.players.map((player) => (
+                    <Box key={`${round.week_id}-${player.team_id}`} sx={{ ml: 2, mb: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {player.player_name
+                          ? `${player.player_name} (${player.team_name})`
+                          : player.team_name}
+                      </Typography>
+                      {!player.match_finished ? (
+                        <Typography variant="caption" color="text.secondary">
+                          Hidden until the match is finished
+                        </Typography>
+                      ) : player.decks.length === 0 ? (
+                        <Typography variant="caption" color="text.secondary">
+                          No decks recorded
+                        </Typography>
+                      ) : (
+                        player.decks.map((deck, i) => (
+                          <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Chip size="small" variant="outlined" label={deck.slot} />
+                            {deck.house && <Chip size="small" variant="outlined" label={deck.house} />}
+                            <Typography variant="body2">{deck.name || 'Unknown'}</Typography>
+                            {deck.sas_rating != null && (
+                              <Chip size="small" variant="outlined" label={`SAS ${deck.sas_rating}`} />
+                            )}
+                            {deck.mv_url && (
+                              <MuiLink href={deck.mv_url} target="_blank" rel="noopener" variant="body2">MV</MuiLink>
+                            )}
+                            {deck.dok_url && (
+                              <MuiLink href={deck.dok_url} target="_blank" rel="noopener" variant="body2">DoK</MuiLink>
+                            )}
+                          </Box>
+                        ))
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              ))}
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
+    );
+  };
 
   const computeMatchWins = (playerId: number, targetWeeks: LeagueWeek[]): number => {
     let wins = 0;
@@ -1277,6 +1448,12 @@ export default function LeagueDetailPage() {
             onChange={(_, v) => {
               setActiveTab(v);
               setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true });
+              if (v === playoffStandingsIdx && playoffTree === null) {
+                getPlayoffTree(league.id).then(setPlayoffTree).catch(() => {});
+              }
+              if (v === playoffDecksIdx && playoffDecks === null) {
+                getPlayoffDecks(league.id).then(setPlayoffDecks).catch(() => {});
+              }
               // Lazy-load admin log on first activation
               if (v === adminLogIdx && adminLog === null && !adminLogLoading) {
                 setAdminLogLoading(true);
@@ -1302,7 +1479,9 @@ export default function LeagueDetailPage() {
             ))}
           </Tabs>
 
-          {activeTab === 0 && renderStandingsTab()}
+          {activeTab === playoffStandingsIdx && renderPlayoffStandingsTab()}
+          {activeTab === playoffDecksIdx && renderPlayoffDecksTab()}
+          {activeTab === standingsIdx && renderStandingsTab()}
           {activeTab === playerStandingsIdx && renderPlayerStandingsTab()}
           {activeTab === teamsIdx && renderTeamsTab()}
           {showSignups && activeTab === signupsIdx && renderSignupsTab()}

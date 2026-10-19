@@ -260,6 +260,45 @@ export async function publishPlayoffRound(
   return data;
 }
 
+/** One deck as the playoff deck list shows it. */
+export interface PlayoffDeckEntry {
+  slot: string;
+  house: string | null;
+  name: string | null;
+  mv_url: string | null;
+  dok_url: string | null;
+  sas_rating: number | null;
+}
+
+export interface PlayoffDecks {
+  assignments_revealed: boolean;
+  brackets: {
+    bracket_id: number;
+    bracket_number: number;
+    name: string | null;
+    format_type: string;
+    rounds: {
+      round_number: number;
+      week_id: number;
+      status: string;
+      players: {
+        team_id: number;
+        team_name: string | null;
+        player_name: string | null;
+        /** Decks stay empty until the match they were taken to is over. */
+        match_finished: boolean;
+        decks: PlayoffDeckEntry[];
+      }[];
+    }[];
+  }[];
+}
+
+/** What was played in the playoffs, once each match is finished. */
+export async function getPlayoffDecks(leagueId: number): Promise<PlayoffDecks> {
+  const { data } = await apiClient.get(`/leagues/${leagueId}/playoffs/decks`);
+  return data;
+}
+
 export interface PlayoffStandingRow {
   team_id: number;
   team_name: string | null;
