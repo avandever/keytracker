@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { TestUserProvider } from './contexts/TestUserContext';
 import { LeagueIdProvider } from './contexts/LeagueContext';
-import { getLeagueByName } from './api/leagues';
+import { getLeagueIdByName } from './api/leagues';
 import AppBar from './components/AppBar';
 import TestUserPicker from './components/TestUserPicker';
 import RequireAuth from './components/RequireAuth';
@@ -67,8 +67,10 @@ function LeagueByNameWrapper() {
       setNumericId(asNum);
       return;
     }
-    getLeagueByName(leagueName!)
-      .then((league) => setNumericId(league.id))
+    // Only the id: the page under this wrapper fetches the league itself,
+    // and asking for the whole thing here fetched it twice.
+    getLeagueIdByName(leagueName!)
+      .then(setNumericId)
       .catch(() => setError('League not found'));
   }, [leagueName]);
 

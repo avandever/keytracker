@@ -44,6 +44,14 @@ export async function getLeague(leagueId: number): Promise<LeagueDetail> {
   return data;
 }
 
+/** The numeric id for a url name, and nothing else: see the endpoint. */
+export async function getLeagueIdByName(urlName: string): Promise<number> {
+  const { data } = await apiClient.get(
+    `/leagues/by-name/${encodeURIComponent(urlName)}/id`,
+  );
+  return data.id;
+}
+
 export async function getLeagueByName(urlName: string): Promise<LeagueDetail> {
   const { data } = await apiClient.get(`/leagues/by-name/${encodeURIComponent(urlName)}`);
   return data;

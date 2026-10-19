@@ -231,6 +231,23 @@ def create_league():
     return jsonify(serialize_league_detail(league)), 201
 
 
+@blueprint.route("/by-name/<string:url_name>/id", methods=["GET"])
+def get_league_id_by_name(url_name):
+    """Just the id behind a league's url name.
+
+    Resolving /league/<name> needs nothing else, and the full detail it used
+    to ask for is the heaviest thing the site serves -- on ABR 15 about two
+    megabytes, fetched here and then again by the page itself a moment later,
+    for the sake of one integer.
+    """
+    league = League.query.filter_by(url_name=url_name).first()
+    if not league:
+        return jsonify({"error": "League not found"}), 404
+    return jsonify(
+        {"id": league.id, "name": league.name, "url_name": league.url_name}
+    )
+
+
 @blueprint.route("/by-name/<string:url_name>", methods=["GET"])
 def get_league_by_name(url_name):
     league = League.query.filter_by(url_name=url_name).first()
