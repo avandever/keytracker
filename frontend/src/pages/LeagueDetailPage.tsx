@@ -61,9 +61,20 @@ function matchupIsUndecided(pm: PlayerMatchupInfo, bestOfN: number): boolean {
   return p1Wins < winsNeeded && p2Wins < winsNeeded;
 }
 
-function computeMyMatchTab(league: LeagueDetail, userId: number): number {
+/**
+ * Which My Info tab holds this player's live match, as a slug.
+ *
+ * It used to work out a tab number, which meant knowing how many tabs that
+ * page draws before its weeks -- and the moment My Info grew a Playoffs tab
+ * every number was one out. My Info resolves ?tab= by name first, so naming
+ * the tab says what is meant and survives the next tab anyone adds.
+ */
+function computeMyMatchTab(league: LeagueDetail, userId: number): string {
+  // A playoff match is the one being played, and My Info opens on it.
+  if ((league.playoff_weeks || []).some((w) => w.playoff_team_user_id === userId)) {
+    return 'playoffs';
+  }
   const weeks = league.weeks || [];
-  const weekTabStart = 1 + (league.fee_amount != null ? 1 : 0);
   let deckSelectionWeekIdx: number | null = null;
 
   for (let i = 0; i < weeks.length; i++) {
@@ -77,7 +88,7 @@ function computeMyMatchTab(league: LeagueDetail, userId: number): number {
             (pm.player1.id === userId || pm.player2.id === userId) &&
             matchupIsUndecided(pm, week.best_of_n)
           ) {
-            return weekTabStart + i;
+            return `week-${week.week_number}`;
           }
         }
       }
@@ -95,12 +106,14 @@ function computeMyMatchTab(league: LeagueDetail, userId: number): number {
     }
   }
 
-  if (deckSelectionWeekIdx !== null) return weekTabStart + deckSelectionWeekIdx;
+  if (deckSelectionWeekIdx !== null) {
+    return `week-${weeks[deckSelectionWeekIdx].week_number}`;
+  }
 
   // Fallback: most recent week
-  if (weeks.length > 0) return weekTabStart + weeks.length - 1;
+  if (weeks.length > 0) return `week-${weeks[weeks.length - 1].week_number}`;
 
-  return 0;
+  return 'team';
 }
 
 const getChipSx = (color: string) => (theme: any) => {
