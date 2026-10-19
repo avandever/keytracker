@@ -739,7 +739,7 @@ def publish_playoff_assignments(league_id):
     return jsonify(_serialize_config(league, config))
 
 
-def _serialize_match(match, hide_teams=False):
+def _serialize_match(match, hide_teams=False, players=None):
     """One match, with the teams in it hidden while its bracket fills up.
 
     Drawing before the captains have finished means the round-one pairings
@@ -754,6 +754,15 @@ def _serialize_match(match, hide_teams=False):
         "slot_index": match.slot_index,
         "team1_id": None if hide_teams else match.team1_id,
         "team2_id": None if hide_teams else match.team2_id,
+        # Who each team put in this bracket, which is who actually plays the
+        # match. Only once the assignments are published -- `players` is empty
+        # until then -- and only for a slot whose team is known.
+        "team1_player": (
+            None if hide_teams else (players or {}).get(match.team1_id)
+        ),
+        "team2_player": (
+            None if hide_teams else (players or {}).get(match.team2_id)
+        ),
         "winner_team_id": None if hide_teams else match.winner_team_id,
         "is_bye": bool(match.is_bye),
         "is_consolation": bool(match.is_consolation),
@@ -958,6 +967,16 @@ def _bracket_tree(league, my_team_id=None, reveal=False):
     config = _config_for(league)
     qualifiers = sorted(league.playoff_qualifiers, key=lambda q: q.position)
     qualifier_ids = [q.team_id for q in qualifiers]
+    # A bracket's players by team, for the matches to name. Empty while the
+    # assignments are private, which is what keeps them out of the tree.
+    players_by_bracket = {}
+    if _assignments_revealed(config):
+        for bracket in brackets:
+            players_by_bracket[bracket.id] = {
+                a.team_id: (a.user.name if a.user else None)
+                for a in bracket.assignments
+            }
+
     hidden_pairings = {
         bracket.id: bool(qualifier_ids)
         and any(
@@ -991,7 +1010,11 @@ def _bracket_tree(league, my_team_id=None, reveal=False):
                 ],
                 "pairings_hidden": hidden_pairings.get(bracket.id, False),
                 "matches": [
-                    _serialize_match(m, hidden_pairings.get(bracket.id, False))
+                    _serialize_match(
+                        m,
+                        hidden_pairings.get(bracket.id, False),
+                        players_by_bracket.get(bracket.id),
+                    )
                     for m in sorted(
                         bracket.matches,
                         key=lambda m: (m.round_number, m.is_consolation, m.slot_index),

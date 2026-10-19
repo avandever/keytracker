@@ -215,7 +215,10 @@ export default function PlayoffsPage() {
                                 : 'transparent',
                             })}
                           >
-                            {[m.team1_id, m.team2_id].map((side, i) => (
+                            {[
+                              [m.team1_id, m.team1_player] as const,
+                              [m.team2_id, m.team2_player] as const,
+                            ].map(([side, player], i) => (
                               <Typography
                                 key={i}
                                 variant="body2"
@@ -224,7 +227,15 @@ export default function PlayoffsPage() {
                                   color: side ? 'text.primary' : 'text.disabled',
                                 }}
                               >
-                                {teamName(side) || 'to be decided'}
+                                {/* The player is who plays it; the team is
+                                    whose side they are on. Before the
+                                    assignments are published only the team is
+                                    known. */}
+                                {side
+                                  ? player
+                                    ? `${player} (${teamName(side)})`
+                                    : teamName(side)
+                                  : 'to be decided'}
                               </Typography>
                             ))}
                             {m.is_bye && <Chip size="small" label="Bye" sx={{ mt: 0.5 }} />}

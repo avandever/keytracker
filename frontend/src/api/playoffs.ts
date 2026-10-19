@@ -62,6 +62,9 @@ export interface PlayoffMatchInfo {
   slot_index: number;
   team1_id: number | null;
   team2_id: number | null;
+  /** Who each team put in this bracket; null until assignments are published. */
+  team1_player?: string | null;
+  team2_player?: string | null;
   winner_team_id: number | null;
   is_bye: boolean;
   is_consolation: boolean;
