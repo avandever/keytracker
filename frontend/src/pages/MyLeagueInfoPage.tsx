@@ -3,6 +3,9 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useLeagueNumericId } from '../contexts/LeagueContext';
 import { WEEK_FORMAT_LABELS as FORMAT_LABELS } from '../utils/formatLabels';
 import {
+  AccordionDetails,
+  AccordionSummary,
+  Accordion,
   Container,
   Typography,
   CircularProgress,
@@ -34,6 +37,7 @@ import {
   DialogContent,
   DialogActions,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import {
   getMyLeagueInfo,
@@ -2692,57 +2696,55 @@ export default function MyLeagueInfoPage() {
       {activeTab === playoffsIdx && (
         <Box>
           {myPlayoffWeeks.map((week, i) => {
-            const mine = week.playoff_team_user_id;
-            const pm = (week.matchups || [])
-              .flatMap((wm) => wm.player_matchups.map((p) => ({ wm, p })))
-              .find(({ p }) => p.player1.id === mine || p.player2.id === mine);
-            const iAmP1 = pm ? pm.p.player1.id === mine : false;
-            const opponent = pm ? (iAmP1 ? pm.p.player2 : pm.p.player1) : null;
-            const theirTeam = pm
-              ? (pm.wm.team1.id === myTeam.id ? pm.wm.team2 : pm.wm.team1)
-              : null;
-            const myWins = pm
-              ? pm.p.games.filter((g) => g.winner_id === (iAmP1 ? pm.p.player1.id : pm.p.player2.id)).length
-              : 0;
-            const theirWins = pm
-              ? pm.p.games.filter((g) => g.winner_id === (iAmP1 ? pm.p.player2.id : pm.p.player1.id)).length
-              : 0;
-            // The round being played leads; anything older is history and is
-            // drawn quieter, below it.
+            // The round being played gets the whole week: decks, bans,
+            // reporting, the lot, through the same renderer a season week
+            // uses. Earlier rounds are history, so they fold away.
             const isCurrent = i === 0;
+            const header = (
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography variant={isCurrent ? 'h6' : 'subtitle1'}>
+                  {week.playoff_bracket_name || week.name}
+                </Typography>
+                <Chip size="small" variant="outlined"
+                  label={FORMAT_LABELS[week.format_type] || week.format_type} />
+                <Chip size="small" variant="outlined" label={`Bo${week.best_of_n}`} />
+                <Chip size="small" variant="outlined" label={`Round ${week.playoff_round}`} />
+                {(() => {
+                  const mine = week.playoff_team_user_id;
+                  const found = (week.matchups || [])
+                    .flatMap((wm) => wm.player_matchups.map((p) => ({ wm, p })))
+                    .find(({ p }) => p.player1.id === mine || p.player2.id === mine);
+                  if (!found) return null;
+                  const iAmP1 = found.p.player1.id === mine;
+                  const opponent = iAmP1 ? found.p.player2 : found.p.player1;
+                  const theirTeam =
+                    found.wm.team1.id === myTeam.id ? found.wm.team2 : found.wm.team1;
+                  return (
+                    <Chip
+                      size="small"
+                      color="primary"
+                      label={`vs ${opponent.name}${theirTeam ? ` (${theirTeam.name})` : ''}`}
+                    />
+                  );
+                })()}
+              </Box>
+            );
+
+            if (isCurrent) {
+              return (
+                <Box key={week.id} sx={{ mb: 3 }}>
+                  <Box sx={{ mb: 1 }}>{header}</Box>
+                  {renderWeekContent(week)}
+                </Box>
+              );
+            }
             return (
-              <Card key={week.id} sx={{ mb: 2, opacity: isCurrent ? 1 : 0.75 }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
-                    <Typography variant={isCurrent ? 'h6' : 'subtitle1'}>
-                      {week.playoff_bracket_name || week.name}
-                    </Typography>
-                    <Chip size="small" variant="outlined"
-                      label={FORMAT_LABELS[week.format_type] || week.format_type} />
-                    <Chip size="small" variant="outlined" label={`Bo${week.best_of_n}`} />
-                    <Chip size="small" variant="outlined"
-                      label={`Round ${week.playoff_round}`} />
-                    {!isCurrent && <Chip size="small" label="Earlier round" />}
-                  </Box>
-                  {opponent ? (
-                    <Typography variant="body1" sx={{ mb: 1 }}>
-                      <strong>vs {opponent.name}</strong>
-                      {theirTeam ? ` (${theirTeam.name})` : ''}
-                      {pm && pm.p.games.length > 0 ? ` — ${myWins}–${theirWins}` : ''}
-                      {pm && pm.p.result_confirmed ? ' · verified' : ''}
-                    </Typography>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      No opponent yet — the pairings for this round are not out.
-                    </Typography>
-                  )}
-                  <WeekConstraints week={week} sets={sets} />
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                    Decks, bans and reporting for this match are on My Team, under{' '}
-                    {week.playoff_round ? `Playoff round ${week.playoff_round}` : 'the round tab'}.
-                  </Typography>
-                </CardContent>
-              </Card>
+              <Accordion key={week.id} sx={{ mb: 1 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  {header}
+                </AccordionSummary>
+                <AccordionDetails>{renderWeekContent(week)}</AccordionDetails>
+              </Accordion>
             );
           })}
         </Box>

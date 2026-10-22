@@ -323,18 +323,31 @@ def get_league(league_id):
     return etag_response(data)
 
 
-def _playoff_weeks_for_team(league, viewer, my_team_id, stub=False):
+def _playoff_weeks_for_team(league, viewer, my_team_id, stub=False, for_user=None):
     """A team's playoff weeks, scoped the way My Info scopes an ordinary one.
 
     A round is one week per bracket, so a team has as many of these per round
     as it has players. They stay out of the ordinary week list -- nobody wants
     eleven more week tabs -- and My Team groups them into a tab per round.
+
+    `for_user` narrows it to the brackets that player was put in, before any
+    of it is serialised. My Info wants one bracket and polls every ten
+    seconds while a match is live; serialising all eleven and keeping one was
+    most of why that call ran 761 queries.
     """
     if my_team_id is None:
         return []
     playoff_weeks = [
         w for w in league.weeks if getattr(w, "playoff_bracket_id", None) is not None
     ]
+    if for_user is not None:
+        mine = {
+            a.bracket_id
+            for b in league.playoff_brackets
+            for a in b.assignments
+            if a.team_id == my_team_id and a.user_id == for_user
+        }
+        playoff_weeks = [w for w in playoff_weeks if w.playoff_bracket_id in mine]
     if not playoff_weeks:
         return []
     my_user_ids = {
@@ -572,14 +585,12 @@ def get_my_league_info(league_id):
     # bracket they were put in rather than every bracket their team plays:
     # this page is one player's view of one match, and the rest is My Team's
     # business. A player in no bracket gets an empty list and no tab.
-    playoff_weeks = _playoff_weeks_for_team(
-        league, effective, my_team.id if my_team else None
+    data["playoff_weeks"] = _playoff_weeks_for_team(
+        league,
+        effective,
+        my_team.id if my_team else None,
+        for_user=effective.id,
     )
-    data["playoff_weeks"] = [
-        w
-        for w in playoff_weeks
-        if w.get("playoff_team_user_id") == effective.id
-    ]
     return etag_response(data)
 
 
