@@ -358,6 +358,17 @@ def _playoff_weeks_for_team(league, viewer, my_team_id, stub=False, for_user=Non
     for week in sorted(
         playoff_weeks, key=lambda w: (w.playoff_round or 0, w.week_number)
     ):
+        # A team knocked out of a bracket does not get that bracket's later
+        # rounds at all -- no tab, no deck slots, nothing to fill in. The
+        # bracket assignment says who plays the bracket, not how far they
+        # got, so the round's own matches are what decide.
+        _bracket = brackets.get(week.playoff_bracket_id)
+        if _bracket is not None and week.playoff_round is not None:
+            from keytracker.routes.playoffs import teams_in_round
+
+            _here = teams_in_round(_bracket, week.playoff_round)
+            if _here and my_team_id not in _here:
+                continue
         if stub:
             # The league page only asks whether this player is in a bracket,
             # and eleven bracket weeks in full is 137KB to answer it. My Team,
@@ -4674,6 +4685,30 @@ def submit_deck_selection(league_id, week_id):
                     400,
                 )
 
+    # A playoff round is only for the teams still in it. The week exists for
+    # the whole bracket, so without this a team knocked out in round one
+    # could still enter decks for round two.
+    if getattr(week, "playoff_bracket_id", None) is not None and week.playoff_round:
+        from keytracker.routes.playoffs import teams_in_round
+
+        _bracket = next(
+            (
+                b
+                for b in league.playoff_brackets
+                if b.id == week.playoff_bracket_id
+            ),
+            None,
+        )
+        if _bracket is not None:
+            _here = teams_in_round(_bracket, week.playoff_round)
+            if _here and (target_team is None or target_team.id not in _here):
+                return (
+                    jsonify(
+                        {"error": "This team is not in that round of the bracket"}
+                    ),
+                    400,
+                )
+
     # Double Oubliette: two decks from each of the week's two sets, so each set
     # is its own pair for the ban aimed at it to work on.
     if week.format_type == WeekFormat.DOUBLE_OUBLIETTE.value:
@@ -8023,10 +8058,67 @@ def confirm_match_result(league_id, matchup_id):
 
     pm.result_confirmed_at = _dt.datetime.utcnow()
     pm.result_confirmed_by_id = effective.id
+    _advance_playoff_bracket(league, week)
     db.session.commit()
 
     viewer = get_effective_user()
     return jsonify(serialize_player_matchup(pm, viewer=viewer))
+
+
+def _advance_playoff_bracket(league, week):
+    """Write a verified playoff result into the next round, there and then.
+
+    Advancement used to happen only when an admin tried to open the next
+    round, and that attempt was refused while any match in the round was
+    still out -- so a player who had won waited on a match they were not in
+    before they could even be told they had gone through.
+
+    _resolve_round takes each match on its own merits and leaves the rest
+    pending, so calling it per result is safe and idempotent: it writes the
+    winners it has and nothing else.
+    """
+    bracket_id = getattr(week, "playoff_bracket_id", None)
+    if bracket_id is None or week.playoff_round is None:
+        return
+    from keytracker.routes.playoffs import (
+        _assignments_revealed,
+        _config_for,
+        _resolve_round,
+        pair_ready_matches,
+    )
+    from keytracker.playoff_draw import rounds_needed
+
+    bracket = next(
+        (b for b in league.playoff_brackets if b.id == bracket_id), None
+    )
+    if bracket is None:
+        return
+    config = _config_for(league)
+    total_rounds = rounds_needed(len(league.playoff_qualifiers))
+    _resolve_round(
+        bracket,
+        week.playoff_round,
+        total_rounds,
+        bool(config.consolation_enabled) if config else False,
+    )
+    db.session.flush()
+
+    # If the round ahead is already open and this result completed one of its
+    # pairings, make that match now. Otherwise an admin would have to open the
+    # round a second time for the two teams to find each other.
+    nxt = next(
+        (
+            w
+            for w in league.weeks
+            if w.playoff_bracket_id == bracket.id
+            and w.playoff_round == week.playoff_round + 1
+        ),
+        None,
+    )
+    if nxt is not None:
+        pair_ready_matches(
+            nxt, bracket, week.playoff_round + 1, _assignments_revealed(config)
+        )
 
 
 def _check_week_completion(week):

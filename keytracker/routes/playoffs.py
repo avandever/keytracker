@@ -243,6 +243,12 @@ def _deck_progress(league, brackets):
         if getattr(week, "playoff_round", None) is None:
             continue
         rounds.setdefault(week.playoff_round, []).append(week)
+    # A team knocked out earlier is not in the round and owes nothing to it.
+    here = {
+        (b.id, r): teams_in_round(b, r)
+        for b in brackets
+        for r in rounds
+    }
 
     out = []
     for round_number in sorted(rounds):
@@ -253,6 +259,9 @@ def _deck_progress(league, brackets):
             for week in weeks:
                 user_id = assigned.get((week.playoff_bracket_id, qualifier.team_id))
                 if user_id is None:
+                    continue
+                in_round = here.get((week.playoff_bracket_id, round_number))
+                if in_round and qualifier.team_id not in in_round:
                     continue
                 slots = deck_slots_for_format(week.format_type)
                 expected += slots
@@ -1299,6 +1308,24 @@ def _carry_suggestions_forward(league, bracket, week, round_number):
     return carried
 
 
+def teams_in_round(bracket, round_number):
+    """The teams holding a slot in this bracket's round.
+
+    A bracket assignment says who plays the bracket, not which rounds they
+    survive to, so it cannot answer this. A team is in a round once it has
+    been written into one of its matches -- which happens as the round
+    before it resolves, match by match.
+    """
+    out = set()
+    for match in bracket.matches:
+        if match.round_number != round_number:
+            continue
+        for team_id in (match.team1_id, match.team2_id):
+            if team_id:
+                out.add(team_id)
+    return out
+
+
 def _missing_decks_for_week(week, bracket):
     """Players in this bracket week who have not finished submitting.
 
@@ -1307,7 +1334,11 @@ def _missing_decks_for_week(week, bracket):
     """
     missing = []
     slots = deck_slots_for_format(week.format_type)
+    # A team knocked out earlier owes nothing: it is not in this round.
+    here = teams_in_round(bracket, week.playoff_round)
     for assignment in bracket.assignments:
+        if here and assignment.team_id not in here:
+            continue
         if week.format_type in ALLIANCE_WEEK_FORMATS:
             have = AlliancePodSelection.query.filter_by(
                 week_id=week.id, user_id=assignment.user_id, slot_type="pod"
@@ -1466,6 +1497,55 @@ def publish_playoff_round(league_id, round_number):
     return jsonify(tree)
 
 
+def pair_ready_matches(week, bracket, round_number, reveal_assignments):
+    """Pair whichever of the round's matches now have both teams.
+
+    A round no longer fills all at once: teams arrive one result at a time.
+    So this runs when the round is opened and again as each later result
+    lets another pair through, which is what spares an admin from opening
+    the round a second time. A match already paired is left alone.
+
+    Returns (paired, deferred) -- deferred being matches held back because
+    the bracket assignments are not published yet.
+    """
+    if week is None:
+        return 0, 0
+    paired = 0
+    deferred = 0
+    for match in bracket.matches:
+        if (
+            match.round_number != round_number
+            or match.is_bye
+            or not match.team1_id
+            or not match.team2_id
+            or match.player_matchup_id is not None
+        ):
+            continue
+        player1 = _player_for(bracket, match.team1_id)
+        player2 = _player_for(bracket, match.team2_id)
+        if not player1 or not player2:
+            continue
+        # A matchup names its two players, so creating one would give the
+        # assignments away. Until they are published the week opens without
+        # its matches, which is enough for a pool to be dealt and studied.
+        if not reveal_assignments:
+            deferred += 1
+            continue
+        wm = WeekMatchup(
+            week_id=week.id, team1_id=match.team1_id, team2_id=match.team2_id
+        )
+        db.session.add(wm)
+        db.session.flush()
+        pm = PlayerMatchup(
+            week_matchup_id=wm.id, player1_id=player1, player2_id=player2
+        )
+        db.session.add(pm)
+        db.session.flush()
+        match.player_matchup_id = pm.id
+        paired += 1
+    return paired, deferred
+
+
 def _player_for(bracket, team_id):
     assignment = next(
         (a for a in bracket.assignments if a.team_id == team_id), None
@@ -1526,6 +1606,11 @@ def start_playoff_round(league_id, round_number):
             return jsonify({"error": "Bracket not found in this league"}), 404
 
     if round_number > 1:
+        # Whatever has resolved, advances. A bracket where A beat B does not
+        # have to wait on C against D: B's winner is already written into the
+        # next round, so they can be given the week and start choosing decks
+        # while the other half is still being played. The round opens again
+        # later and picks up whoever has joined since.
         waiting = []
         for bracket in brackets:
             pending = _resolve_round(
@@ -1534,20 +1619,24 @@ def start_playoff_round(league_id, round_number):
             for match in pending:
                 label = bracket.name or f"Bracket {bracket.bracket_number}"
                 waiting.append(label)
-        if waiting:
+        db.session.flush()
+
+        # Nothing at all resolved means there is nobody to open it for.
+        if not any(
+            teams_in_round(bracket, round_number) for bracket in brackets
+        ):
             unique = sorted(set(waiting))
             return (
                 jsonify(
                     {
-                        "error": "Round "
-                        f"{round_number - 1} is not finished and verified in: "
-                        + ", ".join(unique[:6])
+                        "error": "Nothing has come through round "
+                        f"{round_number - 1} yet"
+                        + (" in: " + ", ".join(unique[:6]) if unique else "")
                         + ("..." if len(unique) > 6 else "")
                     }
                 ),
                 400,
             )
-        db.session.flush()
 
     # week_number is unique per league, so each bracket-week takes the next
     # one rather than sharing a number with the rest of its round.
@@ -1594,38 +1683,11 @@ def start_playoff_round(league_id, round_number):
         for field, value in deadlines.items():
             setattr(week, field, value)
 
-        matches = [
-            m
-            for m in bracket.matches
-            if m.round_number == round_number
-            and not m.is_bye
-            and m.team1_id
-            and m.team2_id
-            and m.player_matchup_id is None
-        ]
-        for match in matches:
-            player1 = _player_for(bracket, match.team1_id)
-            player2 = _player_for(bracket, match.team2_id)
-            if not player1 or not player2:
-                continue
-            # A matchup names its two players, so creating one would give the
-            # assignments away. Until they are published the week opens without
-            # its matches, which is enough for a pool to be dealt and studied.
-            if not reveal_assignments:
-                deferred_matches += 1
-                continue
-            wm = WeekMatchup(
-                week_id=week.id, team1_id=match.team1_id, team2_id=match.team2_id
-            )
-            db.session.add(wm)
-            db.session.flush()
-            pm = PlayerMatchup(
-                week_matchup_id=wm.id, player1_id=player1, player2_id=player2
-            )
-            db.session.add(pm)
-            db.session.flush()
-            match.player_matchup_id = pm.id
-            created_matches += 1
+        paired, deferred = pair_ready_matches(
+            week, bracket, round_number, reveal_assignments
+        )
+        created_matches += paired
+        deferred_matches += deferred
 
     scope = (
         f" for {brackets[0].name or f'bracket {brackets[0].bracket_number}'}"
