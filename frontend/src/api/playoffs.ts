@@ -54,6 +54,10 @@ export interface PlayoffBracketWeek {
   status: string;
   format_type: string;
   sealed_pools_generated: boolean;
+  // Dealt per team as teams win their way into the round, so this is a
+  // count filling up rather than a flag flipping once.
+  pools_dealt: number;
+  pools_expected: number;
 }
 
 export interface PlayoffMatchInfo {

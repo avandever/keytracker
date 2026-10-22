@@ -43,6 +43,7 @@ from keytracker.schema import (
     PlayoffConfig,
     PlayoffMatch,
     PlayoffQualifier,
+    SealedPoolDeck,
     Team,
     TeamMember,
     User,
@@ -986,6 +987,25 @@ def _bracket_tree(league, my_team_id=None, reveal=False):
                 for a in bracket.assignments
             }
 
+    pool_weeks = [
+        w
+        for bracket in brackets
+        for w in league.weeks
+        if w.playoff_bracket_id == bracket.id
+        and w.format_type in SEALED_WEEK_FORMATS
+    ]
+    pools_dealt = {}
+    if pool_weeks:
+        rows = (
+            db.session.query(SealedPoolDeck.week_id, SealedPoolDeck.team_id)
+            .filter(SealedPoolDeck.week_id.in_([w.id for w in pool_weeks]))
+            .distinct()
+            .all()
+        )
+        for week_id, team_id in rows:
+            if team_id:
+                pools_dealt[week_id] = pools_dealt.get(week_id, 0) + 1
+
     hidden_pairings = {
         bracket.id: bool(qualifier_ids)
         and any(
@@ -1011,6 +1031,15 @@ def _bracket_tree(league, my_team_id=None, reveal=False):
                         "status": week.status,
                         "format_type": week.format_type,
                         "sealed_pools_generated": bool(week.sealed_pools_generated),
+                        # A sealed round is dealt per team as teams win their
+                        # way in, so "dealt" is a count now rather than a
+                        # yes: an admin wants to see 1 of 2 and know the
+                        # round is still filling.
+                        "pools_dealt": pools_dealt.get(week.id, 0),
+                        "pools_expected": len(
+                            teams_in_round(bracket, week.playoff_round)
+                        )
+                        or len(qualifier_ids),
                     }
                     for week in sorted(
                         weeks_by_bracket.get(bracket.id, []),

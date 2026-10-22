@@ -1658,6 +1658,11 @@ def _playoff_pool_teams(league, week):
     team's slot in the bracket and whoever ends up in it plays it. That also
     keeps the deal to the teams actually playing rather than to every player in
     the league.
+
+    Only the teams in the round: a round-two pool goes to a team as it wins
+    its way in, not to every qualifier in advance. Before the draw the round
+    holds nobody, and then the qualifiers stand in for it, which is what lets
+    round one's pools be dealt early.
     """
     if getattr(week, "playoff_bracket_id", None) is None:
         return None
@@ -1667,7 +1672,68 @@ def _playoff_pool_teams(league, week):
         for q in sorted(league.playoff_qualifiers, key=lambda q: q.position)
         if q.team_id in by_id
     ]
+    bracket = next(
+        (
+            b
+            for b in league.playoff_brackets
+            if b.id == week.playoff_bracket_id
+        ),
+        None,
+    )
+    if bracket is not None and week.playoff_round:
+        from keytracker.routes.playoffs import teams_in_round
+
+        here = teams_in_round(bracket, week.playoff_round)
+        if here:
+            teams = [t for t in teams if t.id in here]
     return teams or None
+
+
+def deal_playoff_sealed_pools(week, teams):
+    """Deal a pool to each of these bracket teams that does not have one.
+
+    A top-up rather than a deal: teams already holding a pool for the week
+    are left alone, so this runs both from an admin's generate and from a
+    verified result that sends a team into the round. Decks already dealt
+    for the week are held back, so two teams in the same round cannot be
+    given the same deck.
+
+    Returns (dealt, needed, available). Nothing is written when the decks
+    will not go round, and needed is then above available.
+    """
+    from sqlalchemy.sql.expression import func
+
+    rows = SealedPoolDeck.query.filter_by(week_id=week.id).all()
+    have = {row.team_id for row in rows if row.team_id}
+    owed = [t for t in teams if t.id not in have]
+    if not owed:
+        return 0, 0, 0
+    per = week.decks_per_player or 4
+    needed = per * len(owed)
+    query = Deck.query
+    if week.allowed_sets:
+        try:
+            query = query.filter(Deck.expansion.in_(json.loads(week.allowed_sets)))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    spent = [row.deck_id for row in rows if row.deck_id]
+    if spent:
+        query = query.filter(~Deck.id.in_(spent))
+    decks = query.order_by(func.rand()).limit(needed).all()
+    if len(decks) < needed:
+        return 0, needed, len(decks)
+    random.shuffle(decks)
+    for i, team in enumerate(owed):
+        for deck in decks[i * per : (i + 1) * per]:
+            db.session.add(
+                SealedPoolDeck(
+                    week_id=week.id,
+                    team_id=team.id,
+                    user_id=None,
+                    deck_id=deck.id,
+                )
+            )
+    return len(owed), needed, len(decks)
 
 
 def _sealed_pool_rows(week, user_id):
@@ -3048,11 +3114,13 @@ def generate_sealed_pools(league_id, week_id):
             ),
             400,
         )
-    if week.sealed_pools_generated:
-        return jsonify({"error": "Sealed pools already generated"}), 400
-
     decks_per_player = week.decks_per_player or 4
     playoff_teams = _playoff_pool_teams(league, week)
+
+    # A bracket week deals per team as teams arrive, so running it again tops
+    # up whoever has joined the round since. Elsewhere a pool is dealt once.
+    if week.sealed_pools_generated and not playoff_teams:
+        return jsonify({"error": "Sealed pools already generated"}), 400
 
     # Build a base deck query filtered by allowed sets
     def _build_deck_query():
@@ -3101,32 +3169,23 @@ def generate_sealed_pools(league_id, week_id):
                 )
                 db.session.add(spd)
     elif playoff_teams:
-        # One pool per team in the bracket, held by the slot rather than by a
+        # One pool per team in the round, held by the slot rather than by a
         # player, so it can be dealt before the captains have finished.
-        total_decks_needed = decks_per_player * len(playoff_teams)
-        decks = (
-            _build_deck_query().order_by(func.rand()).limit(total_decks_needed).all()
-        )
-        if len(decks) < total_decks_needed:
+        dealt, needed, available = deal_playoff_sealed_pools(week, playoff_teams)
+        if needed > available:
             return (
                 jsonify(
                     {
-                        "error": f"Not enough decks in database ({len(decks)} available, {total_decks_needed} needed)"
+                        "error": f"Not enough decks in database ({available} available, {needed} needed)"
                     }
                 ),
                 400,
             )
-        random.shuffle(decks)
-        for i, team in enumerate(playoff_teams):
-            for d in decks[i * decks_per_player : (i + 1) * decks_per_player]:
-                db.session.add(
-                    SealedPoolDeck(
-                        week_id=week.id,
-                        team_id=team.id,
-                        user_id=None,
-                        deck_id=d.id,
-                    )
-                )
+        if not dealt:
+            return (
+                jsonify({"error": "Every team in this round already has a pool"}),
+                400,
+            )
     else:
         active_members = _get_active_players(league)
         num_players = len(active_members)
@@ -8119,6 +8178,12 @@ def _advance_playoff_bracket(league, week):
         pair_ready_matches(
             nxt, bracket, week.playoff_round + 1, _assignments_revealed(config)
         )
+        # A sealed round whose pools have gone out deals this team in now, so
+        # winning is what their pool waits on rather than an admin noticing.
+        if nxt.format_type in SEALED_WEEK_FORMATS and nxt.sealed_pools_generated:
+            teams = _playoff_pool_teams(league, nxt)
+            if teams:
+                deal_playoff_sealed_pools(nxt, teams)
 
 
 def _check_week_completion(week):
