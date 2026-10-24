@@ -122,7 +122,31 @@ python keytracker/scripts/add_alliance_restricted_card.py --version 2.5 --card-n
 Reads `DATABASE_URL` from `.env`. Creates the version automatically if it doesn't exist.
 See `keytracker/scripts/ALLIANCE_RESTRICTED_LIST.md` for full documentation.
 
-### No test suite exists in this project.
+### Tests
+
+Two kinds, and they are run differently.
+
+`tests/` is pytest, against an in-memory SQLite app built in `conftest.py`:
+
+```bash
+pytest tests/
+```
+
+`tests/integration/` is a set of standalone scripts that build a league from
+nothing in a scratch MySQL database and drive the real API through a Flask
+test client. They need the app container up, and the runner copies the
+**working tree's** `keytracker/` into it, so they test what you have edited
+rather than what is deployed:
+
+```bash
+tests/integration/run.sh                        # all of them, with a summary
+tests/integration/run.sh test_publish_round.py  # one, full output
+```
+
+They drop every table on startup, so they are pinned to
+`keytracker_playoff_scratch` and fail closed without it. See
+`tests/integration/README.md` before adding one — and never point them at a
+database anyone cares about.
 
 ## Architecture
 
