@@ -35,7 +35,7 @@ from keytracker.schema import (
     db,
 )
 from flask import g, has_app_context
-from sqlalchemy import func, select
+from sqlalchemy import func, select, union_all
 from sqlalchemy.orm import joinedload, selectinload
 from keytracker.card_requirements import (
     _deck_category_matches,
@@ -304,6 +304,10 @@ def _preload_league_graph(league: League, weeks=None) -> list:
     """
     keep_alive: list = []
     weeks = league.weeks if weeks is None else list(weeks)
+    # week.deck_selections and matchup.player_matchups are still read one
+    # parent at a time, and deliberately: neither relationship declares an
+    # order_by, so batching them hands the rows back in a different order than
+    # a load per parent does -- and that order reaches the response.
     matchup_ids = [wm.id for week in weeks for wm in week.matchups]
     if matchup_ids:
         keep_alive += PlayerMatchup.query.options(
@@ -330,6 +334,26 @@ def _preload_league_graph(league: League, weeks=None) -> list:
         for sugg in week.deck_suggestions
         if sugg.deck_id
     }
+    # A deck selection is not the only way a deck reaches the page: a sealed
+    # pool, an alliance pod and a curated thief deck each name one too, and
+    # each of those was fetching its own DoK row and pods one deck at a time.
+    week_ids = [week.id for week in weeks]
+    if week_ids:
+        other_decks = union_all(
+            *[
+                select(model.deck_id).where(model.week_id.in_(week_ids))
+                for model in (
+                    SealedPoolDeck,
+                    AlliancePodSelection,
+                    ThiefCurationDeck,
+                )
+            ]
+        )
+        deck_ids |= {
+            deck_id
+            for (deck_id,) in db.session.execute(other_decks).all()
+            if deck_id
+        }
     if deck_ids:
         keep_alive += Deck.query.options(
             joinedload(Deck.dok),

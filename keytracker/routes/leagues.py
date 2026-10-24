@@ -354,6 +354,13 @@ def _playoff_weeks_for_team(league, viewer, my_team_id, stub=False, for_user=Non
         m.user_id for m in TeamMember.query.filter_by(team_id=my_team_id).all()
     }
     brackets = {b.id: b for b in league.playoff_brackets}
+    # Serialising these in full walks the same graph an ordinary week does, and
+    # the league page's own preload has already gone out of scope by the time
+    # we get here. Bound to a local for the same reason it is there: dropping
+    # it would let the rows be collected before they are read.
+    _preloaded = (  # noqa: F841
+        [] if stub else _preload_league_graph(league, weeks=playoff_weeks)
+    )
     scoped = []
     for week in sorted(
         playoff_weeks, key=lambda w: (w.playoff_round or 0, w.week_number)
