@@ -1462,11 +1462,34 @@ def serialize_player_matchup(
     # Whose borrow is in, without saying what the other one was: a form has
     # to know whether this player still owes one, and the choice itself stays
     # secret until both are made.
+    # "Mine" is the player being acted as, not the account looking. A captain
+    # filling in for one of their own reads this to know whether that player
+    # still owes a borrow; resolved against the captain it was always None, so
+    # the form kept asking after they had already answered it.
+    _borrow_for = effective_viewer_id
+    if _borrow_for is not None and not is_participant and pm.week_matchup_id:
+        _wm = pm.week_matchup
+        if _wm:
+            for team in (_wm.team1, _wm.team2):
+                if not any(
+                    m.user_id == _borrow_for and m.is_captain for m in team.members
+                ):
+                    continue
+                _theirs = {m.user_id for m in team.members}
+                _borrow_for = next(
+                    (
+                        pid
+                        for pid in (pm.player1_id, pm.player2_id)
+                        if pid in _theirs
+                    ),
+                    _borrow_for,
+                )
+                break
     data["my_exchange_borrow"] = next(
         (
             b.borrowed_deck_selection_id
             for b in exchange_borrows
-            if b.borrowing_user_id == effective_viewer_id
+            if b.borrowing_user_id == _borrow_for
         ),
         None,
     )

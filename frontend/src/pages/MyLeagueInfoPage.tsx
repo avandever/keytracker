@@ -177,6 +177,8 @@ export default function MyLeagueInfoPage() {
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
   // Exchange: which of the opponent's decks to borrow.
   const [borrowSelectionId, setBorrowSelectionId] = useState<number | ''>('');
+  // ...and the opponent's, when a captain records it for them.
+  const [oppBorrowSelectionId, setOppBorrowSelectionId] = useState<number | ''>('');
   const [tertiateHouseSelection, setTertiateHouseSelection] = useState('');
   // Recording a Tertiate game that was played away from the site.
   const [retroPurgeMatchupId, setRetroPurgeMatchupId] = useState<number | null>(null);
@@ -2054,6 +2056,60 @@ export default function MyLeagueInfoPage() {
                 return (
                   <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
                     <Typography variant="subtitle2" gutterBottom>Borrow Phase</Typography>
+                    {mine && !bothIn && isCaptain && (() => {
+                      // Either captain may record the other side's borrow, for
+                      // a match played away from here. It is their choice, not
+                      // this captain's, so the wording says whose it is -- and
+                      // the server logs who entered it.
+                      const ours = week.deck_selections.filter(
+                        (ds) => ds.user_id === actingId,
+                      );
+                      return (
+                        <Box sx={{ mt: 1 }}>
+                          <Typography variant="body2" sx={{ mb: 1 }}>
+                            As captain you can record {opponentName}&apos;s borrow —
+                            which of these decks they took. Enter what they chose,
+                            not what you would pick.
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <FormControl size="small" sx={{ minWidth: 260 }}>
+                              <InputLabel>{opponentName}&apos;s borrow</InputLabel>
+                              <Select
+                                value={oppBorrowSelectionId}
+                                label={`${opponentName}'s borrow`}
+                                onChange={(e) => setOppBorrowSelectionId(e.target.value as number)}
+                              >
+                                {ours.map((ds) => (
+                                  <MenuItem key={ds.id} value={ds.id}>
+                                    {ds.deck?.name || `Slot ${ds.slot_number}`}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={!oppBorrowSelectionId}
+                              onClick={async () => {
+                                try {
+                                  await submitExchangeBorrow(
+                                    league.id, myMatchup.id,
+                                    oppBorrowSelectionId as number, opponentId,
+                                  );
+                                  setOppBorrowSelectionId('');
+                                  setSuccess(`Recorded ${opponentName}'s borrow.`);
+                                  refresh();
+                                } catch (e: any) {
+                                  setError(e.response?.data?.error || e.message);
+                                }
+                              }}
+                            >
+                              Record it
+                            </Button>
+                          </Box>
+                        </Box>
+                      );
+                    })()}
                     {mine ? (
                       <Typography variant="body2" color="text.secondary">
                         Your borrow is in

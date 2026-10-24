@@ -145,10 +145,54 @@ check("and is told their own is in, while the other stays secret",
       and body(r).get("exchange_borrows") is None,
       (body(r).get("my_exchange_borrow"), body(r).get("exchange_borrows")))
 
-act_as(users["Bob"])
+# Bob has gone quiet, so his captain enters it for him. Bob is the only
+# member of his team here, so the captain is his opponent's -- give Bob a
+# captain of his own to stand in.
+with app.app_context():
+    cap = User(email="cap@e.com", name="BobsCap")
+    db.session.add(cap)
+    db.session.flush()
+    db.session.add(TeamMember(team_id=teams[1], user_id=cap.id, is_captain=True))
+    db.session.commit()
+    cap_id = cap.id
+
+act_as(cap_id)
 r = c.post(f"{base}/exchange-borrow",
            json={"borrowed_deck_selection_id": sels["Ann"][1]})
-check("and so can the opponent", r.status_code == 200, str(body(r))[:80])
+check("a captain can enter it for their own player", r.status_code == 200,
+      str(body(r))[:80])
+check("and the answer credits the player, not the captain",
+      body(r).get("my_exchange_borrow") == sels["Ann"][1],
+      body(r).get("my_exchange_borrow"))
+
+# --- and the other team's captain may record it too ---------------------
+with app.app_context():
+    from keytracker.schema import ExchangeBorrow as EB
+    EB.query.filter_by(player_matchup_id=pm_id,
+                       borrowing_user_id=users["Bob"]).delete()
+    db.session.commit()
+
+act_as(users["Ann"])  # Ann captains the other team
+r = c.post(f"{base}/exchange-borrow",
+           json={"borrowed_deck_selection_id": sels["Ann"][1],
+                 "for_user_id": users["Bob"]})
+check("the opposing captain can record it when named",
+      r.status_code == 200, str(body(r))[:80])
+with app.app_context():
+    from keytracker.schema import ExchangeBorrow as EB, LeagueAdminLog
+    owner = EB.query.filter_by(player_matchup_id=pm_id).filter(
+        EB.borrowing_user_id == users["Bob"]).first()
+    check("recorded against the player it belongs to", owner is not None)
+    logged = LeagueAdminLog.query.filter_by(
+        action_type="exchange_borrow_entered_for_player"
+    ).count()
+    check("and logged, so who entered it is on the record", logged >= 1, logged)
+
+r = c.post(f"{base}/exchange-borrow",
+           json={"borrowed_deck_selection_id": sels["Ann"][0],
+                 "for_user_id": 99999})
+check("a player outside the match cannot be named",
+      r.status_code == 400, body(r).get("error"))
 
 got = playable()
 check("once both have borrowed, each side has two decks",

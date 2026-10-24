@@ -6822,11 +6822,35 @@ def submit_exchange_borrow(league_id, matchup_id):
         return jsonify({"error": "Week is not published"}), 400
 
     effective = get_effective_user()
+    data = request.get_json(silent=True) or {}
+
+    # Either captain may enter either borrow. A borrow is aimed at the other
+    # side, so this is a captain choosing something on an opponent's behalf,
+    # which is only sound where the match has already been played and the
+    # choice is being recorded rather than made. The league asked for it on
+    # those terms; every borrow a captain enters for somebody else is logged
+    # with their name against it.
     acting_id = _acting_player_id(pm, effective.id)
+    target_id = data.get("for_user_id")
+    if target_id is not None:
+        if target_id not in (pm.player1_id, pm.player2_id):
+            return jsonify({"error": "That player is not in this matchup"}), 400
+        may_enter_for_either = _is_league_admin(league, effective) or bool(
+            TeamMember.query.filter(
+                TeamMember.team_id.in_({wm.team1_id, wm.team2_id}),
+                TeamMember.user_id == effective.id,
+                TeamMember.is_captain == True,  # noqa: E712
+            ).first()
+        )
+        if not may_enter_for_either:
+            return (
+                jsonify({"error": "Only a team captain or admin can do this"}),
+                403,
+            )
+        acting_id = target_id
     if acting_id is None:
         return jsonify({"error": "You are not in this matchup"}), 403
 
-    data = request.get_json(silent=True) or {}
     borrowed_deck_selection_id = data.get("borrowed_deck_selection_id")
     if not isinstance(borrowed_deck_selection_id, int):
         return jsonify({"error": "borrowed_deck_selection_id is required"}), 400
@@ -6841,6 +6865,16 @@ def submit_exchange_borrow(league_id, matchup_id):
         borrowed_deck_selection_id=borrowed_deck_selection_id,
     )
     db.session.add(borrow)
+    if acting_id != effective.id:
+        owner = db.session.get(User, acting_id)
+        _log_admin_action(
+            league.id,
+            week.id,
+            effective.id,
+            "exchange_borrow_entered_for_player",
+            f"matchup {pm.id}: borrow recorded for "
+            f"{owner.name if owner else acting_id}",
+        )
     db.session.commit()
     # With the viewer, so the answer can say whose borrow is now in without
     # giving away the other one.

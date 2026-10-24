@@ -820,10 +820,15 @@ export async function submitExchangeBorrow(
   leagueId: number,
   matchupId: number,
   borrowedDeckSelectionId: number,
+  /** Whose borrow this is, when a captain records it for a player. */
+  forUserId?: number,
 ): Promise<PlayerMatchupInfo> {
   const { data } = await apiClient.post(
     `/leagues/${leagueId}/matches/${matchupId}/exchange-borrow`,
-    { borrowed_deck_selection_id: borrowedDeckSelectionId },
+    {
+      borrowed_deck_selection_id: borrowedDeckSelectionId,
+      ...(forUserId ? { for_user_id: forUserId } : {}),
+    },
   );
   return data;
 }
