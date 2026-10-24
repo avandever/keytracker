@@ -114,6 +114,20 @@ function tabKeysFor(league: LeagueDetail): string[] {
   ];
 }
 
+/**
+ * Formats whose game report names the deck each player used. Mirrors the
+ * per-format checks in the reporting endpoint; the legal decks themselves
+ * come from the server as playable_deck_ids.
+ */
+const DECK_PER_GAME = new Set([
+  'triad',
+  'exchange',
+  'nordic_hexad',
+  'moirai',
+  'sealed_survival',
+  'double_oubliette',
+]);
+
 export default function MyLeagueInfoPage() {
   const leagueId = useLeagueNumericId();
   const { user } = useAuth();
@@ -1664,8 +1678,9 @@ export default function MyLeagueInfoPage() {
                 <Typography variant="body2" color="text.secondary" gutterBottom>
                   One ban per set, each applying to that set&apos;s decks only. A ban cannot
                   be a house in {actingId === effectiveUserId ? 'your own' : `${actingName}'s`}{' '}
-                  deck from the same set. Losing a deck to a ban loses the match, since the
-                  match is won by winning a game with each deck.
+                  deck from the same set. The match is won by winning one game with each
+                  legal set, so losing one deck of a set still leaves it playable with
+                  the other — losing both of a set's decks is what ends it.
                 </Typography>
                 {weekSets.map((setNumber) => (
                   <Box key={setNumber} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
@@ -1722,20 +1737,36 @@ export default function MyLeagueInfoPage() {
                     </Box>
                   </Box>
                 )}
-                {/* One verdict over both sides. Read a side at a time, the
-                    two contradicted each other whenever both players lost a
-                    deck -- which is the ordinary outcome, since each side
-                    bans into the other's sets. Miggy9001's match showed
-                    "it is forfeit" and "the match is yours" at once. */}
+                {/* One verdict over both sides, counted by set rather than
+                    by deck. The match is won by winning one game with each
+                    legal set, so losing one of a set's two decks costs you
+                    nothing -- the set is still playable with the other. It
+                    is losing a whole set that ends it, there being no legal
+                    deck left to win that set with.
+
+                    Read per deck and a side at a time, this said "it is
+                    forfeit" and "the match is yours" at once on Miggy9001's
+                    match, where each side had merely lost one deck of two. */}
                 {allIn && (() => {
-                  const mineGone = (myOut || []).length > 0;
-                  const theirsGone = (oppOut || []).length > 0;
+                  const lostASet = (
+                    sels: DeckSelectionInfo[],
+                    out: number[] | null | undefined,
+                  ) => weekSets.some((setNumber) => {
+                    const inSet = sels.filter((ds) => ds.deck?.expansion === setNumber);
+                    if (inSet.length === 0) return false;
+                    return inSet.every(
+                      (ds) => ds.deck?.db_id != null
+                        && (out || []).includes(ds.deck.db_id),
+                    );
+                  });
+                  const mineGone = lostASet(mine, myOut);
+                  const theirsGone = lostASet(theirs, oppOut);
                   if (!mineGone && !theirsGone) return null;
                   if (mineGone && theirsGone) {
                     return (
                       <Alert severity="warning" sx={{ mt: 1 }}>
-                        Both sides lost a deck to a ban, so neither can win a game
-                        with each of theirs. A captain or an admin records how this
+                        Both sides have lost a whole set, so neither can win a game
+                        with each legal set. A captain or an admin records how this
                         one ends.
                       </Alert>
                     );
@@ -1743,14 +1774,16 @@ export default function MyLeagueInfoPage() {
                   if (mineGone) {
                     return (
                       <Alert severity="error" sx={{ mt: 1 }}>
-                        {actingId === effectiveUserId ? 'A deck of yours is' : `One of ${actingName}'s decks is`} out,
-                        so the match cannot be won with each deck — it is forfeit.
+                        {actingId === effectiveUserId ? 'You have' : `${actingName} has`} no
+                        legal deck left in one of the sets, so no game can be won with
+                        it — the match is forfeit.
                       </Alert>
                     );
                   }
                   return (
                     <Alert severity="success" sx={{ mt: 1 }}>
-                      {opponentName} lost a deck, so the match is yours.
+                      {opponentName} has no legal deck left in one of the sets, so
+                      the match is yours.
                     </Alert>
                   );
                 })()}
@@ -2410,13 +2443,32 @@ export default function MyLeagueInfoPage() {
                 );
               })()}
 
+              {/* A format that names a deck per game cannot accept a report
+                  until the step that decides which decks are legal has
+                  happened -- the borrows, the bans, the phases. Offering the
+                  form anyway meant filling it in and being turned away by the
+                  endpoint, which is how "Both players must submit borrows
+                  before reporting games" came back at someone who had no form
+                  to submit a borrow with. */}
+              {DECK_PER_GAME.has(week.format_type)
+                && !myMatchup.playable_deck_ids
+                && !isMatchDecided(myMatchup, week.best_of_n)
+                && (!needsStart || (myMatchup.player1_started && myMatchup.player2_started)) && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  This match is waiting on a step of the format before a game can
+                  be reported — the deck each player used has to come from what
+                  that step leaves legal.
+                </Alert>
+              )}
+
               {/* Game reporting */}
               {(!needsStart || (myMatchup.player1_started && myMatchup.player2_started)) &&
                 !isMatchDecided(myMatchup, week.best_of_n) &&
                 (week.format_type !== 'triad'
                   || myMatchup.strikes.length >= 2
                   || myMatchup.strike_not_recorded) &&
-                (week.format_type !== 'tertiate' || (myMatchup.tertiate_purge_choices || []).filter((p) => p.game_number === myMatchup.games.length + 1).length >= 2) && (
+                (week.format_type !== 'tertiate' || (myMatchup.tertiate_purge_choices || []).filter((p) => p.game_number === myMatchup.games.length + 1).length >= 2) &&
+                (!DECK_PER_GAME.has(week.format_type) || !!myMatchup.playable_deck_ids) && (
                 <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>Report Game {myMatchup.games.length + 1}</Typography>
                   {myMatchup.games.length > 0 && (() => {
