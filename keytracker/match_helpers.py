@@ -1326,6 +1326,135 @@ def double_oubliette_deck_error(matchup, selections_by_user, existing_games, p1_
     return None
 
 
+def playable_deck_ids(matchup, format_type, existing_games, game_number):
+    """Which decks each player may legally play in this game.
+
+    The reporting endpoint already knows this -- it is what it refuses a
+    report for -- but only as a verdict on a pair of decks after the fact.
+    A form has to offer the choice before the fact, and working the rules
+    out a second time in the browser is how the two drift apart. So it is
+    derived here, from the same helpers the validators use.
+
+    Returns {"p1": [deck_id, ...], "p2": [...]} or None for a format that
+    does not name a deck per game, or one whose earlier phases are not far
+    enough along for the question to have an answer yet.
+    """
+    selections = _selections_by_user(matchup)
+    p1_id, p2_id = matchup.player1_id, matchup.player2_id
+
+    def won_with(player_id):
+        """Decks that have already won for this player."""
+        return {
+            (g.player1_deck_id if player_id == p1_id else g.player2_deck_id)
+            for g in existing_games
+            if g.winner_id == player_id
+        }
+
+    def lost_with(player_id):
+        return {
+            (g.player1_deck_id if player_id == p1_id else g.player2_deck_id)
+            for g in existing_games
+            if g.winner_id and g.winner_id != player_id
+        }
+
+    if format_type == WeekFormat.TRIAD:
+        struck = set()
+        for strike in matchup.strikes:
+            sel = db.session.get(PlayerDeckSelection, strike.struck_deck_selection_id)
+            if sel:
+                struck.add(sel.deck_id)
+        return {
+            "p1": sorted(selections[p1_id] - struck - won_with(p1_id)),
+            "p2": sorted(selections[p2_id] - struck - won_with(p2_id)),
+        }
+
+    if format_type == WeekFormat.SEALED_SURVIVAL:
+        # A deck that loses is out; winning does not retire it.
+        return {
+            "p1": sorted(selections[p1_id] - lost_with(p1_id)),
+            "p2": sorted(selections[p2_id] - lost_with(p2_id)),
+        }
+
+    if format_type == WeekFormat.DOUBLE_OUBLIETTE:
+        bans = standalone_double_oubliette_bans(matchup)
+        for player_id in (p1_id, p2_id):
+            if len(bans.get(player_id, {})) < 2:
+                return None
+        # A deck meets only the ban aimed at its own set, and the ban that
+        # takes it out is the opponent's.
+        def killed(owner_id, their_bans):
+            out = set()
+            for sel in PlayerDeckSelection.query.filter_by(
+                week_id=week_id, user_id=owner_id
+            ).all():
+                if not sel.deck:
+                    continue
+                banned = their_bans.get(sel.deck.expansion)
+                if banned and banned in get_deck_houses(sel.deck):
+                    out.add(sel.deck_id)
+            return out
+
+        week_id = matchup.week_matchup.week_id if matchup.week_matchup else None
+        if week_id is None:
+            return None
+        return {
+            "p1": sorted(
+                selections[p1_id] - killed(p1_id, bans.get(p2_id, {})) - won_with(p1_id)
+            ),
+            "p2": sorted(
+                selections[p2_id] - killed(p2_id, bans.get(p1_id, {})) - won_with(p2_id)
+            ),
+        }
+
+    if format_type == WeekFormat.EXCHANGE:
+        if len(matchup.exchange_borrows) < 2:
+            return None
+        p1_sels, p2_sels = _get_exchange_selections(matchup)
+        out = {}
+        for key, player_id in (("p1", p1_id), ("p2", p2_id)):
+            own, borrowed = get_exchange_decks(matchup, player_id, p1_sels, p2_sels)
+            # Both have to win, so a deck that already has is finished.
+            ids = {sel.deck_id for sel in (own, borrowed) if sel}
+            out[key] = sorted(ids - won_with(player_id))
+        return out
+
+    if format_type == WeekFormat.NORDIC_HEXAD:
+        remaining = get_nordic_remaining_deck_ids(matchup)
+        if not remaining:
+            return None
+        return {
+            "p1": sorted(set(remaining.get(p1_id, ())) - won_with(p1_id)),
+            "p2": sorted(set(remaining.get(p2_id, ())) - won_with(p2_id)),
+        }
+
+    if format_type == WeekFormat.MOIRAI:
+        if len(getattr(matchup, "moirai_assignments", [])) < 6:
+            return None
+        if game_number in (1, 2):
+            # Assigned, so there is exactly one answer each and no choosing.
+            sel_ids = get_moirai_game_deck_sel_ids(matchup, game_number)
+            out = {}
+            for key, sel_id in zip(("p1", "p2"), sel_ids):
+                sel = db.session.get(PlayerDeckSelection, sel_id) if sel_id else None
+                out[key] = [sel.deck_id] if sel else []
+            return out
+        choices = getattr(matchup, "adaptive_short_choices", [])
+        out = {"p1": [], "p2": []}
+        for key, player_id in (("p1", p1_id), ("p2", p2_id)):
+            choice = next(
+                (c for c in choices if c.choosing_user_id == player_id), None
+            )
+            sel = (
+                db.session.get(PlayerDeckSelection, choice.chosen_deck_selection_id)
+                if choice and choice.chosen_deck_selection_id
+                else None
+            )
+            out[key] = [sel.deck_id] if sel else []
+        return out
+
+    return None
+
+
 def _selections_by_user(matchup):
     """Each player's chosen deck ids for this matchup's match or week."""
     week_id = matchup.week_matchup.week_id if matchup.week_matchup else None
