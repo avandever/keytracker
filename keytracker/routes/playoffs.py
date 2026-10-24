@@ -12,6 +12,7 @@ import random
 
 from flask import Blueprint, jsonify, request
 from flask_login import login_required
+from sqlalchemy import func
 
 from keytracker.playoff_draw import (
     bracket_size,
@@ -223,6 +224,59 @@ def _missing_assignments(league, brackets, qualifier_ids):
     return missing
 
 
+def _submission_counts(weeks):
+    """What each player has filed for a batch of weeks, keyed by (week, user).
+
+    The progress panels ask this for every qualifier in every week of a round,
+    which was a count query apiece; two grouped queries answer the whole lot.
+    An alliance files pods and nothing else, so the two kinds of week are
+    counted from their own tables and neither is asked about the other.
+    """
+    alliance_ids = [
+        w.id for w in weeks if w.format_type in ALLIANCE_WEEK_FORMATS
+    ]
+    deck_ids = [
+        w.id for w in weeks if w.format_type not in ALLIANCE_WEEK_FORMATS
+    ]
+
+    pods = {}
+    if alliance_ids:
+        pods = {
+            (week_id, user_id): n
+            for week_id, user_id, n in db.session.query(
+                AlliancePodSelection.week_id,
+                AlliancePodSelection.user_id,
+                func.count(AlliancePodSelection.id),
+            )
+            .filter(
+                AlliancePodSelection.week_id.in_(alliance_ids),
+                AlliancePodSelection.slot_type == "pod",
+            )
+            .group_by(
+                AlliancePodSelection.week_id, AlliancePodSelection.user_id
+            )
+            .all()
+        }
+
+    decks = {}
+    if deck_ids:
+        decks = {
+            (week_id, user_id): n
+            for week_id, user_id, n in db.session.query(
+                PlayerDeckSelection.week_id,
+                PlayerDeckSelection.user_id,
+                func.count(PlayerDeckSelection.id),
+            )
+            .filter(PlayerDeckSelection.week_id.in_(deck_ids))
+            .group_by(
+                PlayerDeckSelection.week_id, PlayerDeckSelection.user_id
+            )
+            .all()
+        }
+
+    return pods, decks
+
+
 def _deck_progress(league, brackets):
     """How many decks each qualifying team has in, round by round.
 
@@ -250,6 +304,9 @@ def _deck_progress(league, brackets):
         for b in brackets
         for r in rounds
     }
+    pods_by_week_user, decks_by_week_user = _submission_counts(
+        [week for weeks in rounds.values() for week in weeks]
+    )
 
     out = []
     for round_number in sorted(rounds):
@@ -267,14 +324,10 @@ def _deck_progress(league, brackets):
                 slots = deck_slots_for_format(week.format_type)
                 expected += slots
                 if week.format_type in ALLIANCE_WEEK_FORMATS:
-                    pods = AlliancePodSelection.query.filter_by(
-                        week_id=week.id, user_id=user_id, slot_type="pod"
-                    ).count()
+                    pods = pods_by_week_user.get((week.id, user_id), 0)
                     submitted += slots if pods >= 3 else 0
                 else:
-                    have = PlayerDeckSelection.query.filter_by(
-                        week_id=week.id, user_id=user_id
-                    ).count()
+                    have = decks_by_week_user.get((week.id, user_id), 0)
                     submitted += min(have, slots)
             teams.append(
                 {
@@ -1355,28 +1408,28 @@ def teams_in_round(bracket, round_number):
     return out
 
 
-def _missing_decks_for_week(week, bracket):
+def _missing_decks_for_week(week, bracket, counts=None):
     """Players in this bracket week who have not finished submitting.
 
     An alliance is counted by its pods, which is what it files instead of
-    deck selections.
+    deck selections. A caller walking several weeks hands in the counts for
+    all of them at once rather than having each week go back to the database.
     """
     missing = []
     slots = deck_slots_for_format(week.format_type)
+    pods_by_week_user, decks_by_week_user = (
+        counts if counts is not None else _submission_counts([week])
+    )
     # A team knocked out earlier owes nothing: it is not in this round.
     here = teams_in_round(bracket, week.playoff_round)
     for assignment in bracket.assignments:
         if here and assignment.team_id not in here:
             continue
         if week.format_type in ALLIANCE_WEEK_FORMATS:
-            have = AlliancePodSelection.query.filter_by(
-                week_id=week.id, user_id=assignment.user_id, slot_type="pod"
-            ).count()
+            have = pods_by_week_user.get((week.id, assignment.user_id), 0)
             done = have >= 3
         else:
-            have = PlayerDeckSelection.query.filter_by(
-                week_id=week.id, user_id=assignment.user_id
-            ).count()
+            have = decks_by_week_user.get((week.id, assignment.user_id), 0)
             done = have >= slots
         if not done:
             user = db.session.get(User, assignment.user_id)
@@ -1487,11 +1540,12 @@ def publish_playoff_round(league_id, round_number):
         )
 
     missing = []
+    counts = _submission_counts(weeks)
     for week in weeks:
         bracket = brackets.get(week.playoff_bracket_id)
         if bracket is None:
             continue
-        for name in _missing_decks_for_week(week, bracket):
+        for name in _missing_decks_for_week(week, bracket, counts):
             label = bracket.name or f"bracket {bracket.bracket_number}"
             missing.append(f"{name} ({label})")
     if missing and not force:
