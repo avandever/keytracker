@@ -815,6 +815,17 @@ export async function markOublietteBansNotRecorded(
   return data;
 }
 
+/** Record that a Triad match was played without one of its strikes. */
+export async function markStrikeNotRecorded(
+  leagueId: number,
+  matchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/strike-not-recorded`,
+  );
+  return data;
+}
+
 export async function confirmMatchResult(
   leagueId: number,
   matchupId: number,

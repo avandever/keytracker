@@ -46,6 +46,7 @@ import {
   startMatch,
   reportGame,
   submitStrike,
+  markStrikeNotRecorded,
   submitTertiatePurge,
   submitTertiatePurgeRetroactive,
   markMatchAlreadyPlayed,
@@ -2035,9 +2036,39 @@ export default function MyLeagueInfoPage() {
                             </Typography>
                           </Box>
                         )}
-                        {!bothStruck && (
+                        {!bothStruck && !myMatchup.strike_not_recorded && (
+                          <Box>
+                            <Typography variant="body2" color="text.secondary">
+                              Waiting for opponent to submit their strike...
+                            </Typography>
+                            {/* Which can wait forever. The strike is aimed at
+                                this player's decks, so they are the one held
+                                up by it, and if it never comes then every deck
+                                they brought stays legal whatever anyone does
+                                here. All this decides is whether the match can
+                                be recorded at all. */}
+                            <Button
+                              size="small"
+                              color="warning"
+                              sx={{ mt: 1 }}
+                              onClick={async () => {
+                                try {
+                                  await markStrikeNotRecorded(league.id, myMatchup.id);
+                                  setSuccess('Recorded as played without their strike.');
+                                  refresh();
+                                } catch (e: any) {
+                                  setError(e.response?.data?.error || e.message);
+                                }
+                              }}
+                            >
+                              They never struck — report the match anyway
+                            </Button>
+                          </Box>
+                        )}
+                        {myMatchup.strike_not_recorded && (
                           <Typography variant="body2" color="text.secondary">
-                            Waiting for opponent to submit their strike...
+                            Recorded as played without their strike, so all three
+                            of your decks stayed legal.
                           </Typography>
                         )}
                       </Box>
@@ -2279,7 +2310,9 @@ export default function MyLeagueInfoPage() {
               {/* Game reporting */}
               {(!needsStart || (myMatchup.player1_started && myMatchup.player2_started)) &&
                 !isMatchDecided(myMatchup, week.best_of_n) &&
-                (week.format_type !== 'triad' || myMatchup.strikes.length >= 2) &&
+                (week.format_type !== 'triad'
+                  || myMatchup.strikes.length >= 2
+                  || myMatchup.strike_not_recorded) &&
                 (week.format_type !== 'tertiate' || (myMatchup.tertiate_purge_choices || []).filter((p) => p.game_number === myMatchup.games.length + 1).length >= 2) && (
                 <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, p: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>Report Game {myMatchup.games.length + 1}</Typography>

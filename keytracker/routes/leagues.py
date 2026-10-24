@@ -6484,6 +6484,81 @@ def mark_oubliette_bans_not_recorded(league_id, matchup_id):
 
 
 @blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/strike-not-recorded", methods=["POST"]
+)
+@login_required
+def mark_strike_not_recorded(league_id, matchup_id):
+    """Record that a Triad match was played without one of its strikes.
+
+    The same hole as the Oubliette bans: a strike belongs to the player who
+    makes it, so a player who stops answering leaves a match that cannot be
+    reported and nobody able to move it on. Captains and admins can say so,
+    as they can there.
+
+    So can the opponent, which is the difference. A strike is aimed at their
+    decks, so the player left waiting is the one it was aimed at -- and the
+    waiver is worth something to them, since every deck they brought stays
+    legal. That is a real advantage handed over by the other player's
+    silence, and it is theirs either way: if the strike never comes, nothing
+    anyone does here puts it back. What this decides is only whether the
+    match can be recorded at all, so the opponent may ask -- but only once
+    they have made their own strike. You cannot use this to skip your own.
+
+    It is logged either way, so an organiser can see it was used and by whom.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type not in (WeekFormat.TRIAD.value, WeekFormat.TRIAD_SHORT.value):
+        return jsonify({"error": "Only for Triad format"}), 400
+    if len(pm.strikes) >= 2:
+        return jsonify({"error": "Both strikes are already in"}), 400
+
+    effective = get_effective_user()
+    allowed = _is_league_admin(league, effective)
+    if not allowed:
+        allowed = bool(
+            TeamMember.query.filter(
+                TeamMember.team_id.in_({wm.team1_id, wm.team2_id}),
+                TeamMember.user_id == effective.id,
+                TeamMember.is_captain == True,  # noqa: E712
+            ).first()
+        )
+    if not allowed:
+        acting_id = _acting_player_id(pm, effective.id)
+        mine = any(s.striking_user_id == acting_id for s in pm.strikes)
+        if acting_id is None:
+            return (
+                jsonify({"error": "Only someone in this match can do this"}),
+                403,
+            )
+        if not mine:
+            return (
+                jsonify({"error": "Submit your own strike first"}),
+                400,
+            )
+        allowed = True
+
+    pm.strike_not_recorded = True
+    _log_admin_action(
+        league.id,
+        week.id,
+        effective.id,
+        "strike_not_recorded",
+        f"matchup {pm.id}: {pm.player1.name} vs {pm.player2.name}",
+    )
+    db.session.commit()
+    return jsonify(serialize_player_matchup(pm, viewer=effective))
+
+
+@blueprint.route(
     "/<int:league_id>/matches/<int:matchup_id>/banned-house", methods=["POST"]
 )
 @login_required

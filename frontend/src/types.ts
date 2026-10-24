@@ -644,6 +644,8 @@ export interface PlayerMatchupInfo {
   triad_short_picks?: TriadShortPickInfo[];
   /** Set when a captain recorded that the match was played without its bans. */
   oubliette_bans_not_recorded?: boolean;
+  /** A Triad match played without one of its strikes, so reporting may go on. */
+  strike_not_recorded?: boolean;
   /** Double Oubliette: each player's bans, keyed by the set each applies to.
    *  Empty until the viewer is entitled to see them. */
   double_oubliette_p1_bans?: Record<number, string>;

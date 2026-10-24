@@ -400,6 +400,13 @@ with app.app_context():
                             "oubliette_bans_not_recorded BOOLEAN NULL DEFAULT FALSE"
                         )
                     )
+                if "strike_not_recorded" not in columns:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_player_matchup ADD COLUMN "
+                            "strike_not_recorded BOOLEAN NULL DEFAULT FALSE"
+                        )
+                    )
                 if "double_oubliette_bans" not in columns:
                     conn.execute(
                         text(
