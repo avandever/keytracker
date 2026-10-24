@@ -17,7 +17,11 @@ function getCacheKey(config: InternalAxiosRequestConfig): string {
   const params = config.params
     ? '?' + new URLSearchParams(config.params).toString()
     : '';
-  return (config.url || '') + params;
+  // Who is being asked as is part of what was asked: the same URL answers
+  // differently for an admin looking at a league as one of its players, and
+  // one entry per URL would hand one of them the other's reply.
+  const who = _testUserId == null ? '' : `|as:${_testUserId}`;
+  return (config.url || '') + params + who;
 }
 
 const apiClient = axios.create({
