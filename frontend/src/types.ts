@@ -646,6 +646,13 @@ export interface PlayerMatchupInfo {
   oubliette_bans_not_recorded?: boolean;
   /** A Triad match played without one of its strikes, so reporting may go on. */
   strike_not_recorded?: boolean;
+  /**
+   * Which decks each player may legally play in the next game, for the
+   * formats that name one per game. Worked out on the server so the form and
+   * the endpoint that would refuse it cannot disagree; null where the format
+   * does not name a deck, or an earlier phase has not finished.
+   */
+  playable_deck_ids?: { p1: number[]; p2: number[] } | null;
   /** Double Oubliette: each player's bans, keyed by the set each applies to.
    *  Empty until the viewer is entitled to see them. */
   double_oubliette_p1_bans?: Record<number, string>;

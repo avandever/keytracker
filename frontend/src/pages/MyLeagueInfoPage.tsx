@@ -2451,6 +2451,64 @@ export default function MyLeagueInfoPage() {
                         </Box>
                       );
                     })()}
+                    {/* Every other format that names a deck per game. Which
+                        decks are legal is worked out on the server, from the
+                        same helpers the reporting endpoint refuses a report
+                        with -- deriving the rules again here is how a form and
+                        the endpoint that rejects it drift apart. */}
+                    {!['triad', 'sealed_survival'].includes(week.format_type)
+                      && myMatchup.playable_deck_ids && (() => {
+                      const playable = myMatchup.playable_deck_ids!;
+                      const named = (deckId: number) => {
+                        const sel = week.deck_selections.find(
+                          (ds) => ds.deck?.db_id === deckId,
+                        );
+                        return sel?.deck?.name || `Deck #${deckId}`;
+                      };
+                      const side = (
+                        label: string,
+                        ids: number[],
+                        value: number | '',
+                        set: (id: number) => void,
+                      ) => (
+                        <FormControl size="small" sx={{ flex: 1 }} disabled={ids.length === 0}>
+                          <InputLabel>{label}</InputLabel>
+                          <Select
+                            value={ids.includes(value as number) ? value : ''}
+                            label={label}
+                            onChange={(e) => set(e.target.value as number)}
+                          >
+                            {ids.map((id) => (
+                              <MenuItem key={id} value={id}>{named(id)}</MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      );
+                      return (
+                        <Box>
+                          <Box sx={{ display: 'flex', gap: 2 }}>
+                            {side(
+                              `${myMatchup.player1.name}'s Deck`,
+                              playable.p1 || [],
+                              p1DeckFor(myMatchup.id),
+                              (id) => setReportP1DeckById((prev) => ({ ...prev, [myMatchup.id]: id })),
+                            )}
+                            {side(
+                              `${myMatchup.player2.name}'s Deck`,
+                              playable.p2 || [],
+                              p2DeckFor(myMatchup.id),
+                              (id) => setReportP2DeckById((prev) => ({ ...prev, [myMatchup.id]: id })),
+                            )}
+                          </Box>
+                          {(playable.p1 || []).length === 0 && (playable.p2 || []).length === 0 && (
+                            <Typography variant="caption" color="text.secondary">
+                              No decks are playable yet -- an earlier step of the
+                              format is still outstanding.
+                            </Typography>
+                          )}
+                        </Box>
+                      );
+                    })()}
                     <Box sx={{ display: 'flex', gap: 2 }}>
                       <FormControl size="small" sx={{ flex: 1 }}>
                         <InputLabel>Winner Keys</InputLabel>
