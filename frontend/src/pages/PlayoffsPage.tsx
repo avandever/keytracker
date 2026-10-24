@@ -55,7 +55,12 @@ import {
   startPlayoffRound,
   updatePlayoffConfig,
 } from '../api/playoffs';
-import type { PlayoffSetup, PlayoffStandings, PlayoffTree } from '../api/playoffs';
+import type {
+  PlayoffBracketWeek,
+  PlayoffSetup,
+  PlayoffStandings,
+  PlayoffTree,
+} from '../api/playoffs';
 import type {
   CardCategoryPreset,
   KeyforgeSetInfo,
@@ -1214,7 +1219,12 @@ function SealedPoolsPanel({
   );
   if (rows.length === 0) return null;
 
-  const pending = rows.filter((row) => !row.week.sealed_pools_generated);
+  // A round deals in each team as it wins through, so a week is short of
+  // pools either because none has been dealt or because the round is still
+  // filling. Both want the same button.
+  const short = ({ week }: { week: PlayoffBracketWeek }) =>
+    !week.sealed_pools_generated || week.pools_dealt < week.pools_expected;
+  const pending = rows.filter(short);
 
   return (
     <Card sx={{ mt: 2 }}>
@@ -1222,12 +1232,14 @@ function SealedPoolsPanel({
         <Typography variant="h6" gutterBottom>Sealed pools</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
           A sealed bracket needs its pool dealt before anyone can submit. Decks come from
-          that bracket&apos;s allowed sets, as many per player as it asks for.
+          that bracket&apos;s allowed sets, as many per player as it asks for. A round past
+          the first deals a team in when it wins its match, so this is only here for
+          whoever it missed.
         </Typography>
         {pending.length > 0 && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             {pending.length} sealed bracket-week
-            {pending.length === 1 ? ' has' : 's have'} no pool yet.
+            {pending.length === 1 ? ' is' : 's are'} short of pools.
           </Alert>
         )}
         {rows.map(({ bracket, week }) => (
@@ -1239,20 +1251,24 @@ function SealedPoolsPanel({
               label={WEEK_FORMAT_LABELS[week.format_type] || week.format_type} />
             <Chip size="small" variant="outlined"
               label={week.round_number ? roundLabel(week.round_number) : 'Round ?'} />
-            {week.sealed_pools_generated ? (
-              <Chip size="small" color="success" variant="outlined" label="Pool dealt" />
-            ) : (
+            <Chip
+              size="small"
+              variant="outlined"
+              color={short({ week }) ? 'default' : 'success'}
+              label={`${week.pools_dealt} of ${week.pools_expected} dealt`}
+            />
+            {short({ week }) && (
               <Button
                 size="small"
                 variant="outlined"
                 onClick={() =>
                   onAct(
                     () => generateSealedPools(leagueId, week.id),
-                    `Pool dealt for ${bracket.name || `bracket ${bracket.bracket_number}`}.`,
+                    `Pools dealt for ${bracket.name || `bracket ${bracket.bracket_number}`}.`,
                   )
                 }
               >
-                Generate pools
+                {week.sealed_pools_generated ? 'Deal in the rest' : 'Generate pools'}
               </Button>
             )}
           </Box>
