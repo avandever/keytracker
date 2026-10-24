@@ -25,23 +25,34 @@ if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   exit 1
 fi
 
-# The package under test, copied in once however many scripts follow.
-docker exec "$CONTAINER" rm -rf /tmp/kt_under_test /tmp/keytracker
-docker cp "$REPO/keytracker" "$CONTAINER":/tmp/kt_under_test >/dev/null
-docker exec "$CONTAINER" ln -sfn /tmp/kt_under_test /tmp/keytracker
-docker cp "$HERE/scratch_url.py" "$CONTAINER":/tmp/scratch_url.py >/dev/null
-url=$(docker exec "$CONTAINER" python3 /tmp/scratch_url.py)
+# Everything this run uses lives under one directory of its own. Two runs at
+# once used to copy over each other's package and then drop each other's
+# tables mid-test, which surfaces as "concurrent DDL statement" and missing
+# tables rather than as anything that points at the cause.
+RUN_DIR="/tmp/kt_run_$$"
+cleanup() { docker exec "$CONTAINER" rm -rf "$RUN_DIR" 2>/dev/null || true; }
+trap cleanup EXIT
 
+docker exec "$CONTAINER" mkdir -p "$RUN_DIR"
+docker cp "$REPO/keytracker" "$CONTAINER":"$RUN_DIR"/keytracker >/dev/null
+docker cp "$HERE/scratch_url.py" "$CONTAINER":"$RUN_DIR"/scratch_url.py >/dev/null
+url=$(docker exec "$CONTAINER" python3 "$RUN_DIR"/scratch_url.py)
+
+# The scratch database is one database, though, and every script drops every
+# table in it. So they take turns: a second run waits rather than pulling the
+# first one's tables out from under it. The lock lives in the container, which
+# is where both runs meet however they were started.
 run_one() {
   local name="$1"
-  docker cp "$HERE/$name" "$CONTAINER":/tmp/"$name" >/dev/null
+  docker cp "$HERE/$name" "$CONTAINER":"$RUN_DIR"/"$name" >/dev/null
   docker exec \
     -e TEST_DATABASE_URL="$url" \
     -e DATABASE_URL="$url" \
     -e TRACKER_CONFIG_PATH=ENV \
     -e ENABLE_COLLECTOR= \
     -e ENABLE_CARD_REFRESHER= \
-    "$CONTAINER" python3 /tmp/"$name"
+    "$CONTAINER" sh -c \
+    "flock /tmp/keytracker-integration.lock python3 $RUN_DIR/$name"
 }
 
 if [ $# -ge 1 ]; then
