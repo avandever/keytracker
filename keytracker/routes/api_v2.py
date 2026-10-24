@@ -58,7 +58,7 @@ from keytracker.utils import (
 )
 import keytracker.collection_sync as _collection_sync
 from sqlalchemy import and_, func, or_
-from sqlalchemy.orm import load_only
+from sqlalchemy.orm import joinedload, load_only, selectinload
 import datetime
 import re
 import requests
@@ -220,6 +220,19 @@ SORT_ALLOWLIST = {
 }
 
 
+def _game_summary_options():
+    """What a page of game summaries touches beyond the game row itself.
+
+    Every summary reaches for both decks and asks whether extended data
+    exists, so a page of twenty was forty-two round trips to answer in two.
+    """
+    return (
+        joinedload(Game.winner_deck),
+        joinedload(Game.loser_deck),
+        selectinload(Game.extended_data),
+    )
+
+
 @blueprint.route("/games/mine")
 @login_required
 def games_mine():
@@ -241,6 +254,7 @@ def games_mine():
     offset = (page - 1) * per_page
     user_games = (
         Game.query.filter(or_(Game.winner.in_(usernames), Game.loser.in_(usernames)))
+        .options(*_game_summary_options())
         .order_by(Game.date.desc())
         .limit(per_page)
         .offset(offset)
@@ -263,6 +277,7 @@ def games_recent():
     games = (
         Game.query
         .filter(db.or_(Game.winner_keys > 0, Game.loser_keys > 0))
+        .options(*_game_summary_options())
         .order_by(Game.date.desc())
         .limit(limit)
         .all()
@@ -296,7 +311,12 @@ def games_search():
         query = query.order_by(Game.date.desc())
 
     offset = (page - 1) * per_page
-    games = query.limit(per_page).offset(offset).all()
+    games = (
+        query.options(*_game_summary_options())
+        .limit(per_page)
+        .offset(offset)
+        .all()
+    )
     return jsonify([serialize_game_summary(g) for g in games])
 
 
