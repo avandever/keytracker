@@ -815,6 +815,19 @@ export async function markOublietteBansNotRecorded(
   return data;
 }
 
+/** Secretly name one of the opponent's decks to borrow, for Exchange. */
+export async function submitExchangeBorrow(
+  leagueId: number,
+  matchupId: number,
+  borrowedDeckSelectionId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/exchange-borrow`,
+    { borrowed_deck_selection_id: borrowedDeckSelectionId },
+  );
+  return data;
+}
+
 /** Record that a Triad match was played without one of its strikes. */
 export async function markStrikeNotRecorded(
   leagueId: number,

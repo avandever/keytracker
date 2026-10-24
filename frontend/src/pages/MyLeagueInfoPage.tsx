@@ -46,6 +46,7 @@ import {
   startMatch,
   reportGame,
   submitStrike,
+  submitExchangeBorrow,
   markStrikeNotRecorded,
   submitTertiatePurge,
   submitTertiatePurgeRetroactive,
@@ -160,6 +161,8 @@ export default function MyLeagueInfoPage() {
   const actForParam = Number(searchParams.get('act_for')) || null;
   // Triad: strike selection and deck pickers
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
+  // Exchange: which of the opponent's decks to borrow.
+  const [borrowSelectionId, setBorrowSelectionId] = useState<number | ''>('');
   const [tertiateHouseSelection, setTertiateHouseSelection] = useState('');
   // Recording a Tertiate game that was played away from the site.
   const [retroPurgeMatchupId, setRetroPurgeMatchupId] = useState<number | null>(null);
@@ -1976,6 +1979,84 @@ export default function MyLeagueInfoPage() {
                   onUpdate={handleMatchupUpdate}
                 />
               )}
+
+              {/* Exchange: secretly borrow one of the opponent's decks.
+                  Only the standalone match page ever offered this, so nobody
+                  in a league Exchange week could take the step the format
+                  requires -- and without both borrows there is nothing to
+                  report a game with. */}
+              {week.format_type === 'exchange' && myMatchup.player1_started
+                && myMatchup.player2_started && (() => {
+                const opponentId = myMatchup.player1.id === actingId
+                  ? myMatchup.player2.id : myMatchup.player1.id;
+                const opponentName = myMatchup.player1.id === actingId
+                  ? myMatchup.player2.name : myMatchup.player1.name;
+                const theirs = week.deck_selections.filter(
+                  (ds) => ds.user_id === opponentId,
+                );
+                const mine = myMatchup.my_exchange_borrow;
+                const bothIn = (myMatchup.exchange_borrows_count ?? 0) >= 2;
+                return (
+                  <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                    <Typography variant="subtitle2" gutterBottom>Borrow Phase</Typography>
+                    {mine ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Your borrow is in
+                        {bothIn
+                          ? '. Both are, so the decks for each game can be named below.'
+                          : `. Waiting for ${opponentName}...`}
+                      </Typography>
+                    ) : (
+                      <Box>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          Name one of {opponentName}&apos;s decks to borrow. You play
+                          it as well as your own, and have to win with both.
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <FormControl size="small" sx={{ minWidth: 260 }}>
+                            <InputLabel>Deck to borrow</InputLabel>
+                            <Select
+                              value={borrowSelectionId}
+                              label="Deck to borrow"
+                              onChange={(e) => setBorrowSelectionId(e.target.value as number)}
+                            >
+                              {theirs.map((ds) => (
+                                <MenuItem key={ds.id} value={ds.id}>
+                                  {ds.deck?.name || `Slot ${ds.slot_number}`}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={!borrowSelectionId}
+                            onClick={async () => {
+                              try {
+                                await submitExchangeBorrow(
+                                  league.id, myMatchup.id, borrowSelectionId as number,
+                                );
+                                setBorrowSelectionId('');
+                                setSuccess('Borrow submitted.');
+                                refresh();
+                              } catch (e: any) {
+                                setError(e.response?.data?.error || e.message);
+                              }
+                            }}
+                          >
+                            Submit borrow
+                          </Button>
+                        </Box>
+                        {theirs.length === 0 && (
+                          <Typography variant="caption" color="text.secondary">
+                            {opponentName}&apos;s decks are not visible yet.
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </Box>
+                );
+              })()}
 
               {/* Triad Strike Phase */}
               {week.format_type === 'triad' && myMatchup.player1_started && myMatchup.player2_started && (() => {

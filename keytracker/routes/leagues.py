@@ -6842,7 +6842,9 @@ def submit_exchange_borrow(league_id, matchup_id):
     )
     db.session.add(borrow)
     db.session.commit()
-    return jsonify(serialize_player_matchup(pm))
+    # With the viewer, so the answer can say whose borrow is now in without
+    # giving away the other one.
+    return jsonify(serialize_player_matchup(pm, viewer=effective))
 
 
 @blueprint.route(

@@ -644,6 +644,8 @@ export interface PlayerMatchupInfo {
   triad_short_picks?: TriadShortPickInfo[];
   /** Set when a captain recorded that the match was played without its bans. */
   oubliette_bans_not_recorded?: boolean;
+  /** This viewer's own Exchange borrow, if made; the opponent's stays secret. */
+  my_exchange_borrow?: number | null;
   /** A Triad match played without one of its strikes, so reporting may go on. */
   strike_not_recorded?: boolean;
   /**

@@ -133,17 +133,22 @@ for name in ("Ann", "Bob"):
 check("before the borrows, there is nothing to offer", playable() is None,
       playable())
 
-# Each secretly names one of the opponent's decks to borrow.
-with app.app_context():
-    db.session.add(ExchangeBorrow(
-        player_matchup_id=pm_id, borrowing_user_id=users["Ann"],
-        borrowed_deck_selection_id=sels["Bob"][0],
-    ))
-    db.session.add(ExchangeBorrow(
-        player_matchup_id=pm_id, borrowing_user_id=users["Bob"],
-        borrowed_deck_selection_id=sels["Ann"][1],
-    ))
-    db.session.commit()
+# Each secretly names one of the opponent's decks to borrow -- through the
+# endpoint, since until now the only way in was the standalone match page.
+act_as(users["Ann"])
+r = c.post(f"{base}/exchange-borrow",
+           json={"borrowed_deck_selection_id": sels["Bob"][0]})
+check("a player can submit their borrow", r.status_code == 200,
+      str(body(r))[:80])
+check("and is told their own is in, while the other stays secret",
+      body(r).get("my_exchange_borrow") == sels["Bob"][0]
+      and body(r).get("exchange_borrows") is None,
+      (body(r).get("my_exchange_borrow"), body(r).get("exchange_borrows")))
+
+act_as(users["Bob"])
+r = c.post(f"{base}/exchange-borrow",
+           json={"borrowed_deck_selection_id": sels["Ann"][1]})
+check("and so can the opponent", r.status_code == 200, str(body(r))[:80])
 
 got = playable()
 check("once both have borrowed, each side has two decks",

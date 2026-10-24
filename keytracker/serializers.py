@@ -897,12 +897,16 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
     # is nothing left to keep from the captain -- and a captain entering the
     # purges for a match played off-site has to name a house from each deck.
     if viewer and not viewer_is_admin:
-        if week.format_type in ("triad", "triad_short"):
+        if week.format_type in ("triad", "triad_short", "exchange"):
             # A strike takes out one of the opponent's three, so it is a
             # choice between decks you can see. Hidden, the strike list reads
             # "Unknown deck" three times and the choice is a coin toss -- and
             # the three were locked when the pairings published, so by the
             # time both players have started there is nothing left to keep.
+            #
+            # Exchange is the same bargain for the same reason: you borrow
+            # one of the opponent's two and then have to win with it, which
+            # is not a choice that can be made blind.
             _reveal_opponent_decks(
                 week,
                 viewer,
@@ -1454,6 +1458,17 @@ def serialize_player_matchup(
         ]
         if len(exchange_borrows) == 2
         else None
+    )
+    # Whose borrow is in, without saying what the other one was: a form has
+    # to know whether this player still owes one, and the choice itself stays
+    # secret until both are made.
+    data["my_exchange_borrow"] = next(
+        (
+            b.borrowed_deck_selection_id
+            for b in exchange_borrows
+            if b.borrowing_user_id == effective_viewer_id
+        ),
+        None,
     )
 
     data["nordic_hexad_phase"] = getattr(pm, "nordic_hexad_phase", None)
