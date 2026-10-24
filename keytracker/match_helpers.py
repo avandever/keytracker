@@ -1305,23 +1305,42 @@ def survival_deck_error(matchup, selections_by_user, existing_games, p1_deck_id,
 def double_oubliette_deck_error(matchup, selections_by_user, existing_games, p1_deck_id, p2_deck_id):
     """Why this pair of decks cannot play the next Double Oubliette game.
 
-    The match is won by winning with each deck, so a deck that has won is
-    finished.
+    The match is won by winning one game with each legal set, so a set is
+    finished once a game has been won with any deck from it -- not the deck
+    alone. Read per deck, a player who won with one of a set's two was still
+    offered the other, though winning with it again would prove nothing the
+    first win had not.
     """
     if not p1_deck_id or not p2_deck_id:
         return "player1_deck_id and player2_deck_id required for Double Oubliette"
+    expansion_of = {}
+    for deck_id in (p1_deck_id, p2_deck_id):
+        deck = db.session.get(Deck, deck_id)
+        if deck is not None:
+            expansion_of[deck_id] = deck.expansion
     for label, player_id, deck_id, is_p1 in (
         ("Player 1", matchup.player1_id, p1_deck_id, True),
         ("Player 2", matchup.player2_id, p2_deck_id, False),
     ):
         if deck_id not in selections_by_user.get(player_id, set()):
             return f"{label}'s deck is not one of their two"
+        this_set = expansion_of.get(deck_id)
         for g in existing_games:
             won_with = g.player1_deck_id if is_p1 else g.player2_deck_id
-            if g.winner_id == player_id and won_with == deck_id:
+            if g.winner_id != player_id or not won_with:
+                continue
+            if won_with == deck_id:
                 return (
-                    f"{label}'s deck already won a game, so the other one has to "
+                    f"{label}'s deck already won a game, so the other set has to "
                     "win the next"
+                )
+            won_deck = db.session.get(Deck, won_with)
+            if won_deck is not None and this_set is not None and (
+                won_deck.expansion == this_set
+            ):
+                return (
+                    f"{label} has already won with that set, so the other set "
+                    "has to win the next"
                 )
     return None
 
@@ -1407,12 +1426,26 @@ def playable_deck_ids(matchup, format_type, existing_games, game_number):
         week_id = matchup.week_matchup.week_id if matchup.week_matchup else None
         if week_id is None:
             return None
+        def set_done(player_id):
+            """Decks whose set has already been won, which includes their own."""
+            won_sets = set()
+            for deck_id in won_with(player_id):
+                deck = db.session.get(Deck, deck_id) if deck_id else None
+                if deck is not None:
+                    won_sets.add(deck.expansion)
+            out = set()
+            for deck_id in selections[player_id]:
+                deck = db.session.get(Deck, deck_id)
+                if deck is not None and deck.expansion in won_sets:
+                    out.add(deck_id)
+            return out
+
         return {
             "p1": sorted(
-                selections[p1_id] - killed(p1_id, bans.get(p2_id, {})) - won_with(p1_id)
+                selections[p1_id] - killed(p1_id, bans.get(p2_id, {})) - set_done(p1_id)
             ),
             "p2": sorted(
-                selections[p2_id] - killed(p2_id, bans.get(p1_id, {})) - won_with(p2_id)
+                selections[p2_id] - killed(p2_id, bans.get(p1_id, {})) - set_done(p2_id)
             ),
         }
 

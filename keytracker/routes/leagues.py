@@ -4289,6 +4289,35 @@ def _check_deck_cross_week_conflicts(league, week, deck, target_team):
     return errors
 
 
+def _combined_sas_error(week, user_id):
+    """Why this player's decks together break the week's combined SAS cap.
+
+    A cap on the sum can only be judged once the sum is complete, so this
+    waits for every slot the format asks for -- a player part way through
+    is under the cap by having submitted less, which is not the same as
+    keeping to it.
+
+    Declared on any week, and checked only inside the Triad branch until
+    now, so a bracket in any other format showed the cap and allowed
+    anything. Nothing in ABR 15 set one, which is why it went unnoticed.
+    """
+    if week.combined_max_sas is None:
+        return None
+    slots = deck_slots_for_format(week.format_type)
+    selections = PlayerDeckSelection.query.filter_by(
+        week_id=week.id, user_id=user_id
+    ).all()
+    if len(selections) < slots:
+        return None
+    decks = [d for d in (Deck.query.get(s.deck_id) for s in selections) if d]
+    total = sum(d.sas_rating or 0 for d in decks)
+    if total > week.combined_max_sas:
+        return (
+            f"Combined SAS ({total}) exceeds limit ({week.combined_max_sas})"
+        )
+    return None
+
+
 def _diversity_error(week, user_id):
     """Why this player's decks together break the week's diversity rules.
 
@@ -5098,20 +5127,6 @@ def submit_deck_selection(league_id, week_id):
             selected_decks = [Deck.query.get(s.deck_id) for s in all_selections]
             selected_decks = [d for d in selected_decks if d is not None]
 
-            # Combined max SAS (only enforce when all 3 slots filled)
-            if len(all_selections) == 3 and week.combined_max_sas is not None:
-                total_sas = sum(d.sas_rating or 0 for d in selected_decks)
-                if total_sas > week.combined_max_sas:
-                    db.session.rollback()
-                    return (
-                        jsonify(
-                            {
-                                "error": f"Combined SAS ({total_sas}) exceeds limit ({week.combined_max_sas})"
-                            }
-                        ),
-                        400,
-                    )
-
     # Diversity is declared on any week, and was checked only inside the Triad
     # branch above -- so a bracket that asked for Set Diversity showed its
     # players the rule and then let anything through. PV/CotA Exchange is the
@@ -5120,6 +5135,11 @@ def submit_deck_selection(league_id, week_id):
     if _diversity:
         db.session.rollback()
         return jsonify({"error": _diversity}), 400
+
+    _combined = _combined_sas_error(week, target_user_id)
+    if _combined:
+        db.session.rollback()
+        return jsonify({"error": _combined}), 400
 
     if target_team:
         _log_deck_entry_change(
@@ -7981,39 +8001,21 @@ def report_game(league_id, matchup_id):
                     ),
                     400,
                 )
-        if not p1_deck_id or not p2_deck_id:
-            return (
-                jsonify(
-                    {
-                        "error": "player1_deck_id and player2_deck_id required for "
-                        "Double Oubliette"
-                    }
-                ),
-                400,
-            )
-        for label, player_id, deck_id, won_field in (
-            ("Player 1", pm.player1_id, p1_deck_id, "player1_deck_id"),
-            ("Player 2", pm.player2_id, p2_deck_id, "player2_deck_id"),
-        ):
-            own = PlayerDeckSelection.query.filter_by(
-                week_id=week.id, user_id=player_id, deck_id=deck_id
-            ).first()
-            if not own:
-                return (
-                    jsonify({"error": f"{label}'s deck is not one of their two"}),
-                    400,
-                )
-            for g in existing_games:
-                if g.winner_id == player_id and getattr(g, won_field) == deck_id:
-                    return (
-                        jsonify(
-                            {
-                                "error": f"{label}'s deck already won a game, so the "
-                                "other one has to win the next"
-                            }
-                        ),
-                        400,
-                    )
+        # The same check a standalone match makes, rather than a second copy
+        # of it here: this one had stayed per deck after the rule became one
+        # win per legal set, so a player who had won with one of a set's two
+        # could win with the other and have it count again.
+        from keytracker.match_helpers import double_oubliette_deck_error
+
+        selections_by_user = {pm.player1_id: set(), pm.player2_id: set()}
+        for sel in PlayerDeckSelection.query.filter_by(week_id=week.id).all():
+            if sel.user_id in selections_by_user:
+                selections_by_user[sel.user_id].add(sel.deck_id)
+        error = double_oubliette_deck_error(
+            pm, selections_by_user, existing_games, p1_deck_id, p2_deck_id
+        )
+        if error:
+            return jsonify({"error": error}), 400
 
     # Nordic Hexad: all 3 phases must complete; validate remaining deck pools and unique-deck rule
     if week.format_type == WeekFormat.NORDIC_HEXAD.value:
