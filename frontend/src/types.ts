@@ -363,6 +363,8 @@ export interface LeagueDetail extends LeagueSummary {
   scoped?: LeagueScope;
   /** Which week came back with its detail filled in. */
   loaded_week_id?: number | null;
+  /** The teammate this captain asked to act for, once the server allowed it. */
+  acting_for_user_id?: number | null;
   teams: TeamDetail[];
   signups: SignupInfo[];
   admins: UserBrief[];

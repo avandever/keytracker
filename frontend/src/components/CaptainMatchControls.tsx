@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -322,10 +323,26 @@ export default function CaptainMatchControls({
       )}
 
       {!decided && !needsStart && !needsPurges && !needsBans && NEEDS_DECK_PER_GAME.has(week.format_type) && (
-        <Typography variant="body2" color="text.secondary">
-          {week.format_type === 'triad' ? 'Triad' : 'This format'} records which deck each
-          player used, so the game has to be reported from the player&apos;s own match page.
-        </Typography>
+        <Box>
+          <Typography variant="body2" color="text.secondary">
+            {week.format_type === 'triad' ? 'Triad' : 'This format'} records which deck each
+            player used, so the game has to be reported from the player&apos;s own match page.
+          </Typography>
+          {/* Which used to be the end of it: a captain told to go somewhere
+              they cannot reach. A bracket is one player per team, so their
+              own My Info holds one bracket of eleven and never this one. The
+              link asks for it by name, and the page then offers the strike,
+              ban or bid the match is waiting on as well as the report. */}
+          <Button
+            size="small"
+            component={RouterLink}
+            to={`../my-info?tab=playoffs&act_for=${mine.id}`}
+            relative="path"
+            sx={{ mt: 0.5 }}
+          >
+            Open {mine.name}&apos;s match
+          </Button>
+        </Box>
       )}
 
       {!decided && !needsStart && !needsPurges && !needsBans && !NEEDS_DECK_PER_GAME.has(week.format_type) && (
