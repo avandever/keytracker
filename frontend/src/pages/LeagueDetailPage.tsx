@@ -150,6 +150,8 @@ export default function LeagueDetailPage() {
   const [playoffSetup, setPlayoffSetup] = useState<PlayoffSetup | null>(null);
   const [playoffTree, setPlayoffTree] = useState<PlayoffTree | null>(null);
   const [playoffDecks, setPlayoffDecks] = useState<PlayoffDecks | null>(null);
+  // Standings needs every week, which the page does not load by default.
+  const [allWeeksLoading, setAllWeeksLoading] = useState(false);
 
   const refresh = useCallback(() => {
     getLeague(leagueId, { focus: true })
@@ -187,10 +189,40 @@ export default function LeagueDetailPage() {
     [leagueId],
   );
 
+  /**
+   * Fetch every week in full, for the tabs that read all of them at once.
+   *
+   * Standings adds up each published week's matchups, so a week that came
+   * back as a stub counts as a week nobody won: the table read zero
+   * everywhere except the one week the page had loaded. The focus load is
+   * still right for the week tabs, which show one week at a time -- this is
+   * the exception, asked for only when one of those tabs is opened.
+   */
+  const loadAllWeeks = useCallback(() => {
+    setAllWeeksLoading(true);
+    getLeague(leagueId)
+      .then((full) => setLeague((prev) => (prev ? { ...prev, weeks: full.weeks } : full)))
+      .catch(() => {})
+      .finally(() => setAllWeeksLoading(false));
+  }, [leagueId]);
+
   useEffect(() => { refresh(); }, [refresh]);
 
   // Where the week tabs begin, written down by the render that works it out.
   const weekStartRef = useRef(0);
+  // Likewise the two standings tabs, which are worked out past an early
+  // return and so cannot be read by a hook directly.
+  const standingsTabsRef = useRef<(number | null)[]>([]);
+
+  // Standings and Player Standings both add up every week, so neither can be
+  // drawn from stubs. Asked for when the tab is opened, including on first
+  // paint: the tab you land on fires no change event.
+  useEffect(() => {
+    if (!league || allWeeksLoading) return;
+    if (!standingsTabsRef.current.includes(activeTab)) return;
+    if (!(league.weeks || []).some((w) => w.detail_loaded === false)) return;
+    loadAllWeeks();
+  }, [activeTab, league, loadAllWeeks, allWeeksLoading]);
 
   // The tab the page opens on needs its week too: no change event fires for
   // the tab you land on, and ?tab= can name one.
@@ -310,6 +342,13 @@ export default function LeagueDetailPage() {
     : null;
   const weekStartIdx =
     playoffTabCount + 1 + (showTeamLists ? 2 : 0) + (showSignups ? 1 : 0);
+
+  standingsTabsRef.current = [standingsIdx, playerStandingsIdx];
+
+  // True while any week is still a stub, so the two standings tabs wait
+  // rather than adding up the weeks they have and calling it a table.
+  const weeksPending =
+    allWeeksLoading || (league.weeks || []).some((w) => w.detail_loaded === false);
   const adminLogIdx = tabs.length - 1;
   weekStartRef.current = weekStartIdx;
 
@@ -827,6 +866,9 @@ export default function LeagueDetailPage() {
   };
 
   const renderStandingsTab = () => {
+    // Half the weeks still stubs would read as a table of zeros, which looks
+    // like a result rather than a table that is not ready.
+    if (weeksPending) return <CircularProgress />;
     const qualifyingWeeks = weeks.filter(
       (w) => w.status === 'published' || w.status === 'completed',
     );
@@ -904,6 +946,7 @@ export default function LeagueDetailPage() {
   };
 
   const renderPlayerStandingsTab = () => {
+    if (weeksPending) return <CircularProgress />;
     const qualifyingWeeks = weeks.filter(
       (w) => w.status === 'published' || w.status === 'completed',
     );
