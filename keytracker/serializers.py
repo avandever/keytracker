@@ -1325,6 +1325,23 @@ def serialize_player_matchup(
     # by then is shown, including a lone ban in a match the other player never
     # answered.
     _pm_week = pm.week_matchup.week if pm.week_matchup else None
+    # Which decks the next game may be reported with. Four formats require a
+    # deck per game and had no way to name one, so the match could not be
+    # reported from anywhere -- and working the rules out again in the browser
+    # is how the form and the endpoint that refuses it drift apart.
+    try:
+        from keytracker.match_helpers import playable_deck_ids
+        from keytracker.schema import WeekFormat as _WeekFormat
+
+        data["playable_deck_ids"] = (
+            playable_deck_ids(
+                pm, _WeekFormat(_pm_week.format_type), pm.games, len(pm.games) + 1
+            )
+            if _pm_week
+            else None
+        )
+    except (ValueError, AttributeError):
+        data["playable_deck_ids"] = None
     _reveal_on_publish = (
         _pm_week is not None
         and getattr(_pm_week.league, "oubliette_ban_reveal", "both_banned")

@@ -326,7 +326,8 @@ export default function CaptainMatchControls({
         <Box>
           <Typography variant="body2" color="text.secondary">
             {week.format_type === 'triad' ? 'Triad' : 'This format'} records which deck each
-            player used, so the game has to be reported from the player&apos;s own match page.
+            player used in each game, which these controls do not collect — so the
+            report is made on the match page itself.
           </Typography>
           {/* Which used to be the end of it: a captain told to go somewhere
               they cannot reach. A bracket is one player per team, so their
@@ -335,12 +336,13 @@ export default function CaptainMatchControls({
               ban or bid the match is waiting on as well as the report. */}
           <Button
             size="small"
+            variant="contained"
             component={RouterLink}
             to={`../my-info?tab=playoffs&act_for=${mine.id}`}
             relative="path"
-            sx={{ mt: 0.5 }}
+            sx={{ mt: 1 }}
           >
-            Open {mine.name}&apos;s match
+            Report this match for {mine.name}
           </Button>
         </Box>
       )}

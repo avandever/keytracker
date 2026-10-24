@@ -2744,7 +2744,18 @@ export default function MyLeagueInfoPage() {
   };
 
   const feeOffset = league.fee_amount != null ? 1 : 0;
-  const myPlayoffWeeks = playoffWeeksOf(league);
+  // Asking to act for somebody means their match is the one being come for,
+  // so it leads and is the one shown open. Otherwise a captain follows the
+  // link from My Team and lands on their own bracket expanded and the one
+  // they asked about folded away underneath it.
+  const myPlayoffWeeks = (() => {
+    const weeks = playoffWeeksOf(league);
+    const acting = league.acting_for_user_id;
+    if (!acting) return weeks;
+    const theirs = weeks.filter((w) => w.playoff_team_user_id === acting);
+    if (theirs.length === 0) return weeks;
+    return [...theirs, ...weeks.filter((w) => w.playoff_team_user_id !== acting)];
+  })();
   const playoffOffset = myPlayoffWeeks.length > 0 ? 1 : 0;
   const playoffsIdx = playoffOffset > 0 ? 0 : null;
   const teamIdx = playoffOffset;
