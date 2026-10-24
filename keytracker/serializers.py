@@ -22,6 +22,7 @@ from keytracker.schema import (
     EXPANSION_ID_TO_ABBR,
     SEALED_WEEK_FORMATS,
     deck_reuse_scope,
+    deck_slots_for_format,
 )
 from keytracker.schema import (
     StandaloneMatch,
@@ -872,7 +873,19 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
     # is nothing left to keep from the captain -- and a captain entering the
     # purges for a match played off-site has to name a house from each deck.
     if viewer and not viewer_is_admin:
-        if week.format_type == "tertiate":
+        if week.format_type in ("triad", "triad_short"):
+            # A strike takes out one of the opponent's three, so it is a
+            # choice between decks you can see. Hidden, the strike list reads
+            # "Unknown deck" three times and the choice is a coin toss -- and
+            # the three were locked when the pairings published, so by the
+            # time both players have started there is nothing left to keep.
+            _reveal_opponent_decks(
+                week,
+                viewer,
+                redacted_opponent_ids,
+                lambda pm: bool(pm.player1_started and pm.player2_started),
+            )
+        elif week.format_type == "tertiate":
             _reveal_opponent_decks(
                 week,
                 viewer,
@@ -891,6 +904,28 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
                 lambda pm: bool(
                     pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house
                 ),
+            )
+        elif week.format_type == "sealed_survival":
+            # Survival names both decks on every game report -- a deck that
+            # loses is out, so the server has to be told which one lost. With
+            # the opponent's two decks hidden there is nothing to name them
+            # from and the match cannot be reported at all.
+            #
+            # Once both players have kept their two there is nothing left to
+            # protect: what the keeps would otherwise give away is which two
+            # of the five somebody kept while you still had yours to choose.
+            _kept = {}
+            for _ds in week.deck_selections:
+                _kept[_ds.user_id] = _kept.get(_ds.user_id, 0) + 1
+            # The keeps, not the pool: decks_per_player is how many were
+            # dealt, which is the larger number and never reached.
+            _needed = deck_slots_for_format(week.format_type)
+            _reveal_opponent_decks(
+                week,
+                viewer,
+                redacted_opponent_ids,
+                lambda pm: _kept.get(pm.player1_id, 0) >= _needed
+                and _kept.get(pm.player2_id, 0) >= _needed,
             )
         elif week.format_type == "double_oubliette":
             _by_user = {}

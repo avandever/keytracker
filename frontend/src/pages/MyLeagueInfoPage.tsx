@@ -150,6 +150,9 @@ export default function MyLeagueInfoPage() {
   const [reportLogById, setReportLogById] = useState<Record<number, string>>({});
   const logFor = (id: number) => reportLogById[id] ?? '';
 
+  // Players whose match this captain has taken over, to finish a step the
+  // player themselves has stopped answering.
+  const [captainActingFor, setCaptainActingFor] = useState<number[]>([]);
   // Triad: strike selection and deck pickers
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
   const [tertiateHouseSelection, setTertiateHouseSelection] = useState('');
@@ -216,7 +219,11 @@ export default function MyLeagueInfoPage() {
       })
       .catch((e) => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
-  }, [leagueId]);
+    // Looking as somebody else asks a different question of the same URL, so
+    // it has to be asked again: without this the page kept the last player's
+    // answer and read it against the new player, which is how a week they
+    // are not in came up showing an opponent and no match at once.
+  }, [leagueId, testUserId]);
 
   const loadSealedPool = useCallback(async (weekId: number) => {
     if (!league) return;
@@ -699,10 +706,15 @@ export default function MyLeagueInfoPage() {
   };
 
   /** Players whose match this viewer is covering this week. */
-  const coveredPlayerIds = (week: LeagueWeek): number[] =>
-    (week.substitutions || [])
+  const coveredPlayerIds = (week: LeagueWeek): number[] => [
+    ...(week.substitutions || [])
       .filter((sub) => sub.in_user.id === effectiveUserId)
-      .map((sub) => sub.out_user.id);
+      .map((sub) => sub.out_user.id),
+    // A captain who has taken a stalled match over. Opt-in, one player at a
+    // time: a captain of ten would otherwise be handed ten matches to look
+    // at every week, when what they want is the one that has stopped.
+    ...captainActingFor,
+  ];
 
   /** Every match this viewer may act on: their own, then any they cover. */
   /**
@@ -2514,6 +2526,60 @@ export default function MyLeagueInfoPage() {
         {getMyMatchups(week).length === 0 && week.status === 'published' && (
           <Alert severity="info">No matchup assigned for this week.</Alert>
         )}
+
+        {/* Captain: take over a match that has stopped moving */}
+        {isCaptain && week.status === 'published' && (() => {
+          const mine = new Set(myTeam.members.map((m) => m.user.id));
+          const stalled: { pm: PlayerMatchupInfo; player: { id: number; name: string } }[] = [];
+          for (const wm of week.matchups) {
+            if (wm.team1.id !== myTeam.id && wm.team2.id !== myTeam.id) continue;
+            for (const pm of wm.player_matchups) {
+              if (pm.is_double_loss || pm.result_confirmed) continue;
+              if (isMatchDecided(pm, week.best_of_n)) continue;
+              const player = [pm.player1, pm.player2].find((p) => mine.has(p.id));
+              // Their own match is already on this page in full.
+              if (!player || player.id === effectiveUserId) continue;
+              stalled.push({ pm, player });
+            }
+          }
+          if (stalled.length === 0) return null;
+          return (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle1" gutterBottom fontWeight="bold">
+                Act for a Player
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                For a match waiting on one of yours who has gone quiet. Taking it
+                over puts their match on this page as if it were your own, so you
+                can make the strike, ban or bid they owe and report the games.
+                What you do is recorded as theirs.
+              </Typography>
+              {stalled.map(({ pm, player }) => {
+                const acting = captainActingFor.includes(player.id);
+                return (
+                  <Box key={pm.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+                    <Typography variant="body2">
+                      {pm.player1.name} vs {pm.player2.name}
+                    </Typography>
+                    <Button
+                      size="small"
+                      variant={acting ? 'contained' : 'outlined'}
+                      onClick={() =>
+                        setCaptainActingFor((prev) =>
+                          acting
+                            ? prev.filter((id) => id !== player.id)
+                            : [...prev, player.id],
+                        )
+                      }
+                    >
+                      {acting ? `Stop acting for ${player.name}` : `Act for ${player.name}`}
+                    </Button>
+                  </Box>
+                );
+              })}
+            </Box>
+          );
+        })()}
 
         {/* Captain: verify completed team matches */}
         {isCaptain && week.status === 'published' && (() => {

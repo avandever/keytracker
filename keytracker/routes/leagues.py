@@ -6972,6 +6972,13 @@ def _acting_player_id(pm, user_id):
     matter of who may press the buttons, not of who played whom in the
     standings.
 
+    A captain acts for their own team's player as a last resort. Half the
+    formats are a handshake -- a strike, a purge, a bid -- and a player who
+    stops answering leaves the other one unable to finish, with nothing to
+    do about it short of asking an admin. The captain is who the other team
+    chases anyway, so the captain can press it. Only their own side: a
+    captain never acts for the opposing player.
+
     Returns None for anyone with no business in the match.
     """
     if user_id in (pm.player1_id, pm.player2_id):
@@ -6985,7 +6992,24 @@ def _acting_player_id(pm, user_id):
         WeekSubstitution.in_user_id == user_id,
         WeekSubstitution.out_user_id.in_([pm.player1_id, pm.player2_id]),
     ).first()
-    return sub.out_user_id if sub else None
+    if sub:
+        return sub.out_user_id
+    captained = {
+        m.team_id
+        for m in TeamMember.query.filter_by(
+            user_id=user_id, is_captain=True
+        ).all()
+    } & {wm.team1_id, wm.team2_id}
+    if not captained:
+        return None
+    for player_id in (pm.player1_id, pm.player2_id):
+        theirs = TeamMember.query.filter(
+            TeamMember.user_id == player_id,
+            TeamMember.team_id.in_(captained),
+        ).first()
+        if theirs:
+            return player_id
+    return None
 
 
 @blueprint.route("/<int:league_id>/weeks/<int:week_id>/substitutions", methods=["POST"])
