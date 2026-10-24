@@ -11,6 +11,7 @@ os.environ.pop("ENABLE_COLLECTOR", None)
 
 from keytracker.server import app
 from keytracker.schema import (
+    PlayoffMatch,
     CardInDeck, Deck, DokDeck, KeyforgeHouse, KeyforgeSet, League, LeagueAdmin,
     LeagueStatus, LeagueWeek, MatchGame, PlatonicCard, PlayerDeckSelection,
     PlayoffBracket, PodStats, Team, TeamMember, User, WeekStatus, db,
@@ -203,6 +204,35 @@ def playoff_rounds_for(uid):
     d = body(c.get(f"/api/v2/leagues/{league_id}"))
     return sorted({w["playoff_round"] for w in (d.get("playoff_weeks") or [])})
 
+
+# A round nobody has reached belongs to nobody. Opening round 2 makes a week
+# per bracket, and a bracket where no match has resolved has an empty round:
+# everyone used to see it and be invited to pick decks for it.
+with app.app_context():
+    from keytracker.schema import PlayoffBracket as PB
+    empty = db.session.get(PB, bracket_id)
+    stash = [
+        (m.id, m.team1_id, m.team2_id)
+        for m in empty.matches
+        if m.round_number == 2
+    ]
+    for mid, _, _ in stash:
+        m = db.session.get(PlayoffMatch, mid)
+        m.team1_id = None
+        m.team2_id = None
+    db.session.commit()
+
+for who in (winner_team, loser_team, still_playing):
+    check(f"with round 2 empty, {names[who]} is not shown it",
+          playoff_rounds_for(players[who]) == [1],
+          playoff_rounds_for(players[who]))
+
+with app.app_context():
+    for mid, t1, t2 in stash:
+        m = db.session.get(PlayoffMatch, mid)
+        m.team1_id = t1
+        m.team2_id = t2
+    db.session.commit()
 
 check(f"{names[winner_team]} sees rounds 1 and 2",
       playoff_rounds_for(players[winner_team]) == [1, 2],

@@ -319,7 +319,7 @@ def _deck_progress(league, brackets):
                 if user_id is None:
                     continue
                 in_round = here.get((week.playoff_bracket_id, round_number))
-                if in_round and qualifier.team_id not in in_round:
+                if qualifier.team_id not in in_round:
                     continue
                 slots = deck_slots_for_format(week.format_type)
                 expected += slots
@@ -1423,7 +1423,7 @@ def _missing_decks_for_week(week, bracket, counts=None):
     # A team knocked out earlier owes nothing: it is not in this round.
     here = teams_in_round(bracket, week.playoff_round)
     for assignment in bracket.assignments:
-        if here and assignment.team_id not in here:
+        if assignment.team_id not in here:
             continue
         if week.format_type in ALLIANCE_WEEK_FORMATS:
             have = pods_by_week_user.get((week.id, assignment.user_id), 0)

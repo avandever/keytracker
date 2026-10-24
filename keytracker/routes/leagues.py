@@ -383,7 +383,11 @@ def _playoff_weeks_for_team(
             from keytracker.routes.playoffs import teams_in_round
 
             _here = teams_in_round(_bracket, week.playoff_round)
-            if _here and my_team_id not in _here:
+            # Empty means nobody has come through to this round yet, so it
+            # belongs to nobody -- not to everybody, which is how a team that
+            # had not won its round-one match was shown round two and invited
+            # to pick decks for it.
+            if my_team_id not in _here:
                 continue
         if stub:
             # The league page only asks whether this player is in a bracket,
@@ -4841,7 +4845,7 @@ def submit_deck_selection(league_id, week_id):
         )
         if _bracket is not None:
             _here = teams_in_round(_bracket, week.playoff_round)
-            if _here and (target_team is None or target_team.id not in _here):
+            if target_team is None or target_team.id not in _here:
                 return (
                     jsonify(
                         {"error": "This team is not in that round of the bracket"}
