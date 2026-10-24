@@ -976,7 +976,13 @@ def serialize_league_week(week: LeagueWeek, viewer=None) -> dict:
         "max_sas": week.max_sas,
         "sas_floor": week.sas_floor,
         "combined_max_sas": week.combined_max_sas,
-        "set_diversity": week.set_diversity,
+        # What is actually enforced, which for Double Oubliette is nothing:
+        # it asks for two decks from each of two sets, so its decks share
+        # expansions in pairs by construction and the rule cannot hold. A
+        # week carrying the flag was showing its players a rule of the week
+        # that was not one -- ABR 15's Token Doubliette did.
+        "set_diversity": bool(week.set_diversity)
+        and week.format_type != "double_oubliette",
         "house_diversity": week.house_diversity,
         "decks_per_player": week.decks_per_player,
         "sealed_pools_generated": week.sealed_pools_generated,

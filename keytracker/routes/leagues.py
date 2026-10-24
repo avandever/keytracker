@@ -4262,6 +4262,48 @@ def _check_deck_cross_week_conflicts(league, week, deck, target_team):
     return errors
 
 
+def _diversity_error(week, user_id):
+    """Why this player's decks together break the week's diversity rules.
+
+    Both rules are about a set of decks rather than one, so there is nothing
+    to say until there are two, and the answer can change as a later slot is
+    filled -- which is why this runs on every submission rather than on the
+    last.
+
+    Double Oubliette is excluded from set diversity, and has to be: it asks
+    for two decks from each of two sets, so its four share expansions in
+    pairs by construction and the rule would reject every legal submission.
+    A Double Oubliette week carrying the flag is a mistake in how it was set
+    up, not a rule waiting to be enforced.
+    """
+    selections = PlayerDeckSelection.query.filter_by(
+        week_id=week.id, user_id=user_id
+    ).all()
+    if len(selections) < 2:
+        return None
+    decks = [d for d in (Deck.query.get(s.deck_id) for s in selections) if d]
+
+    if week.set_diversity and week.format_type != WeekFormat.DOUBLE_OUBLIETTE.value:
+        expansions = [d.expansion for d in decks]
+        if len(set(expansions)) != len(expansions):
+            return "Set diversity required: no two decks can share an expansion"
+
+    if week.house_diversity:
+        houses_per_deck = [
+            {ps.house for ps in d.pod_stats if ps.house != "Archon Power"}
+            for d in decks
+        ]
+        for i in range(len(houses_per_deck)):
+            for j in range(i + 1, len(houses_per_deck)):
+                shared = houses_per_deck[i] & houses_per_deck[j]
+                if shared:
+                    return (
+                        "House diversity required: decks share house(s): "
+                        + ", ".join(sorted(shared))
+                    )
+    return None
+
+
 @blueprint.route(
     "/<int:league_id>/weeks/<int:week_id>/deck-selection", methods=["POST"]
 )
@@ -5043,41 +5085,14 @@ def submit_deck_selection(league_id, week_id):
                         400,
                     )
 
-            # Set diversity: no two decks share an expansion
-            if week.set_diversity:
-                expansions = [d.expansion for d in selected_decks]
-                if len(set(expansions)) != len(expansions):
-                    db.session.rollback()
-                    return (
-                        jsonify(
-                            {
-                                "error": "Set diversity required: no two decks can share an expansion"
-                            }
-                        ),
-                        400,
-                    )
-
-            # House diversity: no two decks share any house
-            if week.house_diversity:
-                all_houses = []
-                for d in selected_decks:
-                    houses = {
-                        ps.house for ps in d.pod_stats if ps.house != "Archon Power"
-                    }
-                    all_houses.append(houses)
-                for i in range(len(all_houses)):
-                    for j in range(i + 1, len(all_houses)):
-                        shared = all_houses[i] & all_houses[j]
-                        if shared:
-                            db.session.rollback()
-                            return (
-                                jsonify(
-                                    {
-                                        "error": f"House diversity required: decks share house(s): {', '.join(shared)}"
-                                    }
-                                ),
-                                400,
-                            )
+    # Diversity is declared on any week, and was checked only inside the Triad
+    # branch above -- so a bracket that asked for Set Diversity showed its
+    # players the rule and then let anything through. PV/CotA Exchange is the
+    # one that wanted it: two decks, one from each set.
+    _diversity = _diversity_error(week, target_user_id)
+    if _diversity:
+        db.session.rollback()
+        return jsonify({"error": _diversity}), 400
 
     if target_team:
         _log_deck_entry_change(
