@@ -58,9 +58,11 @@ from keytracker.utils import (
 )
 import keytracker.collection_sync as _collection_sync
 from sqlalchemy import and_, func, or_
+from sqlalchemy.orm import joinedload, load_only, selectinload
 import datetime
 import re
 import requests
+import threading
 import time
 
 
@@ -218,6 +220,19 @@ SORT_ALLOWLIST = {
 }
 
 
+def _game_summary_options():
+    """What a page of game summaries touches beyond the game row itself.
+
+    Every summary reaches for both decks and asks whether extended data
+    exists, so a page of twenty was forty-two round trips to answer in two.
+    """
+    return (
+        joinedload(Game.winner_deck),
+        joinedload(Game.loser_deck),
+        selectinload(Game.extended_data),
+    )
+
+
 @blueprint.route("/games/mine")
 @login_required
 def games_mine():
@@ -239,6 +254,7 @@ def games_mine():
     offset = (page - 1) * per_page
     user_games = (
         Game.query.filter(or_(Game.winner.in_(usernames), Game.loser.in_(usernames)))
+        .options(*_game_summary_options())
         .order_by(Game.date.desc())
         .limit(per_page)
         .offset(offset)
@@ -261,6 +277,7 @@ def games_recent():
     games = (
         Game.query
         .filter(db.or_(Game.winner_keys > 0, Game.loser_keys > 0))
+        .options(*_game_summary_options())
         .order_by(Game.date.desc())
         .limit(limit)
         .all()
@@ -294,7 +311,12 @@ def games_search():
         query = query.order_by(Game.date.desc())
 
     offset = (page - 1) * per_page
-    games = query.limit(per_page).offset(offset).all()
+    games = (
+        query.options(*_game_summary_options())
+        .limit(per_page)
+        .offset(offset)
+        .all()
+    )
     return jsonify([serialize_game_summary(g) for g in games])
 
 
@@ -1395,10 +1417,51 @@ def get_extended(crucible_game_id):
     )
 
 
+# The leaderboard is an aggregate over every game ever reported, so it only
+# moves when a game is reported. The stamp is what makes that cheap to ask:
+# the row count and the high id come straight off the primary key, and
+# updated_at catches the case the other two miss -- a second player's
+# perspective landing on a row that already existed.
+_TIMING_CACHE_LOCK = threading.Lock()
+_timing_cache = {"stamp": None, "result": None}
+
+
+def _timing_table_stamp():
+    return tuple(
+        db.session.query(
+            func.count(ExtendedGameData.id),
+            func.max(ExtendedGameData.id),
+            func.max(ExtendedGameData.updated_at),
+        ).one()
+    )
+
+
 @blueprint.route("/timing-leaderboard", methods=["GET"])
 def timing_leaderboard():
+    stamp = _timing_table_stamp()
+    with _TIMING_CACHE_LOCK:
+        if _timing_cache["stamp"] == stamp:
+            return jsonify(_timing_cache["result"])
+
+    result = _compute_timing_leaderboard()
+    with _TIMING_CACHE_LOCK:
+        _timing_cache["stamp"] = stamp
+        _timing_cache["result"] = result
+    return jsonify(result)
+
+
+def _compute_timing_leaderboard():
     MIN_TURNS = 20
-    rows = ExtendedGameData.query.all()
+    # Only the timing lists are wanted. Fetching the whole row drags along the
+    # turn snapshots, which are tens of megabytes of JSON this never looks at.
+    rows = ExtendedGameData.query.options(
+        load_only(
+            ExtendedGameData.submitter_username,
+            ExtendedGameData.turn_timing,
+            ExtendedGameData.player2_username,
+            ExtendedGameData.player2_turn_timing,
+        )
+    ).all()
 
     # Accumulate per-username totals
     user_totals: dict[str, dict] = {}
@@ -1435,7 +1498,7 @@ def timing_leaderboard():
         )
 
     result.sort(key=lambda x: x["avg_turn_seconds"])
-    return jsonify(result)
+    return result
 
 
 @blueprint.route("/collection/sync", methods=["POST"])
