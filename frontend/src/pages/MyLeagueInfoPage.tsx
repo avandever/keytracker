@@ -1715,23 +1715,45 @@ export default function MyLeagueInfoPage() {
                         {actingId === effectiveUserId ? 'Your decks' : `${actingName}'s decks`}
                       </Typography>
                       {deckRows(mine, myOut)}
-                      {(myOut || []).length > 0 && (
-                        <Alert severity="error" sx={{ mt: 0.5 }}>
-                          A deck is out, so the match cannot be won — it is forfeit.
-                        </Alert>
-                      )}
                     </Box>
                     <Box>
                       <Typography variant="subtitle2">{opponentName}&apos;s decks</Typography>
                       {deckRows(theirs, oppOut)}
-                      {(oppOut || []).length > 0 && (
-                        <Alert severity="success" sx={{ mt: 0.5 }}>
-                          {opponentName} loses a deck, so the match is yours.
-                        </Alert>
-                      )}
                     </Box>
                   </Box>
                 )}
+                {/* One verdict over both sides. Read a side at a time, the
+                    two contradicted each other whenever both players lost a
+                    deck -- which is the ordinary outcome, since each side
+                    bans into the other's sets. Miggy9001's match showed
+                    "it is forfeit" and "the match is yours" at once. */}
+                {allIn && (() => {
+                  const mineGone = (myOut || []).length > 0;
+                  const theirsGone = (oppOut || []).length > 0;
+                  if (!mineGone && !theirsGone) return null;
+                  if (mineGone && theirsGone) {
+                    return (
+                      <Alert severity="warning" sx={{ mt: 1 }}>
+                        Both sides lost a deck to a ban, so neither can win a game
+                        with each of theirs. A captain or an admin records how this
+                        one ends.
+                      </Alert>
+                    );
+                  }
+                  if (mineGone) {
+                    return (
+                      <Alert severity="error" sx={{ mt: 1 }}>
+                        {actingId === effectiveUserId ? 'A deck of yours is' : `One of ${actingName}'s decks is`} out,
+                        so the match cannot be won with each deck — it is forfeit.
+                      </Alert>
+                    );
+                  }
+                  return (
+                    <Alert severity="success" sx={{ mt: 1 }}>
+                      {opponentName} lost a deck, so the match is yours.
+                    </Alert>
+                  );
+                })()}
               </CardContent>
             </Card>
           );
