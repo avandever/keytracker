@@ -618,11 +618,20 @@ def get_my_league_info(league_id):
     act_for = request.args.get("act_for", type=int)
     if act_for is not None:
         is_captain = bool(member.is_captain) if member else False
-        same_team = (
-            my_team is not None
-            and any(m.user_id == act_for for m in my_team.members)
+        # Theirs to act for if they are on the team, or hold one of its
+        # bracket slots. The second is not implied by the first: ABR 15 has
+        # a player assigned to a bracket for a team they are not a member
+        # of, and that slot is exactly the match a captain is here to
+        # finish.
+        mine = my_team is not None and (
+            any(m.user_id == act_for for m in my_team.members)
+            or any(
+                a.team_id == my_team.id and a.user_id == act_for
+                for b in league.playoff_brackets
+                for a in b.assignments
+            )
         )
-        if not (is_captain and same_team):
+        if not (is_captain and mine):
             act_for = None
     data["acting_for_user_id"] = act_for
     data["playoff_weeks"] = _playoff_weeks_for_team(

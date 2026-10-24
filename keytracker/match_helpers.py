@@ -1376,7 +1376,17 @@ def playable_deck_ids(matchup, format_type, existing_games, game_number):
         }
 
     if format_type == WeekFormat.DOUBLE_OUBLIETTE:
-        bans = standalone_double_oubliette_bans(matchup)
+        # A standalone match keeps its bans on the matchup; a league week
+        # keeps them as rows against the week. Reading only the first is how
+        # this came back empty for every league match ever played.
+        week = matchup.week_matchup.week if matchup.week_matchup else None
+        if week is not None:
+            bans = {}
+            for ban in week.oubliette_bans or []:
+                if ban.expansion:
+                    bans.setdefault(ban.user_id, {})[ban.expansion] = ban.banned_house
+        else:
+            bans = standalone_double_oubliette_bans(matchup)
         for player_id in (p1_id, p2_id):
             if len(bans.get(player_id, {})) < 2:
                 return None
