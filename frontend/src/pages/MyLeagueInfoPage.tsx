@@ -153,6 +153,10 @@ export default function MyLeagueInfoPage() {
   // Players whose match this captain has taken over, to finish a step the
   // player themselves has stopped answering.
   const [captainActingFor, setCaptainActingFor] = useState<number[]>([]);
+  // A playoff bracket is one player per team, so a captain is in one of them
+  // and cannot see the other ten at all. My Team sends them here naming the
+  // player, and the server adds that bracket to what this page is given.
+  const actForParam = Number(searchParams.get('act_for')) || null;
   // Triad: strike selection and deck pickers
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
   const [tertiateHouseSelection, setTertiateHouseSelection] = useState('');
@@ -208,7 +212,7 @@ export default function MyLeagueInfoPage() {
     setSealedPools({});
     const target = weekId ?? shownWeekRef.current;
     const count = ++refreshCountRef.current;
-    getMyLeagueInfo(leagueId, target)
+    getMyLeagueInfo(leagueId, target, actForParam)
       .then((l) => {
         if (count === refreshCountRef.current) {
           shownWeekRef.current = l.loaded_week_id ?? null;
@@ -223,7 +227,7 @@ export default function MyLeagueInfoPage() {
     // it has to be asked again: without this the page kept the last player's
     // answer and read it against the new player, which is how a week they
     // are not in came up showing an opponent and no match at once.
-  }, [leagueId, testUserId]);
+  }, [leagueId, testUserId, actForParam]);
 
   const loadSealedPool = useCallback(async (weekId: number) => {
     if (!league) return;
@@ -714,6 +718,10 @@ export default function MyLeagueInfoPage() {
     // time: a captain of ten would otherwise be handed ten matches to look
     // at every week, when what they want is the one that has stopped.
     ...captainActingFor,
+    // ...and the one My Team sent them here to deal with.
+    ...(actForParam && league?.acting_for_user_id === actForParam
+      ? [actForParam]
+      : []),
   ];
 
   /** Every match this viewer may act on: their own, then any they cover. */

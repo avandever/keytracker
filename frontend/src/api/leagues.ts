@@ -846,9 +846,16 @@ export async function submitTertiatePurge(
 export async function getMyLeagueInfo(
   leagueId: number,
   weekId?: number | null,
+  // A captain asking for a teammate's playoff bracket as well as their own,
+  // to step into a match that has stalled. Refused unless they captain that
+  // player's team.
+  actFor?: number | null,
 ): Promise<LeagueDetail> {
+  const params: Record<string, number> = {};
+  if (weekId) params.week_id = weekId;
+  if (actFor) params.act_for = actFor;
   const { data } = await apiClient.get(`/leagues/${leagueId}/my-info`, {
-    params: weekId ? { week_id: weekId } : undefined,
+    params: Object.keys(params).length ? params : undefined,
   });
   return data;
 }

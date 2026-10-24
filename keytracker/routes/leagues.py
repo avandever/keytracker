@@ -323,7 +323,9 @@ def get_league(league_id):
     return etag_response(data)
 
 
-def _playoff_weeks_for_team(league, viewer, my_team_id, stub=False, for_user=None):
+def _playoff_weeks_for_team(
+    league, viewer, my_team_id, stub=False, for_user=None, also_for=None
+):
     """A team's playoff weeks, scoped the way My Info scopes an ordinary one.
 
     A round is one week per bracket, so a team has as many of these per round
@@ -334,6 +336,12 @@ def _playoff_weeks_for_team(league, viewer, my_team_id, stub=False, for_user=Non
     of it is serialised. My Info wants one bracket and polls every ten
     seconds while a match is live; serialising all eleven and keeping one was
     most of why that call ran 761 queries.
+
+    `also_for` adds one more player's bracket to that: a captain stepping
+    into a teammate's stalled match. Without it the narrowing keeps the
+    captain out of the only page the match can be played from -- a bracket
+    is one player per team, so a captain is in at most one of eleven and
+    sees nothing of the other ten.
     """
     if my_team_id is None:
         return []
@@ -341,11 +349,12 @@ def _playoff_weeks_for_team(league, viewer, my_team_id, stub=False, for_user=Non
         w for w in league.weeks if getattr(w, "playoff_bracket_id", None) is not None
     ]
     if for_user is not None:
+        wanted = {for_user} | ({also_for} if also_for else set())
         mine = {
             a.bracket_id
             for b in league.playoff_brackets
             for a in b.assignments
-            if a.team_id == my_team_id and a.user_id == for_user
+            if a.team_id == my_team_id and a.user_id in wanted
         }
         playoff_weeks = [w for w in playoff_weeks if w.playoff_bracket_id in mine]
     if not playoff_weeks:
@@ -596,11 +605,25 @@ def get_my_league_info(league_id):
     # bracket they were put in rather than every bracket their team plays:
     # this page is one player's view of one match, and the rest is My Team's
     # business. A player in no bracket gets an empty list and no tab.
+    # A captain stepping into a teammate's stalled playoff match asks for it
+    # by name. Granted only over their own team, and only to a captain: the
+    # match itself still decides what may be done once the page has it.
+    act_for = request.args.get("act_for", type=int)
+    if act_for is not None:
+        is_captain = bool(member.is_captain) if member else False
+        same_team = (
+            my_team is not None
+            and any(m.user_id == act_for for m in my_team.members)
+        )
+        if not (is_captain and same_team):
+            act_for = None
+    data["acting_for_user_id"] = act_for
     data["playoff_weeks"] = _playoff_weeks_for_team(
         league,
         effective,
         my_team.id if my_team else None,
         for_user=effective.id,
+        also_for=act_for,
     )
     return etag_response(data)
 
