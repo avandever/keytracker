@@ -216,7 +216,11 @@ export default function MyLeagueInfoPage() {
       })
       .catch((e) => setError(e.response?.data?.error || e.message))
       .finally(() => setLoading(false));
-  }, [leagueId]);
+    // Looking as somebody else asks a different question of the same URL, so
+    // it has to be asked again: without this the page kept the last player's
+    // answer and read it against the new player, which is how a week they
+    // are not in came up showing an opponent and no match at once.
+  }, [leagueId, testUserId]);
 
   const loadSealedPool = useCallback(async (weekId: number) => {
     if (!league) return;
