@@ -169,6 +169,16 @@ r = submit("Bea", "r2b2", "two")
 check("a deck not yet played goes in", r.status_code in (200, 201),
       str(body(r))[:70])
 
+# --- and the other way round, which week order used to let through --------
+# Bea holds "two" in week 3. Abe now claims it for week 2, a LOWER number.
+# He is on the other team from her, so the teammate rule has nothing to say
+# and this is the new rule alone: whoever reached the lower-numbered week
+# used to win the race regardless of who was there first.
+r = submit("Abe", "r1b1", "two")
+check("a deck held in a later-numbered week cannot be taken for an earlier one",
+      r.status_code == 409 and "already selected for" in str(body(r).get("error", "")),
+      (r.status_code, body(r).get("error")))
+
 # --- the season stays a separate competition ------------------------------
 r = submit("Ann", "season", "one")
 check("a playoff deck is still free for a season week",

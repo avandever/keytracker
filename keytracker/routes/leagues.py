@@ -2845,7 +2845,6 @@ def generate_player_matchups(league_id, week_id):
                     PlayerDeckSelection.deck_id == sel_deck.id,
                     LeagueWeek.league_id == league.id,
                     LeagueWeek.id != week.id,
-                    LeagueWeek.week_number < week.week_number,
                     ~LeagueWeek.format_type.in_(SEALED_FORMATS),
                     deck_reuse_scope(week),
                 )
@@ -2853,9 +2852,14 @@ def generate_player_matchups(league_id, week_id):
             )
             if prior:
                 prior_sel, prior_week, prior_user = prior
+                verb = (
+                    "was already used in"
+                    if prior_week.week_number < week.week_number
+                    else "is already selected for"
+                )
                 conflict_messages.append(
                     f"{submitter.name}'s deck ({sel_deck.name}) for this week "
-                    f"was already used in {prior_week.name} (Week {prior_week.week_number}) "
+                    f"{verb} {prior_week.name} (Week {prior_week.week_number}) "
                     f"by {prior_user.name}."
                 )
         if conflict_messages:
@@ -4228,7 +4232,13 @@ def _check_deck_cross_week_conflicts(league, week, deck, target_team):
 
     errors = []
 
-    # --- Error 1: used by anyone in a previous (lower week_number) non-sealed week ---
+    # --- Error 1: taken by anyone in any other non-sealed week ---
+    # Not only an earlier one. Week order says who submitted first, not who
+    # has the deck: eleven playoff brackets open at once, so two players can
+    # be filling in different week numbers at the same moment, and whichever
+    # happened to hold the lower one kept the deck. The suggestion list has
+    # always shown both directions as a conflict -- this is the rule it was
+    # already describing.
     prior_conflicts = (
         db.session.query(PlayerDeckSelection, LeagueWeek, User)
         .join(LeagueWeek, PlayerDeckSelection.week_id == LeagueWeek.id)
@@ -4237,15 +4247,19 @@ def _check_deck_cross_week_conflicts(league, week, deck, target_team):
             PlayerDeckSelection.deck_id == deck.id,
             LeagueWeek.league_id == league.id,
             LeagueWeek.id != week.id,
-            LeagueWeek.week_number < week.week_number,
             ~LeagueWeek.format_type.in_(SEALED_FORMATS),
             deck_reuse_scope(week),
         )
         .all()
     )
     for sel, prior_week, user in prior_conflicts:
+        verb = (
+            "was already used in"
+            if prior_week.week_number < week.week_number
+            else "is already selected for"
+        )
         errors.append(
-            f"This deck ({deck.name}) was already used in "
+            f"This deck ({deck.name}) {verb} "
             f"{prior_week.name} (Week {prior_week.week_number}) by {user.name}."
         )
 
