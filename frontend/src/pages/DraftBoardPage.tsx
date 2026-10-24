@@ -35,6 +35,8 @@ import type { DraftState } from '../types';
 export default function DraftBoardPage() {
   const leagueId = useLeagueNumericId();
   const { user } = useAuth();
+  const { testUserId } = useTestUser();
+  const effectiveUserId = testUserId ?? user?.id;
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -87,8 +89,6 @@ export default function DraftBoardPage() {
   if (!draft) return null;
 
   // Can current user pick? They must be captain of current team
-  const { testUserId } = useTestUser();
-  const effectiveUserId = testUserId ?? user?.id;
   const currentTeamCaptainId = draft.current_team?.members.find((m) => m.is_captain)?.user.id;
   const isMyPick = user && draft.current_team && currentTeamCaptainId === effectiveUserId;
 
