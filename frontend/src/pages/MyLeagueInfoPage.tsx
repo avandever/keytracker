@@ -47,6 +47,8 @@ import {
   reportGame,
   submitStrike,
   submitExchangeBorrow,
+  submitAdaptiveBid,
+  markAdaptiveBidNotRecorded,
   markStrikeNotRecorded,
   submitTertiatePurge,
   submitTertiatePurgeRetroactive,
@@ -177,6 +179,8 @@ export default function MyLeagueInfoPage() {
   const [strikeSelectionId, setStrikeSelectionId] = useState<number | ''>('');
   // Exchange: which of the opponent's decks to borrow.
   const [borrowSelectionId, setBorrowSelectionId] = useState<number | ''>('');
+  // Adaptive: the chains being bid for the winning deck.
+  const [adaptiveBid, setAdaptiveBid] = useState('');
   // ...and the opponent's, when a captain records it for them.
   const [oppBorrowSelectionId, setOppBorrowSelectionId] = useState<number | ''>('');
   const [tertiateHouseSelection, setTertiateHouseSelection] = useState('');
@@ -2168,6 +2172,121 @@ export default function MyLeagueInfoPage() {
                   </Box>
                 );
               })()}
+
+              {/* Adaptive: the bidding that decides game three. Built for
+                  the standalone match page and never for a league week, so a
+                  match tied 1-1 had no way to finish -- game three is refused
+                  until bidding completes, and nobody could complete it. */}
+              {week.format_type === 'adaptive'
+                && myMatchup.adaptive_bid_chains !== null
+                && !myMatchup.adaptive_bidding_complete
+                && !myMatchup.adaptive_bid_not_recorded && (() => {
+                const bid = myMatchup.adaptive_bid_chains ?? 0;
+                const isMyTurn = myMatchup.adaptive_bidder_id !== actingId;
+                const nameFor = (id: number | null) =>
+                  myMatchup.player1.id === id
+                    ? myMatchup.player1.name
+                    : myMatchup.player2.name;
+                const holder = nameFor(myMatchup.adaptive_bidder_id);
+                const winningOwner = nameFor(myMatchup.adaptive_winning_deck_player_id);
+                return (
+                  <Box sx={{ mb: 2, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                    <Typography variant="subtitle2" gutterBottom>Adaptive Bidding</Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      Tied 1-1, and {winningOwner}&apos;s deck won both games. The bid is
+                      for the right to play that deck in game three, carrying the chains
+                      bid for it.
+                    </Typography>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      Current bid: <strong>{bid} chains</strong>, held by <strong>{holder}</strong>.
+                    </Typography>
+                    {isMyTurn ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <TextField
+                            label={`Chains (more than ${bid})`}
+                            type="number"
+                            size="small"
+                            value={adaptiveBid}
+                            onChange={(e) => setAdaptiveBid(e.target.value)}
+                            inputProps={{ min: bid + 1 }}
+                            sx={{ width: 180 }}
+                          />
+                          <Button
+                            variant="contained"
+                            size="small"
+                            disabled={!adaptiveBid}
+                            onClick={async () => {
+                              try {
+                                await submitAdaptiveBid(league.id, myMatchup.id, {
+                                  chains: parseInt(adaptiveBid, 10),
+                                });
+                                setAdaptiveBid('');
+                                setSuccess('Bid raised.');
+                                refresh();
+                              } catch (e: any) {
+                                setError(e.response?.data?.error || e.message);
+                              }
+                            }}
+                          >
+                            Raise the bid
+                          </Button>
+                        </Box>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={async () => {
+                            try {
+                              await submitAdaptiveBid(league.id, myMatchup.id,
+                                { concede: true });
+                              setSuccess('Bidding settled.');
+                              refresh();
+                            } catch (e: any) {
+                              setError(e.response?.data?.error || e.message);
+                            }
+                          }}
+                        >
+                          Accept — {holder} plays the winning deck with {bid} chains
+                        </Button>
+                      </Box>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        Waiting for {nameFor(
+                          myMatchup.adaptive_bidder_id === myMatchup.player1.id
+                            ? myMatchup.player2.id
+                            : myMatchup.player1.id,
+                        )} to raise or accept.
+                      </Typography>
+                    )}
+                    {/* For a match whose bidding happened across a table.
+                        What was bid is left unknown rather than invented. */}
+                    {isCaptain && (
+                      <Button
+                        size="small"
+                        color="warning"
+                        sx={{ mt: 1 }}
+                        onClick={async () => {
+                          try {
+                            await markAdaptiveBidNotRecorded(league.id, myMatchup.id);
+                            setSuccess('Recorded as bid away from here.');
+                            refresh();
+                          } catch (e: any) {
+                            setError(e.response?.data?.error || e.message);
+                          }
+                        }}
+                      >
+                        They bid off the site — skip recording it
+                      </Button>
+                    )}
+                  </Box>
+                );
+              })()}
+              {week.format_type === 'adaptive' && myMatchup.adaptive_bid_not_recorded && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Bidding was settled away from here, so game 3 can be reported.
+                  What was bid is not recorded.
+                </Alert>
+              )}
 
               {/* Triad Strike Phase */}
               {week.format_type === 'triad' && myMatchup.player1_started && myMatchup.player2_started && (() => {

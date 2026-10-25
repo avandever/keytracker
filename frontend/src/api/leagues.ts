@@ -815,6 +815,24 @@ export async function markOublietteBansNotRecorded(
   return data;
 }
 
+/**
+ * Raise the Adaptive bid, or accept the standing one.
+ *
+ * Accepting ends the bidding and leaves the current holder playing the
+ * winning deck with that many chains in game three.
+ */
+export async function submitAdaptiveBid(
+  leagueId: number,
+  matchupId: number,
+  opts: { chains?: number; concede?: boolean },
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/adaptive-bid`,
+    opts.concede ? { concede: true } : { chains: opts.chains },
+  );
+  return data;
+}
+
 /** Secretly name one of the opponent's decks to borrow, for Exchange. */
 export async function submitExchangeBorrow(
   leagueId: number,
@@ -829,6 +847,17 @@ export async function submitExchangeBorrow(
       borrowed_deck_selection_id: borrowedDeckSelectionId,
       ...(forUserId ? { for_user_id: forUserId } : {}),
     },
+  );
+  return data;
+}
+
+/** Record that an Adaptive match settled its bidding away from here. */
+export async function markAdaptiveBidNotRecorded(
+  leagueId: number,
+  matchupId: number,
+): Promise<PlayerMatchupInfo> {
+  const { data } = await apiClient.post(
+    `/leagues/${leagueId}/matches/${matchupId}/adaptive-bid-not-recorded`,
   );
   return data;
 }

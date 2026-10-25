@@ -1328,6 +1328,9 @@ def serialize_player_matchup(
         getattr(pm, "oubliette_bans_not_recorded", False)
     )
     data["strike_not_recorded"] = bool(getattr(pm, "strike_not_recorded", False))
+    data["adaptive_bid_not_recorded"] = bool(
+        getattr(pm, "adaptive_bid_not_recorded", False)
+    )
     _both_oubliette_bans = bool(pm.oubliette_p1_banned_house and pm.oubliette_p2_banned_house)
     # A league can choose to hold every ban until the pairings go out instead,
     # so the week opens with all of them on the table at once rather than each

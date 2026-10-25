@@ -646,6 +646,8 @@ export interface PlayerMatchupInfo {
   oubliette_bans_not_recorded?: boolean;
   /** This viewer's own Exchange borrow, if made; the opponent's stays secret. */
   my_exchange_borrow?: number | null;
+  /** An Adaptive match whose bidding happened away from here. */
+  adaptive_bid_not_recorded?: boolean;
   /** A Triad match played without one of its strikes, so reporting may go on. */
   strike_not_recorded?: boolean;
   /**

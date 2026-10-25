@@ -6546,6 +6546,61 @@ def mark_oubliette_bans_not_recorded(league_id, matchup_id):
 
 
 @blueprint.route(
+    "/<int:league_id>/matches/<int:matchup_id>/adaptive-bid-not-recorded",
+    methods=["POST"],
+)
+@login_required
+def mark_adaptive_bid_not_recorded(league_id, matchup_id):
+    """Record that an Adaptive match settled its bidding away from here.
+
+    Bidding is a back-and-forth between the two players, and game three is
+    refused until it finishes -- so a match played off the site, where the
+    bidding happened across a table, cannot be reported at all. The two
+    captains are who know what was agreed.
+
+    What was bid is left unknown rather than invented: the match becomes
+    reportable and nothing claims a figure nobody gave. Logged, like the
+    other waivers.
+    """
+    league, err = _get_league_or_404(league_id)
+    if err:
+        return err
+    pm = db.session.get(PlayerMatchup, matchup_id)
+    if not pm:
+        return jsonify({"error": "Matchup not found"}), 404
+    wm = pm.week_matchup
+    week = wm.week if wm else None
+    if not week or week.league_id != league.id:
+        return jsonify({"error": "Matchup not found"}), 404
+    if week.format_type != WeekFormat.ADAPTIVE.value:
+        return jsonify({"error": "Only for Adaptive format"}), 400
+    if pm.adaptive_bidding_complete:
+        return jsonify({"error": "Bidding is already complete"}), 400
+
+    effective = get_effective_user()
+    allowed = _is_league_admin(league, effective) or bool(
+        TeamMember.query.filter(
+            TeamMember.team_id.in_({wm.team1_id, wm.team2_id}),
+            TeamMember.user_id == effective.id,
+            TeamMember.is_captain == True,  # noqa: E712
+        ).first()
+    )
+    if not allowed:
+        return jsonify({"error": "Only a team captain or admin can do this"}), 403
+
+    pm.adaptive_bid_not_recorded = True
+    _log_admin_action(
+        league.id,
+        week.id,
+        effective.id,
+        "adaptive_bid_not_recorded",
+        f"matchup {pm.id}: {pm.player1.name} vs {pm.player2.name}",
+    )
+    db.session.commit()
+    return jsonify(serialize_player_matchup(pm, viewer=effective))
+
+
+@blueprint.route(
     "/<int:league_id>/matches/<int:matchup_id>/strike-not-recorded", methods=["POST"]
 )
 @login_required
@@ -7789,7 +7844,9 @@ def report_game(league_id, matchup_id):
 
     # Adaptive: block game 3 until bidding is complete
     if week.format_type == WeekFormat.ADAPTIVE.value and game_number == 3:
-        if not pm.adaptive_bidding_complete:
+        if not pm.adaptive_bidding_complete and not getattr(
+            pm, "adaptive_bid_not_recorded", False
+        ):
             return (
                 jsonify(
                     {
