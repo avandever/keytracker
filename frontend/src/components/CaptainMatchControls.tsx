@@ -21,6 +21,7 @@ import {
   confirmMatchResult,
   markMatchAlreadyPlayed,
   markOublietteBansNotRecorded,
+  markAdaptiveBidNotRecorded,
   submitTertiatePurgeRetroactive,
 } from '../api/leagues';
 import type { LeagueWeek, PlayerMatchupInfo } from '../types';
@@ -117,6 +118,16 @@ export default function CaptainMatchControls({
     week.format_type === 'oubliette' &&
     !pm.oubliette_bans_not_recorded &&
     !(pm.oubliette_p1_banned_house && pm.oubliette_p2_banned_house);
+  // Bidding is a back-and-forth between the two players, so a match settled
+  // across a table leaves game three unreportable with nobody able to move
+  // it on -- the same hole the bans have, and the same way out.
+  const needsBid =
+    week.format_type === 'adaptive' &&
+    !needsStart &&
+    pm.adaptive_bid_chains !== null &&
+    !pm.adaptive_bidding_complete &&
+    !pm.adaptive_bid_not_recorded &&
+    pm.games.length >= 2;
   const whoHasNotBanned = [
     pm.oubliette_p1_banned_house ? null : pm.player1.name,
     pm.oubliette_p2_banned_house ? null : pm.player2.name,
@@ -285,6 +296,37 @@ export default function CaptainMatchControls({
         </Box>
       )}
 
+      {!decided && needsBid && (
+        <Box sx={{ mt: 1, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            The match is tied and the bidding for game three is still open. Only
+            the two players can bid, so the result cannot be reported until it
+            settles — on their own match pages, or here if they settled it
+            between themselves.
+          </Typography>
+          <Button
+            size="small"
+            color="warning"
+            sx={{ mt: 1 }}
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await markAdaptiveBidNotRecorded(leagueId, pm.id);
+                setSuccess('Recorded as bid away from the site.');
+                onChanged();
+              } catch (e: any) {
+                setError(e.response?.data?.error || e.message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            They bid off the site — skip recording it
+          </Button>
+        </Box>
+      )}
+
       {!decided && !needsStart && needsBans && (
         <Box sx={{ mt: 1, p: 1.5, border: 1, borderColor: 'divider', borderRadius: 1 }}>
           <Typography variant="body2" color="text.secondary">
@@ -322,7 +364,7 @@ export default function CaptainMatchControls({
         </Box>
       )}
 
-      {!decided && !needsStart && !needsPurges && !needsBans && NEEDS_DECK_PER_GAME.has(week.format_type) && (
+      {!decided && !needsStart && !needsPurges && !needsBans && !needsBid && NEEDS_DECK_PER_GAME.has(week.format_type) && (
         <Box>
           <Typography variant="body2" color="text.secondary">
             {week.format_type === 'triad' ? 'Triad' : 'This format'} records which deck each
@@ -347,7 +389,7 @@ export default function CaptainMatchControls({
         </Box>
       )}
 
-      {!decided && !needsStart && !needsPurges && !needsBans && !NEEDS_DECK_PER_GAME.has(week.format_type) && (
+      {!decided && !needsStart && !needsPurges && !needsBans && !needsBid && !NEEDS_DECK_PER_GAME.has(week.format_type) && (
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel>{`Game ${nextGame} winner`}</InputLabel>
