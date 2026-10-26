@@ -347,6 +347,9 @@ function PlayoffSetupPanel({
   const [openingBracket, setOpeningBracket] = useState<number | ''>('');
   const [advancing, setAdvancing] = useState(setup.config.teams_advancing);
   const [points, setPoints] = useState(setup.config.points_per_round.join(', '));
+  const [seedBonus, setSeedBonus] = useState(
+    (setup.config.seed_bonus_points || []).join(', '),
+  );
   const [consolation, setConsolation] = useState(setup.config.consolation_enabled);
   const [consolationPoints, setConsolationPoints] = useState(setup.config.consolation_points);
   const [byePolicy, setByePolicy] = useState(setup.config.bye_policy);
@@ -381,6 +384,16 @@ function PlayoffSetupPanel({
                 value={consolationPoints} disabled={drawn || !consolation}
                 onChange={(e) => setConsolationPoints(parseInt(e.target.value, 10) || 0)}
               />
+              {/* Scoring, so it stays editable after the draw: the bracket
+                  shape is fixed by then, what a result is worth is not. */}
+              <TextField
+                size="small"
+                label="Seed bonus (best first)"
+                sx={{ width: 220 }}
+                value={seedBonus}
+                onChange={(e) => setSeedBonus(e.target.value)}
+                helperText="e.g. 3, 2, 1 — carried in from the season"
+              />
               <FormControl size="small" sx={{ minWidth: 220 }} disabled={drawn}>
                 <InputLabel>Byes</InputLabel>
                 <Select label="Byes" value={byePolicy}
@@ -392,19 +405,31 @@ function PlayoffSetupPanel({
                 </Select>
               </FormControl>
               <Button
-                variant="contained" disabled={drawn}
-                onClick={() =>
+                variant="contained"
+                onClick={() => {
+                  const numbers = (text: string) =>
+                    text.split(',').map((p) => parseInt(p.trim(), 10)).filter((n) => !isNaN(n));
+                  // Once drawn, only what a result is worth may still change,
+                  // and sending the rest would be refused outright.
+                  const body = drawn
+                    ? {
+                        points_per_round: numbers(points),
+                        consolation_points: consolationPoints,
+                        seed_bonus_points: numbers(seedBonus),
+                      }
+                    : {
+                        teams_advancing: advancing,
+                        points_per_round: numbers(points),
+                        consolation_enabled: consolation,
+                        consolation_points: consolationPoints,
+                        bye_policy: byePolicy,
+                        seed_bonus_points: numbers(seedBonus),
+                      };
                   onAct(
-                    () => updatePlayoffConfig(leagueId, {
-                      teams_advancing: advancing,
-                      points_per_round: points.split(',').map((p) => parseInt(p.trim(), 10)).filter((n) => !isNaN(n)),
-                      consolation_enabled: consolation,
-                      consolation_points: consolationPoints,
-                      bye_policy: byePolicy,
-                    }),
+                    () => updatePlayoffConfig(leagueId, body),
                     'Configuration saved.',
-                  )
-                }
+                  );
+                }}
               >
                 Save
               </Button>

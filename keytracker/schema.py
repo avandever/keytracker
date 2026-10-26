@@ -1817,6 +1817,10 @@ class PlayoffConfig(db.Model):
     # Points a win is worth, by round: the first entry is round one. A round
     # past the end of the list is worth the last entry.
     points_per_round = db.Column(db.Text, nullable=True)
+    # Points a team carries into the playoffs for where it finished the
+    # season: the first entry is the top seed. A seed past the end of the
+    # list carries nothing.
+    seed_bonus_points = db.Column(db.Text, nullable=True)
     consolation_enabled = db.Column(db.Boolean, nullable=False, default=False)
     consolation_points = db.Column(db.Integer, nullable=False, default=1)
     bye_policy = db.Column(

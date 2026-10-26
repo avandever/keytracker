@@ -78,6 +78,8 @@ export interface PlayoffMatchInfo {
 export interface PlayoffConfigInfo {
   teams_advancing: number;
   points_per_round: number[];
+  /** Points each seed carries in from the season, best first. */
+  seed_bonus_points: number[];
   consolation_enabled: boolean;
   consolation_points: number;
   bye_policy: 'random_even' | 'team_record' | 'admin' | 'player_record';
@@ -311,6 +313,10 @@ export interface PlayoffStandingRow {
   matches_played: number;
   /** Rounds come through without playing; they score, but they are not wins. */
   byes: number;
+  /** Where the team finished the season, counting from one. */
+  seed: number | null;
+  /** Points carried in for that finish, before a playoff game is played. */
+  seed_bonus: number;
   /** Points already won, which cannot be lost. */
   min_points: number;
   /** Those plus every round still winnable, bracket by bracket. */
@@ -321,6 +327,8 @@ export interface PlayoffStandings {
   standings: PlayoffStandingRow[];
   points_per_round: number[];
   consolation_points: number;
+  /** What each seed carried in, best first. */
+  seed_bonus_points: number[];
   rounds: number;
 }
 

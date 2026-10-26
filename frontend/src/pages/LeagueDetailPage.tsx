@@ -392,6 +392,7 @@ export default function LeagueDetailPage() {
             (a, b) => b.max_points - a.max_points || b.min_points - a.min_points,
           );
           const topFloor = Math.max(...rows.map((r) => r.min_points), 0);
+          const showsSeedBonus = rows.some((r) => r.seed_bonus > 0);
           return (
             <Card sx={{ mb: 2 }}>
               <CardContent>
@@ -399,12 +400,22 @@ export default function LeagueDetailPage() {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                   Points already won, and the most still reachable if a team wins
                   every match it is alive in. A round is worth{' '}
-                  {playoffStandings.points_per_round.join(', then ')}.
+                  {playoffStandings.points_per_round.join(', then ')}
+                  {(playoffStandings.seed_bonus_points || []).length > 0 && (
+                    <>
+                      , and the season standings carried in{' '}
+                      {playoffStandings.seed_bonus_points.join(', ')} for the top
+                      {' '}{playoffStandings.seed_bonus_points.length} finishers
+                    </>
+                  )}.
                 </Typography>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
                       <TableCell><strong>Team</strong></TableCell>
+                      {showsSeedBonus && (
+                        <TableCell align="center"><strong>Seeding</strong></TableCell>
+                      )}
                       <TableCell align="center"><strong>Now</strong></TableCell>
                       <TableCell align="center"><strong>Most</strong></TableCell>
                       <TableCell><strong></strong></TableCell>
@@ -423,7 +434,15 @@ export default function LeagueDetailPage() {
                         <TableRow key={row.team_id}>
                           <TableCell sx={{ opacity: eliminated ? 0.6 : 1 }}>
                             {row.team_name}
+                            {row.seed ? (
+                              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                                seed {row.seed}
+                              </Typography>
+                            ) : null}
                           </TableCell>
+                          {showsSeedBonus && (
+                            <TableCell align="center">+{row.seed_bonus}</TableCell>
+                          )}
                           <TableCell align="center">{row.min_points}</TableCell>
                           <TableCell align="center">{row.max_points}</TableCell>
                           <TableCell>

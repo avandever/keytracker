@@ -421,6 +421,18 @@ with app.app_context():
                             "double_oubliette_bans TEXT NULL"
                         )
                     )
+        if inspector.has_table("tracker_playoff_config"):
+            columns = {
+                c["name"] for c in inspector.get_columns("tracker_playoff_config")
+            }
+            if "seed_bonus_points" not in columns:
+                with db.engine.begin() as conn:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE tracker_playoff_config ADD COLUMN "
+                            "seed_bonus_points TEXT NULL"
+                        )
+                    )
         if inspector.has_table("tracker_playoff_bracket"):
             columns = {
                 c["name"] for c in inspector.get_columns("tracker_playoff_bracket")

@@ -122,10 +122,35 @@ def _points_list(config):
     return [int(p) for p in points] if isinstance(points, list) else list(DEFAULT_POINTS_PER_ROUND)
 
 
+def _seed_bonus_list(config):
+    """What each seed carries into the playoffs, best first.
+
+    A league can reward the season standings without carrying the season's
+    points over wholesale -- three for finishing first, two for second, one
+    for third, and nothing for the rest. Empty means no bonus at all, which
+    is what every league had before this existed.
+    """
+    if not config or not config.seed_bonus_points:
+        return []
+    try:
+        bonus = json.loads(config.seed_bonus_points)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    return [int(b) for b in bonus] if isinstance(bonus, list) else []
+
+
+def _seed_bonus_for(bonus, position):
+    """The bonus for a seed, counting from one. Past the list, nothing."""
+    if not bonus or position is None or position < 1:
+        return 0
+    return bonus[position - 1] if position <= len(bonus) else 0
+
+
 def _serialize_config(league, config):
     return {
         "teams_advancing": config.teams_advancing if config else 4,
         "points_per_round": _points_list(config),
+        "seed_bonus_points": _seed_bonus_list(config),
         "consolation_enabled": bool(config.consolation_enabled) if config else False,
         "consolation_points": config.consolation_points if config else 1,
         "bye_policy": config.bye_policy if config else PlayoffByePolicy.RANDOM_EVEN.value,
@@ -421,10 +446,27 @@ def update_playoff_config(league_id):
     if not _is_league_admin(league, effective):
         return jsonify({"error": "Admin access required"}), 403
     config = _config_for(league, create=True)
-    if _locked(config):
-        return jsonify({"error": "The brackets are drawn; setup is fixed"}), 400
 
     data = request.get_json(silent=True) or {}
+    # The draw fixes the shape of the playoffs, not what they are worth. A
+    # league that finds its scoring wrong once the brackets are out -- ABR 15
+    # did, having meant to carry a bonus in from the season standings -- can
+    # still put it right, and the standings are recomputed from the brackets
+    # whenever they are asked for, so correcting it is enough.
+    STRUCTURAL = {"teams_advancing", "bye_policy", "consolation_enabled"}
+    if _locked(config):
+        blocked = sorted(STRUCTURAL & set(data))
+        if blocked:
+            return (
+                jsonify(
+                    {
+                        "error": "The brackets are drawn, so "
+                        + ", ".join(blocked)
+                        + " can no longer be changed"
+                    }
+                ),
+                400,
+            )
     if "teams_advancing" in data:
         value = data["teams_advancing"]
         if not isinstance(value, int) or value < 2:
@@ -447,6 +489,21 @@ def update_playoff_config(league_id):
                 400,
             )
         config.points_per_round = json.dumps(points)
+    if "seed_bonus_points" in data:
+        bonus = data["seed_bonus_points"]
+        if bonus in (None, []):
+            config.seed_bonus_points = None
+        elif not isinstance(bonus, list) or any(
+            not isinstance(b, int) or b < 0 for b in bonus
+        ):
+            return (
+                jsonify(
+                    {"error": "seed_bonus_points must be a list of whole numbers"}
+                ),
+                400,
+            )
+        else:
+            config.seed_bonus_points = json.dumps(bonus)
     if "consolation_enabled" in data:
         config.consolation_enabled = bool(data["consolation_enabled"])
     if "consolation_points" in data:
@@ -1822,9 +1879,21 @@ def _playoff_standings(league):
     points = _points_list(config)
     consolation_points = config.consolation_points if config else 0
 
+    seed_bonus = _seed_bonus_list(config)
     totals = {}
     for qualifier in league.playoff_qualifiers:
-        totals[qualifier.team_id] = {"points": 0, "wins": 0, "played": 0, "byes": 0}
+        # Carried in from where the season finished, before a playoff game is
+        # played. It is part of the total rather than a note beside it, since
+        # it is what the brackets are being added to.
+        earned = _seed_bonus_for(seed_bonus, qualifier.position)
+        totals[qualifier.team_id] = {
+            "points": earned,
+            "wins": 0,
+            "played": 0,
+            "byes": 0,
+            "seed": qualifier.position,
+            "seed_bonus": earned,
+        }
 
     for bracket in league.playoff_brackets:
         for match in bracket.matches:
@@ -1900,6 +1969,8 @@ def _playoff_standings(league):
                 "wins": row["wins"],
                 "matches_played": row["played"],
                 "byes": row["byes"],
+                "seed": row["seed"],
+                "seed_bonus": row["seed_bonus"],
                 # The floor and the ceiling as the brackets stand.
                 "min_points": row["points"],
                 "max_points": row["points"] + remaining.get(team_id, 0),
@@ -1912,6 +1983,7 @@ def _playoff_standings(league):
         "standings": rows,
         "points_per_round": points,
         "consolation_points": consolation_points,
+        "seed_bonus_points": seed_bonus,
         "rounds": total_rounds,
     }
 
