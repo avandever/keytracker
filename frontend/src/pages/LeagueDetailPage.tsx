@@ -251,10 +251,13 @@ export default function LeagueDetailPage() {
     if (activeTab === 0 && playoffTree === null) {
       getPlayoffTree(league.id).then(setPlayoffTree).catch(() => {});
     }
+    if (activeTab === 0 && playoffStandings === null) {
+      getPlayoffStandings(league.id).then(setPlayoffStandings).catch(() => {});
+    }
     if (activeTab === 1 && playoffDecks === null) {
       getPlayoffDecks(league.id).then(setPlayoffDecks).catch(() => {});
     }
-  }, [activeTab, league, playoffSetup, playoffTree, playoffDecks]);
+  }, [activeTab, league, playoffSetup, playoffTree, playoffDecks, playoffStandings]);
   useEffect(() => { getSets().then(setSets).catch(() => {}); }, []);
   // Only offer the fantasy link when this league actually has one. Failing
   // quietly is right: a missing fantasy competition is not an error here.
@@ -1630,9 +1633,6 @@ export default function LeagueDetailPage() {
               setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true });
               if (v === playoffStandingsIdx && playoffTree === null) {
                 getPlayoffTree(league.id).then(setPlayoffTree).catch(() => {});
-              }
-              if (v === playoffStandingsIdx && playoffStandings === null) {
-                getPlayoffStandings(league.id).then(setPlayoffStandings).catch(() => {});
               }
               if (v === playoffDecksIdx && playoffDecks === null) {
                 getPlayoffDecks(league.id).then(setPlayoffDecks).catch(() => {});
