@@ -311,12 +311,17 @@ export interface PlayoffStandingRow {
   matches_played: number;
   /** Rounds come through without playing; they score, but they are not wins. */
   byes: number;
+  /** Points already won, which cannot be lost. */
+  min_points: number;
+  /** Those plus every round still winnable, bracket by bracket. */
+  max_points: number;
 }
 
 export interface PlayoffStandings {
   standings: PlayoffStandingRow[];
   points_per_round: number[];
   consolation_points: number;
+  rounds: number;
 }
 
 /** Playoff points, which start from zero rather than carrying the season on. */

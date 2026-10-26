@@ -1849,6 +1849,46 @@ def _playoff_standings(league):
             else:
                 totals[winner]["wins"] += 1
 
+    # What is still winnable, bracket by bracket. Points already scored cannot
+    # be lost, so the total so far is the floor; the ceiling adds every round
+    # a team could still win in every bracket it is still alive in.
+    total_rounds = rounds_needed(len(league.playoff_qualifiers))
+    remaining = {team_id: 0 for team_id in totals}
+    for bracket in league.playoff_brackets:
+        by_round = {}
+        for match in bracket.matches:
+            by_round.setdefault(match.round_number, []).append(match)
+        for team_id in totals:
+            deepest = None
+            for round_number, matches in by_round.items():
+                for match in matches:
+                    if team_id in (match.team1_id, match.team2_id):
+                        if deepest is None or round_number > deepest[0]:
+                            deepest = (round_number, match)
+            if deepest is None:
+                # An undrawn bracket: nobody is placed, so everybody could
+                # still win the whole thing.
+                if not by_round:
+                    remaining[team_id] += sum(
+                        _points_for_round(points, r)
+                        for r in range(1, total_rounds + 1)
+                    )
+                continue
+            round_number, match = deepest
+            winner = match.winner_team_id or _match_winner_team_id(match)
+            if winner is None:
+                from_round = round_number
+            elif winner == team_id:
+                # Won their deepest match. They belong in the next round even
+                # if nothing has written them there yet.
+                from_round = round_number + 1
+            else:
+                continue
+            remaining[team_id] += sum(
+                _points_for_round(points, r)
+                for r in range(from_round, total_rounds + 1)
+            )
+
     rows = []
     for team_id, row in totals.items():
         team = db.session.get(Team, team_id)
@@ -1860,6 +1900,9 @@ def _playoff_standings(league):
                 "wins": row["wins"],
                 "matches_played": row["played"],
                 "byes": row["byes"],
+                # The floor and the ceiling as the brackets stand.
+                "min_points": row["points"],
+                "max_points": row["points"] + remaining.get(team_id, 0),
             }
         )
     # Points first, then matches actually won, so a team that played its way
@@ -1869,6 +1912,7 @@ def _playoff_standings(league):
         "standings": rows,
         "points_per_round": points,
         "consolation_points": consolation_points,
+        "rounds": total_rounds,
     }
 
 

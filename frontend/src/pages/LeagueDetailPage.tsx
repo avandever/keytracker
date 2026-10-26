@@ -29,8 +29,18 @@ import { getLeague, signup, withdraw, getSets, getAdminLog, getCompletedMatchDec
 import { WEEK_FORMAT_LABELS as FORMAT_LABELS } from '../utils/formatLabels';
 import type { SignupDiscordStatus } from '../api/leagues';
 import { listFantasyLeagues } from '../api/fantasy';
-import { getPlayoffDecks, getPlayoffSetup, getPlayoffTree } from '../api/playoffs';
-import type { PlayoffDecks, PlayoffSetup, PlayoffTree } from '../api/playoffs';
+import {
+  getPlayoffDecks,
+  getPlayoffSetup,
+  getPlayoffStandings,
+  getPlayoffTree,
+} from '../api/playoffs';
+import type {
+  PlayoffDecks,
+  PlayoffSetup,
+  PlayoffStandings,
+  PlayoffTree,
+} from '../api/playoffs';
 import { useAuth } from '../contexts/AuthContext';
 import WeekConstraints from '../components/WeekConstraints';
 import { getWeekDescription } from '../utils/formatDescriptions';
@@ -150,6 +160,7 @@ export default function LeagueDetailPage() {
   const [playoffSetup, setPlayoffSetup] = useState<PlayoffSetup | null>(null);
   const [playoffTree, setPlayoffTree] = useState<PlayoffTree | null>(null);
   const [playoffDecks, setPlayoffDecks] = useState<PlayoffDecks | null>(null);
+  const [playoffStandings, setPlayoffStandings] = useState<PlayoffStandings | null>(null);
   // Standings needs every week, which the page does not load by default.
   const [allWeeksLoading, setAllWeeksLoading] = useState(false);
 
@@ -370,6 +381,65 @@ export default function LeagueDetailPage() {
     const teamNames = playoffTree.teams || {};
     return (
       <Box>
+        {playoffStandings && (() => {
+          // What each team is already guaranteed and what is still reachable,
+          // read off the brackets as they stand: points already won cannot be
+          // lost, and every round a team is still alive in is still winnable.
+          const rows = [...playoffStandings.standings].sort(
+            (a, b) => b.max_points - a.max_points || b.min_points - a.min_points,
+          );
+          const topFloor = Math.max(...rows.map((r) => r.min_points), 0);
+          return (
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>Where it can finish</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  Points already won, and the most still reachable if a team wins
+                  every match it is alive in. A round is worth{' '}
+                  {playoffStandings.points_per_round.join(', then ')}.
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell><strong>Team</strong></TableCell>
+                      <TableCell align="center"><strong>Now</strong></TableCell>
+                      <TableCell align="center"><strong>Most</strong></TableCell>
+                      <TableCell><strong></strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map((row) => {
+                      // Out of it once the best they can reach is below what
+                      // somebody already holds.
+                      const eliminated = row.max_points < topFloor;
+                      const clinched = rows.every(
+                        (other) => other.team_id === row.team_id
+                          || other.max_points < row.min_points,
+                      );
+                      return (
+                        <TableRow key={row.team_id}>
+                          <TableCell sx={{ opacity: eliminated ? 0.6 : 1 }}>
+                            {row.team_name}
+                          </TableCell>
+                          <TableCell align="center">{row.min_points}</TableCell>
+                          <TableCell align="center">{row.max_points}</TableCell>
+                          <TableCell>
+                            {clinched && (
+                              <Chip size="small" color="success" label="Cannot be caught" />
+                            )}
+                            {eliminated && (
+                              <Chip size="small" variant="outlined" label="Cannot catch up" />
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          );
+        })()}
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Every bracket, round by round. A bracket keeps its pairings to itself until
           each team has put somebody in it.
@@ -1560,6 +1630,9 @@ export default function LeagueDetailPage() {
               setSearchParams((prev) => { prev.set('tab', String(v)); return prev; }, { replace: true });
               if (v === playoffStandingsIdx && playoffTree === null) {
                 getPlayoffTree(league.id).then(setPlayoffTree).catch(() => {});
+              }
+              if (v === playoffStandingsIdx && playoffStandings === null) {
+                getPlayoffStandings(league.id).then(setPlayoffStandings).catch(() => {});
               }
               if (v === playoffDecksIdx && playoffDecks === null) {
                 getPlayoffDecks(league.id).then(setPlayoffDecks).catch(() => {});
