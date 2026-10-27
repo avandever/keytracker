@@ -138,6 +138,7 @@ export default function PlayoffsPage() {
     return `Round ${n}`;
   };
 
+  /** Returns the server's refusal, for a caller with something to do about it. */
   const act = async (what: () => Promise<unknown>, done: string) => {
     setError('');
     setSuccess('');
@@ -145,8 +146,10 @@ export default function PlayoffsPage() {
       await what();
       setSuccess(done);
       refresh();
+      return null;
     } catch (e: any) {
       setError(e.response?.data?.error || e.message);
+      return e.response?.data ?? null;
     }
   };
 
@@ -325,7 +328,10 @@ function PlayoffSetupPanel({
   league: LeagueDetail;
   setup: PlayoffSetup;
   rounds: number;
-  onAct: (what: () => Promise<unknown>, done: string) => Promise<void>;
+  onAct: (
+    what: () => Promise<unknown>,
+    done: string,
+  ) => Promise<{ error?: string; missing_players?: string[] } | null>;
   leagueId: number;
   sets: KeyforgeSetInfo[];
   rlVersions: { id: number; version: number }[];
@@ -341,6 +347,11 @@ function PlayoffSetupPanel({
     progress.length > 0 && progress.every((row) => row.total > 0 && row.assigned >= row.total);
   // Which round the deadline dialog is for, if it is open.
   const [openingRound, setOpeningRound] = useState<number | null>(null);
+  // A publish the server refused for missing decks, held so it can be
+  // confirmed rather than only complained about.
+  const [publishPending, setPublishPending] = useState<
+    { round: number; missing: string[] } | null
+  >(null);
   const [deckDeadline, setDeckDeadline] = useState('');
   const [matchDeadline, setMatchDeadline] = useState('');
   // '' opens every bracket; a bracket id opens that one alone.
@@ -612,12 +623,17 @@ function PlayoffSetupPanel({
               {Array.from({ length: rounds }, (_, i) => i + 1).map((n) => (
                 <Button
                   key={`publish-${n}`} variant="outlined" color="secondary" disabled={!drawn}
-                  onClick={() =>
-                    onAct(
+                  onClick={async () => {
+                    const refusal = await onAct(
                       () => publishPlayoffRound(leagueId, n),
                       `Round ${n} pairings published.`,
-                    )
-                  }
+                    );
+                    // "Publish anyway" was advice with nothing behind it: the
+                    // endpoint takes force, the button never sent it.
+                    if (refusal?.missing_players?.length) {
+                      setPublishPending({ round: n, missing: refusal.missing_players });
+                    }
+                  }}
                 >
                   Publish round {n} pairings
                 </Button>
@@ -652,6 +668,50 @@ function PlayoffSetupPanel({
           roundLabel={roundLabel}
         />
       )}
+
+      <Dialog
+        open={publishPending !== null}
+        onClose={() => setPublishPending(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Publish without them?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" gutterBottom>
+            {publishPending?.missing.length === 1
+              ? 'This player has'
+              : 'These players have'}{' '}
+            not submitted for round {publishPending?.round}:
+          </Typography>
+          <Box component="ul" sx={{ mt: 0, mb: 1 }}>
+            {(publishPending?.missing || []).map((who) => (
+              <li key={who}><Typography variant="body2">{who}</Typography></li>
+            ))}
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            Publishing makes the round live for everyone, so the matches that are
+            ready can be played. A deck can still be entered for a player who has
+            not submitted, and is recorded as a late entry.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPublishPending(null)}>Keep waiting</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => {
+              const round = publishPending!.round;
+              setPublishPending(null);
+              onAct(
+                () => publishPlayoffRound(leagueId, round, { force: true }),
+                `Round ${round} pairings published.`,
+              );
+            }}
+          >
+            Publish anyway
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={openingRound !== null} onClose={() => setOpeningRound(null)} maxWidth="xs" fullWidth>
         <DialogTitle>
@@ -809,7 +869,10 @@ function BracketEditor({
   setup: PlayoffSetup;
   drawn: boolean;
   leagueId: number;
-  onAct: (what: () => Promise<unknown>, done: string) => Promise<void>;
+  onAct: (
+    what: () => Promise<unknown>,
+    done: string,
+  ) => Promise<{ error?: string; missing_players?: string[] } | null>;
   sets: KeyforgeSetInfo[];
   rlVersions: { id: number; version: number }[];
   cardPresets: CardCategoryPreset[];
@@ -1234,7 +1297,10 @@ function SealedPoolsPanel({
 }: {
   tree: PlayoffTree | null;
   leagueId: number;
-  onAct: (what: () => Promise<unknown>, done: string) => Promise<void>;
+  onAct: (
+    what: () => Promise<unknown>,
+    done: string,
+  ) => Promise<{ error?: string; missing_players?: string[] } | null>;
   roundLabel: (n: number) => string;
 }) {
   const rows = (tree?.brackets || []).flatMap((bracket) =>
