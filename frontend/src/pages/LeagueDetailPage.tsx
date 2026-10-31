@@ -389,9 +389,8 @@ export default function LeagueDetailPage() {
           // read off the brackets as they stand: points already won cannot be
           // lost, and every round a team is still alive in is still winnable.
           const rows = [...playoffStandings.standings].sort(
-            (a, b) => b.max_points - a.max_points || b.min_points - a.min_points,
+            (a, b) => b.min_points - a.min_points || b.max_points - a.max_points,
           );
-          const topFloor = Math.max(...rows.map((r) => r.min_points), 0);
           const showsSeedBonus = rows.some((r) => r.seed_bonus > 0);
           return (
             <Card sx={{ mb: 2 }}>
@@ -418,44 +417,26 @@ export default function LeagueDetailPage() {
                       )}
                       <TableCell align="center"><strong>Now</strong></TableCell>
                       <TableCell align="center"><strong>Most</strong></TableCell>
-                      <TableCell><strong></strong></TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {rows.map((row) => {
-                      // Out of it once the best they can reach is below what
-                      // somebody already holds.
-                      const eliminated = row.max_points < topFloor;
-                      const clinched = rows.every(
-                        (other) => other.team_id === row.team_id
-                          || other.max_points < row.min_points,
-                      );
-                      return (
-                        <TableRow key={row.team_id}>
-                          <TableCell sx={{ opacity: eliminated ? 0.6 : 1 }}>
-                            {row.team_name}
-                            {row.seed ? (
-                              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                                seed {row.seed}
-                              </Typography>
-                            ) : null}
-                          </TableCell>
-                          {showsSeedBonus && (
-                            <TableCell align="center">+{row.seed_bonus}</TableCell>
-                          )}
-                          <TableCell align="center">{row.min_points}</TableCell>
-                          <TableCell align="center">{row.max_points}</TableCell>
-                          <TableCell>
-                            {clinched && (
-                              <Chip size="small" color="success" label="Cannot be caught" />
-                            )}
-                            {eliminated && (
-                              <Chip size="small" variant="outlined" label="Cannot catch up" />
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {rows.map((row) => (
+                      <TableRow key={row.team_id}>
+                        <TableCell>
+                          {row.team_name}
+                          {row.seed ? (
+                            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                              seed {row.seed}
+                            </Typography>
+                          ) : null}
+                        </TableCell>
+                        {showsSeedBonus && (
+                          <TableCell align="center">+{row.seed_bonus}</TableCell>
+                        )}
+                        <TableCell align="center">{row.min_points}</TableCell>
+                        <TableCell align="center">{row.max_points}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </CardContent>
